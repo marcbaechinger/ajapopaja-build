@@ -145,15 +145,7 @@ export class TaskItem {
           </div>
         ` : ''}
 
-        ${isImplemented ? `
-          <details class="group/details">
-            <summary class="text-xs text-app-accent-2 cursor-pointer hover:underline list-none flex items-center gap-1 mb-2">
-              <svg class="w-3 h-3 transition-transform group-open/details:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-              View Design Document
-            </summary>
-            ${designDocHtml}
-          </details>
-        ` : designDocHtml}
+        ${designDocHtml}
 
         ${task.commit_hash ? `
           <div class="text-xs font-mono text-app-accent-2 bg-app-surface p-2 rounded border border-app-border w-fit">
