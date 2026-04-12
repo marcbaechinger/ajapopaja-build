@@ -65,6 +65,17 @@ async def delete_task(task_id: str):
     ))
     return {"status": "ok"}
 
+@task_router.post("/{task_id}/notify", status_code=202)
+async def notify_task_changed(task_id: str):
+    # Fetch the updated task from the database
+    task = await task_queries.get_task_by_id(task_id)
+    # Broadcast a TASK_UPDATED message to all connected WebSocket clients
+    await manager.broadcast(WSMessage(
+        type="TASK_UPDATED",
+        payload=task.model_dump(mode='json')
+    ))
+    return {"status": "notified"}
+
 # Pipeline-nested router for task management within a pipeline
 pipeline_task_router = APIRouter(prefix="/pipelines/{pipeline_id}/tasks", tags=["tasks"])
 

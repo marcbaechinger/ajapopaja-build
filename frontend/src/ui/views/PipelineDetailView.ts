@@ -26,19 +26,169 @@ export class PipelineDetailView extends View {
     const handleUpdate = (message: any) => {
       // Refresh if the updated task belongs to this pipeline
       if (message.payload?.pipeline_id === this.pipelineId) {
+        this.updateSingleTask(message.payload);
+      }
+    };
+
+    const handleCreate = (message: any) => {
+      if (message.payload?.pipeline_id === this.pipelineId) {
+        // Only append if it doesn't exist yet
+        if (this.container?.querySelector(`[data-view-id="${message.payload._id}"]`)) return;
+        
+        const listContainer = this.container?.querySelector('#task-list');
+        if (!listContainer) return;
+
+        // For created tasks, a full refresh is safest to maintain sort order
+        // and handle the "No tasks" placeholder correctly.
         this.refreshTasks();
       }
     };
 
-    this.unsubs.push(this.context.wsClient.on('TASK_CREATED', handleUpdate));
+    this.unsubs.push(this.context.wsClient.on('TASK_CREATED', handleCreate));
     this.unsubs.push(this.context.wsClient.on('TASK_UPDATED', handleUpdate));
     this.unsubs.push(this.context.wsClient.on('TASK_STATUS_UPDATED', handleUpdate));
     this.unsubs.push(this.context.wsClient.on('TASK_COMPLETED', handleUpdate));
     this.unsubs.push(this.context.wsClient.on('TASK_DELETED', (message: any) => {
       if (message.payload?.pipeline_id === this.pipelineId) {
-        this.refreshTasks();
+        const taskEl = this.container?.querySelector(`[data-view-id="${message.payload.task_id}"]`);
+        if (taskEl) {
+          const list = taskEl.parentElement;
+          const wasLastCompleted = list?.id === 'last-completed-task';
+          taskEl.remove();
+          
+          if (list && list.children.length === 0) {
+             if (list.id === 'task-list') {
+               list.innerHTML = '<p class="text-app-muted italic">No tasks to be done.</p>';
+             } else if (list.id === 'completed-task-list') {
+               list.innerHTML = '<p class="text-app-muted italic text-xs">No completed tasks yet.</p>';
+             }
+          }
+
+          if (wasLastCompleted) {
+            // Promote the top of completed-task-list to last-completed-task
+            const completedList = this.container?.querySelector('#completed-task-list');
+            const topCompleted = completedList?.firstElementChild;
+            if (topCompleted && topCompleted.tagName !== 'P') {
+              this.container?.querySelector('#last-completed-task')?.appendChild(topCompleted);
+              if (completedList?.children.length === 0) {
+                completedList.innerHTML = '<p class="text-app-muted italic text-xs">No completed tasks yet.</p>';
+              }
+            }
+          }
+
+          this.updateCompletedCount();
+        }
       }
     }));
+  }
+
+  private updateCompletedCount() {
+    const completedContainer = this.container?.querySelector('#completed-task-list');
+    const lastCompletedContainer = this.container?.querySelector('#last-completed-task');
+    const completedCountEl = this.container?.querySelector('#completed-count');
+    if (completedContainer && lastCompletedContainer && completedCountEl) {
+      const countList = completedContainer.querySelectorAll('[data-view-id]').length;
+      const countLast = lastCompletedContainer.querySelectorAll('[data-view-id]').length;
+      completedCountEl.textContent = `(${countList + countLast})`;
+    }
+  }
+
+  private updateSingleTask(task: any) {
+    if (!this.container) return;
+
+    // If task is being edited locally, skip external updates to avoid losing state
+    if (this.activeEditors.has(task._id)) {
+      console.log('Skipping update for task being edited:', task._id);
+      return;
+    }
+
+    const taskEl = this.container.querySelector(`[data-view-id="${task._id}"]`);
+    if (!taskEl) {
+      // If task belongs here but isn't shown, refresh everything
+      this.refreshTasks();
+      return;
+    }
+
+    const isTaskCompleted = ([TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED] as any[]).includes(task.status);
+    const wasTaskCompleted = taskEl.closest('#completed-task-list') !== null || taskEl.closest('#last-completed-task') !== null;
+
+    // If moving between open/completed sections
+    if (isTaskCompleted !== wasTaskCompleted) {
+      const sourceList = taskEl.parentElement;
+      const wasLastCompleted = sourceList?.id === 'last-completed-task';
+      taskEl.remove();
+      
+      // Handle empty source list
+      if (sourceList && sourceList.children.length === 0) {
+        if (sourceList.id === 'task-list') {
+          sourceList.innerHTML = '<p class="text-app-muted italic">No tasks to be done.</p>';
+        } else if (sourceList.id === 'completed-task-list') {
+          sourceList.innerHTML = '<p class="text-app-muted italic text-xs">No completed tasks yet.</p>';
+        }
+      }
+
+      if (wasLastCompleted) {
+        // Promote from completed list
+        const completedList = this.container.querySelector('#completed-task-list');
+        const topCompleted = completedList?.firstElementChild;
+        if (topCompleted && topCompleted.tagName !== 'P') {
+          this.container.querySelector('#last-completed-task')?.appendChild(topCompleted);
+          if (completedList?.children.length === 0) {
+            completedList.innerHTML = '<p class="text-app-muted italic text-xs">No completed tasks yet.</p>';
+          }
+        }
+      }
+
+      if (isTaskCompleted) {
+        // Task became completed: Demote current last-completed to list, and put new task in last-completed
+        const lastCompletedContainer = this.container.querySelector('#last-completed-task');
+        const completedList = this.container.querySelector('#completed-task-list');
+        
+        if (lastCompletedContainer && completedList) {
+          const currentLast = lastCompletedContainer.firstElementChild;
+          if (currentLast && currentLast.tagName !== 'P') {
+            if (completedList.querySelector('p.italic')) {
+              completedList.innerHTML = '';
+            }
+            completedList.prepend(currentLast);
+          }
+          
+          const temp = document.createElement('div');
+          temp.innerHTML = TaskItem.render(task, false);
+          const newNode = temp.firstElementChild;
+          if (newNode) {
+            lastCompletedContainer.innerHTML = ''; // clear any placeholder if we had one
+            lastCompletedContainer.appendChild(newNode);
+          }
+        }
+      } else {
+        // Task became open (rare)
+        const targetList = this.container.querySelector('#task-list');
+        if (targetList) {
+          if (targetList.querySelector('p.italic')) {
+            targetList.innerHTML = '';
+          }
+          const temp = document.createElement('div');
+          temp.innerHTML = TaskItem.render(task, this.currentSortOrder === 'execution');
+          const newNode = temp.firstElementChild;
+          if (newNode) {
+             targetList.prepend(newNode);
+          }
+        }
+      }
+      
+      this.updateCompletedCount();
+      return;
+    }
+
+    // Render new HTML and replace inline
+    const temp = document.createElement('div');
+    const showOrdering = this.currentSortOrder === 'execution' && !isTaskCompleted;
+    temp.innerHTML = TaskItem.render(task, showOrdering);
+    const newNode = temp.firstElementChild;
+    if (newNode) {
+      taskEl.replaceWith(newNode);
+    }
   }
 
   private registerActions() {
@@ -268,9 +418,10 @@ export class PipelineDetailView extends View {
   async refreshTasks() {
     if (!this.container) return;
     const listContainer = this.container.querySelector('#task-list');
+    const lastCompletedContainer = this.container.querySelector('#last-completed-task');
     const completedContainer = this.container.querySelector('#completed-task-list');
     const completedCountEl = this.container.querySelector('#completed-count');
-    if (!listContainer || !completedContainer) return;
+    if (!listContainer || !lastCompletedContainer || !completedContainer) return;
 
     try {
       const allTasks = await this.context.taskClient.listByPipeline(this.pipelineId);
@@ -298,9 +449,16 @@ export class PipelineDetailView extends View {
         ? openTasks.map(t => TaskItem.render(t, showOrdering)).join('')
         : '<p class="text-app-muted italic">No tasks to be done.</p>';
 
-      completedContainer.innerHTML = completedTasks.length > 0
-        ? completedTasks.map(t => TaskItem.render(t, false)).join('')
-        : '<p class="text-app-muted italic text-xs">No completed tasks yet.</p>';
+      if (completedTasks.length > 0) {
+        lastCompletedContainer.innerHTML = TaskItem.render(completedTasks[0], false);
+        const remainingCompleted = completedTasks.slice(1);
+        completedContainer.innerHTML = remainingCompleted.length > 0
+          ? remainingCompleted.map(t => TaskItem.render(t, false)).join('')
+          : '<p class="text-app-muted italic text-xs">No completed tasks yet.</p>';
+      } else {
+        lastCompletedContainer.innerHTML = '';
+        completedContainer.innerHTML = '<p class="text-app-muted italic text-xs">No completed tasks yet.</p>';
+      }
 
       if (completedCountEl) {
         completedCountEl.textContent = `(${completedTasks.length})`;
@@ -362,12 +520,17 @@ export class PipelineDetailView extends View {
           </div>
 
           <div class="mt-8 pt-6 border-t border-app-border/30">
+            <h3 class="text-sm font-bold text-app-muted uppercase tracking-widest mb-4">Last Completed Task</h3>
+            <div id="last-completed-task" class="mb-4">
+              <!-- Render last completed task here -->
+            </div>
+            
             <details class="group/completed">
               <summary class="flex items-center gap-2 cursor-pointer list-none text-app-muted hover:text-app-text transition-colors">
                 <svg class="w-4 h-4 transition-transform group-open/completed:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                 </svg>
-                <span class="font-bold text-sm uppercase tracking-widest">Completed Tasks <span id="completed-count"></span></span>
+                <span class="font-bold text-sm uppercase tracking-widest">Older Completed Tasks <span id="completed-count"></span></span>
               </summary>
               <div id="completed-task-list" class="space-y-4 mt-4 opacity-80">
                 <!-- Completed tasks will be rendered here -->

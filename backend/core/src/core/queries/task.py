@@ -125,12 +125,12 @@ def _verify_task(task: Task) -> dict:
     }
 
 async def get_next_task(pipeline_id: str, actor: str = "mcp") -> Optional[Task]:
-    """Finds the first scheduled task (lowest order), sets it to inprogress, and increments version."""
+    """Finds the first scheduled task (lowest order, then oldest creation time), sets it to inprogress, and increments version."""
     task = await Task.find(
         Task.pipeline_id == pipeline_id,
         Task.status == TaskStatus.SCHEDULED,
         Task.deleted == False
-    ).sort(+Task.order).first_or_none()
+    ).sort(+Task.order, +Task.created_at).first_or_none()
     
     if task:
         task.history.append(StateTransition(from_status=task.status, to_status=TaskStatus.INPROGRESS, by=actor))

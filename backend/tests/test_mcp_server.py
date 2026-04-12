@@ -99,9 +99,9 @@ async def test_mcp_complete_task_verification_warning():
     )
     await task.insert()
 
-    # Complete with empty hash to trigger verification failure
+    # Complete with a valid hash but no verification success recorded in db
     result = await complete_task(
-        task_id=str(task.id), commit_hash="", completion_info="", version=1
+        task_id=str(task.id), commit_hash="1234567", completion_info="", version=1
     )
 
     assert "WARNING: Verification failed" in result
@@ -110,6 +110,19 @@ async def test_mcp_complete_task_verification_warning():
     assert updated_task is not None
     assert updated_task.verification is not None
     assert updated_task.verification["success"] is False
+
+
+@pytest.mark.asyncio
+async def test_mcp_complete_task_invalid_hash():
+    result = await complete_task(
+        task_id="123", commit_hash="invalid_hash_!", completion_info="", version=1
+    )
+    assert "Error: Invalid commit hash" in result
+    
+    result_empty = await complete_task(
+        task_id="123", commit_hash="", completion_info="", version=1
+    )
+    assert "Error: Invalid commit hash" in result_empty
 
 
 @pytest.mark.asyncio

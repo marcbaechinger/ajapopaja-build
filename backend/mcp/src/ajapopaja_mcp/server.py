@@ -1,3 +1,6 @@
+import logging
+import httpx
+import re
 from typing import Any, Dict
 from mcp.server.fastmcp import FastMCP
 from core.db import init_db
@@ -6,6 +9,16 @@ from core.exceptions import EntityNotFoundError, VersionMismatchError
 
 # Create an MCP server
 mcp = FastMCP("Ajapopaja Build MCP")
+
+API_BASE_URL = "http://localhost:8000/api"
+
+async def notify_api(task_id: str):
+    """Notifies the API that a task has changed."""
+    try:
+        async with httpx.AsyncClient() as client:
+            await client.post(f"{API_BASE_URL}/tasks/{task_id}/notify")
+    except Exception as e:
+        logging.error(f"Failed to notify API for task {task_id}: {e}")
 
 
 @mcp.tool()
@@ -23,6 +36,7 @@ async def get_next_task(pipeline_id: str) -> Dict[str, Any]:
     task = await task_queries.get_next_task(pipeline_id, actor="mcp")
 
     if task:
+        await notify_api(str(task.id))
         return {
             "id": str(task.id),
             "title": task.title,
@@ -49,6 +63,7 @@ async def update_task_design_doc(task_id: str, design_doc: str, version: int) ->
         await task_queries.update_task_details(
             task_id=task_id, version=version, design_doc=design_doc
         )
+        await notify_api(task_id)
         return f"Design document for task {task_id} updated successfully."
     except EntityNotFoundError as e:
         return f"Error: {str(e)}"
@@ -73,6 +88,9 @@ async def complete_task(
         completion_info: A brief summary of what was accomplished.
         version: Current version for OCC.
     """
+    if not commit_hash or not re.match(r"^[0-9a-fA-F]{7,40}$", commit_hash):
+        return f"Error: Invalid commit hash '{commit_hash}'. Must be a valid 7-40 character hexadecimal string."
+
     await init_db()
     try:
         task = await task_queries.complete_task(
@@ -83,6 +101,7 @@ async def complete_task(
             actor="mcp"
         )
 
+        await notify_api(task_id)
         status_msg = f"Task {task_id} completed successfully."
         if task.verification and not task.verification.get("success"):
             status_msg += f" WARNING: Verification failed. Errors: {', '.join(task.verification.get('errors', []))}. A follow-up system task has been created."
