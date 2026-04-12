@@ -9,6 +9,13 @@ export const TaskStatus = {
 
 export type TaskStatus = typeof TaskStatus[keyof typeof TaskStatus];
 
+export interface StateTransition {
+  from_status?: TaskStatus | null;
+  to_status: TaskStatus;
+  timestamp: string;
+  by: string; // "user", "mcp", "system"
+}
+
 export class Task {
   _id?: string;
   title: string = '';
@@ -26,6 +33,7 @@ export class Task {
   created_at?: string;
   updated_at?: string;
   deleted: boolean = false;
+  history: StateTransition[] = [];
 }
 
 export const PipelineStatus = {

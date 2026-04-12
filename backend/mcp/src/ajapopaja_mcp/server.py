@@ -20,7 +20,7 @@ async def get_next_task(pipeline_id: str) -> Dict[str, Any]:
         A dictionary containing task details (id, title, description, design_doc, version).
     """
     await init_db()
-    task = await task_queries.get_next_task(pipeline_id)
+    task = await task_queries.get_next_task(pipeline_id, actor="mcp")
 
     if task:
         return {
@@ -80,6 +80,7 @@ async def complete_task(
             version=version,
             commit_hash=commit_hash,
             completion_info=completion_info,
+            actor="mcp"
         )
 
         status_msg = f"Task {task_id} completed successfully."

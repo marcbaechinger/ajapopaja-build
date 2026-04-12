@@ -3,6 +3,26 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 
 export class TaskItem {
+  private static renderHistory(task: Task): string {
+    if (!task.history || task.history.length === 0) return '';
+
+    return `
+      <div class="mt-4 pt-4 border-t border-app-border/30">
+        <h4 class="text-[10px] font-bold text-app-muted uppercase tracking-widest mb-2">Status History</h4>
+        <div class="space-y-2">
+          ${task.history.map(t => `
+            <div class="flex items-center gap-2 text-[10px]">
+              <span class="text-app-muted w-24">${new Date(t.timestamp).toLocaleString()}</span>
+              <span class="px-1.5 py-0.5 rounded bg-app-surface border border-app-border font-mono text-app-accent-1">${t.to_status}</span>
+              <span class="text-app-muted">by</span>
+              <span class="font-bold text-app-text/80 italic">${t.by}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
   static render(task: Task, showOrdering: boolean = true): string {
     const statusColors: Record<string, string> = {
       [TaskStatus.CREATED]: 'bg-slate-600 text-slate-300',
@@ -109,13 +129,16 @@ export class TaskItem {
         </div>
         ${task.description ? `<p class="text-sm text-app-text/70">${task.description}</p>` : ''}
         
-        ${task.completion_info ? `
+        ${task.completion_info || (task.history && task.history.length > 0) ? `
           <div class="bg-green-500/10 border border-green-500/20 p-3 rounded-lg text-sm text-app-text/80">
-            <div class="font-bold text-green-400 mb-1 flex items-center gap-2">
-               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-               Implementation Summary
-            </div>
-            ${task.completion_info}
+            ${task.completion_info ? `
+              <div class="font-bold text-green-400 mb-1 flex items-center gap-2">
+                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                 Implementation Summary
+              </div>
+              ${task.completion_info}
+            ` : ''}
+            ${this.renderHistory(task)}
           </div>
         ` : ''}
 

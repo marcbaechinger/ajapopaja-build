@@ -17,7 +17,7 @@ async def update_task_status(
     status: TaskStatus = Body(..., embed=True), 
     version: int = Body(..., embed=True)
 ):
-    updated_task = await task_queries.update_task_status(task_id, status, version)
+    updated_task = await task_queries.update_task_status(task_id, status, version, actor="user")
     await manager.broadcast(WSMessage(
         type="TASK_STATUS_UPDATED",
         payload=updated_task.model_dump(mode='json')
@@ -31,7 +31,7 @@ async def complete_task(
     commit_hash: str = Body(..., embed=True),
     completion_info: str = Body(..., embed=True)
 ):
-    updated_task = await task_queries.complete_task(task_id, version, commit_hash, completion_info)
+    updated_task = await task_queries.complete_task(task_id, version, commit_hash, completion_info, actor="user")
     await manager.broadcast(WSMessage(
         type="TASK_COMPLETED",
         payload=updated_task.model_dump(mode='json')
@@ -74,7 +74,7 @@ async def list_pipeline_tasks(pipeline_id: str, include_deleted: bool = False):
 
 @pipeline_task_router.post("/next", response_model=Optional[Task])
 async def get_next_task(pipeline_id: str):
-    task = await task_queries.get_next_task(pipeline_id)
+    task = await task_queries.get_next_task(pipeline_id, actor="mcp")
     if task:
         await manager.broadcast(WSMessage(
             type="TASK_STATUS_UPDATED",
@@ -84,7 +84,7 @@ async def get_next_task(pipeline_id: str):
 
 @pipeline_task_router.post("/", response_model=Task)
 async def create_task(pipeline_id: str, task: Task):
-    new_task = await task_queries.create_task(pipeline_id, task)
+    new_task = await task_queries.create_task(pipeline_id, task, actor="user")
     await manager.broadcast(WSMessage(
         type="TASK_CREATED",
         payload=new_task.model_dump(mode='json')

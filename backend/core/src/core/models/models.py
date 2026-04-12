@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import List, Optional, Dict, Any
 from datetime import datetime, UTC
-from pydantic import Field
+from pydantic import Field, BaseModel
 from beanie import Document
 
 class TaskStatus(str, Enum):
@@ -11,6 +11,12 @@ class TaskStatus(str, Enum):
     IMPLEMENTED = "implemented"
     DISCARDED = "discarded"
     FAILED = "failed"
+
+class StateTransition(BaseModel):
+    from_status: Optional[TaskStatus] = None
+    to_status: TaskStatus
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    by: str  # "user", "mcp", "system"
 
 class Task(Document):
     title: str
@@ -28,6 +34,7 @@ class Task(Document):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     pipeline_id: str
     deleted: bool = False
+    history: List[StateTransition] = Field(default_factory=list)
 
     class Settings:
         name = "tasks"

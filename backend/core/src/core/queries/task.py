@@ -1,6 +1,6 @@
 from typing import List, Optional, Any
 from beanie import PydanticObjectId
-from core.models.models import Task, TaskStatus
+from core.models.models import Task, TaskStatus, StateTransition
 from core.exceptions import EntityNotFoundError, VersionMismatchError
 
 async def get_tasks_by_pipeline(pipeline_id: str, include_deleted: bool = False) -> List[Task]:
@@ -18,13 +18,14 @@ async def get_task_by_id(task_id: str, include_deleted: bool = False) -> Task:
         raise EntityNotFoundError(f"Task with ID {task_id} not found")
     return task
 
-async def create_task(pipeline_id: str, task: Task) -> Task:
+async def create_task(pipeline_id: str, task: Task, actor: str = "user") -> Task:
     task.pipeline_id = pipeline_id
     task.version = 1
+    task.history = [StateTransition(to_status=task.status, by=actor)]
     await task.insert()
     return task
 
-async def update_task_status(task_id: str, status: TaskStatus, version: int) -> Task:
+async def update_task_status(task_id: str, status: TaskStatus, version: int, actor: str = "user") -> Task:
     task = await get_task_by_id(task_id)
     
     if task.version != version:
@@ -32,6 +33,7 @@ async def update_task_status(task_id: str, status: TaskStatus, version: int) -> 
             f"Task version mismatch. Client has {version}, DB has {task.version}"
         )
     
+    task.history.append(StateTransition(from_status=task.status, to_status=status, by=actor))
     task.status = status
     task.version += 1
     await task.save()
@@ -69,7 +71,8 @@ async def complete_task(
     task_id: str, 
     version: int, 
     commit_hash: str, 
-    completion_info: str
+    completion_info: str,
+    actor: str = "mcp"
 ) -> Task:
     task = await get_task_by_id(task_id)
     
@@ -80,6 +83,7 @@ async def complete_task(
     
     task.commit_hash = commit_hash
     task.completion_info = completion_info
+    task.history.append(StateTransition(from_status=task.status, to_status=TaskStatus.IMPLEMENTED, by=actor))
     task.status = TaskStatus.IMPLEMENTED
     task.version += 1
     
@@ -96,7 +100,8 @@ async def complete_task(
             status=TaskStatus.CREATED,
             order=task.order - 1, # Higher priority
             parent_task_id=str(task.id),
-            pipeline_id=task.pipeline_id
+            pipeline_id=task.pipeline_id,
+            history=[StateTransition(to_status=TaskStatus.CREATED, by="system")]
         )
         await system_task.insert()
     
@@ -119,7 +124,7 @@ def _verify_task(task: Task) -> dict:
         "errors": errors
     }
 
-async def get_next_task(pipeline_id: str) -> Optional[Task]:
+async def get_next_task(pipeline_id: str, actor: str = "mcp") -> Optional[Task]:
     """Finds the first scheduled task (lowest order), sets it to inprogress, and increments version."""
     task = await Task.find(
         Task.pipeline_id == pipeline_id,
@@ -128,6 +133,7 @@ async def get_next_task(pipeline_id: str) -> Optional[Task]:
     ).sort(+Task.order).first_or_none()
     
     if task:
+        task.history.append(StateTransition(from_status=task.status, to_status=TaskStatus.INPROGRESS, by=actor))
         task.status = TaskStatus.INPROGRESS
         task.version += 1
         await task.save()
