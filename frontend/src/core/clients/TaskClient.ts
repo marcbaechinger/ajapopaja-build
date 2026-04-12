@@ -59,4 +59,28 @@ export class TaskClient {
     if (!response.ok) throw new Error('Failed to update task details');
     return await response.json();
   }
+
+  async complete(id: string, version: number, commit_hash: string, completion_info: string): Promise<Task> {
+    const response = await fetch(`${this.baseUrl}/tasks/${id}/complete/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ version, commit_hash, completion_info })
+    });
+
+    if (response.status === 409) {
+      throw new Error('OCC_CONFLICT');
+    }
+    
+    if (!response.ok) throw new Error('Failed to complete task');
+    return await response.json();
+  }
+
+  async getNextTask(pipelineId: string): Promise<Task | null> {
+    const response = await fetch(`${this.baseUrl}/pipelines/${pipelineId}/tasks/next/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (!response.ok) throw new Error('Failed to get next task');
+    return await response.json();
+  }
 }

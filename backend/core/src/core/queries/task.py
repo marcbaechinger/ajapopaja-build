@@ -51,3 +51,37 @@ async def update_task_details(
     task.version += 1
     await task.save()
     return task
+
+async def complete_task(
+    task_id: str, 
+    version: int, 
+    commit_hash: str, 
+    completion_info: str
+) -> Task:
+    task = await get_task_by_id(task_id)
+    
+    if task.version != version:
+        raise VersionMismatchError(
+            f"Task version mismatch. Client has {version}, DB has {task.version}"
+        )
+    
+    task.commit_hash = commit_hash
+    task.completion_info = completion_info
+    task.status = TaskStatus.IMPLEMENTED
+    task.version += 1
+    await task.save()
+    return task
+
+async def get_next_task(pipeline_id: str) -> Optional[Task]:
+    """Finds the first scheduled task (lowest order) and sets it to inprogress."""
+    task = await Task.find(
+        Task.pipeline_id == pipeline_id,
+        Task.status == TaskStatus.SCHEDULED
+    ).sort(+Task.order).first_or_none()
+    
+    if task:
+        task.status = TaskStatus.INPROGRESS
+        task.version += 1
+        await task.save()
+        
+    return task
