@@ -57,6 +57,9 @@ body {
 .CodeMirror {
   @apply !bg-app-bg !text-app-text !border-app-border;
 }
+.CodeMirror-cursor {
+  @apply !border-l-2 !border-app-accent-1;
+}
 .editor-preview {
   @apply !bg-app-bg !text-app-text prose prose-invert prose-sm max-w-none;
 }
