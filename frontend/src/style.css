@@ -98,14 +98,14 @@ body {
 }
 
 /* Design Doc Editor Expand/Collapse and Resize */
+.design-doc-edit .CodeMirror {
+  @apply !resize-y !overflow-hidden !h-auto;
+}
+
 .design-doc-edit .CodeMirror:not(.expanded-editor) .CodeMirror-scroll {
   max-height: 300px;
 }
 
 .design-doc-edit .CodeMirror.expanded-editor .CodeMirror-scroll {
   max-height: none;
-}
-
-.design-doc-edit .CodeMirror {
-  @apply !resize-y !overflow-auto;
 }
