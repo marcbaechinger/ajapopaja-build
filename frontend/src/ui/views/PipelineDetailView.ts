@@ -1,8 +1,9 @@
 import { View } from '../../core/Navigator.ts';
 import { AppContext } from '../../core/AppContext.ts';
-import { Pipeline, TaskStatus } from '../../core/domain.ts';
+import { Pipeline, TaskStatus, Task } from '../../core/domain.ts';
 import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
 import { TaskItem } from '../components/TaskItem.ts';
+import { HistoryDialog } from '../components/HistoryDialog.ts';
 import EasyMDE from 'easymde';
 
 export class PipelineDetailView extends View {
@@ -13,6 +14,8 @@ export class PipelineDetailView extends View {
   private unsubs: (() => void)[] = [];
   private activeEditors: Map<string, EasyMDE> = new Map();
   private currentSortOrder: 'execution' | 'newest' | 'status' = 'execution';
+  private allLoadedTasks: Task[] = [];
+  private keydownHandler: ((e: KeyboardEvent) => void) | null = null;
 
   constructor(context: AppContext, params: Record<string, string>) {
     super();
@@ -20,6 +23,23 @@ export class PipelineDetailView extends View {
     this.pipelineId = params.id;
     this.registerActions();
     this.setupWebSocket();
+    this.setupKeyboardShortcuts();
+  }
+
+  private setupKeyboardShortcuts() {
+    this.keydownHandler = (e: KeyboardEvent) => {
+      // Ignore if user is typing in an input or textarea
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || (e.target as HTMLElement).isContentEditable) {
+        return;
+      }
+      
+      // 'h' key for history dialog
+      if (e.key === 'h' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        new HistoryDialog(this.allLoadedTasks).show();
+      }
+    };
+    document.addEventListener('keydown', this.keydownHandler);
   }
 
   private setupWebSocket() {
@@ -50,6 +70,9 @@ export class PipelineDetailView extends View {
     this.unsubs.push(this.context.wsClient.on('TASK_COMPLETED', handleUpdate));
     this.unsubs.push(this.context.wsClient.on('TASK_DELETED', (message: any) => {
       if (message.payload?.pipeline_id === this.pipelineId) {
+        // Update local cache
+        this.allLoadedTasks = this.allLoadedTasks.filter(t => t._id !== message.payload.task_id);
+
         const taskEl = this.container?.querySelector(`[data-view-id="${message.payload.task_id}"]`);
         if (taskEl) {
           const list = taskEl.parentElement;
@@ -95,6 +118,14 @@ export class PipelineDetailView extends View {
 
   private updateSingleTask(task: any) {
     if (!this.container) return;
+
+    // Update the local tasks cache
+    const index = this.allLoadedTasks.findIndex(t => t._id === task._id);
+    if (index !== -1) {
+      this.allLoadedTasks[index] = task;
+    } else {
+      this.allLoadedTasks.push(task);
+    }
 
     // If task is being edited locally, skip external updates to avoid losing state
     if (this.activeEditors.has(task._id)) {
@@ -424,7 +455,8 @@ export class PipelineDetailView extends View {
     if (!listContainer || !lastCompletedContainer || !completedContainer) return;
 
     try {
-      const allTasks = await this.context.taskClient.listByPipeline(this.pipelineId);
+      this.allLoadedTasks = await this.context.taskClient.listByPipeline(this.pipelineId);
+      const allTasks = this.allLoadedTasks;
       
       const openTasks = allTasks.filter(t => !([TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED] as any[]).includes(t.status));
       const completedTasks = allTasks.filter(t => ([TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED] as any[]).includes(t.status));
@@ -553,5 +585,9 @@ export class PipelineDetailView extends View {
     this.activeEditors.clear();
     this.unsubs.forEach(unsub => unsub());
     this.unsubs = [];
+    if (this.keydownHandler) {
+      document.removeEventListener('keydown', this.keydownHandler);
+      this.keydownHandler = null;
+    }
   }
 }
