@@ -31,6 +31,38 @@ export class TaskItem {
           </span>
         </div>
         
+        <div class="flex justify-between items-center mt-2">
+          <div class="flex gap-1">
+            <button data-action-click="move_task_up" data-version="${task.version}" data-order="${task.order}"
+                    ${isInProgress ? 'disabled' : ''}
+                    class="p-1 hover:bg-app-surface rounded text-app-muted hover:text-app-accent-1 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed" title="Move Up">
+              &uarr;
+            </button>
+            <button data-action-click="move_task_down" data-version="${task.version}" data-order="${task.order}"
+                    ${isInProgress ? 'disabled' : ''}
+                    class="p-1 hover:bg-app-surface rounded text-app-muted hover:text-app-accent-1 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed" title="Move Down">
+              &darr;
+            </button>
+          </div>
+          <div class="flex gap-2">
+            <button data-action-click="delete_task" 
+                    class="p-1.5 hover:bg-red-500/20 text-app-muted hover:text-red-400 rounded transition-all cursor-pointer" title="Delete Task">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+            </button>
+            ${canFail ? `
+              <button data-action-click="fail_task" data-version="${task.version}" 
+                      class="text-xs text-red-400 hover:text-red-300 px-3 py-1 rounded transition-all cursor-pointer">
+                Mark as Failed
+              </button>
+            ` : ''}
+            ${canSchedule ? `
+              <button data-action-click="schedule_task" data-version="${task.version}" 
+                      class="text-xs bg-app-accent-1 hover:brightness-110 text-white px-3 py-1 rounded transition-all shadow-lg cursor-pointer">
+                Schedule Execution
+              </button>
+            ` : ''}
+          </div>
+        </div>
         ${task.description ? `<p class="text-sm text-app-text/70">${task.description}</p>` : ''}
         
         <div class="design-doc-container w-full text-xs bg-app-surface p-3 rounded-lg border border-app-border transition-all"
@@ -66,38 +98,6 @@ export class TaskItem {
           </div>
         ` : ''}
 
-        <div class="flex justify-between items-center mt-2">
-          <div class="flex gap-1">
-            <button data-action-click="move_task_up" data-version="${task.version}" data-order="${task.order}"
-                    ${isInProgress ? 'disabled' : ''}
-                    class="p-1 hover:bg-app-surface rounded text-app-muted hover:text-app-accent-1 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed" title="Move Up">
-              &uarr;
-            </button>
-            <button data-action-click="move_task_down" data-version="${task.version}" data-order="${task.order}"
-                    ${isInProgress ? 'disabled' : ''}
-                    class="p-1 hover:bg-app-surface rounded text-app-muted hover:text-app-accent-1 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed" title="Move Down">
-              &darr;
-            </button>
-          </div>
-          <div class="flex gap-2">
-            <button data-action-click="delete_task" 
-                    class="p-1.5 hover:bg-red-500/20 text-app-muted hover:text-red-400 rounded transition-all cursor-pointer" title="Delete Task">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-            </button>
-            ${canFail ? `
-              <button data-action-click="fail_task" data-version="${task.version}" 
-                      class="text-xs text-red-400 hover:text-red-300 px-3 py-1 rounded transition-all cursor-pointer">
-                Mark as Failed
-              </button>
-            ` : ''}
-            ${canSchedule ? `
-              <button data-action-click="schedule_task" data-version="${task.version}" 
-                      class="text-xs bg-app-accent-1 hover:brightness-110 text-white px-3 py-1 rounded transition-all shadow-lg cursor-pointer">
-                Schedule Execution
-              </button>
-            ` : ''}
-          </div>
-        </div>
       </div>
     `;
   }
