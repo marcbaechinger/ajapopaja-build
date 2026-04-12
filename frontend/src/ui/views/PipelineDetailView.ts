@@ -77,7 +77,6 @@ export class PipelineDetailView extends View {
         spellChecker: false,
         status: false,
         minHeight: "150px",
-        maxHeight: "300px",
         toolbar: ["bold", "italic", "heading", "|", "quote", "unordered-list", "ordered-list", "|", "link", "code", "table", "|", "preview", "side-by-side", "fullscreen"],
         onFullScreen: (full: boolean) => {
           if (full) {
@@ -96,6 +95,17 @@ export class PipelineDetailView extends View {
 
       this.activeEditors.set(taskId, editor);
       editor.codemirror.focus();
+    });
+
+    this.context.actionRegistry.register('toggle_edit_design_doc_expand', async (_e, el) => {
+      const container = el.closest('.design-doc-container') as HTMLElement;
+      if (!container) return;
+      
+      const cm = container.querySelector('.CodeMirror');
+      if (!cm) return;
+
+      const isExpanded = cm.classList.toggle('expanded-editor');
+      el.textContent = isExpanded ? 'Show Less' : 'Show More';
     });
 
     this.context.actionRegistry.register('toggle_design_doc_expand', async (_e, el) => {
@@ -124,6 +134,11 @@ export class PipelineDetailView extends View {
 
       container.querySelector('.design-doc-view')?.classList.remove('hidden');
       container.querySelector('[data-action-click="toggle_design_doc_expand"]')?.classList.remove('hidden');
+      const editToggle = container.querySelector('[data-action-click="toggle_edit_design_doc_expand"]');
+      if (editToggle) {
+        editToggle.classList.remove('hidden');
+        editToggle.textContent = 'Show More';
+      }
       container.querySelector('.design-doc-edit')?.classList.add('hidden');
     });
 
