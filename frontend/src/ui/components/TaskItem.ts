@@ -3,13 +3,16 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 
 export class TaskItem {
-  private static renderHistory(task: Task): string {
+  private static renderHistory(task: Task, expandHistory: boolean): string {
     if (!task.history || task.history.length === 0) return '';
 
     return `
-      <div class="mt-4 pt-4 border-t border-app-border/30">
-        <h4 class="text-[10px] font-bold text-app-muted uppercase tracking-widest mb-2">Status History</h4>
-        <div class="space-y-2">
+      <details class="group/history mt-4 pt-4 border-t border-app-border/30" ${expandHistory ? 'open' : ''}>
+        <summary class="flex items-center gap-2 cursor-pointer list-none text-[10px] font-bold text-app-muted uppercase tracking-widest mb-2 hover:text-app-text transition-colors">
+          <svg class="w-3 h-3 transition-transform group-open/history:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+          Status History
+        </summary>
+        <div class="space-y-2 mt-2">
           ${task.history.map(t => `
             <div class="flex items-center gap-2 text-[10px]">
               <span class="text-app-muted w-24">${new Date(t.timestamp).toLocaleString()}</span>
@@ -19,11 +22,11 @@ export class TaskItem {
             </div>
           `).join('')}
         </div>
-      </div>
+      </details>
     `;
   }
 
-  static render(task: Task, showOrdering: boolean = true): string {
+  static render(task: Task, showOrdering: boolean = true, expandHistory: boolean = false): string {
     const statusColors: Record<string, string> = {
       [TaskStatus.CREATED]: 'bg-slate-600 text-slate-300',
       [TaskStatus.SCHEDULED]: 'bg-blue-600 text-white animate-pulse',
@@ -138,7 +141,7 @@ export class TaskItem {
               </div>
               ${task.completion_info}
             ` : ''}
-            ${this.renderHistory(task)}
+            ${this.renderHistory(task, expandHistory)}
           </div>
         ` : ''}
 

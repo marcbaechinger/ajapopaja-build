@@ -92,6 +92,9 @@ export class PipelineDetailView extends View {
             const completedList = this.container?.querySelector('#completed-task-list');
             const topCompleted = completedList?.firstElementChild;
             if (topCompleted && topCompleted.tagName !== 'P') {
+              const details = topCompleted.querySelector('details.group\\/history');
+              if (details) details.setAttribute('open', '');
+              
               this.container?.querySelector('#last-completed-task')?.appendChild(topCompleted);
               if (completedList?.children.length === 0) {
                 completedList.innerHTML = '<p class="text-app-muted italic text-xs">No completed tasks yet.</p>';
@@ -163,6 +166,9 @@ export class PipelineDetailView extends View {
         const completedList = this.container.querySelector('#completed-task-list');
         const topCompleted = completedList?.firstElementChild;
         if (topCompleted && topCompleted.tagName !== 'P') {
+          const details = topCompleted.querySelector('details.group\\/history');
+          if (details) details.setAttribute('open', '');
+
           this.container.querySelector('#last-completed-task')?.appendChild(topCompleted);
           if (completedList?.children.length === 0) {
             completedList.innerHTML = '<p class="text-app-muted italic text-xs">No completed tasks yet.</p>';
@@ -178,6 +184,9 @@ export class PipelineDetailView extends View {
         if (lastCompletedContainer && completedList) {
           const currentLast = lastCompletedContainer.firstElementChild;
           if (currentLast && currentLast.tagName !== 'P') {
+            const details = currentLast.querySelector('details.group\\/history');
+            if (details) details.removeAttribute('open');
+
             if (completedList.querySelector('p.italic')) {
               completedList.innerHTML = '';
             }
@@ -185,7 +194,7 @@ export class PipelineDetailView extends View {
           }
           
           const temp = document.createElement('div');
-          temp.innerHTML = TaskItem.render(task, false);
+          temp.innerHTML = TaskItem.render(task, false, true);
           const newNode = temp.firstElementChild;
           if (newNode) {
             lastCompletedContainer.innerHTML = ''; // clear any placeholder if we had one
@@ -200,7 +209,7 @@ export class PipelineDetailView extends View {
             targetList.innerHTML = '';
           }
           const temp = document.createElement('div');
-          temp.innerHTML = TaskItem.render(task, this.currentSortOrder === 'execution');
+          temp.innerHTML = TaskItem.render(task, this.currentSortOrder === 'execution', false);
           const newNode = temp.firstElementChild;
           if (newNode) {
              targetList.prepend(newNode);
@@ -215,7 +224,8 @@ export class PipelineDetailView extends View {
     // Render new HTML and replace inline
     const temp = document.createElement('div');
     const showOrdering = this.currentSortOrder === 'execution' && !isTaskCompleted;
-    temp.innerHTML = TaskItem.render(task, showOrdering);
+    const isLastCompleted = taskEl.closest('#last-completed-task') !== null;
+    temp.innerHTML = TaskItem.render(task, showOrdering, isLastCompleted);
     const newNode = temp.firstElementChild;
     if (newNode) {
       taskEl.replaceWith(newNode);
@@ -478,14 +488,14 @@ export class PipelineDetailView extends View {
 
       const showOrdering = this.currentSortOrder === 'execution';
       listContainer.innerHTML = openTasks.length > 0 
-        ? openTasks.map(t => TaskItem.render(t, showOrdering)).join('')
+        ? openTasks.map(t => TaskItem.render(t, showOrdering, false)).join('')
         : '<p class="text-app-muted italic">No tasks to be done.</p>';
 
       if (completedTasks.length > 0) {
-        lastCompletedContainer.innerHTML = TaskItem.render(completedTasks[0], false);
+        lastCompletedContainer.innerHTML = TaskItem.render(completedTasks[0], false, true);
         const remainingCompleted = completedTasks.slice(1);
         completedContainer.innerHTML = remainingCompleted.length > 0
-          ? remainingCompleted.map(t => TaskItem.render(t, false)).join('')
+          ? remainingCompleted.map(t => TaskItem.render(t, false, false)).join('')
           : '<p class="text-app-muted italic text-xs">No completed tasks yet.</p>';
       } else {
         lastCompletedContainer.innerHTML = '';
