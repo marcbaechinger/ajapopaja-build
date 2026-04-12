@@ -15,7 +15,7 @@ async def create_pipeline(pipeline: Pipeline):
     new_pipeline = await pipeline_queries.create_pipeline(pipeline)
     await manager.broadcast(WSMessage(
         type="PIPELINE_CREATED",
-        payload=new_pipeline.model_dump()
+        payload=new_pipeline.model_dump(mode='json')
     ))
     return new_pipeline
 
@@ -32,6 +32,6 @@ async def update_pipeline(
     updated_pipeline = await pipeline_queries.update_pipeline(pipeline_id, name, version)
     await manager.broadcast(WSMessage(
         type="PIPELINE_UPDATED",
-        payload=updated_pipeline.model_dump()
+        payload=updated_pipeline.model_dump(mode='json')
     ))
     return updated_pipeline

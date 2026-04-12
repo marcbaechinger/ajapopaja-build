@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 class WSMessage(BaseModel):
     type: str
     id: str = Field(default="")
-    payload: Dict[str, Any] = Field(default_factory=dict)
+    payload: Any = Field(default_factory=dict)
 
 MessageHandler = Callable[[WSMessage, WebSocket], Awaitable[None]]
 

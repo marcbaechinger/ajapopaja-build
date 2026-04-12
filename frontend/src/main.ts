@@ -1,74 +1,31 @@
-import './style.css'
+import './style.css';
+import { AppContext } from './core/AppContext';
+import { DashboardView } from './ui/views/DashboardView';
+import { View } from './core/Navigator';
 
-console.log('Ajapopaja Build SPA Initialized');
-
+// API Base URL - In production this could be relative or from env
 const API_BASE = 'http://localhost:8000';
-const form = document.getElementById('create-pipeline') as HTMLFormElement;
-const list = document.getElementById('pipeline-list') as HTMLDivElement;
-const themeToggle = document.getElementById('theme-toggle');
 
-// Theme Toggling logic
-themeToggle?.addEventListener('click', () => {
-  const currentTheme = document.documentElement.getAttribute('data-theme');
-  const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-  document.documentElement.setAttribute('data-theme', newTheme);
-});
+// Initialize the Application Context
+// We use the '#content' div as the main view container
+const app = new AppContext('content', API_BASE);
 
-// Helper to render a pipeline item
-const renderPipeline = (name: string) => {
-  if (list.querySelector('p')) {
-    list.innerHTML = '';
-  }
-
-  const item = document.createElement('div');
-  item.className = 'bg-app-bg p-3 rounded-lg border border-app-border flex justify-between items-center transition-all hover:border-app-accent-1 cursor-pointer';
-  item.innerHTML = `
-    <span class="font-medium text-app-text">${name}</span>
-    <span class="text-xs bg-app-surface px-2 py-1 rounded text-app-muted border border-app-border capitalize">active</span>
-  `;
-  list.appendChild(item);
-};
-
-// Fetch and display pipelines from the API
-const fetchPipelines = async () => {
-  try {
-    const response = await fetch(`${API_BASE}/pipelines`);
-    if (!response.ok) throw new Error('Failed to fetch pipelines');
-    const pipelines = await response.json();
-    
-    if (pipelines.length > 0) {
-      list.innerHTML = '';
-      pipelines.forEach((p: any) => renderPipeline(p.name));
+// Register Routes
+app.navigator.register('/', () => new DashboardView(app));
+app.navigator.register('/pipeline/:id', (params) => {
+  // We will implement PipelineDetailView soon
+  return new class extends View {
+    render() {
+      return `
+        <div class="bg-app-surface p-8 rounded-xl shadow-xl border border-app-border">
+          <h2 class="text-3xl font-bold text-app-accent-1 mb-4">Pipeline Detail</h2>
+          <p class="text-app-text">Viewing details for pipeline ID: <span class="font-mono text-app-accent-2">${params.id}</span></p>
+          <button class="mt-6 text-app-muted hover:text-app-text underline" onclick="window.location.hash = '#'">Back to Dashboard</button>
+        </div>
+      `;
     }
-  } catch (error) {
-    console.error('Error fetching pipelines:', error);
-  }
-};
-
-// Create a new pipeline via the API
-form?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const input = form.querySelector('input') as HTMLInputElement;
-  const name = input.value;
-  if (!name) return;
-
-  try {
-    const response = await fetch(`${API_BASE}/pipelines`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name })
-    });
-
-    if (!response.ok) throw new Error('Failed to create pipeline');
-    
-    const newPipeline = await response.json();
-    renderPipeline(newPipeline.name);
-    input.value = '';
-  } catch (error) {
-    console.error('Error creating pipeline:', error);
-    alert('Failed to create pipeline in the database.');
-  }
+  };
 });
 
-// Initialize on page load
-fetchPipelines();
+// Start the application
+app.start();

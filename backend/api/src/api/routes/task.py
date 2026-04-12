@@ -20,7 +20,7 @@ async def update_task_status(
     updated_task = await task_queries.update_task_status(task_id, status, version)
     await manager.broadcast(WSMessage(
         type="TASK_STATUS_UPDATED",
-        payload=updated_task.model_dump()
+        payload=updated_task.model_dump(mode='json')
     ))
     return updated_task
 
@@ -34,7 +34,7 @@ async def update_task_details(
     updated_task = await task_queries.update_task_details(task_id, version, title, description)
     await manager.broadcast(WSMessage(
         type="TASK_UPDATED",
-        payload=updated_task.model_dump()
+        payload=updated_task.model_dump(mode='json')
     ))
     return updated_task
 
@@ -50,6 +50,6 @@ async def create_task(pipeline_id: str, task: Task):
     new_task = await task_queries.create_task(pipeline_id, task)
     await manager.broadcast(WSMessage(
         type="TASK_CREATED",
-        payload=new_task.model_dump()
+        payload=new_task.model_dump(mode='json')
     ))
     return new_task
