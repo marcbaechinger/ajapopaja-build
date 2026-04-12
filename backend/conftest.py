@@ -5,7 +5,7 @@ from beanie import init_beanie
 from api.main import app
 from core.models.models import Pipeline, Task
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 async def init_mock_db():
     client = AsyncIOMotorClient("mongodb://localhost:27017")
     db = client["ajapopaja_test_db"]

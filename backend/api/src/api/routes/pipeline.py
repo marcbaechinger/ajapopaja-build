@@ -2,6 +2,7 @@ from fastapi import APIRouter, Body
 from typing import List
 from core.models.models import Pipeline
 from core.queries import pipeline as pipeline_queries
+from api.websocket_manager import manager, WSMessage
 
 router = APIRouter(prefix="/pipelines", tags=["pipelines"])
 
@@ -11,7 +12,12 @@ async def get_pipelines():
 
 @router.post("/", response_model=Pipeline)
 async def create_pipeline(pipeline: Pipeline):
-    return await pipeline_queries.create_pipeline(pipeline)
+    new_pipeline = await pipeline_queries.create_pipeline(pipeline)
+    await manager.broadcast(WSMessage(
+        type="PIPELINE_CREATED",
+        payload=new_pipeline.model_dump()
+    ))
+    return new_pipeline
 
 @router.get("/{pipeline_id}", response_model=Pipeline)
 async def get_pipeline(pipeline_id: str):
@@ -23,4 +29,9 @@ async def update_pipeline(
     name: str = Body(..., embed=True), 
     version: int = Body(..., embed=True)
 ):
-    return await pipeline_queries.update_pipeline(pipeline_id, name, version)
+    updated_pipeline = await pipeline_queries.update_pipeline(pipeline_id, name, version)
+    await manager.broadcast(WSMessage(
+        type="PIPELINE_UPDATED",
+        payload=updated_pipeline.model_dump()
+    ))
+    return updated_pipeline

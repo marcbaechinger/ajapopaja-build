@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -7,7 +7,11 @@ from core.db import init_db
 from core.exceptions import AjapopajaError, EntityNotFoundError, VersionMismatchError, ValidationError
 from api.routes.pipeline import router as pipeline_router
 from api.routes.task import task_router, pipeline_task_router
+from api.websocket_manager import manager
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -47,6 +51,20 @@ app.add_middleware(
 app.include_router(pipeline_router)
 app.include_router(task_router)
 app.include_router(pipeline_task_router)
+
+# WebSocket Endpoint
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            await manager.handle_message(data, websocket)
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+        manager.disconnect(websocket)
 
 # Serve SPA static files in production mode
 frontend_path = os.path.join(os.path.dirname(__file__), "../../../frontend/dist")
