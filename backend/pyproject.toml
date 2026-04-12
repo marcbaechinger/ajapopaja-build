@@ -10,5 +10,15 @@ dependencies = []
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28.1",
+    "mongomock-motor>=0.0.36",
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.3.0",
     "pytest-watch>=4.2.0",
 ]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+pythonpath = ["core/src", "api/src"]

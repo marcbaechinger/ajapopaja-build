@@ -1,10 +1,12 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from core.db import init_db
-from core.models.models import Pipeline, Task, TaskStatus
-from typing import List
+from core.exceptions import AjapopajaError, EntityNotFoundError, VersionMismatchError, ValidationError
+from api.routes.pipeline import router as pipeline_router
+from api.routes.task import task_router, pipeline_task_router
 import os
 
 @asynccontextmanager
@@ -15,7 +17,24 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Ajapopaja Build API", lifespan=lifespan)
 
-# Enable CORS for development (allows Vite dev server to talk to FastAPI)
+# Global Exception Handlers
+@app.exception_handler(EntityNotFoundError)
+async def entity_not_found_handler(request: Request, exc: EntityNotFoundError):
+    return JSONResponse(status_code=404, content={"detail": str(exc) or "Entity not found"})
+
+@app.exception_handler(VersionMismatchError)
+async def version_mismatch_handler(request: Request, exc: VersionMismatchError):
+    return JSONResponse(status_code=409, content={"detail": str(exc) or "Optimistic concurrency conflict"})
+
+@app.exception_handler(ValidationError)
+async def validation_error_handler(request: Request, exc: ValidationError):
+    return JSONResponse(status_code=422, content={"detail": str(exc) or "Validation error"})
+
+@app.exception_handler(AjapopajaError)
+async def generic_ajapopaja_error_handler(request: Request, exc: AjapopajaError):
+    return JSONResponse(status_code=400, content={"detail": str(exc) or "Application error"})
+
+# CORS Configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],
@@ -24,36 +43,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/pipelines", response_model=List[Pipeline])
-async def get_pipelines():
-    return await Pipeline.find_all().to_list()
-
-@app.post("/pipelines", response_model=Pipeline)
-async def create_pipeline(pipeline: Pipeline):
-    await pipeline.insert()
-    return pipeline
-
-@app.get("/pipelines/{pipeline_id}/tasks", response_model=List[Task])
-async def get_pipeline_tasks(pipeline_id: str):
-    return await Task.find(Task.pipeline_id == pipeline_id).sort(+Task.order).to_list()
-
-@app.post("/pipelines/{pipeline_id}/tasks", response_model=Task)
-async def create_task(pipeline_id: str, task: Task):
-    task.pipeline_id = pipeline_id
-    await task.insert()
-    return task
-
-@app.patch("/tasks/{task_id}/status", response_model=Task)
-async def update_task_status(task_id: str, status: TaskStatus):
-    task = await Task.get(task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    task.status = status
-    await task.save()
-    return task
+# Register Routers
+app.include_router(pipeline_router)
+app.include_router(task_router)
+app.include_router(pipeline_task_router)
 
 # Serve SPA static files in production mode
-# Expects 'frontend/dist' to exist after 'npm run build'
 frontend_path = os.path.join(os.path.dirname(__file__), "../../../frontend/dist")
 if os.path.exists(frontend_path):
     app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")

@@ -17,6 +17,7 @@ class Task(Document):
     description: Optional[str] = None
     status: TaskStatus = TaskStatus.CREATED
     order: int = 0
+    version: int = 1
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     pipeline_id: str
@@ -27,6 +28,7 @@ class Task(Document):
 class Pipeline(Document):
     name: str
     description: Optional[str] = None
+    version: int = 1
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
