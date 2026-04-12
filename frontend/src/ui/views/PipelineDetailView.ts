@@ -477,7 +477,28 @@ export class PipelineDetailView extends View {
       // Sort open tasks
       openTasks.sort((a, b) => {
         if (this.currentSortOrder === 'execution') {
-          return a.order - b.order;
+          if (a.order !== b.order) {
+            return a.order - b.order; // Primary: User explicit order
+          }
+          
+          // Secondary: Status weight to push active/ready tasks up
+          const getStatusWeight = (status: TaskStatus | string) => {
+            if (status === TaskStatus.INPROGRESS) return 0;
+            if (status === TaskStatus.SCHEDULED) return 1;
+            if (status === TaskStatus.CREATED) return 2;
+            if (status === TaskStatus.FAILED) return 3;
+            return 4;
+          };
+          
+          const weightA = getStatusWeight(a.status);
+          const weightB = getStatusWeight(b.status);
+          
+          if (weightA !== weightB) {
+            return weightA - weightB;
+          }
+          
+          // Tertiary: Oldest first (FIFO)
+          return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
         } else if (this.currentSortOrder === 'newest') {
           return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
         } else {

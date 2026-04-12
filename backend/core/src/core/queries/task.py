@@ -5,8 +5,8 @@ from core.exceptions import EntityNotFoundError, VersionMismatchError
 
 async def get_tasks_by_pipeline(pipeline_id: str, include_deleted: bool = False) -> List[Task]:
     if include_deleted:
-        return await Task.find(Task.pipeline_id == pipeline_id).sort(+Task.order).to_list()
-    return await Task.find(Task.pipeline_id == pipeline_id, Task.deleted == False).sort(+Task.order).to_list()
+        return await Task.find(Task.pipeline_id == pipeline_id).sort(+Task.order, +Task.created_at).to_list()
+    return await Task.find(Task.pipeline_id == pipeline_id, Task.deleted == False).sort(+Task.order, +Task.created_at).to_list()
 
 async def get_task_by_id(task_id: str, include_deleted: bool = False) -> Task:
     try:
