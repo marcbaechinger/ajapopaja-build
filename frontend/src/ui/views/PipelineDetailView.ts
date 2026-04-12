@@ -92,9 +92,6 @@ export class PipelineDetailView extends View {
             const completedList = this.container?.querySelector('#completed-task-list');
             const topCompleted = completedList?.firstElementChild;
             if (topCompleted && topCompleted.tagName !== 'P') {
-              const details = topCompleted.querySelector('details.group\\/history');
-              if (details) details.setAttribute('open', '');
-              
               this.container?.querySelector('#last-completed-task')?.appendChild(topCompleted);
               if (completedList?.children.length === 0) {
                 completedList.innerHTML = '<p class="text-app-muted italic text-xs">No completed tasks yet.</p>';
@@ -166,9 +163,6 @@ export class PipelineDetailView extends View {
         const completedList = this.container.querySelector('#completed-task-list');
         const topCompleted = completedList?.firstElementChild;
         if (topCompleted && topCompleted.tagName !== 'P') {
-          const details = topCompleted.querySelector('details.group\\/history');
-          if (details) details.setAttribute('open', '');
-
           this.container.querySelector('#last-completed-task')?.appendChild(topCompleted);
           if (completedList?.children.length === 0) {
             completedList.innerHTML = '<p class="text-app-muted italic text-xs">No completed tasks yet.</p>';
@@ -184,9 +178,6 @@ export class PipelineDetailView extends View {
         if (lastCompletedContainer && completedList) {
           const currentLast = lastCompletedContainer.firstElementChild;
           if (currentLast && currentLast.tagName !== 'P') {
-            const details = currentLast.querySelector('details.group\\/history');
-            if (details) details.removeAttribute('open');
-
             if (completedList.querySelector('p.italic')) {
               completedList.innerHTML = '';
             }
