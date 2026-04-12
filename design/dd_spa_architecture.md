@@ -29,9 +29,9 @@ This document defines the architecture and design principles for the Ajapopaja B
     - The frontend `Client` catches this and notifies the UI to handle the conflict (e.g., via a "Merge or Overwrite" dialog).
 
 ### Real-Time Synchronization
-- **WebSocket Protocol**: A generic message-based protocol over a single WebSocket connection.
-- **Message Structure**: `{ "type": "TASK_UPDATED", "id": "uuid", "payload": { ... } }`.
-- **Registry**: An extensible `MessageHandlerRegistry` allows components to register for specific message types.
+- **WebSocket Protocol**: A generic message-based protocol over a single WebSocket connection (registered at root `/ws/{client_id}`).
+- **Message Structure**: `{ "type": "TASK_UPDATED", "payload": { ... } }`.
+- **WebSocketClient**: Manages the persistent connection, automatic reconnection, and subscription-based event handling (`on(type, handler)`).
 
 ## 5. Action Registry & Event Delegation
 ### Centralized Action Registry
@@ -73,11 +73,11 @@ const TaskItem = (task: Task) => `
 ```
 
 ## 8. Dialog System
-### `DialogManager`
-- Provides a static or singleton API to open/close dialogs.
-- Uses Tailwind-styled `<dialog>` elements or overlay patterns.
-- **Result Pattern**: `openDialog<T>(component): Promise<T | null>` (returns data on "Confirm", `null` on "Cancel").
-- Common logic for backdrop clicking, Escape key handling, and focus trapping is centralized.
+### `ConfirmationDialog`
+- Reusable component for simple confirm/cancel flows.
+- Uses Tailwind-styled native `<dialog>` elements with backdrop blur.
+- **Promise Pattern**: `show(): Promise<boolean>` (resolves to `true` on "Confirm", `false` on "Cancel" or backdrop click).
+- Centralized logic for centering, backdrop interaction, and Escape key handling.
 
 ## 9. Recommended Libraries
 - **`nanoid`**: For generating unique client-side IDs.

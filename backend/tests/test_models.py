@@ -12,6 +12,14 @@ async def test_task_version_default(init_mock_db):
     assert task.version == 1
 
 @pytest.mark.asyncio
+async def test_task_design_doc(init_mock_db):
+    task = Task(title="Test Task", pipeline_id="123", design_doc="This is a design doc.")
+    await task.insert()
+    
+    saved_task = await Task.get(task.id)
+    assert saved_task.design_doc == "This is a design doc."
+
+@pytest.mark.asyncio
 async def test_pipeline_save_version(init_mock_db):
     pipeline = Pipeline(name="Versioned Pipeline")
     await pipeline.insert()

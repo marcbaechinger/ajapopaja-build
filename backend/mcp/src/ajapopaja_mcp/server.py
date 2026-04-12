@@ -21,7 +21,10 @@ async def get_next_task(pipeline_id: str) -> str:
     if task:
         task.status = TaskStatus.INPROGRESS
         await task.save()
-        return f"Task ID: {task.id}\nTitle: {task.title}\nDescription: {task.description}"
+        response = f"Task ID: {task.id}\nTitle: {task.title}\nDescription: {task.description}"
+        if task.design_doc:
+            response += f"\nDesign Doc: {task.design_doc}"
+        return response
     
     return "No scheduled tasks found in this pipeline."
 

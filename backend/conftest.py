@@ -15,7 +15,7 @@ async def init_mock_db():
     )
     yield
     await client.drop_database("ajapopaja_test_db")
-    client.close()
+    await client.close()
 
 @pytest.fixture
 async def async_client():

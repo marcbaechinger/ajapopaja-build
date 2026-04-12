@@ -20,7 +20,7 @@ The system is composed of four primary interconnected components:
         *   Provide a RESTful HTTP API to manage Pipelines and Tasks (CRUD operations).
         *   Enforce business logic regarding state transitions (e.g., a task cannot move from `created` directly to `implemented` without being `scheduled` and `inprogress`).
         *   Serve as the backend for the human-facing management UI.
-        *   (Optional) Expose WebSockets for real-time UI updates when the MCP server changes task states.
+        *   Expose WebSockets for real-time UI updates when the MCP server or human managers change task states.
 
 3.  **MCP Server (Model Context Protocol)**
     *   **Role**: The direct interface for the Coding AI Agent (Gemini/Claude).
@@ -48,7 +48,7 @@ The system is composed of four primary interconnected components:
     *   The agent performs the required coding work.
     *   Upon completion, the agent calls an MCP tool (e.g., `mark_task_implemented(task_id)`).
     *   The MCP Server updates the task state in **MongoDB** to `implemented` (or `failed` if an error occurred).
-5.  **Monitoring**: The user observes these state changes in real-time or upon refresh via the **SPA Frontend** polling or receiving events from the **FastAPI Server**.
+5.  **Monitoring**: The user observes these state changes in real-time via the **SPA Frontend**, which receives events from the **FastAPI Server** over a WebSocket connection.
 
 ## 4. Shared Core Logic
 To maintain consistency and avoid code duplication, the **FastAPI Server** and the **MCP Server** will share a common Python core library. This core library will encapsulate:
@@ -57,7 +57,7 @@ To maintain consistency and avoid code duplication, the **FastAPI Server** and t
 *   The business logic governing state transitions (Lifecycle Management).
 
 ## 5. Technology Constraints & Decisions
-*   **Database**: MongoDB
-*   **Backend Languages**: Python (FastAPI, MCP Server)
-*   **Frontend Technologies**: HTML, CSS, JavaScript (Vanilla JS/SPA), Tailwind CSS.
+*   **Database**: MongoDB (via Beanie ODM)
+*   **Backend Languages**: Python (FastAPI, MCP SDK, websockets)
+*   **Frontend Technologies**: TypeScript (Vanilla), Tailwind CSS v4.
 *   *Note: Further specific library and tooling choices are detailed in the `dd_project_setup.md` document.*

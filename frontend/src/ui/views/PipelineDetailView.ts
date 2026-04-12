@@ -41,14 +41,18 @@ export class PipelineDetailView extends View {
     this.context.actionRegistry.register('create_task', async (e) => {
       e.preventDefault();
       const form = (e.target as HTMLElement).closest('form') as HTMLFormElement;
-      const input = form.querySelector('input') as HTMLInputElement;
-      const title = input.value.trim();
+      const titleInput = form.querySelector('#task-title') as HTMLInputElement;
+      const docInput = form.querySelector('#task-design-doc') as HTMLTextAreaElement;
+      
+      const title = titleInput.value.trim();
+      const designDoc = docInput.value.trim();
       
       if (!title) return;
 
       try {
-        await this.context.taskClient.create(this.pipelineId, title);
-        input.value = '';
+        await this.context.taskClient.create(this.pipelineId, title, designDoc || undefined);
+        titleInput.value = '';
+        docInput.value = '';
         // Refresh handled by WS
       } catch (error) {
         alert('Failed to create task');
@@ -197,6 +201,12 @@ export class PipelineDetailView extends View {
         </div>
         
         ${task.description ? `<p class="text-sm text-app-text/70">${task.description}</p>` : ''}
+        ${task.design_doc ? `
+          <div class="text-xs bg-app-surface p-3 rounded-lg border border-app-border italic text-app-text/60">
+            <span class="block font-bold not-italic text-app-accent-2 mb-1">Design Document</span>
+            ${task.design_doc}
+          </div>
+        ` : ''}
 
         ${task.commit_hash ? `
           <div class="text-xs font-mono text-app-accent-2 bg-app-surface p-2 rounded border border-app-border">
@@ -261,7 +271,11 @@ export class PipelineDetailView extends View {
             <form id="create-task" class="space-y-4">
               <div>
                 <label class="block text-sm font-medium text-app-muted mb-1">Task Title</label>
-                <input type="text" placeholder="e.g. Implement User Auth" class="w-full bg-app-bg border border-app-border rounded-lg px-4 py-2 focus:ring-2 focus:ring-app-accent-1 outline-none text-app-text transition-all">
+                <input type="text" id="task-title" placeholder="e.g. Implement User Auth" class="w-full bg-app-bg border border-app-border rounded-lg px-4 py-2 focus:ring-2 focus:ring-app-accent-1 outline-none text-app-text transition-all">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-app-muted mb-1">Design Doc (Optional)</label>
+                <textarea id="task-design-doc" rows="4" placeholder="Describe the implementation details..." class="w-full bg-app-bg border border-app-border rounded-lg px-4 py-2 focus:ring-2 focus:ring-app-accent-1 outline-none text-app-text transition-all text-sm"></textarea>
               </div>
               <button type="submit" data-action-click="create_task" class="w-full bg-app-accent-1 hover:brightness-110 text-white font-bold py-2 rounded-lg transition-all shadow-lg cursor-pointer">
                 Add to Pipeline

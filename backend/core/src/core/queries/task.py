@@ -35,7 +35,8 @@ async def update_task_details(
     version: int, 
     title: Optional[str] = None, 
     description: Optional[str] = None,
-    order: Optional[int] = None
+    order: Optional[int] = None,
+    design_doc: Optional[str] = None
 ) -> Task:
     task = await get_task_by_id(task_id)
     
@@ -50,6 +51,8 @@ async def update_task_details(
         task.description = description
     if order is not None:
         task.order = order
+    if design_doc is not None:
+        task.design_doc = design_doc
         
     task.version += 1
     await task.save()

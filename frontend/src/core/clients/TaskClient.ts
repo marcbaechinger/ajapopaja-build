@@ -20,11 +20,11 @@ export class TaskClient {
     return await response.json();
   }
 
-  async create(pipelineId: string, title: string): Promise<Task> {
+  async create(pipelineId: string, title: string, design_doc?: string): Promise<Task> {
     const response = await fetch(`${this.baseUrl}/pipelines/${pipelineId}/tasks/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, pipeline_id: pipelineId })
+      body: JSON.stringify({ title, pipeline_id: pipelineId, design_doc })
     });
     if (!response.ok) throw new Error('Failed to create task');
     return await response.json();
@@ -45,7 +45,7 @@ export class TaskClient {
     return await response.json();
   }
 
-  async updateDetails(id: string, version: number, details: Partial<{title: string, description: string, order: number}>): Promise<Task> {
+  async updateDetails(id: string, version: number, details: Partial<{title: string, description: string, order: number, design_doc: string}>): Promise<Task> {
     const response = await fetch(`${this.baseUrl}/tasks/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },

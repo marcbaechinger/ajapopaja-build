@@ -44,9 +44,10 @@ async def update_task_details(
     version: int = Body(..., embed=True),
     title: Optional[str] = Body(None, embed=True),
     description: Optional[str] = Body(None, embed=True),
-    order: Optional[int] = Body(None, embed=True)
+    order: Optional[int] = Body(None, embed=True),
+    design_doc: Optional[str] = Body(None, embed=True)
 ):
-    updated_task = await task_queries.update_task_details(task_id, version, title, description, order)
+    updated_task = await task_queries.update_task_details(task_id, version, title, description, order, design_doc)
     await manager.broadcast(WSMessage(
         type="TASK_UPDATED",
         payload=updated_task.model_dump(mode='json')

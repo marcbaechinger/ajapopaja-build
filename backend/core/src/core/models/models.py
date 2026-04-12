@@ -1,6 +1,6 @@
 from enum import Enum
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, UTC
 from pydantic import Field
 from beanie import Document
 
@@ -22,9 +22,10 @@ class Task(Document):
     commit_hash: Optional[str] = None
     completion_info: Optional[str] = None
     verification: Optional[Dict[str, Any]] = None
+    design_doc: Optional[str] = None
     parent_task_id: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     pipeline_id: str
 
     class Settings:
@@ -40,8 +41,8 @@ class Pipeline(Document):
     description: Optional[str] = None
     status: PipelineStatus = PipelineStatus.ACTIVE
     version: int = 1
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     class Settings:
         name = "pipelines"

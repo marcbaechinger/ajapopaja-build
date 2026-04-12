@@ -20,6 +20,7 @@ export class Task {
   commit_hash?: string | null;
   completion_info?: string | null;
   verification?: any | null;
+  design_doc?: string | null;
   parent_task_id?: string | null;
   pipeline_id: string = '';
   created_at?: string;

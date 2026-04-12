@@ -70,6 +70,24 @@ async def test_complete_task_failed_verification(init_mock_db):
     assert "Verification failed" in system_task.title
 
 @pytest.mark.asyncio
+async def test_update_task_design_doc(init_mock_db):
+    pipeline = Pipeline(name="Test Pipeline")
+    await pipeline.insert()
+    
+    task = Task(title="Test Task", pipeline_id=str(pipeline.id), order=10)
+    await task.insert()
+    
+    # Update design doc
+    updated_task = await task_queries.update_task_details(
+        task_id=str(task.id),
+        version=task.version,
+        design_doc="New design doc"
+    )
+    
+    assert updated_task.design_doc == "New design doc"
+    assert updated_task.version == 2
+
+@pytest.mark.asyncio
 async def test_reorder_tasks(init_mock_db):
     pipeline = Pipeline(name="Test Pipeline")
     await pipeline.insert()
