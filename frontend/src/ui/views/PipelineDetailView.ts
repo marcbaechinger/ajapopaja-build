@@ -79,6 +79,7 @@ export class PipelineDetailView extends View {
       if (message.payload?.pipeline_id === this.pipelineId) {
         // Update local cache
         this.allLoadedTasks = this.allLoadedTasks.filter(t => t._id !== message.payload.task_id);
+        this.updateHeaderStats();
 
         const taskEl = this.container?.querySelector(`[data-view-id="${message.payload.task_id}"]`);
         if (taskEl) {
@@ -133,6 +134,7 @@ export class PipelineDetailView extends View {
     } else {
       this.allLoadedTasks.push(task);
     }
+    this.updateHeaderStats();
 
     // If task is being edited locally, skip external updates to avoid losing state
     if (this.activeEditors.has(task._id)) {
@@ -469,6 +471,7 @@ export class PipelineDetailView extends View {
 
     try {
       this.allLoadedTasks = await this.context.taskClient.listByPipeline(this.pipelineId, true);
+      this.updateHeaderStats();
       const allTasks = this.allLoadedTasks;
       
       const openTasks = allTasks.filter(t => !t.deleted && !([TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED] as any[]).includes(t.status));
@@ -540,12 +543,61 @@ export class PipelineDetailView extends View {
     if (titleEl) titleEl.textContent = this.pipeline.name;
   }
 
+  private updateHeaderStats() {
+    if (!this.container) return;
+    const statsContainer = this.container.querySelector('#header-stats');
+    if (!statsContainer) return;
+
+    const statusCounts: Record<string, number> = {
+      [TaskStatus.CREATED]: 0,
+      [TaskStatus.SCHEDULED]: 0,
+      [TaskStatus.INPROGRESS]: 0,
+      [TaskStatus.IMPLEMENTED]: 0,
+      [TaskStatus.FAILED]: 0,
+      [TaskStatus.DISCARDED]: 0,
+    };
+    
+    let total = 0;
+    this.allLoadedTasks.forEach(t => {
+      if (!t.deleted && statusCounts[t.status] !== undefined) {
+        statusCounts[t.status]++;
+        total++;
+      }
+    });
+
+    if (total === 0) {
+      statsContainer.innerHTML = '';
+      return;
+    }
+
+    const colors: Record<string, string> = {
+      [TaskStatus.CREATED]: 'bg-slate-500',
+      [TaskStatus.SCHEDULED]: 'bg-blue-500',
+      [TaskStatus.INPROGRESS]: 'bg-amber-500',
+      [TaskStatus.IMPLEMENTED]: 'bg-green-500',
+      [TaskStatus.FAILED]: 'bg-red-500',
+      [TaskStatus.DISCARDED]: 'bg-slate-700',
+    };
+
+    statsContainer.innerHTML = Object.entries(statusCounts)
+      .filter(([_, count]) => count > 0)
+      .map(([status, count]) => `
+        <span class="flex items-center text-app-muted border border-app-border rounded px-1.5 py-0.5 bg-app-bg" title="${status}">
+          <span class="w-1.5 h-1.5 rounded-full ${colors[status]} mr-1.5"></span>
+          ${count}
+        </span>
+      `).join('');
+  }
+
   render() {    return `
       <div class="space-y-6 max-w-5xl mx-auto px-4 py-8">
         <header class="flex justify-between items-center bg-app-surface p-6 rounded-xl shadow-lg border border-app-border">
-          <div>
+          <div class="flex flex-col">
             <h2 id="pipeline-title" class="text-3xl font-bold text-app-accent-1">Loading...</h2>
-            <p class="text-app-muted text-sm mt-1">Pipeline ID: ${this.pipelineId}</p>
+            <div class="flex flex-wrap items-center gap-3 mt-2">
+              <p class="text-app-muted text-xs font-mono bg-app-bg px-2 py-1 rounded border border-app-border">ID: ${this.pipelineId}</p>
+              <div id="header-stats" class="flex flex-wrap gap-2 text-[10px] uppercase font-bold tracking-wider"></div>
+            </div>
           </div>
           <div class="flex gap-4 items-center">
              <button data-action-click="open_stats" class="text-app-accent-2 hover:brightness-110 font-bold transition-all text-sm px-3 py-1.5 rounded-lg border border-app-border bg-app-bg shadow-sm cursor-pointer" title="Keyboard Shortcut: s">
