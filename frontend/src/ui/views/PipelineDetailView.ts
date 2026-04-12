@@ -76,8 +76,22 @@ export class PipelineDetailView extends View {
         spellChecker: false,
         status: false,
         minHeight: "150px",
-        toolbar: ["bold", "italic", "heading", "|", "quote", "unordered-list", "ordered-list", "|", "link", "code", "table", "|", "preview", "side-by-side", "fullscreen"]
-      });
+        toolbar: ["bold", "italic", "heading", "|", "quote", "unordered-list", "ordered-list", "|", "link", "code", "table", "|", "preview", "side-by-side", "fullscreen"],
+        onFullScreen: (full: boolean) => {
+          if (full) {
+            container.classList.add('z-[100]');
+            // Add a temporary backdrop
+            const backdrop = document.createElement('div');
+            backdrop.id = 'editor-backdrop';
+            backdrop.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm z-[90]';
+            document.body.appendChild(backdrop);
+          } else {
+            container.classList.remove('z-[100]');
+            document.getElementById('editor-backdrop')?.remove();
+          }
+        }
+      } as any);
+
       this.activeEditors.set(taskId, editor);
       editor.codemirror.focus();
     });
