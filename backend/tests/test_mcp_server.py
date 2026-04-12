@@ -3,8 +3,8 @@ from core.models.models import Task, TaskStatus, Pipeline
 from ajapopaja_mcp.server import get_next_task, update_task_design_doc, complete_task, get_task_status
 
 @pytest.fixture(autouse=True)
-def setup_mcp_env(monkeypatch):
-    monkeypatch.setenv("DATABASE_NAME", "ajapopaja_test_db")
+def setup_mcp_env(monkeypatch, init_mock_db):
+    monkeypatch.setenv("DATABASE_NAME", init_mock_db)
 
 @pytest.mark.asyncio
 async def test_mcp_get_next_task_success(init_mock_db):
