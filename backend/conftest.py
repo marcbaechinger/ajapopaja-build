@@ -1,13 +1,13 @@
 import pytest
 from httpx import AsyncClient
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import AsyncMongoClient
 from beanie import init_beanie
 from api.main import app
 from core.models.models import Pipeline, Task
 
 @pytest.fixture
 async def init_mock_db():
-    client = AsyncIOMotorClient("mongodb://localhost:27017")
+    client = AsyncMongoClient("mongodb://localhost:27017")
     db = client["ajapopaja_test_db"]
     await init_beanie(
         database=db,

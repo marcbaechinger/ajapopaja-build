@@ -1,11 +1,13 @@
-export enum TaskStatus {
-  CREATED = "created",
-  SCHEDULED = "scheduled",
-  INPROGRESS = "inprogress",
-  IMPLEMENTED = "implemented",
-  DISCARDED = "discarded",
-  FAILED = "failed",
-}
+export const TaskStatus = {
+  CREATED: "created",
+  SCHEDULED: "scheduled",
+  INPROGRESS: "inprogress",
+  IMPLEMENTED: "implemented",
+  DISCARDED: "discarded",
+  FAILED: "failed",
+} as const;
+
+export type TaskStatus = typeof TaskStatus[keyof typeof TaskStatus];
 
 export class Task {
   _id?: string;
@@ -24,11 +26,13 @@ export class Task {
   updated_at?: string;
 }
 
-export enum PipelineStatus {
-  ACTIVE = "active",
-  PAUSED = "paused",
-  COMPLETED = "completed",
-}
+export const PipelineStatus = {
+  ACTIVE: "active",
+  PAUSED: "paused",
+  COMPLETED: "completed",
+} as const;
+
+export type PipelineStatus = typeof PipelineStatus[keyof typeof PipelineStatus];
 
 export class Pipeline {
   _id?: string;

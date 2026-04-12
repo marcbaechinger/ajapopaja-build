@@ -2,6 +2,7 @@ import { ActionRegistry } from './ActionRegistry';
 import { Navigator } from './Navigator';
 import { PipelineClient } from './clients/PipelineClient';
 import { TaskClient } from './clients/TaskClient';
+import { WebSocketClient } from './WebSocketClient';
 
 export interface AppState {
   theme: 'light' | 'dark';
@@ -12,6 +13,7 @@ export class AppContext {
   public readonly navigator: Navigator;
   public readonly pipelineClient: PipelineClient;
   public readonly taskClient: TaskClient;
+  public readonly wsClient: WebSocketClient;
   private state: AppState;
 
   constructor(containerId: string, apiBaseUrl: string) {
@@ -19,6 +21,7 @@ export class AppContext {
     this.navigator = new Navigator(containerId);
     this.pipelineClient = new PipelineClient(apiBaseUrl);
     this.taskClient = new TaskClient(apiBaseUrl);
+    this.wsClient = new WebSocketClient(apiBaseUrl);
     
     const savedTheme = document.documentElement.getAttribute('data-theme') as 'light' | 'dark' | null;
     this.state = {
@@ -41,6 +44,7 @@ export class AppContext {
   }
 
   start() {
+    this.wsClient.connect();
     this.navigator.start();
     console.log('Ajapopaja AppContext Started');
   }

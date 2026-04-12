@@ -4,10 +4,20 @@ import { Pipeline } from '../../core/domain.ts';
 
 export class DashboardView extends View {
   private container: HTMLElement | null = null;
+  private context: AppContext;
+  private unsub: (() => void) | null = null;
 
-  constructor(private context: AppContext) {
+  constructor(context: AppContext) {
     super();
+    this.context = context;
     this.registerActions();
+    this.setupWebSocket();
+  }
+
+  private setupWebSocket() {
+    this.unsub = this.context.wsClient.on('PIPELINE_CREATED', () => {
+      this.refreshList();
+    });
   }
 
   private registerActions() {
@@ -22,9 +32,7 @@ export class DashboardView extends View {
       try {
         await this.context.pipelineClient.create(name);
         input.value = '';
-        // The list will be updated via WebSocket if implemented, 
-        // or we can manually refresh for now.
-        this.refreshList();
+        // List will be updated via WebSocket
       } catch (error) {
         alert('Failed to create pipeline');
       }
@@ -37,22 +45,36 @@ export class DashboardView extends View {
     if (!listContainer) return;
 
     try {
+      console.log('Fetching pipelines from:', this.context.pipelineClient);
       const pipelines = await this.context.pipelineClient.list();
+      console.log('Pipelines loaded:', pipelines);
       listContainer.innerHTML = pipelines.length > 0 
         ? pipelines.map(p => this.renderPipelineItem(p)).join('')
         : '<p class="text-app-muted italic">No pipelines created yet.</p>';
     } catch (error) {
-      listContainer.innerHTML = '<p class="text-red-400">Error loading pipelines.</p>';
+      console.error('Error in refreshList:', error);
+      listContainer.innerHTML = `<p class="text-red-400">Error loading pipelines: ${error instanceof Error ? error.message : String(error)}</p>`;
     }
   }
 
   private renderPipelineItem(pipeline: Pipeline) {
+    const statusColors: Record<string, string> = {
+      'active': 'bg-green-600/20 text-green-400 border-green-600/30',
+      'paused': 'bg-amber-600/20 text-amber-400 border-amber-600/30',
+      'completed': 'bg-blue-600/20 text-blue-400 border-blue-600/30'
+    };
+
     return `
       <div class="bg-app-bg p-3 rounded-lg border border-app-border flex justify-between items-center transition-all hover:border-app-accent-1 cursor-pointer" 
            data-view-type="pipeline" data-view-id="${pipeline._id}"
            onclick="window.location.hash = '#/pipeline/${pipeline._id}'">
-        <span class="font-medium text-app-text">${pipeline.name}</span>
-        <span class="text-xs bg-app-surface px-2 py-1 rounded text-app-muted border border-app-border capitalize">v${pipeline.version}</span>
+        <div class="flex flex-col">
+          <span class="font-medium text-app-text">${pipeline.name}</span>
+          <span class="text-[10px] text-app-muted uppercase font-bold mt-1">v${pipeline.version}</span>
+        </div>
+        <span class="text-[10px] px-2 py-0.5 rounded border font-bold uppercase ${statusColors[pipeline.status] || 'bg-slate-600/20 text-slate-400 border-slate-600/30'}">
+          ${pipeline.status}
+        </span>
       </div>
     `;
   }
@@ -86,5 +108,9 @@ export class DashboardView extends View {
   mount(container: HTMLElement) {
     this.container = container;
     this.refreshList();
+  }
+
+  unmount() {
+    if (this.unsub) this.unsub();
   }
 }

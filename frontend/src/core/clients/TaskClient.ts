@@ -14,7 +14,7 @@ export class TaskClient {
   }
 
   async get(id: string): Promise<Task> {
-    const response = await fetch(`${this.baseUrl}/tasks/${id}/`);
+    const response = await fetch(`${this.baseUrl}/tasks/${id}`);
     if (response.status === 404) throw new Error(`Task ${id} not found`);
     if (!response.ok) throw new Error('Failed to fetch task');
     return await response.json();
@@ -31,7 +31,7 @@ export class TaskClient {
   }
 
   async updateStatus(id: string, status: TaskStatus, version: number): Promise<Task> {
-    const response = await fetch(`${this.baseUrl}/tasks/${id}/status/`, {
+    const response = await fetch(`${this.baseUrl}/tasks/${id}/status`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status, version })
@@ -45,8 +45,8 @@ export class TaskClient {
     return await response.json();
   }
 
-  async updateDetails(id: string, version: number, details: Partial<{title: string, description: string}>): Promise<Task> {
-    const response = await fetch(`${this.baseUrl}/tasks/${id}/`, {
+  async updateDetails(id: string, version: number, details: Partial<{title: string, description: string, order: number}>): Promise<Task> {
+    const response = await fetch(`${this.baseUrl}/tasks/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ version, ...details })
@@ -61,7 +61,7 @@ export class TaskClient {
   }
 
   async complete(id: string, version: number, commit_hash: string, completion_info: string): Promise<Task> {
-    const response = await fetch(`${this.baseUrl}/tasks/${id}/complete/`, {
+    const response = await fetch(`${this.baseUrl}/tasks/${id}/complete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ version, commit_hash, completion_info })
@@ -76,7 +76,7 @@ export class TaskClient {
   }
 
   async getNextTask(pipelineId: string): Promise<Task | null> {
-    const response = await fetch(`${this.baseUrl}/pipelines/${pipelineId}/tasks/next/`, {
+    const response = await fetch(`${this.baseUrl}/pipelines/${pipelineId}/tasks/next`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }
     });

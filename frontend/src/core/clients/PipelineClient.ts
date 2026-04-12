@@ -14,7 +14,7 @@ export class PipelineClient {
   }
 
   async get(id: string): Promise<Pipeline> {
-    const response = await fetch(`${this.baseUrl}/pipelines/${id}/`);
+    const response = await fetch(`${this.baseUrl}/pipelines/${id}`);
     if (response.status === 404) throw new Error(`Pipeline ${id} not found`);
     if (!response.ok) throw new Error('Failed to fetch pipeline');
     return await response.json();
@@ -31,7 +31,7 @@ export class PipelineClient {
   }
 
   async update(id: string, name: string, version: number): Promise<Pipeline> {
-    const response = await fetch(`${this.baseUrl}/pipelines/${id}/`, {
+    const response = await fetch(`${this.baseUrl}/pipelines/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, version })

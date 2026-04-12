@@ -1,8 +1,11 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { Navigator, View } from '../Navigator';
 
 class MockView implements View {
-  constructor(public id: string) {}
+  id: string;
+  constructor(id: string) {
+    this.id = id;
+  }
   render() {
     const el = document.createElement('div');
     el.id = `view-${this.id}`;
