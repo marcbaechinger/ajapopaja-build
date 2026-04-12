@@ -68,6 +68,7 @@ export class PipelineDetailView extends View {
       if (!taskId || !textarea) return;
 
       container.querySelector('.design-doc-view')?.classList.add('hidden');
+      container.querySelector('[data-action-click="toggle_design_doc_expand"]')?.classList.add('hidden');
       container.querySelector('.design-doc-edit')?.classList.remove('hidden');
 
       // Initialize EasyMDE
@@ -76,6 +77,7 @@ export class PipelineDetailView extends View {
         spellChecker: false,
         status: false,
         minHeight: "150px",
+        maxHeight: "300px",
         toolbar: ["bold", "italic", "heading", "|", "quote", "unordered-list", "ordered-list", "|", "link", "code", "table", "|", "preview", "side-by-side", "fullscreen"],
         onFullScreen: (full: boolean) => {
           if (full) {
@@ -96,6 +98,17 @@ export class PipelineDetailView extends View {
       editor.codemirror.focus();
     });
 
+    this.context.actionRegistry.register('toggle_design_doc_expand', async (_e, el) => {
+      const container = el.closest('.design-doc-container') as HTMLElement;
+      if (!container) return;
+      
+      const display = container.querySelector('.design-doc-display');
+      if (!display) return;
+
+      const isExpanded = display.classList.toggle('expanded');
+      el.textContent = isExpanded ? 'Show Less' : 'Show More';
+    });
+
     this.context.actionRegistry.register('cancel_design_doc', async (_e, el) => {
       const container = el.closest('.design-doc-container') as HTMLElement;
       if (!container) return;
@@ -110,6 +123,7 @@ export class PipelineDetailView extends View {
       }
 
       container.querySelector('.design-doc-view')?.classList.remove('hidden');
+      container.querySelector('[data-action-click="toggle_design_doc_expand"]')?.classList.remove('hidden');
       container.querySelector('.design-doc-edit')?.classList.add('hidden');
     });
 

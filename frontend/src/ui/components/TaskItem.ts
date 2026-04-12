@@ -72,10 +72,16 @@ export class TaskItem {
               <span class="font-bold text-app-accent-2">Design Document</span>
               <span class="text-[10px] text-app-muted opacity-0 group-hover:opacity-100 transition-opacity">Click to edit</span>
             </div>
-            <div class="design-doc-display prose prose-invert prose-sm max-w-none text-app-text/70">
+            <div class="design-doc-display prose prose-invert prose-sm max-w-none text-app-text/70 overflow-hidden relative transition-all duration-300">
               ${task.design_doc ? DOMPurify.sanitize(marked.parse(task.design_doc) as string) : '<span class="italic text-app-muted">Click to add design doc...</span>'}
+              ${task.design_doc ? '<div class="expand-overlay absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-app-surface to-transparent pointer-events-none"></div>' : ''}
             </div>
           </div>
+          ${task.design_doc ? `
+            <button data-action-click="toggle_design_doc_expand" class="mt-2 text-[10px] text-app-accent-2 hover:underline cursor-pointer">
+              Show More
+            </button>
+          ` : ''}
           
           <div class="design-doc-edit hidden flex flex-col gap-2">
             <span class="font-bold text-app-accent-2 mb-1">Editing Design Document</span>

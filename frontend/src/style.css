@@ -83,3 +83,16 @@ body {
 .editor-preview-active-side {
   @apply !bg-app-bg;
 }
+
+/* Design Doc Expand/Collapse */
+.design-doc-display:not(.expanded) {
+  @apply max-h-48;
+}
+
+.design-doc-display.expanded {
+  @apply max-h-none;
+}
+
+.design-doc-display.expanded .expand-overlay {
+  @apply hidden;
+}
