@@ -468,11 +468,11 @@ export class PipelineDetailView extends View {
     if (!listContainer || !lastCompletedContainer || !completedContainer) return;
 
     try {
-      this.allLoadedTasks = await this.context.taskClient.listByPipeline(this.pipelineId);
+      this.allLoadedTasks = await this.context.taskClient.listByPipeline(this.pipelineId, true);
       const allTasks = this.allLoadedTasks;
       
-      const openTasks = allTasks.filter(t => !([TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED] as any[]).includes(t.status));
-      const completedTasks = allTasks.filter(t => ([TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED] as any[]).includes(t.status));
+      const openTasks = allTasks.filter(t => !t.deleted && !([TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED] as any[]).includes(t.status));
+      const completedTasks = allTasks.filter(t => !t.deleted && ([TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED] as any[]).includes(t.status));
 
       // Sort open tasks
       openTasks.sort((a, b) => {
