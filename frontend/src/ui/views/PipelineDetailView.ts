@@ -4,6 +4,7 @@ import { Pipeline, TaskStatus, Task } from '../../core/domain.ts';
 import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
 import { TaskItem } from '../components/TaskItem.ts';
 import { HistoryDialog } from '../components/HistoryDialog.ts';
+import { StatsDialog } from '../components/StatsDialog.ts';
 import EasyMDE from 'easymde';
 
 export class PipelineDetailView extends View {
@@ -37,6 +38,12 @@ export class PipelineDetailView extends View {
       if (e.key === 'h' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
         new HistoryDialog(this.allLoadedTasks).show();
+      }
+
+      // 's' key for stats dialog
+      if (e.key === 's' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        new StatsDialog(this.allLoadedTasks).show();
       }
     };
     document.addEventListener('keydown', this.keydownHandler);
@@ -224,6 +231,11 @@ export class PipelineDetailView extends View {
   }
 
   private registerActions() {
+    this.context.actionRegistry.register('open_stats', async (e) => {
+      e.preventDefault();
+      new StatsDialog(this.allLoadedTasks).show();
+    });
+
     this.context.actionRegistry.register('change_sort_order', async (e) => {
       const select = e.target as HTMLSelectElement;
       this.currentSortOrder = select.value as any;
@@ -514,7 +526,11 @@ export class PipelineDetailView extends View {
             <h2 id="pipeline-title" class="text-3xl font-bold text-app-accent-1">Loading...</h2>
             <p class="text-app-muted text-sm mt-1">Pipeline ID: ${this.pipelineId}</p>
           </div>
-          <div class="flex gap-4">
+          <div class="flex gap-4 items-center">
+             <button data-action-click="open_stats" class="text-app-accent-2 hover:brightness-110 font-bold transition-all text-sm px-3 py-1.5 rounded-lg border border-app-border bg-app-bg shadow-sm cursor-pointer" title="Keyboard Shortcut: s">
+               <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+               Stats
+             </button>
              <button onclick="window.location.hash = '#'" class="text-app-muted hover:text-app-text transition-colors">
                &larr; Back to Dashboard
              </button>
