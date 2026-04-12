@@ -3,7 +3,7 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 
 export class TaskItem {
-  static render(task: Task): string {
+  static render(task: Task, showOrdering: boolean = true): string {
     const statusColors: Record<string, string> = {
       [TaskStatus.CREATED]: 'bg-slate-600 text-slate-300',
       [TaskStatus.SCHEDULED]: 'bg-blue-600 text-white animate-pulse',
@@ -74,6 +74,7 @@ export class TaskItem {
         </div>
         
         <div class="flex justify-between items-center mt-2">
+          ${showOrdering ? `
           <div class="flex gap-1">
             <button data-action-click="move_task_up" data-version="${task.version}" data-order="${task.order}"
                     ${isInProgress ? 'disabled' : ''}
@@ -86,6 +87,7 @@ export class TaskItem {
               &darr;
             </button>
           </div>
+          ` : '<div></div>'}
           <div class="flex gap-2">
             <button data-action-click="delete_task" 
                     class="p-1.5 hover:bg-red-500/20 text-app-muted hover:text-red-400 rounded transition-all cursor-pointer" title="Delete Task">

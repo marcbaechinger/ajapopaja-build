@@ -19,6 +19,18 @@ export class ActionRegistry {
         }
       }
     });
+
+    document.body.addEventListener('change', (event) => {
+      const target = event.target as HTMLElement;
+      const actionElement = target.closest('[data-action-change]') as HTMLElement;
+
+      if (actionElement) {
+        const actionName = actionElement.getAttribute('data-action-change');
+        if (actionName) {
+          this.execute(actionName, event, actionElement);
+        }
+      }
+    });
   }
 
   register(name: string, handler: ActionHandler) {
@@ -28,7 +40,9 @@ export class ActionRegistry {
   async execute(name: string, event: Event, element: HTMLElement) {
     const handler = this.handlers.get(name);
     if (handler) {
-      event.preventDefault();
+      if (event.type === 'click') {
+        event.preventDefault();
+      }
       event.stopPropagation();
       try {
         await handler(event, element);

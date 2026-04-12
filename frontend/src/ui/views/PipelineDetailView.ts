@@ -12,6 +12,7 @@ export class PipelineDetailView extends View {
   private context: AppContext;
   private unsubs: (() => void)[] = [];
   private activeEditors: Map<string, EasyMDE> = new Map();
+  private currentSortOrder: 'execution' | 'newest' | 'status' = 'execution';
 
   constructor(context: AppContext, params: Record<string, string>) {
     super();
@@ -41,6 +42,12 @@ export class PipelineDetailView extends View {
   }
 
   private registerActions() {
+    this.context.actionRegistry.register('change_sort_order', async (e) => {
+      const select = e.target as HTMLSelectElement;
+      this.currentSortOrder = select.value as any;
+      this.refreshTasks();
+    });
+
     this.context.actionRegistry.register('create_task', async (e) => {
       e.preventDefault();
       const form = (e.target as HTMLElement).closest('form') as HTMLFormElement;
@@ -261,13 +268,43 @@ export class PipelineDetailView extends View {
   async refreshTasks() {
     if (!this.container) return;
     const listContainer = this.container.querySelector('#task-list');
-    if (!listContainer) return;
+    const completedContainer = this.container.querySelector('#completed-task-list');
+    const completedCountEl = this.container.querySelector('#completed-count');
+    if (!listContainer || !completedContainer) return;
 
     try {
-      const tasks = await this.context.taskClient.listByPipeline(this.pipelineId);
-      listContainer.innerHTML = tasks.length > 0 
-        ? tasks.map(t => TaskItem.render(t)).join('')
-        : '<p class="text-app-muted italic">No tasks in this pipeline.</p>';
+      const allTasks = await this.context.taskClient.listByPipeline(this.pipelineId);
+      
+      const openTasks = allTasks.filter(t => !([TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED] as any[]).includes(t.status));
+      const completedTasks = allTasks.filter(t => ([TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED] as any[]).includes(t.status));
+
+      // Sort open tasks
+      openTasks.sort((a, b) => {
+        if (this.currentSortOrder === 'execution') {
+          return a.order - b.order;
+        } else if (this.currentSortOrder === 'newest') {
+          return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+        } else {
+          // Status sort
+          return a.status.localeCompare(b.status);
+        }
+      });
+
+      // Sort completed tasks by completion time (updated_at)
+      completedTasks.sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
+
+      const showOrdering = this.currentSortOrder === 'execution';
+      listContainer.innerHTML = openTasks.length > 0 
+        ? openTasks.map(t => TaskItem.render(t, showOrdering)).join('')
+        : '<p class="text-app-muted italic">No tasks to be done.</p>';
+
+      completedContainer.innerHTML = completedTasks.length > 0
+        ? completedTasks.map(t => TaskItem.render(t, false)).join('')
+        : '<p class="text-app-muted italic text-xs">No completed tasks yet.</p>';
+
+      if (completedCountEl) {
+        completedCountEl.textContent = `(${completedTasks.length})`;
+      }
     } catch (error) {
       listContainer.innerHTML = '<p class="text-red-400">Error loading tasks.</p>';
     }
@@ -308,9 +345,34 @@ export class PipelineDetailView extends View {
         </section>
 
         <section class="bg-app-surface p-6 rounded-xl shadow-xl border border-app-border w-full">
-          <h3 class="text-xl font-bold mb-4 text-app-accent-2">Task Sequence</h3>
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xl font-bold text-app-accent-2">Task Sequence</h3>
+            <div class="flex items-center gap-2">
+              <label class="text-xs text-app-muted uppercase font-bold tracking-wider">Sort:</label>
+              <select data-action-change="change_sort_order" class="bg-app-bg border border-app-border rounded px-2 py-1 text-xs text-app-text outline-none focus:ring-1 focus:ring-app-accent-1 cursor-pointer">
+                <option value="execution" ${this.currentSortOrder === 'execution' ? 'selected' : ''}>Execution Order</option>
+                <option value="newest" ${this.currentSortOrder === 'newest' ? 'selected' : ''}>Newest First</option>
+                <option value="status" ${this.currentSortOrder === 'status' ? 'selected' : ''}>By Status</option>
+              </select>
+            </div>
+          </div>
+          
           <div id="task-list" class="space-y-4">
             <p class="text-app-muted animate-pulse">Loading tasks...</p>
+          </div>
+
+          <div class="mt-8 pt-6 border-t border-app-border/30">
+            <details class="group/completed">
+              <summary class="flex items-center gap-2 cursor-pointer list-none text-app-muted hover:text-app-text transition-colors">
+                <svg class="w-4 h-4 transition-transform group-open/completed:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                </svg>
+                <span class="font-bold text-sm uppercase tracking-widest">Completed Tasks <span id="completed-count"></span></span>
+              </summary>
+              <div id="completed-task-list" class="space-y-4 mt-4 opacity-80">
+                <!-- Completed tasks will be rendered here -->
+              </div>
+            </details>
           </div>
         </section>
       </div>
