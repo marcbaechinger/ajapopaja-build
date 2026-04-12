@@ -55,21 +55,21 @@ body {
   @apply !bg-app-bg !text-app-accent-2;
 }
 .CodeMirror {
-  @apply !bg-app-bg !text-app-text !border-app-border;
+  @apply !bg-app-bg !text-app-text !border-app-border !text-base;
 }
 .CodeMirror-cursor {
   @apply !border-l-2 !border-app-accent-1;
 }
 .editor-preview {
-  @apply !bg-app-bg !text-app-text prose prose-invert prose-sm max-w-none;
+  @apply !bg-app-bg !text-app-text prose prose-invert prose-base max-w-none;
 }
 .CodeMirror-fullscreen {
-  @apply !fixed !inset-4 !z-50 !bg-app-bg !h-auto !w-auto !border !border-app-border !shadow-2xl !rounded-xl overflow-hidden;
+  @apply !fixed !inset-4 !z-50 !bg-app-bg !h-auto !w-auto !border !border-app-border !shadow-2xl !rounded-xl overflow-hidden !text-lg;
   top: 60px !important; /* Avoid overlap with our fake modal container padding */
 }
 
 .CodeMirror-fullscreen + .editor-preview-side {
-  @apply !fixed !z-50 !bg-app-bg !border-app-border;
+  @apply !fixed !z-50 !bg-app-bg !border-app-border prose-base;
   top: 60px !important;
   bottom: 16px !important;
   right: 16px !important;
