@@ -18,6 +18,48 @@ export class TaskItem {
     const isSystem = task.type === 'system';
     const isInProgress = task.status === TaskStatus.INPROGRESS;
 
+    const isImplemented = task.status === TaskStatus.IMPLEMENTED;
+
+    const designDocHtml = `
+        <div class="design-doc-container w-full text-xs bg-app-surface p-3 rounded-lg border border-app-border transition-all"
+             data-task-id="${task._id}" data-version="${task.version}">
+          <div class="design-doc-view ${isImplemented ? '' : 'cursor-pointer group'}" ${isImplemented ? '' : 'data-action-click="edit_design_doc"'}>
+            <div class="flex justify-between items-center mb-1">
+              <span class="font-bold text-app-accent-2">Design Document</span>
+              ${isImplemented ? '' : '<span class="text-[10px] text-app-muted opacity-0 group-hover:opacity-100 transition-opacity">Click to edit</span>'}
+            </div>
+            <div class="design-doc-display prose prose-invert prose-sm max-w-none text-app-text/70 overflow-hidden relative transition-all duration-300">
+              ${task.design_doc ? DOMPurify.sanitize(marked.parse(task.design_doc) as string) : '<span class="italic text-app-muted">Click to add design doc...</span>'}
+              ${task.design_doc ? '<div class="expand-overlay absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-app-surface to-transparent pointer-events-none"></div>' : ''}
+            </div>
+          </div>
+          ${task.design_doc ? `
+            <button data-action-click="toggle_design_doc_expand" class="mt-2 text-[10px] text-app-accent-2 hover:underline cursor-pointer">
+              Show More
+            </button>
+          ` : ''}
+          
+          <div class="design-doc-edit hidden flex flex-col gap-2">
+            <span class="font-bold text-app-accent-2 mb-1">Editing Design Document</span>
+            <textarea class="w-full bg-app-bg border border-app-border rounded p-2 text-app-text outline-none focus:ring-1 focus:ring-app-accent-2 min-h-[120px]" 
+                      placeholder="Describe the implementation details...">${task.design_doc || ''}</textarea>
+            <div class="flex gap-2 justify-between items-center">
+              <button data-action-click="toggle_edit_design_doc_expand" class="text-[10px] text-app-accent-2 hover:underline cursor-pointer">
+                Show More
+              </button>
+              <div class="flex gap-2">
+                <button data-action-click="cancel_design_doc" class="px-3 py-1 text-app-muted hover:text-app-text transition-colors cursor-pointer">
+                  Cancel
+                </button>
+                <button data-action-click="save_design_doc" class="px-4 py-1 bg-app-accent-2 text-white rounded hover:brightness-110 transition-all shadow-md cursor-pointer">
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+    `;
+
     return `
       <div class="bg-app-bg p-4 rounded-lg border border-app-border flex flex-col gap-3 transition-all hover:border-app-accent-1/30 ${isSystem ? 'border-l-4 border-l-red-500' : ''}" 
            data-view-type="task" data-view-id="${task._id}">
@@ -65,43 +107,25 @@ export class TaskItem {
         </div>
         ${task.description ? `<p class="text-sm text-app-text/70">${task.description}</p>` : ''}
         
-        <div class="design-doc-container w-full text-xs bg-app-surface p-3 rounded-lg border border-app-border transition-all"
-             data-task-id="${task._id}" data-version="${task.version}">
-          <div class="design-doc-view cursor-pointer group" data-action-click="edit_design_doc">
-            <div class="flex justify-between items-center mb-1">
-              <span class="font-bold text-app-accent-2">Design Document</span>
-              <span class="text-[10px] text-app-muted opacity-0 group-hover:opacity-100 transition-opacity">Click to edit</span>
+        ${task.completion_info ? `
+          <div class="bg-green-500/10 border border-green-500/20 p-3 rounded-lg text-sm text-app-text/80">
+            <div class="font-bold text-green-400 mb-1 flex items-center gap-2">
+               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+               Implementation Summary
             </div>
-            <div class="design-doc-display prose prose-invert prose-sm max-w-none text-app-text/70 overflow-hidden relative transition-all duration-300">
-              ${task.design_doc ? DOMPurify.sanitize(marked.parse(task.design_doc) as string) : '<span class="italic text-app-muted">Click to add design doc...</span>'}
-              ${task.design_doc ? '<div class="expand-overlay absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-app-surface to-transparent pointer-events-none"></div>' : ''}
-            </div>
+            ${task.completion_info}
           </div>
-          ${task.design_doc ? `
-            <button data-action-click="toggle_design_doc_expand" class="mt-2 text-[10px] text-app-accent-2 hover:underline cursor-pointer">
-              Show More
-            </button>
-          ` : ''}
-          
-          <div class="design-doc-edit hidden flex flex-col gap-2">
-            <span class="font-bold text-app-accent-2 mb-1">Editing Design Document</span>
-            <textarea class="w-full bg-app-bg border border-app-border rounded p-2 text-app-text outline-none focus:ring-1 focus:ring-app-accent-2 min-h-[120px]" 
-                      placeholder="Describe the implementation details...">${task.design_doc || ''}</textarea>
-            <div class="flex gap-2 justify-between items-center">
-              <button data-action-click="toggle_edit_design_doc_expand" class="text-[10px] text-app-accent-2 hover:underline cursor-pointer">
-                Show More
-              </button>
-              <div class="flex gap-2">
-                <button data-action-click="cancel_design_doc" class="px-3 py-1 text-app-muted hover:text-app-text transition-colors cursor-pointer">
-                  Cancel
-                </button>
-                <button data-action-click="save_design_doc" class="px-4 py-1 bg-app-accent-2 text-white rounded hover:brightness-110 transition-all shadow-md cursor-pointer">
-                  Save Changes
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        ` : ''}
+
+        ${isImplemented ? `
+          <details class="group/details">
+            <summary class="text-xs text-app-accent-2 cursor-pointer hover:underline list-none flex items-center gap-1 mb-2">
+              <svg class="w-3 h-3 transition-transform group-open/details:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+              View Design Document
+            </summary>
+            ${designDocHtml}
+          </details>
+        ` : designDocHtml}
 
         ${task.commit_hash ? `
           <div class="text-xs font-mono text-app-accent-2 bg-app-surface p-2 rounded border border-app-border w-fit">
