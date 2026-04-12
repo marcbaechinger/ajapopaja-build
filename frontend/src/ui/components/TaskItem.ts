@@ -97,20 +97,29 @@ export class TaskItem {
         </div>
         
         <div class="flex justify-between items-center mt-2">
-          ${showOrdering ? `
-          <div class="flex gap-1">
-            <button data-action-click="move_task_up" data-version="${task.version}" data-order="${task.order}"
-                    ${isInProgress ? 'disabled' : ''}
-                    class="p-1 hover:bg-app-surface rounded text-app-muted hover:text-app-accent-1 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed" title="Move Up">
-              &uarr;
-            </button>
-            <button data-action-click="move_task_down" data-version="${task.version}" data-order="${task.order}"
-                    ${isInProgress ? 'disabled' : ''}
-                    class="p-1 hover:bg-app-surface rounded text-app-muted hover:text-app-accent-1 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed" title="Move Down">
-              &darr;
-            </button>
+          <div class="flex gap-3 items-center">
+            ${showOrdering ? `
+            <div class="flex gap-1">
+              <button data-action-click="move_task_up" data-version="${task.version}" data-order="${task.order}"
+                      ${isInProgress ? 'disabled' : ''}
+                      class="p-1 hover:bg-app-surface rounded text-app-muted hover:text-app-accent-1 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed" title="Move Up">
+                &uarr;
+              </button>
+              <button data-action-click="move_task_down" data-version="${task.version}" data-order="${task.order}"
+                      ${isInProgress ? 'disabled' : ''}
+                      class="p-1 hover:bg-app-surface rounded text-app-muted hover:text-app-accent-1 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed" title="Move Down">
+                &darr;
+              </button>
+            </div>
+            ` : ''}
+            
+            ${task.commit_hash ? `
+              <div class="text-[10px] font-mono text-app-accent-2 bg-app-surface px-2 py-0.5 rounded border border-app-border" title="Commit Hash">
+                ${task.commit_hash.substring(0, 7)}
+              </div>
+            ` : ''}
           </div>
-          ` : '<div></div>'}
+
           <div class="flex gap-2">
             <button data-action-click="delete_task" 
                     class="p-1.5 hover:bg-red-500/20 text-app-muted hover:text-red-400 rounded transition-all cursor-pointer" title="Delete Task">
@@ -147,12 +156,6 @@ export class TaskItem {
         ${this.renderHistory(task, expandHistory)}
 
         ${designDocHtml}
-
-        ${task.commit_hash ? `
-          <div class="text-xs font-mono text-app-accent-2 bg-app-surface p-2 rounded border border-app-border w-fit">
-            Commit: ${task.commit_hash.substring(0, 7)}
-          </div>
-        ` : ''}
 
       </div>
     `;
