@@ -15,7 +15,7 @@ export class HistoryDialog {
     dialog.className = 'bg-app-surface text-app-text p-0 rounded-xl shadow-2xl border border-app-border backdrop:bg-black/50 backdrop:backdrop-blur-sm max-w-2xl w-full fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 m-0 max-h-[80vh] overflow-hidden flex flex-col';
     
     const implementedTasks = this.tasks
-      .filter(t => t.status === TaskStatus.IMPLEMENTED)
+      .filter(t => !t.deleted && t.status === TaskStatus.IMPLEMENTED)
       .sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
 
     dialog.innerHTML = `

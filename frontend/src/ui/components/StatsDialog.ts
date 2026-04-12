@@ -66,15 +66,19 @@ export class StatsDialog {
       [TaskStatus.IMPLEMENTED]: 0,
       [TaskStatus.FAILED]: 0,
       [TaskStatus.DISCARDED]: 0,
+      'DELETED': 0,
     };
     
+    let total = 0;
     this.tasks.forEach(t => {
-      if (statusCounts[t.status] !== undefined) {
+      if (t.deleted) {
+        statusCounts['DELETED']++;
+      } else if (statusCounts[t.status] !== undefined) {
         statusCounts[t.status]++;
       }
+      total++;
     });
     
-    const total = this.tasks.length;
     const completionTimes = this.calculateCompletionTimes();
 
     const colors: Record<string, string> = {
@@ -83,7 +87,8 @@ export class StatsDialog {
       [TaskStatus.INPROGRESS]: 'bg-amber-600',
       [TaskStatus.IMPLEMENTED]: 'bg-green-600',
       [TaskStatus.FAILED]: 'bg-red-600',
-      [TaskStatus.DISCARDED]: 'bg-slate-800'
+      [TaskStatus.DISCARDED]: 'bg-slate-800',
+      'DELETED': 'bg-red-900',
     };
 
     const bars = Object.entries(statusCounts).map(([status, count]) => {
