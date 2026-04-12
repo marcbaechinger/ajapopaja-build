@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Any
 from core.models.models import Task, TaskStatus
 from core.exceptions import EntityNotFoundError, VersionMismatchError
 
@@ -113,7 +113,7 @@ def _verify_task(task: Task) -> dict:
     }
 
 async def get_next_task(pipeline_id: str) -> Optional[Task]:
-    """Finds the first scheduled task (lowest order) and sets it to inprogress."""
+    """Finds the first scheduled task (lowest order), sets it to inprogress, and increments version."""
     task = await Task.find(
         Task.pipeline_id == pipeline_id,
         Task.status == TaskStatus.SCHEDULED
@@ -123,8 +123,9 @@ async def get_next_task(pipeline_id: str) -> Optional[Task]:
         task.status = TaskStatus.INPROGRESS
         task.version += 1
         await task.save()
+        return task
         
-    return task
+    return None
 
 async def delete_task(task_id: str):
     task = await get_task_by_id(task_id)
