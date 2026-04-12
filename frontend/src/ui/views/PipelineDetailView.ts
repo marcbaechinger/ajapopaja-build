@@ -42,17 +42,14 @@ export class PipelineDetailView extends View {
       e.preventDefault();
       const form = (e.target as HTMLElement).closest('form') as HTMLFormElement;
       const titleInput = form.querySelector('#task-title') as HTMLInputElement;
-      const docInput = form.querySelector('#task-design-doc') as HTMLTextAreaElement;
       
       const title = titleInput.value.trim();
-      const designDoc = docInput.value.trim();
       
       if (!title) return;
 
       try {
-        await this.context.taskClient.create(this.pipelineId, title, designDoc || undefined);
+        await this.context.taskClient.create(this.pipelineId, title);
         titleInput.value = '';
-        docInput.value = '';
         // Refresh handled by WS
       } catch (error) {
         alert('Failed to create task');
@@ -202,14 +199,14 @@ export class PipelineDetailView extends View {
         
         ${task.description ? `<p class="text-sm text-app-text/70">${task.description}</p>` : ''}
         ${task.design_doc ? `
-          <div class="text-xs bg-app-surface p-3 rounded-lg border border-app-border italic text-app-text/60">
+          <div class="w-full text-xs bg-app-surface p-3 rounded-lg border border-app-border italic text-app-text/60">
             <span class="block font-bold not-italic text-app-accent-2 mb-1">Design Document</span>
             ${task.design_doc}
           </div>
         ` : ''}
 
         ${task.commit_hash ? `
-          <div class="text-xs font-mono text-app-accent-2 bg-app-surface p-2 rounded border border-app-border">
+          <div class="text-xs font-mono text-app-accent-2 bg-app-surface p-2 rounded border border-app-border w-fit">
             Commit: ${task.commit_hash.substring(0, 7)}
           </div>
         ` : ''}
@@ -252,7 +249,7 @@ export class PipelineDetailView extends View {
 
   render() {
     return `
-      <div class="space-y-8">
+      <div class="space-y-6 max-w-5xl mx-auto px-4 py-8">
         <header class="flex justify-between items-center bg-app-surface p-6 rounded-xl shadow-lg border border-app-border">
           <div>
             <h2 id="pipeline-title" class="text-3xl font-bold text-app-accent-1">Loading...</h2>
@@ -265,31 +262,26 @@ export class PipelineDetailView extends View {
           </div>
         </header>
 
-        <main class="grid gap-8 md:grid-cols-3">
-          <section class="bg-app-surface p-6 rounded-xl shadow-xl border border-app-border md:col-span-1 h-fit">
-            <h3 class="text-xl font-bold mb-4 text-app-accent-1">Add Task</h3>
-            <form id="create-task" class="space-y-4">
-              <div>
-                <label class="block text-sm font-medium text-app-muted mb-1">Task Title</label>
-                <input type="text" id="task-title" placeholder="e.g. Implement User Auth" class="w-full bg-app-bg border border-app-border rounded-lg px-4 py-2 focus:ring-2 focus:ring-app-accent-1 outline-none text-app-text transition-all">
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-app-muted mb-1">Design Doc (Optional)</label>
-                <textarea id="task-design-doc" rows="4" placeholder="Describe the implementation details..." class="w-full bg-app-bg border border-app-border rounded-lg px-4 py-2 focus:ring-2 focus:ring-app-accent-1 outline-none text-app-text transition-all text-sm"></textarea>
-              </div>
-              <button type="submit" data-action-click="create_task" class="w-full bg-app-accent-1 hover:brightness-110 text-white font-bold py-2 rounded-lg transition-all shadow-lg cursor-pointer">
-                Add to Pipeline
-              </button>
-            </form>
-          </section>
-
-          <section class="bg-app-surface p-6 rounded-xl shadow-xl border border-app-border md:col-span-2">
-            <h3 class="text-xl font-bold mb-4 text-app-accent-2">Task Sequence</h3>
-            <div id="task-list" class="space-y-4">
-              <p class="text-app-muted animate-pulse">Loading tasks...</p>
+        <section class="bg-app-surface p-6 rounded-xl shadow-xl border border-app-border w-full">
+          <form id="create-task" class="flex flex-col md:flex-row gap-4 items-end">
+            <div class="flex-grow w-full">
+              <label class="block text-sm font-medium text-app-muted mb-1">Add New Task</label>
+              <input type="text" id="task-title" placeholder="e.g. Implement User Auth" 
+                     class="w-full bg-app-bg border border-app-border rounded-lg px-4 py-2 focus:ring-2 focus:ring-app-accent-1 outline-none text-app-text transition-all">
             </div>
-          </section>
-        </main>
+            <button type="submit" data-action-click="create_task" 
+                    class="w-full md:w-auto bg-app-accent-1 hover:brightness-110 text-white font-bold px-8 py-2 rounded-lg transition-all shadow-lg cursor-pointer h-[42px]">
+              Add Task
+            </button>
+          </form>
+        </section>
+
+        <section class="bg-app-surface p-6 rounded-xl shadow-xl border border-app-border w-full">
+          <h3 class="text-xl font-bold mb-4 text-app-accent-2">Task Sequence</h3>
+          <div id="task-list" class="space-y-4">
+            <p class="text-app-muted animate-pulse">Loading tasks...</p>
+          </div>
+        </section>
       </div>
     `;
   }
