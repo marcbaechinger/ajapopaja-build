@@ -13,6 +13,12 @@ This document provides a condensed, high-signal context for Gemini CLI and other
 
 ## 2. Operational Mandates for AI Agents
 - **Recommended CWD**: Always start in the project root `/home/marc-baechinger/monolit/code/ajapopaja-build/`.
+- **Git Commit Conventions**: 
+    - The first line of the commit message must start with a `[topic]` tag (e.g., `[backend]`, `[frontend]`, `[infra]`, `[bugfix]`, `[cleanup]`, `[design]`, `[test]`).
+    - The first letter of the first line after the tag must be capitalized (e.g., `[backend] Setup API`).
+    - The topic tag should denote the module or type of change.
+    - Additional details belong in the description after a single blank line.
+    - **Always suggest a commit message** once a task is completed and wait for user confirmation before committing.
 - **Dependency Management**: Use `uv` for all Python operations. It manages the workspace and local `core` linking.
 - **Execution Wrapper**: Always use `uv run --package <pkg>` from the `backend/` directory or provide the full path to `backend/.venv/bin/`.
 - **Naming Note**: The MCP package is named `ajapopaja_mcp` to avoid conflicts with the `mcp` SDK.
