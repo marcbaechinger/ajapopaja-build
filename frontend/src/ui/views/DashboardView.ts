@@ -1,7 +1,8 @@
 import { View } from '../../core/Navigator.ts';
 import { AppContext } from '../../core/AppContext.ts';
-import { Pipeline } from '../../core/domain.ts';
+import { Pipeline, Task } from '../../core/domain.ts';
 import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
+import { PipelineStatsView } from '../components/PipelineStatsView.ts';
 
 export class DashboardView extends View {
   private container: HTMLElement | null = null;
@@ -22,6 +23,13 @@ export class DashboardView extends View {
     this.unsubs.push(this.context.wsClient.on('PIPELINE_DELETED', () => {
       this.refreshList();
     }));
+    // We should also refresh if a task is created/updated/deleted
+    // since we're displaying stats on the dashboard now.
+    this.unsubs.push(this.context.wsClient.on('TASK_CREATED', () => this.refreshList()));
+    this.unsubs.push(this.context.wsClient.on('TASK_UPDATED', () => this.refreshList()));
+    this.unsubs.push(this.context.wsClient.on('TASK_STATUS_UPDATED', () => this.refreshList()));
+    this.unsubs.push(this.context.wsClient.on('TASK_COMPLETED', () => this.refreshList()));
+    this.unsubs.push(this.context.wsClient.on('TASK_DELETED', () => this.refreshList()));
   }
 
   private registerActions() {
@@ -42,7 +50,8 @@ export class DashboardView extends View {
       }
     });
 
-    this.context.actionRegistry.register('delete_pipeline', async (_e, el) => {
+    this.context.actionRegistry.register('delete_pipeline', async (e, el) => {
+      e.stopPropagation(); // Prevent view_pipeline
       const pipelineId = el.closest('[data-view-id]')?.getAttribute('data-view-id');
       if (!pipelineId) return;
 
@@ -62,7 +71,11 @@ export class DashboardView extends View {
       }
     });
 
-    this.context.actionRegistry.register('view_pipeline', async (_e, el) => {
+    this.context.actionRegistry.register('view_pipeline', async (e, el) => {
+      // Don't navigate if clicking the delete button
+      if ((e.target as HTMLElement).closest('[data-action-click="delete_pipeline"]')) {
+        return;
+      }
       const pipelineId = el.closest('[data-view-id]')?.getAttribute('data-view-id');
       if (pipelineId) {
         window.location.hash = `#/pipeline/${pipelineId}`;
@@ -72,23 +85,40 @@ export class DashboardView extends View {
 
   async refreshList() {
     if (!this.container) return;
-    const listContainer = this.container.querySelector('#pipeline-list');
+    const listContainer = this.container.querySelector('#pipeline-list') as HTMLElement;
     if (!listContainer) return;
 
     try {
-      console.log('Fetching pipelines from:', this.context.pipelineClient);
       const pipelines = await this.context.pipelineClient.list();
-      console.log('Pipelines loaded:', pipelines);
-      listContainer.innerHTML = pipelines.length > 0 
-        ? pipelines.map(p => this.renderPipelineItem(p)).join('')
-        : '<p class="text-app-muted italic">No pipelines created yet.</p>';
+      
+      if (pipelines.length === 0) {
+        listContainer.innerHTML = '<p class="text-app-muted italic">No pipelines created yet.</p>';
+        return;
+      }
+
+      // Fetch tasks for all pipelines concurrently
+      const pipelinesWithTasks = await Promise.all(
+        pipelines.map(async (pipeline) => {
+          try {
+            const tasks = pipeline._id ? await this.context.taskClient.listByPipeline(pipeline._id, true) : [];
+            return { pipeline, tasks };
+          } catch (e) {
+            console.error(`Failed to load tasks for pipeline ${pipeline._id}:`, e);
+            return { pipeline, tasks: [] };
+          }
+        })
+      );
+
+      listContainer.innerHTML = pipelinesWithTasks.map(({pipeline, tasks}) => this.renderPipelineItem(pipeline, tasks)).join('');
+      
+      PipelineStatsView.animateBars(listContainer);
     } catch (error) {
       console.error('Error in refreshList:', error);
       listContainer.innerHTML = `<p class="text-red-400">Error loading pipelines: ${error instanceof Error ? error.message : String(error)}</p>`;
     }
   }
 
-  private renderPipelineItem(pipeline: Pipeline) {
+  private renderPipelineItem(pipeline: Pipeline, tasks: Task[]) {
     const statusColors: Record<string, string> = {
       'active': 'bg-green-600/20 text-green-400 border-green-600/30',
       'paused': 'bg-amber-600/20 text-amber-400 border-amber-600/30',
@@ -96,21 +126,27 @@ export class DashboardView extends View {
     };
 
     return `
-      <div class="bg-app-bg p-3 rounded-lg border border-app-border flex justify-between items-center transition-all hover:border-app-accent-1 cursor-pointer group" 
+      <div class="bg-app-bg p-4 rounded-lg border border-app-border flex flex-col gap-3 transition-all hover:border-app-accent-1 cursor-pointer group mb-4" 
            data-view-type="pipeline" data-view-id="${pipeline._id}"
            data-action-click="view_pipeline">
-        <div class="flex flex-col">
-          <span class="font-medium text-app-text">${pipeline.name}</span>
-          <span class="text-[10px] text-app-muted uppercase font-bold mt-1">v${pipeline.version}</span>
+        <div class="flex justify-between items-start">
+          <div class="flex flex-col">
+            <span class="font-bold text-app-text text-lg">${pipeline.name}</span>
+            <span class="text-[10px] text-app-muted uppercase font-bold mt-1 tracking-wider">Version ${pipeline.version}</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-[10px] px-2 py-0.5 rounded border font-bold uppercase ${statusColors[pipeline.status] || 'bg-slate-600/20 text-slate-400 border-slate-600/30'}">
+              ${pipeline.status}
+            </span>
+            <button data-action-click="delete_pipeline" 
+                    class="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-500/20 text-app-muted hover:text-red-400 rounded transition-all cursor-pointer" title="Delete Pipeline">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+            </button>
+          </div>
         </div>
-        <div class="flex items-center gap-3">
-          <span class="text-[10px] px-2 py-0.5 rounded border font-bold uppercase ${statusColors[pipeline.status] || 'bg-slate-600/20 text-slate-400 border-slate-600/30'}">
-            ${pipeline.status}
-          </span>
-          <button data-action-click="delete_pipeline" 
-                  class="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-500/20 text-app-muted hover:text-red-400 rounded transition-all cursor-pointer" title="Delete Pipeline">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-          </button>
+        
+        <div class="pt-2">
+          ${PipelineStatsView.render(tasks, true)}
         </div>
       </div>
     `;
@@ -119,7 +155,7 @@ export class DashboardView extends View {
   render() {
     return `
       <main class="grid gap-8 md:grid-cols-2">
-        <section class="bg-app-surface p-6 rounded-xl shadow-xl border border-app-border transition-all hover:border-app-accent-1/50">
+        <section class="bg-app-surface p-6 rounded-xl shadow-xl border border-app-border transition-all hover:border-app-accent-1/50 h-fit">
           <h2 class="text-2xl font-bold mb-4 text-app-accent-1">Create Pipeline</h2>
           <form id="create-pipeline" class="space-y-4">
             <div>
