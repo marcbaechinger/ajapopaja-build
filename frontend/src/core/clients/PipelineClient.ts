@@ -7,14 +7,18 @@ export class PipelineClient {
     this.baseUrl = baseUrl;
   }
 
-  async list(): Promise<Pipeline[]> {
-    const response = await fetch(`${this.baseUrl}/pipelines/`);
+  async list(includeDeleted: boolean = false): Promise<Pipeline[]> {
+    const url = new URL(`${this.baseUrl}/pipelines/`);
+    if (includeDeleted) url.searchParams.append('include_deleted', 'true');
+    const response = await fetch(url.toString());
     if (!response.ok) throw new Error('Failed to fetch pipelines');
     return await response.json();
   }
 
-  async get(id: string): Promise<Pipeline> {
-    const response = await fetch(`${this.baseUrl}/pipelines/${id}`);
+  async get(id: string, includeDeleted: boolean = false): Promise<Pipeline> {
+    const url = new URL(`${this.baseUrl}/pipelines/${id}`);
+    if (includeDeleted) url.searchParams.append('include_deleted', 'true');
+    const response = await fetch(url.toString());
     if (response.status === 404) throw new Error(`Pipeline ${id} not found`);
     if (!response.ok) throw new Error('Failed to fetch pipeline');
     return await response.json();

@@ -1,13 +1,20 @@
 from typing import List, Optional, Any
+from beanie import PydanticObjectId
 from core.models.models import Task, TaskStatus
 from core.exceptions import EntityNotFoundError, VersionMismatchError
 
-async def get_tasks_by_pipeline(pipeline_id: str) -> List[Task]:
-    return await Task.find(Task.pipeline_id == pipeline_id).sort(+Task.order).to_list()
+async def get_tasks_by_pipeline(pipeline_id: str, include_deleted: bool = False) -> List[Task]:
+    if include_deleted:
+        return await Task.find(Task.pipeline_id == pipeline_id).sort(+Task.order).to_list()
+    return await Task.find(Task.pipeline_id == pipeline_id, Task.deleted == False).sort(+Task.order).to_list()
 
-async def get_task_by_id(task_id: str) -> Task:
-    task = await Task.get(task_id)
-    if not task:
+async def get_task_by_id(task_id: str, include_deleted: bool = False) -> Task:
+    try:
+        task = await Task.get(task_id)
+    except Exception:
+        task = None
+        
+    if not task or (not include_deleted and task.deleted):
         raise EntityNotFoundError(f"Task with ID {task_id} not found")
     return task
 
@@ -116,7 +123,8 @@ async def get_next_task(pipeline_id: str) -> Optional[Task]:
     """Finds the first scheduled task (lowest order), sets it to inprogress, and increments version."""
     task = await Task.find(
         Task.pipeline_id == pipeline_id,
-        Task.status == TaskStatus.SCHEDULED
+        Task.status == TaskStatus.SCHEDULED,
+        Task.deleted == False
     ).sort(+Task.order).first_or_none()
     
     if task:
@@ -129,4 +137,6 @@ async def get_next_task(pipeline_id: str) -> Optional[Task]:
 
 async def delete_task(task_id: str):
     task = await get_task_by_id(task_id)
-    await task.delete()
+    task.deleted = True
+    task.version += 1
+    await task.save()

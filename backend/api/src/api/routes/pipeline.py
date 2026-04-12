@@ -7,8 +7,8 @@ from api.websocket_manager import manager, WSMessage
 router = APIRouter(prefix="/pipelines", tags=["pipelines"])
 
 @router.get("/", response_model=List[Pipeline])
-async def get_pipelines():
-    return await pipeline_queries.get_all_pipelines()
+async def get_pipelines(include_deleted: bool = False):
+    return await pipeline_queries.get_all_pipelines(include_deleted)
 
 @router.post("/", response_model=Pipeline)
 async def create_pipeline(pipeline: Pipeline):
@@ -20,8 +20,8 @@ async def create_pipeline(pipeline: Pipeline):
     return new_pipeline
 
 @router.get("/{pipeline_id}", response_model=Pipeline)
-async def get_pipeline(pipeline_id: str):
-    return await pipeline_queries.get_pipeline_by_id(pipeline_id)
+async def get_pipeline(pipeline_id: str, include_deleted: bool = False):
+    return await pipeline_queries.get_pipeline_by_id(pipeline_id, include_deleted)
 
 @router.patch("/{pipeline_id}", response_model=Pipeline)
 async def update_pipeline(

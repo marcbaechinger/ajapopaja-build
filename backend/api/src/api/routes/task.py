@@ -8,8 +8,8 @@ from api.websocket_manager import manager, WSMessage
 task_router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 @task_router.get("/{task_id}", response_model=Task)
-async def get_task(task_id: str):
-    return await task_queries.get_task_by_id(task_id)
+async def get_task(task_id: str, include_deleted: bool = False):
+    return await task_queries.get_task_by_id(task_id, include_deleted)
 
 @task_router.patch("/{task_id}/status", response_model=Task)
 async def update_task_status(
@@ -69,8 +69,8 @@ async def delete_task(task_id: str):
 pipeline_task_router = APIRouter(prefix="/pipelines/{pipeline_id}/tasks", tags=["tasks"])
 
 @pipeline_task_router.get("/", response_model=List[Task])
-async def list_pipeline_tasks(pipeline_id: str):
-    return await task_queries.get_tasks_by_pipeline(pipeline_id)
+async def list_pipeline_tasks(pipeline_id: str, include_deleted: bool = False):
+    return await task_queries.get_tasks_by_pipeline(pipeline_id, include_deleted)
 
 @pipeline_task_router.post("/next", response_model=Optional[Task])
 async def get_next_task(pipeline_id: str):

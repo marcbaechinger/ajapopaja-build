@@ -27,6 +27,7 @@ class Task(Document):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     pipeline_id: str
+    deleted: bool = False
 
     class Settings:
         name = "tasks"
@@ -43,6 +44,7 @@ class Pipeline(Document):
     version: int = 1
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    deleted: bool = False
 
     class Settings:
         name = "pipelines"

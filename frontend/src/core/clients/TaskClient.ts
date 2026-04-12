@@ -7,14 +7,18 @@ export class TaskClient {
     this.baseUrl = baseUrl;
   }
 
-  async listByPipeline(pipelineId: string): Promise<Task[]> {
-    const response = await fetch(`${this.baseUrl}/pipelines/${pipelineId}/tasks/`);
+  async listByPipeline(pipelineId: string, includeDeleted: boolean = false): Promise<Task[]> {
+    const url = new URL(`${this.baseUrl}/pipelines/${pipelineId}/tasks/`);
+    if (includeDeleted) url.searchParams.append('include_deleted', 'true');
+    const response = await fetch(url.toString());
     if (!response.ok) throw new Error('Failed to fetch tasks');
     return await response.json();
   }
 
-  async get(id: string): Promise<Task> {
-    const response = await fetch(`${this.baseUrl}/tasks/${id}`);
+  async get(id: string, includeDeleted: boolean = false): Promise<Task> {
+    const url = new URL(`${this.baseUrl}/tasks/${id}`);
+    if (includeDeleted) url.searchParams.append('include_deleted', 'true');
+    const response = await fetch(url.toString());
     if (response.status === 404) throw new Error(`Task ${id} not found`);
     if (!response.ok) throw new Error('Failed to fetch task');
     return await response.json();

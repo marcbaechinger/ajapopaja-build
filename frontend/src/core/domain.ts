@@ -25,6 +25,7 @@ export class Task {
   pipeline_id: string = '';
   created_at?: string;
   updated_at?: string;
+  deleted: boolean = false;
 }
 
 export const PipelineStatus = {
@@ -43,6 +44,7 @@ export class Pipeline {
   version: number = 1;
   created_at?: string;
   updated_at?: string;
+  deleted: boolean = false;
 }
 
 export interface WSMessage {
