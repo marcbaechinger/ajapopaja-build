@@ -11,9 +11,10 @@ export class WebSocketClient {
   private url: string;
 
   constructor(_apiBaseUrl: string) {
-    // Hardcoded for now to match API_BASE
-    this.url = 'ws://localhost:8000/ws';
+    // Connect to root /ws to avoid static file mount issues
+    this.url = 'ws://localhost:8000/ws/browser';
   }
+
 
   public connect() {
     if (this.ws?.readyState === WebSocket.OPEN) return;

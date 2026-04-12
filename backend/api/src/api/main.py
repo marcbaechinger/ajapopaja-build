@@ -23,14 +23,39 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Initialize database
     logger.info("Initializing database...")
     await init_db()
     yield
 
 app = FastAPI(title="Ajapopaja Build API", lifespan=lifespan)
 
-# Global Exception Handlers
+# CORS Configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Root level WebSocket - Matches BEFORE routers and BEFORE static mount
+@app.websocket("/ws/{client_id}")
+async def websocket_endpoint(websocket: WebSocket, client_id: str):
+    logger.info(f"WS connection attempt: {client_id}")
+    await websocket.accept()
+    await manager.add_connection(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            await manager.handle_message(data, websocket)
+    except WebSocketDisconnect:
+        logger.info(f"WS disconnected: {client_id}")
+        manager.disconnect(websocket)
+    except Exception as e:
+        logger.error(f"WS error for {client_id}: {e}")
+        manager.disconnect(websocket)
+
+# Exception Handlers
 @app.exception_handler(EntityNotFoundError)
 async def entity_not_found_handler(request: Request, exc: EntityNotFoundError):
     return JSONResponse(status_code=404, content={"detail": str(exc)})
@@ -47,40 +72,18 @@ async def validation_error_handler(request: Request, exc: ValidationError):
 async def generic_ajapopaja_error_handler(request: Request, exc: AjapopajaError):
     return JSONResponse(status_code=400, content={"detail": str(exc)})
 
-# CORS Configuration
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# API Router for all other endpoints
+api_router = APIRouter(prefix="/api")
 
-# Health Check
-@app.get("/api/health")
+@api_router.get("/health")
 async def health():
     return {"status": "ok", "message": "Ajapopaja API is running"}
 
-# WebSocket Endpoint - Root level
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    logger.info("Incoming WebSocket connection...")
-    await manager.connect(websocket)
-    try:
-        while True:
-            data = await websocket.receive_text()
-            await manager.handle_message(data, websocket)
-    except WebSocketDisconnect:
-        logger.info("WebSocket client disconnected")
-        manager.disconnect(websocket)
-    except Exception as e:
-        logger.error(f"WebSocket error: {e}")
-        manager.disconnect(websocket)
+api_router.include_router(pipeline_router)
+api_router.include_router(task_router)
+api_router.include_router(pipeline_task_router)
 
-# Register Routers
-app.include_router(pipeline_router, prefix="/api")
-app.include_router(task_router, prefix="/api")
-app.include_router(pipeline_task_router, prefix="/api")
+app.include_router(api_router)
 
 # Serve SPA static files - Mount last resort
 frontend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../frontend/dist"))

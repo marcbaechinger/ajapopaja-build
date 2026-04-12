@@ -23,6 +23,11 @@ class ConnectionManager:
         self.active_connections.append(websocket)
         logger.info(f"New WebSocket connection. Total: {len(self.active_connections)}")
 
+    async def add_connection(self, websocket: WebSocket):
+        """Adds an already accepted connection."""
+        self.active_connections.append(websocket)
+        logger.info(f"Accepted connection added. Total: {len(self.active_connections)}")
+
     def disconnect(self, websocket: WebSocket):
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
