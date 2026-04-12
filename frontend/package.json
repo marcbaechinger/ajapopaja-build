@@ -10,7 +10,10 @@
     "test": "vitest"
   },
   "devDependencies": {
+    "@tailwindcss/typography": "^0.5.19",
     "@tailwindcss/vite": "^4.2.2",
+    "@types/dompurify": "^3.0.5",
+    "@types/marked": "^5.0.2",
     "autoprefixer": "^10.4.27",
     "jsdom": "^29.0.2",
     "postcss": "^8.5.9",
@@ -18,5 +21,10 @@
     "typescript": "~6.0.2",
     "vite": "^8.0.4",
     "vitest": "^4.1.4"
+  },
+  "dependencies": {
+    "dompurify": "^3.3.3",
+    "easymde": "^2.20.0",
+    "marked": "^18.0.0"
   }
 }

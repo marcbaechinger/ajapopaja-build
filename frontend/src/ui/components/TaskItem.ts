@@ -1,4 +1,6 @@
 import { Task, TaskStatus } from '../../core/domain.ts';
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 
 export class TaskItem {
   static render(task: Task): string {
@@ -38,8 +40,8 @@ export class TaskItem {
               <span class="font-bold text-app-accent-2">Design Document</span>
               <span class="text-[10px] text-app-muted opacity-0 group-hover:opacity-100 transition-opacity">Click to edit</span>
             </div>
-            <div class="design-doc-display ${!task.design_doc ? 'text-app-muted italic' : 'text-app-text/70'}">
-              ${task.design_doc || 'Click to add design doc...'}
+            <div class="design-doc-display prose prose-invert prose-sm max-w-none text-app-text/70">
+              ${task.design_doc ? DOMPurify.sanitize(marked.parse(task.design_doc) as string) : '<span class="italic text-app-muted">Click to add design doc...</span>'}
             </div>
           </div>
           

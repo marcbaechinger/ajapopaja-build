@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
+@import "easymde/dist/easymde.min.css";
 
 @theme {
   /* Define custom theme colors that map to our CSS variables */
@@ -40,4 +42,24 @@
 /* Ensure body uses the theme background and text colors */
 body {
   @apply bg-app-bg text-app-text transition-colors duration-300;
+}
+
+/* EasyMDE Dark Mode Tweaks */
+.editor-toolbar {
+  @apply !bg-app-surface !border-app-border !text-app-text;
+}
+.editor-toolbar button {
+  @apply !text-app-text/70 hover:!bg-app-bg hover:!text-app-accent-2;
+}
+.editor-toolbar button.active, .editor-toolbar button:hover {
+  @apply !bg-app-bg !text-app-accent-2;
+}
+.CodeMirror {
+  @apply !bg-app-bg !text-app-text !border-app-border;
+}
+.editor-preview {
+  @apply !bg-app-bg !text-app-text prose prose-invert prose-sm max-w-none;
+}
+.editor-statusbar {
+  @apply !text-app-muted;
 }

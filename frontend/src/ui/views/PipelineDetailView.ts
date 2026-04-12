@@ -3,6 +3,7 @@ import { AppContext } from '../../core/AppContext.ts';
 import { Pipeline, TaskStatus } from '../../core/domain.ts';
 import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
 import { TaskItem } from '../components/TaskItem.ts';
+import EasyMDE from 'easymde';
 
 export class PipelineDetailView extends View {
   private container: HTMLElement | null = null;
@@ -10,6 +11,7 @@ export class PipelineDetailView extends View {
   private pipeline: Pipeline | null = null;
   private context: AppContext;
   private unsubs: (() => void)[] = [];
+  private activeEditors: Map<string, EasyMDE> = new Map();
 
   constructor(context: AppContext, params: Record<string, string>) {
     super();
@@ -58,18 +60,41 @@ export class PipelineDetailView extends View {
     });
 
     this.context.actionRegistry.register('edit_design_doc', async (_e, el) => {
-      const container = el.closest('.design-doc-container');
+      const container = el.closest('.design-doc-container') as HTMLElement;
       if (!container) return;
       
+      const taskId = container.getAttribute('data-task-id');
+      const textarea = container.querySelector('textarea');
+      if (!taskId || !textarea) return;
+
       container.querySelector('.design-doc-view')?.classList.add('hidden');
       container.querySelector('.design-doc-edit')?.classList.remove('hidden');
-      container.querySelector('textarea')?.focus();
+
+      // Initialize EasyMDE
+      const editor = new EasyMDE({
+        element: textarea,
+        spellChecker: false,
+        status: false,
+        minHeight: "150px",
+        toolbar: ["bold", "italic", "heading", "|", "quote", "unordered-list", "ordered-list", "|", "link", "code", "table", "|", "preview", "side-by-side", "fullscreen"]
+      });
+      this.activeEditors.set(taskId, editor);
+      editor.codemirror.focus();
     });
 
     this.context.actionRegistry.register('cancel_design_doc', async (_e, el) => {
-      const container = el.closest('.design-doc-container');
+      const container = el.closest('.design-doc-container') as HTMLElement;
       if (!container) return;
       
+      const taskId = container.getAttribute('data-task-id');
+      if (taskId) {
+        const editor = this.activeEditors.get(taskId);
+        if (editor) {
+          editor.toTextArea();
+          this.activeEditors.delete(taskId);
+        }
+      }
+
       container.querySelector('.design-doc-view')?.classList.remove('hidden');
       container.querySelector('.design-doc-edit')?.classList.add('hidden');
     });
@@ -80,13 +105,18 @@ export class PipelineDetailView extends View {
       
       const taskId = container.getAttribute('data-task-id');
       const version = parseInt(container.getAttribute('data-version') || '1');
-      const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
-      const designDoc = textarea.value.trim();
-
       if (!taskId) return;
+
+      const editor = this.activeEditors.get(taskId);
+      if (!editor) return;
+
+      const designDoc = editor.value().trim();
 
       try {
         await this.context.taskClient.updateDetails(taskId, version, { design_doc: designDoc });
+        // After success, destroy editor
+        editor.toTextArea();
+        this.activeEditors.delete(taskId);
         // UI refresh will be triggered by WebSocket message TASK_UPDATED
       } catch (error) {
         alert('Failed to save design doc. Please try again.');
@@ -251,6 +281,8 @@ export class PipelineDetailView extends View {
   }
 
   unmount() {
+    this.activeEditors.forEach(editor => editor.toTextArea());
+    this.activeEditors.clear();
     this.unsubs.forEach(unsub => unsub());
     this.unsubs = [];
   }
