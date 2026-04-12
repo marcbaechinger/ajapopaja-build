@@ -1,5 +1,5 @@
 from typing import List
-from core.models.models import Pipeline
+from core.models.models import Pipeline, Task
 from core.exceptions import EntityNotFoundError, VersionMismatchError
 
 async def get_all_pipelines() -> List[Pipeline]:
@@ -29,3 +29,9 @@ async def update_pipeline(pipeline_id: str, name: str, version: int) -> Pipeline
     pipeline.version += 1
     await pipeline.save()
     return pipeline
+
+async def delete_pipeline(pipeline_id: str):
+    pipeline = await get_pipeline_by_id(pipeline_id)
+    # Delete all tasks in this pipeline
+    await Task.find(Task.pipeline_id == pipeline_id).delete()
+    await pipeline.delete()

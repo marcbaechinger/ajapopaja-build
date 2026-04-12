@@ -83,4 +83,11 @@ export class TaskClient {
     if (!response.ok) throw new Error('Failed to get next task');
     return await response.json();
   }
+
+  async delete(id: string): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/tasks/${id}`, {
+      method: 'DELETE'
+    });
+    if (!response.ok) throw new Error('Failed to delete task');
+  }
 }

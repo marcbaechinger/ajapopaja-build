@@ -35,3 +35,12 @@ async def update_pipeline(
         payload=updated_pipeline.model_dump(mode='json')
     ))
     return updated_pipeline
+
+@router.delete("/{pipeline_id}")
+async def delete_pipeline(pipeline_id: str):
+    await pipeline_queries.delete_pipeline(pipeline_id)
+    await manager.broadcast(WSMessage(
+        type="PIPELINE_DELETED",
+        payload={"pipeline_id": pipeline_id}
+    ))
+    return {"status": "ok"}

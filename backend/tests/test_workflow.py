@@ -98,3 +98,33 @@ async def test_manual_failure_override(init_mock_db):
     # Manual fail
     updated_task = await task_queries.update_task_status(str(task.id), TaskStatus.FAILED, task.version)
     assert updated_task.status == TaskStatus.FAILED
+
+@pytest.mark.asyncio
+async def test_delete_task(init_mock_db):
+    pipeline = Pipeline(name="Test Pipeline")
+    await pipeline.insert()
+    task = Task(title="To Delete", pipeline_id=str(pipeline.id))
+    await task.insert()
+    
+    await task_queries.delete_task(str(task.id))
+    
+    tasks = await task_queries.get_tasks_by_pipeline(str(pipeline.id))
+    assert len(tasks) == 0
+
+@pytest.mark.asyncio
+async def test_delete_pipeline_cascades(init_mock_db):
+    pipeline = Pipeline(name="To Delete")
+    await pipeline.insert()
+    task = Task(title="Task in Pipeline", pipeline_id=str(pipeline.id))
+    await task.insert()
+    
+    from core.queries import pipeline as pipeline_queries
+    await pipeline_queries.delete_pipeline(str(pipeline.id))
+    
+    # Check pipeline gone
+    with pytest.raises(Exception):
+        await pipeline_queries.get_pipeline_by_id(str(pipeline.id))
+        
+    # Check tasks gone
+    tasks = await task_queries.get_tasks_by_pipeline(str(pipeline.id))
+    assert len(tasks) == 0

@@ -44,4 +44,11 @@ export class PipelineClient {
     if (!response.ok) throw new Error('Failed to update pipeline');
     return await response.json();
   }
+
+  async delete(id: string): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/pipelines/${id}`, {
+      method: 'DELETE'
+    });
+    if (!response.ok) throw new Error('Failed to delete pipeline');
+  }
 }

@@ -122,3 +122,7 @@ async def get_next_task(pipeline_id: str) -> Optional[Task]:
         await task.save()
         
     return task
+
+async def delete_task(task_id: str):
+    task = await get_task_by_id(task_id)
+    await task.delete()

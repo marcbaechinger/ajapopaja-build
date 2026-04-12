@@ -53,6 +53,17 @@ async def update_task_details(
     ))
     return updated_task
 
+@task_router.delete("/{task_id}")
+async def delete_task(task_id: str):
+    task = await task_queries.get_task_by_id(task_id)
+    pipeline_id = task.pipeline_id
+    await task_queries.delete_task(task_id)
+    await manager.broadcast(WSMessage(
+        type="TASK_DELETED",
+        payload={"task_id": task_id, "pipeline_id": pipeline_id}
+    ))
+    return {"status": "ok"}
+
 # Pipeline-nested router for task management within a pipeline
 pipeline_task_router = APIRouter(prefix="/pipelines/{pipeline_id}/tasks", tags=["tasks"])
 

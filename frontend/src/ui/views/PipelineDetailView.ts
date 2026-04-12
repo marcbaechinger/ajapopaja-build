@@ -29,6 +29,11 @@ export class PipelineDetailView extends View {
     this.unsubs.push(this.context.wsClient.on('TASK_UPDATED', handleUpdate));
     this.unsubs.push(this.context.wsClient.on('TASK_STATUS_UPDATED', handleUpdate));
     this.unsubs.push(this.context.wsClient.on('TASK_COMPLETED', handleUpdate));
+    this.unsubs.push(this.context.wsClient.on('TASK_DELETED', (message: any) => {
+      if (message.payload?.pipeline_id === this.pipelineId) {
+        this.refreshTasks();
+      }
+    }));
   }
 
   private registerActions() {
@@ -102,6 +107,20 @@ export class PipelineDetailView extends View {
         // Refresh handled by WS
       } catch (error) {
         alert('Failed to update task');
+      }
+    });
+
+    this.context.actionRegistry.register('delete_task', async (_e, el) => {
+      const taskId = el.closest('[data-view-id]')?.getAttribute('data-view-id');
+      if (!taskId) return;
+
+      if (!confirm('Are you sure you want to delete this task?')) return;
+
+      try {
+        await this.context.taskClient.delete(taskId);
+        // Refresh handled by WS
+      } catch (error) {
+        alert('Failed to delete task');
       }
     });
   }
@@ -186,6 +205,10 @@ export class PipelineDetailView extends View {
             </button>
           </div>
           <div class="flex gap-2">
+            <button data-action-click="delete_task" 
+                    class="p-1.5 hover:bg-red-500/20 text-app-muted hover:text-red-400 rounded transition-all cursor-pointer" title="Delete Task">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+            </button>
             ${canFail ? `
               <button data-action-click="fail_task" data-version="${task.version}" 
                       class="text-xs text-red-400 hover:text-red-300 px-3 py-1 rounded transition-all cursor-pointer">

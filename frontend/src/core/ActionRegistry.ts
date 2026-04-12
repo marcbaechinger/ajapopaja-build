@@ -11,7 +11,7 @@ export class ActionRegistry {
     document.body.addEventListener('click', (event) => {
       const target = event.target as HTMLElement;
       const actionElement = target.closest('[data-action-click]') as HTMLElement;
-      
+
       if (actionElement) {
         const actionName = actionElement.getAttribute('data-action-click');
         if (actionName) {
@@ -28,6 +28,8 @@ export class ActionRegistry {
   async execute(name: string, event: Event, element: HTMLElement) {
     const handler = this.handlers.get(name);
     if (handler) {
+      event.preventDefault();
+      event.stopPropagation();
       try {
         await handler(event, element);
       } catch (error) {
