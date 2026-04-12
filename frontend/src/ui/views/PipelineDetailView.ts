@@ -1,6 +1,7 @@
 import { View } from '../../core/Navigator.ts';
 import { AppContext } from '../../core/AppContext.ts';
 import { Pipeline, Task, TaskStatus } from '../../core/domain.ts';
+import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
 
 export class PipelineDetailView extends View {
   private container: HTMLElement | null = null;
@@ -100,7 +101,13 @@ export class PipelineDetailView extends View {
       const version = parseInt(el.getAttribute('data-version') || '1');
       if (!taskId) return;
 
-      if (!confirm('Are you sure you want to mark this task as FAILED?')) return;
+      const confirmed = await new ConfirmationDialog(
+        'Mark Task as Failed',
+        'Are you sure you want to mark this task as FAILED? This may trigger an automated fix sequence.',
+        'Mark Failed'
+      ).show();
+
+      if (!confirmed) return;
 
       try {
         await this.context.taskClient.updateStatus(taskId, TaskStatus.FAILED, version);
@@ -114,7 +121,13 @@ export class PipelineDetailView extends View {
       const taskId = el.closest('[data-view-id]')?.getAttribute('data-view-id');
       if (!taskId) return;
 
-      if (!confirm('Are you sure you want to delete this task?')) return;
+      const confirmed = await new ConfirmationDialog(
+        'Delete Task',
+        'Are you sure you want to delete this task? This action cannot be undone.',
+        'Delete'
+      ).show();
+
+      if (!confirmed) return;
 
       try {
         await this.context.taskClient.delete(taskId);

@@ -1,6 +1,7 @@
 import { View } from '../../core/Navigator.ts';
 import { AppContext } from '../../core/AppContext.ts';
 import { Pipeline } from '../../core/domain.ts';
+import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
 
 export class DashboardView extends View {
   private container: HTMLElement | null = null;
@@ -41,18 +42,30 @@ export class DashboardView extends View {
       }
     });
 
-    this.context.actionRegistry.register('delete_pipeline', async (e, el) => {
-      e.stopPropagation();
+    this.context.actionRegistry.register('delete_pipeline', async (_e, el) => {
       const pipelineId = el.closest('[data-view-id]')?.getAttribute('data-view-id');
       if (!pipelineId) return;
 
-      if (!confirm('Are you sure you want to delete this pipeline and ALL its tasks?')) return;
+      const confirmed = await new ConfirmationDialog(
+        'Delete Pipeline',
+        'Are you sure you want to delete this pipeline and ALL its tasks? This action cannot be undone.',
+        'Delete'
+      ).show();
+
+      if (!confirmed) return;
 
       try {
         await this.context.pipelineClient.delete(pipelineId);
         // List will be updated via WebSocket
       } catch (error) {
         alert('Failed to delete pipeline');
+      }
+    });
+
+    this.context.actionRegistry.register('view_pipeline', async (_e, el) => {
+      const pipelineId = el.closest('[data-view-id]')?.getAttribute('data-view-id');
+      if (pipelineId) {
+        window.location.hash = `#/pipeline/${pipelineId}`;
       }
     });
   }
@@ -85,7 +98,7 @@ export class DashboardView extends View {
     return `
       <div class="bg-app-bg p-3 rounded-lg border border-app-border flex justify-between items-center transition-all hover:border-app-accent-1 cursor-pointer group" 
            data-view-type="pipeline" data-view-id="${pipeline._id}"
-           onclick="window.location.hash = '#/pipeline/${pipeline._id}'">
+           data-action-click="view_pipeline">
         <div class="flex flex-col">
           <span class="font-medium text-app-text">${pipeline.name}</span>
           <span class="text-[10px] text-app-muted uppercase font-bold mt-1">v${pipeline.version}</span>
