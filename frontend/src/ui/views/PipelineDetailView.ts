@@ -57,6 +57,42 @@ export class PipelineDetailView extends View {
       }
     });
 
+    this.context.actionRegistry.register('edit_design_doc', async (_e, el) => {
+      const container = el.closest('.design-doc-container');
+      if (!container) return;
+      
+      container.querySelector('.design-doc-view')?.classList.add('hidden');
+      container.querySelector('.design-doc-edit')?.classList.remove('hidden');
+      container.querySelector('textarea')?.focus();
+    });
+
+    this.context.actionRegistry.register('cancel_design_doc', async (_e, el) => {
+      const container = el.closest('.design-doc-container');
+      if (!container) return;
+      
+      container.querySelector('.design-doc-view')?.classList.remove('hidden');
+      container.querySelector('.design-doc-edit')?.classList.add('hidden');
+    });
+
+    this.context.actionRegistry.register('save_design_doc', async (_e, el) => {
+      const container = el.closest('.design-doc-container') as HTMLElement;
+      if (!container) return;
+      
+      const taskId = container.getAttribute('data-task-id');
+      const version = parseInt(container.getAttribute('data-version') || '1');
+      const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+      const designDoc = textarea.value.trim();
+
+      if (!taskId) return;
+
+      try {
+        await this.context.taskClient.updateDetails(taskId, version, { design_doc: designDoc });
+        // UI refresh will be triggered by WebSocket message TASK_UPDATED
+      } catch (error) {
+        alert('Failed to save design doc. Please try again.');
+      }
+    });
+
     this.context.actionRegistry.register('schedule_task', async (_e, el) => {
       const taskId = el.closest('[data-view-id]')?.getAttribute('data-view-id');
       const version = parseInt(el.getAttribute('data-version') || '1');

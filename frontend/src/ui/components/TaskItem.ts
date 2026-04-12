@@ -30,12 +30,33 @@ export class TaskItem {
         </div>
         
         ${task.description ? `<p class="text-sm text-app-text/70">${task.description}</p>` : ''}
-        ${task.design_doc ? `
-          <div class="w-full text-xs bg-app-surface p-3 rounded-lg border border-app-border italic text-app-text/60">
-            <span class="block font-bold not-italic text-app-accent-2 mb-1">Design Document</span>
-            ${task.design_doc}
+        
+        <div class="design-doc-container w-full text-xs bg-app-surface p-3 rounded-lg border border-app-border transition-all"
+             data-task-id="${task._id}" data-version="${task.version}">
+          <div class="design-doc-view cursor-pointer group" data-action-click="edit_design_doc">
+            <div class="flex justify-between items-center mb-1">
+              <span class="font-bold text-app-accent-2">Design Document</span>
+              <span class="text-[10px] text-app-muted opacity-0 group-hover:opacity-100 transition-opacity">Click to edit</span>
+            </div>
+            <div class="design-doc-display ${!task.design_doc ? 'text-app-muted italic' : 'text-app-text/70'}">
+              ${task.design_doc || 'Click to add design doc...'}
+            </div>
           </div>
-        ` : ''}
+          
+          <div class="design-doc-edit hidden flex flex-col gap-2">
+            <span class="font-bold text-app-accent-2 mb-1">Editing Design Document</span>
+            <textarea class="w-full bg-app-bg border border-app-border rounded p-2 text-app-text outline-none focus:ring-1 focus:ring-app-accent-2 min-h-[120px]" 
+                      placeholder="Describe the implementation details...">${task.design_doc || ''}</textarea>
+            <div class="flex gap-2 justify-end">
+              <button data-action-click="cancel_design_doc" class="px-3 py-1 text-app-muted hover:text-app-text transition-colors cursor-pointer">
+                Cancel
+              </button>
+              <button data-action-click="save_design_doc" class="px-4 py-1 bg-app-accent-2 text-white rounded hover:brightness-110 transition-all shadow-md cursor-pointer">
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
 
         ${task.commit_hash ? `
           <div class="text-xs font-mono text-app-accent-2 bg-app-surface p-2 rounded border border-app-border w-fit">
