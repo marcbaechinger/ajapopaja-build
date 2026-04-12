@@ -132,18 +132,17 @@ export class TaskItem {
         </div>
         ${task.description ? `<p class="text-sm text-app-text/70">${task.description}</p>` : ''}
         
-        ${task.completion_info || (task.history && task.history.length > 0) ? `
+        ${task.completion_info ? `
           <div class="bg-green-500/10 border border-green-500/20 p-3 rounded-lg text-sm text-app-text/80">
-            ${task.completion_info ? `
-              <div class="font-bold text-green-400 mb-1 flex items-center gap-2">
-                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                 Implementation Summary
-              </div>
-              ${task.completion_info.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}
-            ` : ''}
-            ${this.renderHistory(task, expandHistory)}
+            <div class="font-bold text-green-400 mb-1 flex items-center gap-2">
+               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+               Implementation Summary
+            </div>
+            ${task.completion_info.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}
           </div>
         ` : ''}
+
+        ${this.renderHistory(task, expandHistory)}
 
         ${designDocHtml}
 
