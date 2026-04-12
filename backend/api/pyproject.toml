@@ -1,0 +1,18 @@
+[project]
+name = "api"
+version = "0.1.0"
+description = "Ajapopaja Build FastAPI API"
+authors = []
+dependencies = [
+    "fastapi>=0.100.0",
+    "uvicorn>=0.23.0",
+    "core",
+]
+requires-python = ">=3.11"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv.sources]
+core = { workspace = true }

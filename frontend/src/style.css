@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+@theme {
+  /* Define custom theme colors that map to our CSS variables */
+  --color-app-bg: var(--app-bg);
+  --color-app-surface: var(--app-surface);
+  --color-app-text: var(--app-text);
+  --color-app-muted: var(--app-muted);
+  --color-app-border: var(--app-border);
+  --color-app-accent-1: var(--app-accent-1);
+  --color-app-accent-2: var(--app-accent-2);
+}
+
+/* Default Theme (Dark - Sky Primary) */
+:root {
+  --app-bg: var(--color-slate-950);
+  --app-surface: var(--color-slate-900);
+  --app-text: var(--color-slate-100);
+  --app-muted: var(--color-slate-400);
+  --app-border: var(--color-slate-800);
+  
+  /* Sky as primary accent */
+  --app-accent-1: var(--color-sky-400);
+  /* Cyan as secondary accent - matches 'Sky' better than Indigo */
+  --app-accent-2: var(--color-cyan-400);
+}
+
+/* Light Theme (Sky/Cyan adjusted for light background) */
+[data-theme='light'] {
+  --app-bg: var(--color-slate-50);
+  --app-surface: var(--color-white);
+  --app-text: var(--color-slate-900);
+  --app-muted: var(--color-slate-500);
+  --app-border: var(--color-slate-200);
+  
+  --app-accent-1: var(--color-sky-600);
+  --app-accent-2: var(--color-cyan-600);
+}
+
+/* Ensure body uses the theme background and text colors */
+body {
+  @apply bg-app-bg text-app-text transition-colors duration-300;
+}

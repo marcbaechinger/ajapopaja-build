@@ -1,0 +1,14 @@
+[tool.uv]
+workspace = { members = ["core", "api", "mcp"] }
+
+[project]
+name = "ajapopaja-backend"
+version = "0.1.0"
+description = "Ajapopaja Build Backend Workspace"
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest-watch>=4.2.0",
+]
