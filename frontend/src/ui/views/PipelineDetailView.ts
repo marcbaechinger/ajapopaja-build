@@ -5,6 +5,10 @@ import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
 import { TaskItem } from '../components/TaskItem.ts';
 import { HistoryDialog } from '../components/HistoryDialog.ts';
 import { StatsDialog } from '../components/StatsDialog.ts';
+import { TaskForm } from '../components/TaskForm.ts';
+import { TaskColumn } from '../components/TaskColumn.ts';
+import { CompletedSection } from '../components/CompletedSection.ts';
+import { PipelineStatsView } from '../components/PipelineStatsView.ts';
 import EasyMDE from 'easymde';
 
 export class PipelineDetailView extends View {
@@ -66,7 +70,7 @@ export class PipelineDetailView extends View {
         // Only append if it doesn't exist yet
         if (this.container?.querySelector(`[data-view-id="${message.payload._id}"]`)) return;
         
-        const listContainer = this.container?.querySelector('#task-list');
+        const listContainer = this.container?.querySelector('#backlog-list');
         if (!listContainer) return;
 
         // For created tasks, a full refresh is safest to maintain sort order
@@ -492,13 +496,12 @@ export class PipelineDetailView extends View {
 
   async refreshTasks() {
     if (!this.container) return;
-    const proposedContainer = this.container.querySelector('#proposed-task-list');
-    const proposedSection = this.container.querySelector('#proposed-section');
-    const listContainer = this.container.querySelector('#task-list');
-    const lastCompletedContainer = this.container.querySelector('#last-completed-task');
-    const completedContainer = this.container.querySelector('#completed-task-list');
+    const prepContainer = this.container.querySelector('#col-prep');
+    const activeContainer = this.container.querySelector('#col-active');
+    const historyContainer = this.container.querySelector('#col-history');
     const completedCountEl = this.container.querySelector('#completed-count');
-    if (!listContainer || !lastCompletedContainer || !completedContainer) return;
+    
+    if (!prepContainer || !activeContainer || !historyContainer) return;
 
     try {
       this.allLoadedTasks = await this.context.taskClient.listByPipeline(this.pipelineId, true);
@@ -516,78 +519,107 @@ export class PipelineDetailView extends View {
       }
       
       const proposedTasks = allTasks.filter(t => !t.deleted && t.status === TaskStatus.PROPOSED);
-      const openTasks = allTasks.filter(t => !t.deleted && t.status !== TaskStatus.PROPOSED && !([TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED] as any[]).includes(t.status));
+      const createdTasks = allTasks.filter(t => !t.deleted && t.status === TaskStatus.CREATED);
+      
+      const inProgressTasks = allTasks.filter(t => !t.deleted && t.status === TaskStatus.INPROGRESS);
+      const scheduledTasks = allTasks.filter(t => !t.deleted && t.status === TaskStatus.SCHEDULED);
+      const failedTasks = allTasks.filter(t => !t.deleted && t.status === TaskStatus.FAILED);
+      
       const completedTasks = allTasks.filter(t => !t.deleted && ([TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED] as any[]).includes(t.status));
 
-      // Update proposed section visibility
-      if (proposedSection && proposedContainer) {
-        if (proposedTasks.length > 0) {
-          proposedSection.classList.remove('hidden');
-          // Sort proposed by updated_at desc
-          proposedTasks.sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
-          proposedContainer.innerHTML = proposedTasks.map(t => TaskItem.render(t, false, false, this.collapsedTasks.has(t._id!))).join('');
-        } else {
-          proposedSection.classList.add('hidden');
-        }
-      }
+      // 1. Render Preparation Column
+      prepContainer.innerHTML = `
+        ${TaskColumn.render({
+          id: 'proposed',
+          title: 'Proposed',
+          tasks: proposedTasks,
+          emptyMessage: 'No proposed designs.',
+          collapsedTasks: this.collapsedTasks,
+          badge: { text: 'Review', class: 'bg-purple-500/20 text-purple-400 border border-purple-500/30' }
+        })}
+        ${TaskColumn.render({
+          id: 'backlog',
+          title: 'Backlog',
+          tasks: createdTasks,
+          emptyMessage: 'Backlog is empty.',
+          collapsedTasks: this.collapsedTasks
+        })}
+      `;
 
-      // Sort open tasks
-      openTasks.sort((a, b) => {
+      // 2. Render Active Column
+      // Sort scheduled and failed tasks according to current sort order
+      const sortFn = (a: Task, b: Task) => {
         if (this.currentSortOrder === 'execution') {
-          if (a.order !== b.order) {
-            return a.order - b.order; // Primary: User explicit order
-          }
-          
-          // Secondary: Status weight to push active/ready tasks up
-          const getStatusWeight = (status: TaskStatus | string) => {
-            if (status === TaskStatus.INPROGRESS) return 0;
-            if (status === TaskStatus.SCHEDULED) return 1;
-            if (status === TaskStatus.CREATED) return 2;
-            if (status === TaskStatus.FAILED) return 3;
-            return 4;
-          };
-          
-          const weightA = getStatusWeight(a.status);
-          const weightB = getStatusWeight(b.status);
-          
-          if (weightA !== weightB) {
-            return weightA - weightB;
-          }
-          
-          // Tertiary: Oldest first (FIFO)
-          return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+          if (a.order !== b.order) return a.order - b.order;
+          return new Date(a.scheduled_at || a.created_at || 0).getTime() - new Date(b.scheduled_at || b.created_at || 0).getTime();
         } else if (this.currentSortOrder === 'newest') {
           return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
         } else {
-          // Status sort
           return a.status.localeCompare(b.status);
         }
-      });
+      };
 
+      inProgressTasks.sort(sortFn);
+      scheduledTasks.sort(sortFn);
+      failedTasks.sort(sortFn);
+
+      activeContainer.innerHTML = `
+        ${TaskColumn.render({
+          id: 'inprogress',
+          title: 'In Progress',
+          tasks: inProgressTasks,
+          emptyMessage: 'No active work.',
+          collapsedTasks: this.collapsedTasks,
+          badge: { text: 'Running', class: 'bg-amber-500/20 text-amber-400 border border-amber-500/30' }
+        })}
+        ${TaskColumn.render({
+          id: 'failed',
+          title: 'Failed',
+          tasks: failedTasks,
+          emptyMessage: '',
+          collapsedTasks: this.collapsedTasks,
+          badge: { text: 'Attention', class: 'bg-red-500/20 text-red-400 border border-red-500/30' }
+        })}
+        ${TaskColumn.render({
+          id: 'scheduled',
+          title: 'Queue',
+          tasks: scheduledTasks,
+          emptyMessage: 'Nothing scheduled.',
+          showOrdering: this.currentSortOrder === 'execution',
+          collapsedTasks: this.collapsedTasks
+        })}
+      `;
+      
+      // Remove empty failed section if no failed tasks
+      if (failedTasks.length === 0) {
+        activeContainer.querySelector('#failed-section')?.remove();
+      }
+
+      // 3. Render History Column
       // Sort completed tasks by completion time (updated_at)
       completedTasks.sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
 
-      const showOrdering = this.currentSortOrder === 'execution';
-      listContainer.innerHTML = openTasks.length > 0 
-        ? openTasks.map(t => TaskItem.render(t, showOrdering, false, this.collapsedTasks.has(t._id!))).join('')
-        : '<p class="text-app-muted italic">No tasks to be done.</p>';
-
+      historyContainer.innerHTML = `
+        <div class="bg-app-bg/50 p-6 rounded-3xl border border-app-border/50 shadow-sm mb-4">
+          <h3 class="text-sm font-black text-app-muted uppercase tracking-widest mb-6 px-1">Pipeline Health</h3>
+          ${PipelineStatsView.render(allTasks, true)}
+        </div>
+        ${CompletedSection.render({
+          lastCompleted: completedTasks.length > 0 ? completedTasks[0] : null,
+          totalCompletedCount: completedTasks.length,
+          collapsedTasks: this.collapsedTasks
+        })}
+      `;
+      
       if (completedTasks.length > 0) {
-        lastCompletedContainer.innerHTML = TaskItem.render(completedTasks[0], false, true, this.collapsedTasks.has(completedTasks[0]._id!));
         this.refreshCompletedTasks();
-      } else {
-        lastCompletedContainer.innerHTML = '';
-        completedContainer.innerHTML = '<p class="text-app-muted italic text-xs">No completed tasks yet.</p>';
-        if (this.container.querySelector('#completed-pagination')) {
-          this.container.querySelector('#completed-pagination')!.innerHTML = '';
-        }
       }
 
       if (completedCountEl) {
         completedCountEl.textContent = `(${completedTasks.length})`;
       }
     } catch (error) {
-      listContainer.innerHTML = '<p class="text-red-400">Error loading tasks.</p>';
+      prepContainer.innerHTML = '<p class="text-red-400">Error loading tasks.</p>';
       console.error('Error refreshing tasks:', error);
     }
   }
@@ -693,8 +725,8 @@ export class PipelineDetailView extends View {
   render() {
     const user = this.context.authService.getUser();
     return `
-      <div class="space-y-6 max-w-5xl mx-auto px-4 py-8">
-        <header class="flex justify-between items-center bg-app-surface p-6 rounded-xl shadow-lg border border-app-border">
+      <div class="max-w-[1600px] mx-auto px-4 py-8 flex flex-col gap-8 min-h-screen">
+        <header class="flex justify-between items-center bg-app-surface p-6 rounded-2xl shadow-lg border border-app-border shrink-0">
           <div class="flex gap-6 items-center">
             <button onclick="window.location.hash = '#'" class="p-3 hover:bg-app-bg rounded-xl transition-all text-app-muted hover:text-app-accent-1 border border-transparent hover:border-app-border group cursor-pointer" title="Back to Dashboard">
               <svg class="w-6 h-6 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -721,67 +753,48 @@ export class PipelineDetailView extends View {
           </div>
         </header>
 
-        <section class="bg-app-surface p-6 rounded-xl shadow-xl border border-app-border w-full">
-          <form data-action-submit="create_task" class="flex flex-col md:flex-row gap-4 items-end">
-            <div class="flex-grow w-full">
-              <label class="block text-sm font-medium text-app-muted mb-1">Add New Task</label>
-              <input type="text" id="task-title" placeholder="e.g. Implement User Auth" 
-                     class="w-full bg-app-bg border border-app-border rounded-lg px-4 py-2 focus:ring-2 focus:ring-app-accent-1 outline-none text-app-text transition-all">
-            </div>
-            <button type="submit" 
-                    class="w-full md:w-auto bg-app-accent-1 hover:brightness-110 text-white font-bold px-8 py-2 rounded-lg transition-all shadow-lg cursor-pointer h-[42px]">
-              Add 
-            </button>
-          </form>
-        </section>
-
-        <section id="proposed-section" class="bg-app-surface p-6 rounded-xl shadow-xl border border-app-border w-full hidden">
-          <h3 class="text-xl font-bold text-app-accent-2 mb-4 flex items-center gap-2">
-            Proposed for Review
-            <span class="text-[10px] bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-full font-black uppercase tracking-widest">New Designs</span>
-          </h3>
-          <div id="proposed-task-list" class="space-y-4">
-            <!-- Proposed tasks will be rendered here -->
-          </div>
-        </section>
-
-        <section class="bg-app-surface p-6 rounded-xl shadow-xl border border-app-border w-full">
-          <div class="flex justify-between items-center mb-4">
-            <h3 class="text-xl font-bold text-app-accent-2">Task Sequence</h3>
-            <div class="flex items-center gap-2">
-              <label class="text-xs text-app-muted uppercase font-bold tracking-wider">Sort:</label>
-              <select data-action-change="change_sort_order" class="bg-app-bg border border-app-border rounded px-2 py-1 text-xs text-app-text outline-none focus:ring-1 focus:ring-app-accent-1 cursor-pointer">
-                <option value="execution" ${this.currentSortOrder === 'execution' ? 'selected' : ''}>Execution Order</option>
-                <option value="newest" ${this.currentSortOrder === 'newest' ? 'selected' : ''}>Newest First</option>
-                <option value="status" ${this.currentSortOrder === 'status' ? 'selected' : ''}>By Status</option>
-              </select>
-            </div>
-          </div>
-          
-          <div id="task-list" class="space-y-4">
-            <p class="text-app-muted animate-pulse">Loading tasks...</p>
-          </div>
-
-          <div class="mt-8 pt-6 border-t border-app-border/30">
-            <h3 class="text-sm font-bold text-app-muted uppercase tracking-widest mb-4">Last Completed Task</h3>
-            <div id="last-completed-task" class="mb-4">
-              <!-- Render last completed task here -->
-            </div>
-            
-            <details class="group/completed">
-              <summary class="flex items-center gap-2 cursor-pointer list-none text-app-muted hover:text-app-text transition-colors">
-                <svg class="w-4 h-4 transition-transform group-open/completed:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                </svg>
-                <span class="font-bold text-sm uppercase tracking-widest">Older Completed Tasks <span id="completed-count"></span></span>
-              </summary>
-              <div id="completed-task-list" class="space-y-4 mt-4 opacity-80">
-                <!-- Completed tasks will be rendered here -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start flex-grow">
+          <!-- Column 1: Preparation & Review -->
+          <div class="flex flex-col gap-8 h-full">
+            <div class="bg-app-surface/30 p-6 rounded-3xl border border-app-border/30 flex flex-col h-full">
+              ${TaskForm.render()}
+              <div id="col-prep" class="space-y-10">
+                <!-- Proposed and Created tasks will be rendered here -->
+                <p class="text-app-muted animate-pulse text-center py-10">Loading backlog...</p>
               </div>
-              <div id="completed-pagination"></div>
-            </details>
+            </div>
           </div>
-        </section>
+
+          <!-- Column 2: Active Execution -->
+          <div class="flex flex-col gap-8 h-full">
+            <div class="bg-app-surface/30 p-6 rounded-3xl border border-app-border/30 flex flex-col h-full">
+              <div class="flex justify-between items-center mb-6 px-1">
+                <h3 class="text-xl font-black text-app-accent-1 uppercase tracking-tighter">Execution Engine</h3>
+                <div class="flex items-center gap-2">
+                  <select data-action-change="change_sort_order" class="bg-app-bg border border-app-border rounded-lg px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-app-text outline-none focus:ring-1 focus:ring-app-accent-1 cursor-pointer">
+                    <option value="execution" ${this.currentSortOrder === 'execution' ? 'selected' : ''}>Execution Order</option>
+                    <option value="newest" ${this.currentSortOrder === 'newest' ? 'selected' : ''}>Newest First</option>
+                    <option value="status" ${this.currentSortOrder === 'status' ? 'selected' : ''}>By Status</option>
+                  </select>
+                </div>
+              </div>
+              <div id="col-active" class="space-y-10">
+                <!-- In Progress and Scheduled tasks will be rendered here -->
+                <p class="text-app-muted animate-pulse text-center py-10">Loading execution queue...</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Column 3: History & Analytics -->
+          <div class="flex flex-col gap-8 h-full">
+            <div class="bg-app-surface/30 p-6 rounded-3xl border border-app-border/30 flex flex-col h-full">
+              <div id="col-history" class="space-y-8">
+                <!-- Stats and Completed tasks will be rendered here -->
+                <p class="text-app-muted animate-pulse text-center py-10">Loading history...</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     `;
   }
