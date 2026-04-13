@@ -180,12 +180,16 @@ def _verify_task(task: Task) -> dict:
     """
     Initial implementation of verification logic.
     Success requires non-empty commit_hash and completion_info.
+    If want_design_doc is True, design_doc must also be non-empty.
     """
     errors = []
     if not task.commit_hash or not task.commit_hash.strip():
         errors.append("Missing commit_hash")
     if not task.completion_info or not task.completion_info.strip():
         errors.append("Missing completion_info")
+    
+    if task.want_design_doc and (not task.design_doc or not task.design_doc.strip()):
+        errors.append("Missing design_doc. Since want_design_doc is True, you MUST provide a design proposal using update_task_design_doc and have it approved before completing the task.")
     
     return {
         "success": len(errors) == 0,

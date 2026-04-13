@@ -70,6 +70,30 @@ async def test_complete_task_failed_verification(init_mock_db):
     assert "Verification failed" in system_task.title
 
 @pytest.mark.asyncio
+async def test_complete_task_missing_required_design_doc(init_mock_db):
+    pipeline = Pipeline(name="Test Pipeline")
+    await pipeline.insert()
+    
+    # Task that requires a design doc
+    task = Task(title="Test Task", pipeline_id=str(pipeline.id), status=TaskStatus.INPROGRESS, want_design_doc=True)
+    await task.insert()
+    
+    # Complete task without design_doc
+    updated_task = await task_queries.complete_task(
+        task_id=str(task.id),
+        version=task.version,
+        commit_hash="abc1234",
+        completion_info="Done!"
+    )
+    
+    assert updated_task.verification["success"] is False
+    assert any("Missing design_doc" in err for err in updated_task.verification["errors"])
+    
+    # Check for system task
+    tasks = await task_queries.get_tasks_by_pipeline(str(pipeline.id))
+    assert any(t.type == "system" for t in tasks)
+
+@pytest.mark.asyncio
 async def test_update_task_design_doc(init_mock_db):
     pipeline = Pipeline(name="Test Pipeline")
     await pipeline.insert()

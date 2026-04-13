@@ -27,6 +27,11 @@ async def get_next_task(pipeline_id: str) -> Dict[str, Any]:
     """
     Fetches the first available scheduled task in a pipeline and marks it inprogress.
 
+    IMPORTANT: If 'want_design_doc' is True, you MUST provide a design proposal using 
+    'update_task_design_doc' before implementing and completing the task.
+    The task will automatically move to 'proposed' status once the design_doc is set.
+    You must wait for the user to approve the design before proceeding with implementation.
+
     Args:
         pipeline_id: The ID of the pipeline to pull from.
 
@@ -85,6 +90,9 @@ async def complete_task(
 ) -> str:
     """
     Finalizes a task implementation.
+
+    IMPORTANT: If 'want_design_doc' was True for this task, a 'design_doc' must have been 
+    provided and approved by the user before calling this tool.
 
     Args:
         task_id: The target task ID.
