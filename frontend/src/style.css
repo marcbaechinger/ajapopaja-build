@@ -64,8 +64,14 @@ body {
   @apply !bg-app-bg !text-app-text prose prose-invert prose-base max-w-none;
 }
 .CodeMirror-fullscreen {
-  @apply !fixed !inset-4 !z-50 !bg-app-bg !h-auto !w-auto !border !border-app-border !shadow-2xl !rounded-xl overflow-hidden !text-lg;
+  @apply !fixed !inset-4 !z-50 !bg-app-bg !w-auto !border !border-app-border !shadow-2xl !rounded-xl overflow-hidden !text-lg;
   top: 60px !important; /* Avoid overlap with our fake modal container padding */
+  bottom: 16px !important;
+}
+
+.CodeMirror-fullscreen .CodeMirror-scroll {
+  @apply !h-auto;
+  min-height: 100% !important;
 }
 
 .CodeMirror-fullscreen + .editor-preview-side {
