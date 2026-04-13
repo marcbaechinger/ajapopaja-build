@@ -8,6 +8,29 @@ async def get_tasks_by_pipeline(pipeline_id: str, include_deleted: bool = False)
         return await Task.find(Task.pipeline_id == pipeline_id).sort(+Task.order, +Task.created_at).to_list()
     return await Task.find(Task.pipeline_id == pipeline_id, Task.deleted == False).sort(+Task.order, +Task.created_at).to_list()
 
+async def get_completed_tasks_by_pipeline(
+    pipeline_id: str, 
+    page: int = 0, 
+    limit: int = 5
+) -> (List[Task], int):
+    # Filter for completed tasks (IMPLEMENTED or DISCARDED) that are not deleted
+    query = Task.find(
+        Task.pipeline_id == pipeline_id,
+        Task.deleted == False,
+        {"status": {"$in": [TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED]}}
+    )
+    
+    # Total count of all completed tasks
+    total_completed = await query.count()
+    
+    # The UI shows the *latest* completed task separately. 
+    # We want to return "older" completed tasks, so we skip the first one.
+    # We sort by updated_at descending to get the newest first.
+    tasks = await query.sort(-Task.updated_at).skip(1 + (page * limit)).limit(limit).to_list()
+    
+    # We return total_completed - 1 because one task is shown separately
+    return tasks, max(0, total_completed - 1)
+
 async def get_task_by_id(task_id: str, include_deleted: bool = False) -> Task:
     try:
         task = await Task.get(task_id)

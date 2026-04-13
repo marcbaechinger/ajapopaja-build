@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Body, Depends
 from typing import List, Optional
+from pydantic import BaseModel
 from core.models.models import Task, TaskStatus, User
 from core.queries import task as task_queries
 from api.websocket_manager import manager, WSMessage
@@ -7,6 +8,10 @@ from api.auth import get_current_user
 
 # Root router for task-specific top-level endpoints
 task_router = APIRouter(prefix="/tasks", tags=["tasks"])
+
+class CompletedTasksResponse(BaseModel):
+    tasks: List[Task]
+    total_count: int
 
 @task_router.get("/{task_id}", response_model=Task)
 async def get_task(
@@ -127,6 +132,16 @@ async def list_pipeline_tasks(
     current_user: User = Depends(get_current_user)
 ):
     return await task_queries.get_tasks_by_pipeline(pipeline_id, include_deleted)
+
+@pipeline_task_router.get("/completed", response_model=CompletedTasksResponse)
+async def list_completed_pipeline_tasks(
+    pipeline_id: str,
+    page: int = 0,
+    limit: int = 5,
+    current_user: User = Depends(get_current_user)
+):
+    tasks, total_count = await task_queries.get_completed_tasks_by_pipeline(pipeline_id, page, limit)
+    return CompletedTasksResponse(tasks=tasks, total_count=total_count)
 
 @pipeline_task_router.post("/next", response_model=Optional[Task])
 async def get_next_task(pipeline_id: str):

@@ -179,14 +179,14 @@ export class PipelineDetailView extends View {
       e.preventDefault();
       if (this.completedTasksPage > 0) {
         this.completedTasksPage--;
-        this.refreshTasks();
+        this.refreshCompletedTasks();
       }
     });
 
     this.context.actionRegistry.register('next_completed_page', async (e) => {
       e.preventDefault();
       this.completedTasksPage++;
-      this.refreshTasks();
+      this.refreshCompletedTasks();
     });
 
     this.context.actionRegistry.register('create_task', async (_e, el) => {
@@ -574,24 +574,45 @@ export class PipelineDetailView extends View {
 
       if (completedTasks.length > 0) {
         lastCompletedContainer.innerHTML = TaskItem.render(completedTasks[0], false, true, this.collapsedTasks.has(completedTasks[0]._id!));
-        const remainingCompleted = completedTasks.slice(1);
-        
-        const totalPages = Math.ceil(remainingCompleted.length / this.completedPageSize);
-        // Ensure page index is valid if tasks were deleted
-        if (this.completedTasksPage >= totalPages && totalPages > 0) {
-          this.completedTasksPage = totalPages - 1;
+        this.refreshCompletedTasks();
+      } else {
+        lastCompletedContainer.innerHTML = '';
+        completedContainer.innerHTML = '<p class="text-app-muted italic text-xs">No completed tasks yet.</p>';
+        if (this.container.querySelector('#completed-pagination')) {
+          this.container.querySelector('#completed-pagination')!.innerHTML = '';
         }
-        
-        const start = this.completedTasksPage * this.completedPageSize;
-        const end = start + this.completedPageSize;
-        const pageTasks = remainingCompleted.slice(start, end);
+      }
 
-        completedContainer.innerHTML = pageTasks.length > 0
-          ? pageTasks.map(t => TaskItem.render(t, false, false, this.collapsedTasks.has(t._id!))).join('')
-          : '<p class="text-app-muted italic text-xs">No completed tasks yet.</p>';
+      if (completedCountEl) {
+        completedCountEl.textContent = `(${completedTasks.length})`;
+      }
+    } catch (error) {
+      listContainer.innerHTML = '<p class="text-red-400">Error loading tasks.</p>';
+      console.error('Error refreshing tasks:', error);
+    }
+  }
 
+  async refreshCompletedTasks() {
+    if (!this.container) return;
+    const completedContainer = this.container.querySelector('#completed-task-list');
+    const paginationContainer = this.container.querySelector('#completed-pagination');
+    if (!completedContainer) return;
+
+    try {
+      const { tasks, total_count } = await this.context.taskClient.listCompletedByPipeline(
+        this.pipelineId, 
+        this.completedTasksPage, 
+        this.completedPageSize
+      );
+
+      completedContainer.innerHTML = tasks.length > 0
+        ? tasks.map(t => TaskItem.render(t, false, false, this.collapsedTasks.has(t._id!))).join('')
+        : '<p class="text-app-muted italic text-xs">No older completed tasks.</p>';
+
+      if (paginationContainer) {
+        const totalPages = Math.ceil(total_count / this.completedPageSize);
         if (totalPages > 1) {
-          const paginationHtml = `
+          paginationContainer.innerHTML = `
             <div class="flex justify-between items-center mt-6 pt-4 border-t border-app-border/20">
               <button data-action-click="prev_completed_page" ${this.completedTasksPage === 0 ? 'disabled' : ''}
                       class="text-[10px] font-bold uppercase tracking-widest text-app-muted hover:text-app-accent-1 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1">
@@ -606,18 +627,12 @@ export class PipelineDetailView extends View {
               </button>
             </div>
           `;
-          completedContainer.insertAdjacentHTML('beforeend', paginationHtml);
+        } else {
+          paginationContainer.innerHTML = '';
         }
-      } else {
-        lastCompletedContainer.innerHTML = '';
-        completedContainer.innerHTML = '<p class="text-app-muted italic text-xs">No completed tasks yet.</p>';
-      }
-
-      if (completedCountEl) {
-        completedCountEl.textContent = `(${completedTasks.length})`;
       }
     } catch (error) {
-      listContainer.innerHTML = '<p class="text-red-400">Error loading tasks.</p>';
+      console.error('Error refreshing completed tasks:', error);
     }
   }
 
@@ -763,6 +778,7 @@ export class PipelineDetailView extends View {
               <div id="completed-task-list" class="space-y-4 mt-4 opacity-80">
                 <!-- Completed tasks will be rendered here -->
               </div>
+              <div id="completed-pagination"></div>
             </details>
           </div>
         </section>

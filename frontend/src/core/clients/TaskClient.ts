@@ -17,6 +17,14 @@ export class TaskClient extends BaseClient {
     return await response.json();
   }
 
+  async listCompletedByPipeline(pipelineId: string, page: number = 0, limit: number = 5): Promise<{tasks: Task[], total_count: number}> {
+    const url = new URL(`${this.baseUrl}/pipelines/${pipelineId}/tasks/completed`);
+    url.searchParams.append('page', page.toString());
+    url.searchParams.append('limit', limit.toString());
+    const response = await this.fetch(url.toString());
+    return await response.json();
+  }
+
   async get(id: string, includeDeleted: boolean = false): Promise<Task> {
     const url = new URL(`${this.baseUrl}/tasks/${id}`);
     if (includeDeleted) url.searchParams.append('include_deleted', 'true');
