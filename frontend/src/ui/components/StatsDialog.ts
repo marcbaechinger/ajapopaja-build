@@ -21,11 +21,13 @@ export class StatsDialog extends BaseDialog {
   }
 
   protected renderBody(): string {
+    if (!this.tasks) return '';
     return PipelineStatsView.render(this.tasks);
   }
 
   public async show(): Promise<void> {
-    await super.show();
+    const showPromise = super.show();
     PipelineStatsView.animateBars(this.dialog);
+    await showPromise;
   }
 }

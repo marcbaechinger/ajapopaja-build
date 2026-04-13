@@ -18,6 +18,7 @@ export class HistoryDialog extends BaseDialog {
   }
 
   protected renderBody(): string {
+    if (!this.tasks) return '';
     const implementedTasks = this.tasks
       .filter(t => !t.deleted && t.status === TaskStatus.IMPLEMENTED)
       .sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
