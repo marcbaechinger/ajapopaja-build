@@ -68,6 +68,8 @@ body {
   top: 60px !important; /* Avoid overlap with our fake modal container padding */
   bottom: 16px !important;
   max-width: 1024px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
 }
 
 .CodeMirror-fullscreen .CodeMirror-scroll {
@@ -79,12 +81,17 @@ body {
   @apply !fixed !z-50 !bg-app-bg !border-app-border prose-base;
   top: 60px !important;
   bottom: 16px !important;
-  right: 16px !important;
+  max-width: 1024px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
 }
 
 .editor-toolbar.fullscreen {
   @apply !fixed !top-4 !inset-x-4 !z-50 !bg-app-surface !border-app-border !rounded-t-xl !border-b-0;
   width: auto !important;
+  max-width: 1024px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
 }
 
 .editor-preview-active-side {
