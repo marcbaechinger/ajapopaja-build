@@ -1,12 +1,13 @@
 from typing import List, Optional, Any
+from datetime import datetime, UTC
 from beanie import PydanticObjectId
 from core.models.models import Task, TaskStatus, StateTransition
 from core.exceptions import EntityNotFoundError, VersionMismatchError
 
 async def get_tasks_by_pipeline(pipeline_id: str, include_deleted: bool = False) -> List[Task]:
     if include_deleted:
-        return await Task.find(Task.pipeline_id == pipeline_id).sort(+Task.order, +Task.created_at).to_list()
-    return await Task.find(Task.pipeline_id == pipeline_id, Task.deleted == False).sort(+Task.order, +Task.created_at).to_list()
+        return await Task.find(Task.pipeline_id == pipeline_id).sort(+Task.order, +Task.scheduled_at, +Task.created_at).to_list()
+    return await Task.find(Task.pipeline_id == pipeline_id, Task.deleted == False).sort(+Task.order, +Task.scheduled_at, +Task.created_at).to_list()
 
 async def get_completed_tasks_by_pipeline(
     pipeline_id: str, 
@@ -45,6 +46,8 @@ async def create_task(pipeline_id: str, task: Task, actor: str = "user") -> Task
     task.pipeline_id = pipeline_id
     task.version = 1
     task.history = [StateTransition(to_status=task.status, by=actor)]
+    if task.status == TaskStatus.SCHEDULED:
+        task.scheduled_at = datetime.now(UTC)
     await task.insert()
     return task
 
@@ -58,6 +61,8 @@ async def update_task_status(task_id: str, status: TaskStatus, version: int, act
     
     task.history.append(StateTransition(from_status=task.status, to_status=status, by=actor))
     task.status = status
+    if status == TaskStatus.SCHEDULED:
+        task.scheduled_at = datetime.now(UTC)
     task.version += 1
     await task.save()
     return task
@@ -114,6 +119,7 @@ async def accept_design(task_id: str, version: int, actor: str = "user") -> Task
     
     task.history.append(StateTransition(from_status=task.status, to_status=TaskStatus.SCHEDULED, by=actor))
     task.status = TaskStatus.SCHEDULED
+    task.scheduled_at = datetime.now(UTC)
     task.version += 1
     await task.save()
     return task
@@ -197,12 +203,12 @@ def _verify_task(task: Task) -> dict:
     }
 
 async def get_next_task(pipeline_id: str, actor: str = "mcp") -> Optional[Task]:
-    """Finds the first scheduled task (lowest order, then oldest creation time), sets it to inprogress, and increments version."""
+    """Finds the first scheduled task (lowest order, then oldest scheduled time), sets it to inprogress, and increments version."""
     task = await Task.find(
         Task.pipeline_id == pipeline_id,
         Task.status == TaskStatus.SCHEDULED,
         Task.deleted == False
-    ).sort(+Task.order, +Task.created_at).first_or_none()
+    ).sort(+Task.order, +Task.scheduled_at, +Task.created_at).first_or_none()
     
     if task:
         task.history.append(StateTransition(from_status=task.status, to_status=TaskStatus.INPROGRESS, by=actor))

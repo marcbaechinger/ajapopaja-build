@@ -35,6 +35,7 @@ export class Task {
   pipeline_id: string = '';
   created_at?: string;
   updated_at?: string;
+  scheduled_at?: string;
   deleted: boolean = false;
   history: StateTransition[] = [];
 }

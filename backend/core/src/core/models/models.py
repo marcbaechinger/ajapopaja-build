@@ -35,6 +35,7 @@ class Task(Document):
     parent_task_id: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    scheduled_at: Optional[datetime] = None
     pipeline_id: str
     deleted: bool = False
     history: List[StateTransition] = Field(default_factory=list)
