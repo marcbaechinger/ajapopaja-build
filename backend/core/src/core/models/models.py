@@ -7,6 +7,7 @@ from beanie import Document
 class TaskStatus(str, Enum):
     CREATED = "created"
     SCHEDULED = "scheduled"
+    PROPOSED = "proposed"
     INPROGRESS = "inprogress"
     IMPLEMENTED = "implemented"
     DISCARDED = "discarded"
@@ -23,6 +24,8 @@ class Task(Document):
     description: Optional[str] = None
     status: TaskStatus = TaskStatus.CREATED
     type: str = "manual"  # manual, system
+    spec: Optional[str] = None
+    want_design_doc: bool = False
     order: int = 0
     version: int = 1
     commit_hash: Optional[str] = None

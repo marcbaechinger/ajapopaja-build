@@ -1,6 +1,7 @@
 export const TaskStatus = {
   CREATED: "created",
   SCHEDULED: "scheduled",
+  PROPOSED: "proposed",
   INPROGRESS: "inprogress",
   IMPLEMENTED: "implemented",
   DISCARDED: "discarded",
@@ -22,6 +23,8 @@ export class Task {
   description?: string | null;
   status: TaskStatus = TaskStatus.CREATED;
   type: string = "manual"; // manual, system
+  spec?: string | null;
+  want_design_doc: boolean = false;
   order: number = 0;
   version: number = 1;
   commit_hash?: string | null;

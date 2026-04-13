@@ -45,7 +45,10 @@ async def update_task_details(
     title: Optional[str] = None, 
     description: Optional[str] = None,
     order: Optional[int] = None,
-    design_doc: Optional[str] = None
+    design_doc: Optional[str] = None,
+    spec: Optional[str] = None,
+    want_design_doc: Optional[bool] = None,
+    actor: str = "mcp"
 ) -> Task:
     task = await get_task_by_id(task_id)
     
@@ -60,9 +63,51 @@ async def update_task_details(
         task.description = description
     if order is not None:
         task.order = order
+    if spec is not None:
+        task.spec = spec
+    if want_design_doc is not None:
+        task.want_design_doc = want_design_doc
+        
     if design_doc is not None:
         task.design_doc = design_doc
+        if task.want_design_doc and task.status == TaskStatus.INPROGRESS:
+            task.history.append(StateTransition(from_status=task.status, to_status=TaskStatus.PROPOSED, by=actor))
+            task.status = TaskStatus.PROPOSED
         
+    task.version += 1
+    await task.save()
+    return task
+
+async def accept_design(task_id: str, version: int, actor: str = "user") -> Task:
+    task = await get_task_by_id(task_id)
+    
+    if task.version != version:
+        raise VersionMismatchError(
+            f"Task version mismatch. Client has {version}, DB has {task.version}"
+        )
+    
+    if task.status != TaskStatus.PROPOSED:
+        raise ValueError(f"Task status must be PROPOSED to accept design, currently {task.status}")
+    
+    task.history.append(StateTransition(from_status=task.status, to_status=TaskStatus.SCHEDULED, by=actor))
+    task.status = TaskStatus.SCHEDULED
+    task.version += 1
+    await task.save()
+    return task
+
+async def reject_design(task_id: str, version: int, actor: str = "user") -> Task:
+    task = await get_task_by_id(task_id)
+    
+    if task.version != version:
+        raise VersionMismatchError(
+            f"Task version mismatch. Client has {version}, DB has {task.version}"
+        )
+    
+    if task.status != TaskStatus.PROPOSED:
+        raise ValueError(f"Task status must be PROPOSED to reject design, currently {task.status}")
+    
+    task.history.append(StateTransition(from_status=task.status, to_status=TaskStatus.DISCARDED, by=actor))
+    task.status = TaskStatus.DISCARDED
     task.version += 1
     await task.save()
     return task

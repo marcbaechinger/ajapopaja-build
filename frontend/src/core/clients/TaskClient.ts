@@ -24,11 +24,11 @@ export class TaskClient extends BaseClient {
     return await response.json();
   }
 
-  async create(pipelineId: string, title: string, design_doc?: string): Promise<Task> {
+  async create(pipelineId: string, title: string, design_doc?: string, spec?: string, want_design_doc?: boolean): Promise<Task> {
     const response = await this.fetch(`${this.baseUrl}/pipelines/${pipelineId}/tasks/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, pipeline_id: pipelineId, design_doc })
+      body: JSON.stringify({ title, pipeline_id: pipelineId, design_doc, spec, want_design_doc })
     });
     return await response.json();
   }
@@ -49,7 +49,7 @@ export class TaskClient extends BaseClient {
     }
   }
 
-  async updateDetails(id: string, version: number, details: Partial<{title: string, description: string, order: number, design_doc: string}>): Promise<Task> {
+  async updateDetails(id: string, version: number, details: Partial<{title: string, description: string, order: number, design_doc: string, spec: string, want_design_doc: boolean}>): Promise<Task> {
     try {
       const response = await this.fetch(`${this.baseUrl}/tasks/${id}`, {
         method: 'PATCH',
@@ -71,6 +71,38 @@ export class TaskClient extends BaseClient {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ version, commit_hash, completion_info })
+      });
+      return await response.json();
+    } catch (e: any) {
+      if (e.message?.includes('409') || e.message?.includes('OCC_CONFLICT')) {
+        throw new Error('OCC_CONFLICT');
+      }
+      throw e;
+    }
+  }
+
+  async acceptDesign(id: string, version: number): Promise<Task> {
+    try {
+      const response = await this.fetch(`${this.baseUrl}/tasks/${id}/accept-design`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version })
+      });
+      return await response.json();
+    } catch (e: any) {
+      if (e.message?.includes('409') || e.message?.includes('OCC_CONFLICT')) {
+        throw new Error('OCC_CONFLICT');
+      }
+      throw e;
+    }
+  }
+
+  async rejectDesign(id: string, version: number): Promise<Task> {
+    try {
+      const response = await this.fetch(`${this.baseUrl}/tasks/${id}/reject-design`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version })
       });
       return await response.json();
     } catch (e: any) {

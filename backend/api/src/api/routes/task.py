@@ -45,6 +45,32 @@ async def complete_task(
     ))
     return updated_task
 
+@task_router.post("/{task_id}/accept-design", response_model=Task)
+async def accept_design(
+    task_id: str,
+    version: int = Body(..., embed=True),
+    current_user: User = Depends(get_current_user)
+):
+    updated_task = await task_queries.accept_design(task_id, version, actor="user")
+    await manager.broadcast(WSMessage(
+        type="TASK_STATUS_UPDATED",
+        payload=updated_task.model_dump(mode='json')
+    ))
+    return updated_task
+
+@task_router.post("/{task_id}/reject-design", response_model=Task)
+async def reject_design(
+    task_id: str,
+    version: int = Body(..., embed=True),
+    current_user: User = Depends(get_current_user)
+):
+    updated_task = await task_queries.reject_design(task_id, version, actor="user")
+    await manager.broadcast(WSMessage(
+        type="TASK_STATUS_UPDATED",
+        payload=updated_task.model_dump(mode='json')
+    ))
+    return updated_task
+
 @task_router.patch("/{task_id}", response_model=Task)
 async def update_task_details(
     task_id: str,
@@ -53,9 +79,13 @@ async def update_task_details(
     description: Optional[str] = Body(None, embed=True),
     order: Optional[int] = Body(None, embed=True),
     design_doc: Optional[str] = Body(None, embed=True),
+    spec: Optional[str] = Body(None, embed=True),
+    want_design_doc: Optional[bool] = Body(None, embed=True),
     current_user: User = Depends(get_current_user)
 ):
-    updated_task = await task_queries.update_task_details(task_id, version, title, description, order, design_doc)
+    updated_task = await task_queries.update_task_details(
+        task_id, version, title, description, order, design_doc, spec=spec, want_design_doc=want_design_doc, actor="user"
+    )
     await manager.broadcast(WSMessage(
         type="TASK_UPDATED",
         payload=updated_task.model_dump(mode='json')

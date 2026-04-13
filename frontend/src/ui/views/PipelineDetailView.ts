@@ -193,6 +193,44 @@ export class PipelineDetailView extends View {
       }
     });
 
+    this.context.actionRegistry.register('edit_spec', async (_e, el) => {
+      const container = el.closest('.spec-container') as HTMLElement;
+      if (!container) return;
+      
+      container.querySelector('.spec-view')?.classList.add('hidden');
+      container.querySelector('.spec-edit')?.classList.remove('hidden');
+      
+      const textarea = container.querySelector('textarea');
+      textarea?.focus();
+    });
+
+    this.context.actionRegistry.register('cancel_spec_edit', async (_e, el) => {
+      const container = el.closest('.spec-container') as HTMLElement;
+      if (!container) return;
+      
+      container.querySelector('.spec-view')?.classList.remove('hidden');
+      container.querySelector('.spec-edit')?.classList.add('hidden');
+    });
+
+    this.context.actionRegistry.register('save_spec', async (_e, el) => {
+      const container = el.closest('.spec-container') as HTMLElement;
+      if (!container) return;
+      
+      const taskId = container.getAttribute('data-task-id');
+      const version = parseInt(container.getAttribute('data-version') || '1');
+      if (!taskId) return;
+
+      const spec = (container.querySelector('textarea') as HTMLTextAreaElement).value.trim();
+      const want_design_doc = (container.querySelector('input[type="checkbox"]') as HTMLInputElement).checked;
+
+      try {
+        await this.context.taskClient.updateDetails(taskId, version, { spec, want_design_doc });
+        // UI refresh via WS
+      } catch (error) {
+        alert('Failed to save specification');
+      }
+    });
+
     this.context.actionRegistry.register('edit_design_doc', async (_e, el) => {
       const container = el.closest('.design-doc-container') as HTMLElement;
       if (!container) return;
@@ -297,6 +335,40 @@ export class PipelineDetailView extends View {
         // UI refresh will be triggered by WebSocket message TASK_UPDATED
       } catch (error) {
         alert('Failed to save design doc. Please try again.');
+      }
+    });
+
+    this.context.actionRegistry.register('accept_design', async (_e, el) => {
+      const taskId = el.closest('[data-view-id]')?.getAttribute('data-view-id');
+      const version = parseInt(el.getAttribute('data-version') || '1');
+      if (!taskId) return;
+
+      try {
+        await this.context.taskClient.acceptDesign(taskId, version);
+        // Refresh handled by WS
+      } catch (error) {
+        alert('Failed to accept design');
+      }
+    });
+
+    this.context.actionRegistry.register('reject_design', async (_e, el) => {
+      const taskId = el.closest('[data-view-id]')?.getAttribute('data-view-id');
+      const version = parseInt(el.getAttribute('data-version') || '1');
+      if (!taskId) return;
+
+      const confirmed = await new ConfirmationDialog(
+        'Reject Design',
+        'Are you sure you want to reject this design? This task will be marked as DISCARDED.',
+        'Reject'
+      ).show();
+
+      if (!confirmed) return;
+
+      try {
+        await this.context.taskClient.rejectDesign(taskId, version);
+        // Refresh handled by WS
+      } catch (error) {
+        alert('Failed to reject design');
       }
     });
 
@@ -407,6 +479,8 @@ export class PipelineDetailView extends View {
 
   async refreshTasks() {
     if (!this.container) return;
+    const proposedContainer = this.container.querySelector('#proposed-task-list');
+    const proposedSection = this.container.querySelector('#proposed-section');
     const listContainer = this.container.querySelector('#task-list');
     const lastCompletedContainer = this.container.querySelector('#last-completed-task');
     const completedContainer = this.container.querySelector('#completed-task-list');
@@ -418,8 +492,21 @@ export class PipelineDetailView extends View {
       this.updateHeaderStats();
       const allTasks = this.allLoadedTasks;
       
-      const openTasks = allTasks.filter(t => !t.deleted && !([TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED] as any[]).includes(t.status));
+      const proposedTasks = allTasks.filter(t => !t.deleted && t.status === TaskStatus.PROPOSED);
+      const openTasks = allTasks.filter(t => !t.deleted && t.status !== TaskStatus.PROPOSED && !([TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED] as any[]).includes(t.status));
       const completedTasks = allTasks.filter(t => !t.deleted && ([TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED] as any[]).includes(t.status));
+
+      // Update proposed section visibility
+      if (proposedSection && proposedContainer) {
+        if (proposedTasks.length > 0) {
+          proposedSection.classList.remove('hidden');
+          // Sort proposed by updated_at desc
+          proposedTasks.sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
+          proposedContainer.innerHTML = proposedTasks.map(t => TaskItem.render(t, false, false, this.collapsedTasks.has(t._id!))).join('');
+        } else {
+          proposedSection.classList.add('hidden');
+        }
+      }
 
       // Sort open tasks
       openTasks.sort((a, b) => {
@@ -525,6 +612,7 @@ export class PipelineDetailView extends View {
     const statusCounts: Record<string, number> = {
       [TaskStatus.CREATED]: 0,
       [TaskStatus.SCHEDULED]: 0,
+      [TaskStatus.PROPOSED]: 0,
       [TaskStatus.INPROGRESS]: 0,
       [TaskStatus.IMPLEMENTED]: 0,
       [TaskStatus.FAILED]: 0,
@@ -547,6 +635,7 @@ export class PipelineDetailView extends View {
     const colors: Record<string, string> = {
       [TaskStatus.CREATED]: 'bg-slate-500',
       [TaskStatus.SCHEDULED]: 'bg-blue-500',
+      [TaskStatus.PROPOSED]: 'bg-purple-500',
       [TaskStatus.INPROGRESS]: 'bg-amber-500',
       [TaskStatus.IMPLEMENTED]: 'bg-green-500',
       [TaskStatus.FAILED]: 'bg-red-500',
@@ -607,6 +696,17 @@ export class PipelineDetailView extends View {
             </button>
           </form>
         </section>
+
+        <section id="proposed-section" class="bg-app-surface p-6 rounded-xl shadow-xl border border-app-border w-full hidden">
+          <h3 class="text-xl font-bold text-app-accent-2 mb-4 flex items-center gap-2">
+            Proposed for Review
+            <span class="text-[10px] bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-full font-black uppercase tracking-widest">New Designs</span>
+          </h3>
+          <div id="proposed-task-list" class="space-y-4">
+            <!-- Proposed tasks will be rendered here -->
+          </div>
+        </section>
+
         <section class="bg-app-surface p-6 rounded-xl shadow-xl border border-app-border w-full">
           <div class="flex justify-between items-center mb-4">
             <h3 class="text-xl font-bold text-app-accent-2">Task Sequence</h3>
