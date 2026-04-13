@@ -17,6 +17,8 @@ export class PipelineDetailView extends View {
   private currentSortOrder: 'execution' | 'newest' | 'status' = 'execution';
   private allLoadedTasks: Task[] = [];
   private collapsedTasks: Set<string> = new Set();
+  private completedTasksPage: number = 0;
+  private completedPageSize: number = 5;
   private keydownHandler: ((e: KeyboardEvent) => void) | null = null;
 
   constructor(context: AppContext, params: Record<string, string>) {
@@ -80,49 +82,9 @@ export class PipelineDetailView extends View {
       if (message.payload?.pipeline_id === this.pipelineId) {
         // Update local cache
         this.allLoadedTasks = this.allLoadedTasks.filter(t => t._id !== message.payload.task_id);
-        this.updateHeaderStats();
-
-        const taskEl = this.container?.querySelector(`[data-view-id="${message.payload.task_id}"]`);
-        if (taskEl) {
-          const list = taskEl.parentElement;
-          const wasLastCompleted = list?.id === 'last-completed-task';
-          taskEl.remove();
-          
-          if (list && list.children.length === 0) {
-             if (list.id === 'task-list') {
-               list.innerHTML = '<p class="text-app-muted italic">No tasks to be done.</p>';
-             } else if (list.id === 'completed-task-list') {
-               list.innerHTML = '<p class="text-app-muted italic text-xs">No completed tasks yet.</p>';
-             }
-          }
-
-          if (wasLastCompleted) {
-            // Promote the top of completed-task-list to last-completed-task
-            const completedList = this.container?.querySelector('#completed-task-list');
-            const topCompleted = completedList?.firstElementChild;
-            if (topCompleted && topCompleted.tagName !== 'P') {
-              this.container?.querySelector('#last-completed-task')?.appendChild(topCompleted);
-              if (completedList?.children.length === 0) {
-                completedList.innerHTML = '<p class="text-app-muted italic text-xs">No completed tasks yet.</p>';
-              }
-            }
-          }
-
-          this.updateCompletedCount();
-        }
+        this.refreshTasks();
       }
     }));
-  }
-
-  private updateCompletedCount() {
-    const completedContainer = this.container?.querySelector('#completed-task-list');
-    const lastCompletedContainer = this.container?.querySelector('#last-completed-task');
-    const completedCountEl = this.container?.querySelector('#completed-count');
-    if (completedContainer && lastCompletedContainer && completedCountEl) {
-      const countList = completedContainer.querySelectorAll('[data-view-id]').length;
-      const countLast = lastCompletedContainer.querySelectorAll('[data-view-id]').length;
-      completedCountEl.textContent = `(${countList + countLast})`;
-    }
   }
 
   private updateSingleTask(task: any) {
@@ -155,70 +117,7 @@ export class PipelineDetailView extends View {
 
     // If moving between open/completed sections
     if (isTaskCompleted !== wasTaskCompleted) {
-      const sourceList = taskEl.parentElement;
-      const wasLastCompleted = sourceList?.id === 'last-completed-task';
-      taskEl.remove();
-      
-      // Handle empty source list
-      if (sourceList && sourceList.children.length === 0) {
-        if (sourceList.id === 'task-list') {
-          sourceList.innerHTML = '<p class="text-app-muted italic">No tasks to be done.</p>';
-        } else if (sourceList.id === 'completed-task-list') {
-          sourceList.innerHTML = '<p class="text-app-muted italic text-xs">No completed tasks yet.</p>';
-        }
-      }
-
-      if (wasLastCompleted) {
-        // Promote from completed list
-        const completedList = this.container.querySelector('#completed-task-list');
-        const topCompleted = completedList?.firstElementChild;
-        if (topCompleted && topCompleted.tagName !== 'P') {
-          this.container.querySelector('#last-completed-task')?.appendChild(topCompleted);
-          if (completedList?.children.length === 0) {
-            completedList.innerHTML = '<p class="text-app-muted italic text-xs">No completed tasks yet.</p>';
-          }
-        }
-      }
-
-      if (isTaskCompleted) {
-        // Task became completed: Demote current last-completed to list, and put new task in last-completed
-        const lastCompletedContainer = this.container.querySelector('#last-completed-task');
-        const completedList = this.container.querySelector('#completed-task-list');
-        
-        if (lastCompletedContainer && completedList) {
-          const currentLast = lastCompletedContainer.firstElementChild;
-          if (currentLast && currentLast.tagName !== 'P') {
-            if (completedList.querySelector('p.italic')) {
-              completedList.innerHTML = '';
-            }
-            completedList.prepend(currentLast);
-          }
-          
-          const temp = document.createElement('div');
-          temp.innerHTML = TaskItem.render(task, false, true, this.collapsedTasks.has(task._id));
-          const newNode = temp.firstElementChild;
-          if (newNode) {
-            lastCompletedContainer.innerHTML = ''; // clear any placeholder if we had one
-            lastCompletedContainer.appendChild(newNode);
-          }
-        }
-      } else {
-        // Task became open (rare)
-        const targetList = this.container.querySelector('#task-list');
-        if (targetList) {
-          if (targetList.querySelector('p.italic')) {
-            targetList.innerHTML = '';
-          }
-          const temp = document.createElement('div');
-          temp.innerHTML = TaskItem.render(task, this.currentSortOrder === 'execution', false, this.collapsedTasks.has(task._id));
-          const newNode = temp.firstElementChild;
-          if (newNode) {
-             targetList.prepend(newNode);
-          }
-        }
-      }
-      
-      this.updateCompletedCount();
+      this.refreshTasks();
       return;
     }
 
@@ -260,6 +159,20 @@ export class PipelineDetailView extends View {
     this.context.actionRegistry.register('change_sort_order', async (e) => {
       const select = e.target as HTMLSelectElement;
       this.currentSortOrder = select.value as any;
+      this.refreshTasks();
+    });
+
+    this.context.actionRegistry.register('prev_completed_page', async (e) => {
+      e.preventDefault();
+      if (this.completedTasksPage > 0) {
+        this.completedTasksPage--;
+        this.refreshTasks();
+      }
+    });
+
+    this.context.actionRegistry.register('next_completed_page', async (e) => {
+      e.preventDefault();
+      this.completedTasksPage++;
       this.refreshTasks();
     });
 
@@ -540,9 +453,39 @@ export class PipelineDetailView extends View {
       if (completedTasks.length > 0) {
         lastCompletedContainer.innerHTML = TaskItem.render(completedTasks[0], false, true, this.collapsedTasks.has(completedTasks[0]._id!));
         const remainingCompleted = completedTasks.slice(1);
-        completedContainer.innerHTML = remainingCompleted.length > 0
-          ? remainingCompleted.map(t => TaskItem.render(t, false, false, this.collapsedTasks.has(t._id!))).join('')
+        
+        const totalPages = Math.ceil(remainingCompleted.length / this.completedPageSize);
+        // Ensure page index is valid if tasks were deleted
+        if (this.completedTasksPage >= totalPages && totalPages > 0) {
+          this.completedTasksPage = totalPages - 1;
+        }
+        
+        const start = this.completedTasksPage * this.completedPageSize;
+        const end = start + this.completedPageSize;
+        const pageTasks = remainingCompleted.slice(start, end);
+
+        completedContainer.innerHTML = pageTasks.length > 0
+          ? pageTasks.map(t => TaskItem.render(t, false, false, this.collapsedTasks.has(t._id!))).join('')
           : '<p class="text-app-muted italic text-xs">No completed tasks yet.</p>';
+
+        if (totalPages > 1) {
+          const paginationHtml = `
+            <div class="flex justify-between items-center mt-6 pt-4 border-t border-app-border/20">
+              <button data-action-click="prev_completed_page" ${this.completedTasksPage === 0 ? 'disabled' : ''}
+                      class="text-[10px] font-bold uppercase tracking-widest text-app-muted hover:text-app-accent-1 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                Previous
+              </button>
+              <span class="text-[10px] font-bold text-app-muted uppercase tracking-widest">Page ${this.completedTasksPage + 1} of ${totalPages}</span>
+              <button data-action-click="next_completed_page" ${this.completedTasksPage === totalPages - 1 ? 'disabled' : ''}
+                      class="text-[10px] font-bold uppercase tracking-widest text-app-muted hover:text-app-accent-1 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1">
+                Next
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+              </button>
+            </div>
+          `;
+          completedContainer.insertAdjacentHTML('beforeend', paginationHtml);
+        }
       } else {
         lastCompletedContainer.innerHTML = '';
         completedContainer.innerHTML = '<p class="text-app-muted italic text-xs">No completed tasks yet.</p>';
