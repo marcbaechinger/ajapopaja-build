@@ -51,7 +51,27 @@ Run these commands from the project root. To stop a server, simply use `Ctrl+C` 
 
 ---
 
-## 2. Getting Started for Developers
+## 2. Key Features & Recent Achievements
+
+### 🚀 Automated Agent Workflow
+- **State Machine Lifecycle**: Tasks follow a strict, reliable path: `created` → `scheduled` -> `inprogress` → `implemented` (or `failed`/`discarded`).
+- **Autonomous Design Review**: Agents can be required to submit a Design Document (`want_design_doc`). The system automatically transitions tasks to a `PROPOSED` state for human approval before execution.
+- **Smart Title Parsing**: The backend automatically parses the first H1 header (e.g., `# My Feature`) from submitted design docs to update the task title dynamically.
+- **Execution Ordering**: Tasks are prioritized by a combination of manual `order` and precise `scheduled_at` timestamps to ensure FIFO execution within priority tiers.
+
+### 🎨 Modern, Real-time UI
+- **Multi-Column Dashboard**: A three-column "Execution Engine" layout that separates *Preparation*, *Active Execution*, and *History/Analytics*.
+- **Live Updates**: Integrated WebSockets ensure the UI reacts instantly to agent progress and state changes without page refreshes.
+- **Advanced History Tracking**: Server-side paging for completed tasks and detailed status history for every task.
+- **Adaptive Focus**: Non-active tasks are automatically collapsed to reduce noise, while `INPROGRESS` and `PROPOSED` tasks auto-expand for immediate attention.
+
+### 🤖 AI Agent Integration (MCP)
+- **Deep Context for Agents**: The MCP server provides agents with full task specifications, design document requirements, and a `design_doc_ready` flag to skip design phases when already approved.
+- **Strict Verification**: Automated verification ensures agents provide valid commit hashes and implementation summaries before marking tasks as complete.
+
+---
+
+## 3. Getting Started for Developers
 
 ### Architecture and Design
 The system is composed of five interconnected components:
