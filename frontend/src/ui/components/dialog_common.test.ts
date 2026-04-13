@@ -105,4 +105,25 @@ describe('BaseDialog', () => {
     dialog1['close']('done');
     await showPromise1;
   });
+
+  it('should apply shake animation when duplicate dialog is attempted', async () => {
+    const dialog1 = new TestDialog();
+    const dialog2 = new TestDialog();
+    
+    dialog1['dialog'].showModal = vi.fn();
+    dialog1['dialog'].close = vi.fn();
+    dialog2['dialog'].showModal = vi.fn();
+    dialog2['dialog'].close = vi.fn();
+    
+    const showPromise1 = dialog1.show();
+    expect(dialog1['dialog'].classList.contains('animate-dialog-shake')).toBe(false);
+    
+    const showPromise2 = dialog2.show();
+    expect(dialog1['dialog'].classList.contains('animate-dialog-shake')).toBe(true);
+    
+    // Cleanup
+    dialog1['close'](null);
+    await showPromise1;
+    await showPromise2;
+  });
 });

@@ -112,8 +112,8 @@ body {
 
 @keyframes dialog-shake {
   0%, 100% { transform: translate(-50%, -50%) scale(1); }
-  10%, 30%, 50%, 70%, 90% { transform: translate(-52%, -50%) scale(1.02); }
-  20%, 40%, 60%, 80% { transform: translate(-48%, -50%) scale(1.02); }
+  10%, 30%, 50%, 70%, 90% { transform: translate(-50%, -50%) translateX(-6px) scale(1.01); }
+  20%, 40%, 60%, 80% { transform: translate(-50%, -50%) translateX(6px) scale(1.01); }
 }
 
 .animate-dialog-shake {
