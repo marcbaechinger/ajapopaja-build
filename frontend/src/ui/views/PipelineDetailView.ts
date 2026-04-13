@@ -725,7 +725,7 @@ export class PipelineDetailView extends View {
   render() {
     const user = this.context.authService.getUser();
     return `
-      <div class="max-w-[1600px] mx-auto px-4 py-8 flex flex-col gap-8 min-h-screen">
+      <div class="max-w-[1800px] mx-auto px-6 py-8 flex flex-col gap-8 min-h-screen">
         <header class="flex justify-between items-center bg-app-surface p-6 rounded-2xl shadow-lg border border-app-border shrink-0">
           <div class="flex gap-6 items-center">
             <button onclick="window.location.hash = '#'" class="p-3 hover:bg-app-bg rounded-xl transition-all text-app-muted hover:text-app-accent-1 border border-transparent hover:border-app-border group cursor-pointer" title="Back to Dashboard">
@@ -753,9 +753,9 @@ export class PipelineDetailView extends View {
           </div>
         </header>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start flex-grow">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start flex-grow w-full">
           <!-- Column 1: Preparation & Review -->
-          <div class="flex flex-col gap-8 h-full">
+          <div class="flex flex-col gap-8 h-full min-w-0 lg:min-w-[350px]">
             <div class="bg-app-surface/30 p-6 rounded-3xl border border-app-border/30 flex flex-col h-full">
               ${TaskForm.render()}
               <div id="col-prep" class="space-y-10">
@@ -766,12 +766,12 @@ export class PipelineDetailView extends View {
           </div>
 
           <!-- Column 2: Active Execution -->
-          <div class="flex flex-col gap-8 h-full">
+          <div class="flex flex-col gap-8 h-full min-w-0 lg:min-w-[350px]">
             <div class="bg-app-surface/30 p-6 rounded-3xl border border-app-border/30 flex flex-col h-full">
-              <div class="flex justify-between items-center mb-6 px-1">
-                <h3 class="text-xl font-black text-app-accent-1 uppercase tracking-tighter">Execution Engine</h3>
-                <div class="flex items-center gap-2">
-                  <select data-action-change="change_sort_order" class="bg-app-bg border border-app-border rounded-lg px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-app-text outline-none focus:ring-1 focus:ring-app-accent-1 cursor-pointer">
+              <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 px-1">
+                <h3 class="text-xl font-black text-app-accent-1 uppercase tracking-tighter shrink-0">Execution Engine</h3>
+                <div class="flex items-center gap-2 w-full sm:w-auto">
+                  <select data-action-change="change_sort_order" class="w-full sm:w-auto bg-app-bg border border-app-border rounded-lg px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-app-text outline-none focus:ring-1 focus:ring-app-accent-1 cursor-pointer">
                     <option value="execution" ${this.currentSortOrder === 'execution' ? 'selected' : ''}>Execution Order</option>
                     <option value="newest" ${this.currentSortOrder === 'newest' ? 'selected' : ''}>Newest First</option>
                     <option value="status" ${this.currentSortOrder === 'status' ? 'selected' : ''}>By Status</option>
@@ -786,7 +786,7 @@ export class PipelineDetailView extends View {
           </div>
 
           <!-- Column 3: History & Analytics -->
-          <div class="flex flex-col gap-8 h-full">
+          <div class="flex flex-col gap-8 h-full min-w-0 lg:min-w-[350px]">
             <div class="bg-app-surface/30 p-6 rounded-3xl border border-app-border/30 flex flex-col h-full">
               <div id="col-history" class="space-y-8">
                 <!-- Stats and Completed tasks will be rendered here -->

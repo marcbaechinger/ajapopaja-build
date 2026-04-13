@@ -5,12 +5,12 @@ export class TaskForm {
         <form data-action-submit="create_task" class="flex flex-col gap-3">
           <div class="flex flex-col gap-1.5">
             <label class="text-[10px] font-black text-app-muted uppercase tracking-widest px-1">Quick Add Task</label>
-            <div class="flex gap-2">
+            <div class="flex flex-col sm:flex-row gap-2">
               <input type="text" id="task-title" placeholder="What needs to be done?" 
-                     class="flex-grow bg-app-bg border border-app-border rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-app-accent-1 outline-none text-app-text transition-all text-sm shadow-sm"
+                     class="flex-grow bg-app-bg border border-app-border rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-app-accent-1 outline-none text-app-text transition-all text-sm shadow-sm min-w-0"
                      required>
               <button type="submit" 
-                      class="bg-app-accent-1 hover:brightness-110 text-white font-black px-6 py-2.5 rounded-xl transition-all shadow-lg shadow-app-accent-1/20 cursor-pointer text-sm uppercase tracking-tight">
+                      class="bg-app-accent-1 hover:brightness-110 text-white font-black px-6 py-2.5 rounded-xl transition-all shadow-lg shadow-app-accent-1/20 cursor-pointer text-sm uppercase tracking-tight whitespace-nowrap">
                 Add
               </button>
             </div>

@@ -154,7 +154,8 @@ export class DashboardView extends View {
   render() {
     const user = this.context.authService.getUser();
     return `
-      <header class="flex justify-between items-center bg-app-surface p-6 rounded-xl shadow-lg border border-app-border mb-8">
+      <div class="max-w-7xl mx-auto p-8">
+        <header class="flex justify-between items-center bg-app-surface p-6 rounded-xl shadow-lg border border-app-border mb-8">
         <div class="flex flex-col">
           <h1 class="text-3xl font-black text-app-accent-1 tracking-tight">Ajapopaja <span class="text-app-text/50">Build</span></h1>
           <p class="text-xs text-app-muted uppercase font-bold tracking-widest mt-1">Unified Agent Workspace</p>
@@ -191,6 +192,7 @@ export class DashboardView extends View {
           </div>
         </section>
       </main>
+      </div>
     `;
   }
 
