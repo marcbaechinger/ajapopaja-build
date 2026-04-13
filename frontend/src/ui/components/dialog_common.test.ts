@@ -116,10 +116,11 @@ describe('BaseDialog', () => {
     dialog2['dialog'].close = vi.fn();
     
     const showPromise1 = dialog1.show();
-    expect(dialog1['dialog'].classList.contains('animate-dialog-shake')).toBe(false);
+    const content1 = dialog1['dialog'].querySelector('.dialog-content');
+    expect(content1?.classList.contains('animate-dialog-shake')).toBe(false);
     
     const showPromise2 = dialog2.show();
-    expect(dialog1['dialog'].classList.contains('animate-dialog-shake')).toBe(true);
+    expect(content1?.classList.contains('animate-dialog-shake')).toBe(true);
     
     // Cleanup
     dialog1['close'](null);

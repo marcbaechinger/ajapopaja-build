@@ -111,11 +111,41 @@ body {
 }
 
 @keyframes dialog-shake {
-  0%, 100% { transform: translate(-50%, -50%) scale(1); }
-  10%, 30%, 50%, 70%, 90% { transform: translate(-50%, -50%) translateX(-6px) scale(1.01); }
-  20%, 40%, 60%, 80% { transform: translate(-50%, -50%) translateX(6px) scale(1.01); }
+  0%, 100% { transform: scale(1); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-6px) scale(1.01); }
+  20%, 40%, 60%, 80% { transform: translateX(6px) scale(1.01); }
 }
 
 .animate-dialog-shake {
   animation: dialog-shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+}
+
+/* BaseDialog Transitions */
+.dialog-backdrop {
+  @apply fixed inset-0 bg-black/80 backdrop-blur-md transition-opacity duration-300;
+}
+
+.dialog-panel {
+  @apply fixed inset-0 z-10 flex items-center justify-center p-4 transition-all duration-300 pointer-events-none;
+}
+
+.dialog-content {
+  @apply w-full flex flex-col transform overflow-hidden rounded-3xl bg-app-surface border border-app-border shadow-2xl transition-all duration-300 pointer-events-auto;
+}
+
+/* State Classes */
+.dialog-closed .dialog-backdrop {
+  @apply opacity-0;
+}
+
+.dialog-closed .dialog-content {
+  @apply scale-95 opacity-0;
+}
+
+.dialog-open .dialog-backdrop {
+  @apply opacity-100;
+}
+
+.dialog-open .dialog-content {
+  @apply scale-100 opacity-100;
 }
