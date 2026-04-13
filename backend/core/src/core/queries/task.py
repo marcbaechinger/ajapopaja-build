@@ -99,12 +99,25 @@ async def update_task_details(
     if design_doc is not None:
         task.design_doc = design_doc
         if task.want_design_doc and task.status == TaskStatus.INPROGRESS:
+            # Parse top-level header from design doc to use as task title
+            new_title = _parse_title_from_design_doc(design_doc)
+            if new_title:
+                task.title = new_title
+            
             task.history.append(StateTransition(from_status=task.status, to_status=TaskStatus.PROPOSED, by=actor))
             task.status = TaskStatus.PROPOSED
         
     task.version += 1
     await task.save()
     return task
+
+def _parse_title_from_design_doc(design_doc: str) -> Optional[str]:
+    """Parses the first top-level Markdown header (# Title) from the design doc."""
+    for line in design_doc.splitlines():
+        line = line.strip()
+        if line.startswith("# "):
+            return line[2:].strip()
+    return None
 
 async def accept_design(task_id: str, version: int, actor: str = "user") -> Task:
     task = await get_task_by_id(task_id)

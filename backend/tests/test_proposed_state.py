@@ -92,3 +92,32 @@ async def test_accept_design_invalid_status(init_mock_db):
             task_id=str(task.id),
             version=task.version
         )
+
+@pytest.mark.asyncio
+async def test_update_title_from_design_doc(init_mock_db):
+    pipeline = Pipeline(name="Test Pipeline")
+    await pipeline.insert()
+    
+    task = Task(
+        title="Original Title", 
+        pipeline_id=str(pipeline.id), 
+        status=TaskStatus.INPROGRESS, 
+        want_design_doc=True
+    )
+    await task.insert()
+    
+    # Update with design doc containing an H1 header
+    design_doc = """
+    # New Improved Title
+    
+    Some details here.
+    """
+    
+    updated_task = await task_queries.update_task_details(
+        task_id=str(task.id),
+        version=task.version,
+        design_doc=design_doc
+    )
+    
+    assert updated_task.title == "New Improved Title"
+    assert updated_task.status == TaskStatus.PROPOSED
