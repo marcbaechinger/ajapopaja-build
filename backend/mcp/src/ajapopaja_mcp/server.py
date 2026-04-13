@@ -13,6 +13,7 @@ mcp = FastMCP("Ajapopaja Build MCP")
 
 API_BASE_URL = "http://localhost:8000/api"
 
+
 async def notify_api(task_id: str):
     """Notifies the API that a task has changed."""
     try:
@@ -27,10 +28,12 @@ async def get_next_task(pipeline_id: str) -> Dict[str, Any]:
     """
     Fetches the first available scheduled task in a pipeline and marks it inprogress.
 
-    IMPORTANT: If 'want_design_doc' is True, you MUST provide a design proposal using 
+    IMPORTANT: If 'want_design_doc' is True, you MUST provide a design proposal using
     'update_task_design_doc' before implementing and completing the task.
     The task will automatically move to 'proposed' status once the design_doc is set.
-    You must wait for the user to approve the design before proceeding with implementation.
+    Once you have submitted the design, you should stop working on this task.
+    You can then call 'get_next_task' again to pick up the next available task
+    (which might be this one again once it has been approved and moved back to 'scheduled').
 
     Args:
         pipeline_id: The ID of the pipeline to pull from.
@@ -61,6 +64,12 @@ async def get_next_task(pipeline_id: str) -> Dict[str, Any]:
 async def update_task_design_doc(task_id: str, design_doc: str, version: int) -> str:
     """
     Updates the design document field for a specific task.
+    This also automatically moves tasks to 'proposed' if 'want_design_doc' is True.
+
+    If 'want_design_doc' is True, you should stop working on this task and can call
+    'get_next_task' to see if there is any other scheduled task to pick up.
+
+    If 'want_design_doc' is False implementation can directly continue.
 
     Args:
         task_id: The target task ID.
@@ -91,7 +100,7 @@ async def complete_task(
     """
     Finalizes a task implementation.
 
-    IMPORTANT: If 'want_design_doc' was True for this task, a 'design_doc' must have been 
+    IMPORTANT: If 'want_design_doc' was True for this task, a 'design_doc' must have been
     provided and approved by the user before calling this tool.
 
     Args:
@@ -110,7 +119,7 @@ async def complete_task(
             version=version,
             commit_hash=commit_hash,
             completion_info=completion_info,
-            actor="mcp"
+            actor="mcp",
         )
 
         await notify_api(task_id)
