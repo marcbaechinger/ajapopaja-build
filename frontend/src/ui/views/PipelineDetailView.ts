@@ -16,6 +16,7 @@ export class PipelineDetailView extends View {
   private activeEditors: Map<string, EasyMDE> = new Map();
   private currentSortOrder: 'execution' | 'newest' | 'status' = 'execution';
   private allLoadedTasks: Task[] = [];
+  private collapsedTasks: Set<string> = new Set();
   private keydownHandler: ((e: KeyboardEvent) => void) | null = null;
 
   constructor(context: AppContext, params: Record<string, string>) {
@@ -194,7 +195,7 @@ export class PipelineDetailView extends View {
           }
           
           const temp = document.createElement('div');
-          temp.innerHTML = TaskItem.render(task, false, true);
+          temp.innerHTML = TaskItem.render(task, false, true, this.collapsedTasks.has(task._id));
           const newNode = temp.firstElementChild;
           if (newNode) {
             lastCompletedContainer.innerHTML = ''; // clear any placeholder if we had one
@@ -209,7 +210,7 @@ export class PipelineDetailView extends View {
             targetList.innerHTML = '';
           }
           const temp = document.createElement('div');
-          temp.innerHTML = TaskItem.render(task, this.currentSortOrder === 'execution', false);
+          temp.innerHTML = TaskItem.render(task, this.currentSortOrder === 'execution', false, this.collapsedTasks.has(task._id));
           const newNode = temp.firstElementChild;
           if (newNode) {
              targetList.prepend(newNode);
@@ -225,7 +226,7 @@ export class PipelineDetailView extends View {
     const temp = document.createElement('div');
     const showOrdering = this.currentSortOrder === 'execution' && !isTaskCompleted;
     const isLastCompleted = taskEl.closest('#last-completed-task') !== null;
-    temp.innerHTML = TaskItem.render(task, showOrdering, isLastCompleted);
+    temp.innerHTML = TaskItem.render(task, showOrdering, isLastCompleted, this.collapsedTasks.has(task._id));
     const newNode = temp.firstElementChild;
     if (newNode) {
       taskEl.replaceWith(newNode);
@@ -233,6 +234,24 @@ export class PipelineDetailView extends View {
   }
 
   private registerActions() {
+    this.context.actionRegistry.register('toggle_task_collapse', async (_e, el) => {
+      const taskEl = el.closest('[data-view-id]') as HTMLElement;
+      if (!taskEl) return;
+      const taskId = taskEl.getAttribute('data-view-id');
+      if (!taskId) return;
+
+      if (this.collapsedTasks.has(taskId)) {
+        this.collapsedTasks.delete(taskId);
+      } else {
+        this.collapsedTasks.add(taskId);
+      }
+
+      const task = this.allLoadedTasks.find(t => t._id === taskId);
+      if (task) {
+        this.updateSingleTask(task);
+      }
+    });
+
     this.context.actionRegistry.register('open_stats', async (e) => {
       e.preventDefault();
       new StatsDialog(this.allLoadedTasks).show();
@@ -515,14 +534,14 @@ export class PipelineDetailView extends View {
 
       const showOrdering = this.currentSortOrder === 'execution';
       listContainer.innerHTML = openTasks.length > 0 
-        ? openTasks.map(t => TaskItem.render(t, showOrdering, false)).join('')
+        ? openTasks.map(t => TaskItem.render(t, showOrdering, false, this.collapsedTasks.has(t._id!))).join('')
         : '<p class="text-app-muted italic">No tasks to be done.</p>';
 
       if (completedTasks.length > 0) {
-        lastCompletedContainer.innerHTML = TaskItem.render(completedTasks[0], false, true);
+        lastCompletedContainer.innerHTML = TaskItem.render(completedTasks[0], false, true, this.collapsedTasks.has(completedTasks[0]._id!));
         const remainingCompleted = completedTasks.slice(1);
         completedContainer.innerHTML = remainingCompleted.length > 0
-          ? remainingCompleted.map(t => TaskItem.render(t, false, false)).join('')
+          ? remainingCompleted.map(t => TaskItem.render(t, false, false, this.collapsedTasks.has(t._id!))).join('')
           : '<p class="text-app-muted italic text-xs">No completed tasks yet.</p>';
       } else {
         lastCompletedContainer.innerHTML = '';

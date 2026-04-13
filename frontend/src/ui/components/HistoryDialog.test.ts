@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { HistoryDialog } from './HistoryDialog.ts';
 import { TaskStatus } from '../../core/domain.ts';
 
