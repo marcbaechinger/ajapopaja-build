@@ -32,4 +32,11 @@ describe('TaskItem', () => {
     expect(html).toContain('task-body flex flex-col gap-3 hidden');
     expect(html).not.toContain('rotate-90');
   });
+
+  it('should render cancel schedule button for scheduled tasks', () => {
+    const scheduledTask = { ...mockTask, status: TaskStatus.SCHEDULED };
+    const html = TaskItem.render(scheduledTask as any);
+    expect(html).toContain('Cancel Schedule');
+    expect(html).toContain('data-action-click="unschedule_task"');
+  });
 });

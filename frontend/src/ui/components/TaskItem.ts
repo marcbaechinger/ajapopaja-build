@@ -37,6 +37,7 @@ export class TaskItem {
     };
 
     const canSchedule = task.status === TaskStatus.CREATED;
+    const canUnschedule = task.status === TaskStatus.SCHEDULED;
     const canFail = ([TaskStatus.INPROGRESS, TaskStatus.IMPLEMENTED] as any[]).includes(task.status);
     const isSystem = task.type === 'system';
     const isInProgress = task.status === TaskStatus.INPROGRESS;
@@ -143,6 +144,12 @@ export class TaskItem {
                 <button data-action-click="schedule_task" data-version="${task.version}" 
                         class="text-xs bg-app-accent-1 hover:brightness-110 text-white px-3 py-1 rounded transition-all shadow-lg cursor-pointer">
                   Schedule Execution
+                </button>
+              ` : ''}
+              ${canUnschedule ? `
+                <button data-action-click="unschedule_task" data-version="${task.version}" 
+                        class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1 rounded transition-all shadow-lg cursor-pointer">
+                  Cancel Schedule
                 </button>
               ` : ''}
             </div>
