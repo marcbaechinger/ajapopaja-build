@@ -55,7 +55,7 @@ Run these commands from the project root. To stop a server, simply use `Ctrl+C` 
 
 ### 🚀 Automated Agent Workflow
 - **State Machine Lifecycle**: Tasks follow a strict, reliable path: `created` → `scheduled` -> `inprogress` → `implemented` (or `failed`/`discarded`).
-- **Autonomous Design Review**: Agents can be required to submit a Design Document (`want_design_doc`). The system automatically transitions tasks to a `PROPOSED` state for human approval before execution.
+- **Human-in-the-loop Design Review**: Agents can be required to submit a Design Document (`want_design_doc`). The system automatically transitions tasks to a `PROPOSED` state, where they remain locked for human review and manual refinement until explicitly accepted or rejected.
 - **Smart Title Parsing**: The backend automatically parses the first H1 header (e.g., `# My Feature`) from submitted design docs to update the task title dynamically.
 - **Execution Ordering**: Tasks are prioritized by a combination of manual `order` and precise `scheduled_at` timestamps to ensure FIFO execution within priority tiers.
 
