@@ -26,6 +26,32 @@ export class TaskItem {
     `;
   }
 
+  private static calculateDuration(task: Task): string | null {
+    if (!task.history || task.history.length === 0) return null;
+
+    const inProgressEntry = task.history.find(t => t.to_status === TaskStatus.INPROGRESS);
+    const implementedEntry = task.history.find(t => t.to_status === TaskStatus.IMPLEMENTED);
+
+    if (!inProgressEntry || !implementedEntry) return null;
+
+    const start = new Date(inProgressEntry.timestamp).getTime();
+    const end = new Date(implementedEntry.timestamp).getTime();
+    const durationMs = end - start;
+
+    if (durationMs < 0) return null;
+
+    const seconds = Math.floor((durationMs / 1000) % 60);
+    const minutes = Math.floor((durationMs / (1000 * 60)) % 60);
+    const hours = Math.floor(durationMs / (1000 * 60 * 60));
+
+    const parts = [];
+    if (hours > 0) parts.push(`${hours}h`);
+    if (minutes > 0) parts.push(`${minutes}m`);
+    if (seconds > 0 || parts.length === 0) parts.push(`${seconds}s`);
+
+    return parts.join(' ');
+  }
+
   static render(task: Task, showOrdering: boolean = true, expandHistory: boolean = false, isCollapsed: boolean = false): string {
     const statusColors: Record<string, string> = {
       [TaskStatus.CREATED]: 'bg-slate-600 text-slate-300',
@@ -162,8 +188,16 @@ export class TaskItem {
               ` : ''}
               
               ${task.commit_hash ? `
-                <div class="text-[10px] font-mono text-app-accent-2 bg-app-surface px-2 py-0.5 rounded border border-app-border" title="Commit Hash">
-                  ${task.commit_hash.substring(0, 7)}
+                <div class="flex items-center gap-2">
+                  <div class="text-[10px] font-mono text-app-accent-2 bg-app-surface px-2 py-0.5 rounded border border-app-border" title="Commit Hash">
+                    ${task.commit_hash.substring(0, 7)}
+                  </div>
+                  ${isImplemented && this.calculateDuration(task) ? `
+                    <div class="text-[10px] text-app-muted flex items-center gap-1" title="Implementation Duration">
+                      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                      ${this.calculateDuration(task)}
+                    </div>
+                  ` : ''}
                 </div>
               ` : ''}
             </div>
