@@ -67,6 +67,7 @@ body {
   @apply !fixed !inset-4 !z-50 !bg-app-bg !w-auto !border !border-app-border !shadow-2xl !rounded-xl overflow-hidden !text-lg;
   top: 60px !important; /* Avoid overlap with our fake modal container padding */
   bottom: 16px !important;
+  max-width: 1024px !important;
 }
 
 .CodeMirror-fullscreen .CodeMirror-scroll {
