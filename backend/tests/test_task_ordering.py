@@ -67,8 +67,9 @@ async def test_task_execution_order_with_design_approval(init_mock_db):
     assert t1.title == "Task 1"
     
     # 2. Submit design (moves to proposed)
-    t1 = await task_queries.update_task_details(str(t1.id), t1.version, design_doc="Some design")
+    t1 = await task_queries.update_task_details(str(t1.id), t1.version, design_doc="# Task 1 Design\n\nSome design")
     assert t1.status == TaskStatus.PROPOSED
+    assert t1.title == "Task 1 Design"
     
     # 3. Accept design (moves back to scheduled)
     # Restore order to 0 so we can test the scheduled_at logic
@@ -81,4 +82,4 @@ async def test_task_execution_order_with_design_approval(init_mock_db):
     assert next_task.title == "Task 2"
     
     next_task = await task_queries.get_next_task(pid)
-    assert next_task.title == "Task 1"
+    assert next_task.title == "Task 1 Design"

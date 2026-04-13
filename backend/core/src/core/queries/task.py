@@ -64,6 +64,7 @@ async def update_task_status(task_id: str, status: TaskStatus, version: int, act
     if status == TaskStatus.SCHEDULED:
         task.scheduled_at = datetime.now(UTC)
     task.version += 1
+    task.updated_at = datetime.now(UTC)
     await task.save()
     return task
 
@@ -110,6 +111,7 @@ async def update_task_details(
             task.status = TaskStatus.PROPOSED
         
     task.version += 1
+    task.updated_at = datetime.now(UTC)
     await task.save()
     return task
 
@@ -136,6 +138,7 @@ async def accept_design(task_id: str, version: int, actor: str = "user") -> Task
     task.status = TaskStatus.SCHEDULED
     task.scheduled_at = datetime.now(UTC)
     task.version += 1
+    task.updated_at = datetime.now(UTC)
     await task.save()
     return task
 
@@ -153,6 +156,7 @@ async def reject_design(task_id: str, version: int, actor: str = "user") -> Task
     task.history.append(StateTransition(from_status=task.status, to_status=TaskStatus.DISCARDED, by=actor))
     task.status = TaskStatus.DISCARDED
     task.version += 1
+    task.updated_at = datetime.now(UTC)
     await task.save()
     return task
 
@@ -175,6 +179,7 @@ async def complete_task(
     task.history.append(StateTransition(from_status=task.status, to_status=TaskStatus.IMPLEMENTED, by=actor))
     task.status = TaskStatus.IMPLEMENTED
     task.version += 1
+    task.updated_at = datetime.now(UTC)
     
     # Run verification logic
     verification_results = _verify_task(task)
@@ -229,6 +234,7 @@ async def get_next_task(pipeline_id: str, actor: str = "mcp") -> Optional[Task]:
         task.history.append(StateTransition(from_status=task.status, to_status=TaskStatus.INPROGRESS, by=actor))
         task.status = TaskStatus.INPROGRESS
         task.version += 1
+        task.updated_at = datetime.now(UTC)
         await task.save()
         return task
         
@@ -238,4 +244,5 @@ async def delete_task(task_id: str):
     task = await get_task_by_id(task_id)
     task.deleted = True
     task.version += 1
+    task.updated_at = datetime.now(UTC)
     await task.save()

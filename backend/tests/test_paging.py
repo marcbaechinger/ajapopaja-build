@@ -1,7 +1,7 @@
 import pytest
 from core.models.models import Task, TaskStatus, Pipeline
 from core.queries import task as task_queries
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 
 @pytest.mark.asyncio
 async def test_get_completed_tasks_paging(init_mock_db):
@@ -16,7 +16,7 @@ async def test_get_completed_tasks_paging(init_mock_db):
             title=f"Task {i}", 
             pipeline_id=pid, 
             status=TaskStatus.IMPLEMENTED,
-            updated_at=(datetime.utcnow() + timedelta(minutes=i)).isoformat()
+            updated_at=(datetime.now(UTC) + timedelta(minutes=i)).isoformat()
         )
         await task.insert()
         
