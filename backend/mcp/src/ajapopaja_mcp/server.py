@@ -8,6 +8,7 @@ from core.queries import task as task_queries
 from core.exceptions import EntityNotFoundError, VersionMismatchError
 
 # Create an MCP server
+# Updated fields: spec, want_design_doc
 mcp = FastMCP("Ajapopaja Build MCP")
 
 API_BASE_URL = "http://localhost:8000/api"
