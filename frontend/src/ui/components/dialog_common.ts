@@ -6,6 +6,7 @@ export interface DialogOptions {
 }
 
 export abstract class BaseDialog<T = void> {
+  private static openDialogs: Map<string, BaseDialog<any>> = new Map();
   protected dialog: HTMLDialogElement;
   private resolveRef: ((value: T | null) => void) | null = null;
 
@@ -90,6 +91,13 @@ export abstract class BaseDialog<T = void> {
 
   // Unified show method returning a promise
   public async show(): Promise<T | null> {
+    const dialogName = this.constructor.name;
+    const existing = BaseDialog.openDialogs.get(dialogName);
+    if (existing) {
+      existing.close(null);
+    }
+    BaseDialog.openDialogs.set(dialogName, this);
+
     document.body.appendChild(this.dialog);
     this.dialog.showModal();
     return new Promise((resolve) => {
@@ -99,6 +107,11 @@ export abstract class BaseDialog<T = void> {
 
   // Unified close method
   protected close(result: T | null = null) {
+    const dialogName = this.constructor.name;
+    if (BaseDialog.openDialogs.get(dialogName) === this) {
+      BaseDialog.openDialogs.delete(dialogName);
+    }
+
     if (this.dialog.open) {
       this.dialog.close();
     }

@@ -76,4 +76,28 @@ describe('BaseDialog', () => {
     
     expect(document.body.contains(dialog['dialog'])).toBe(false);
   });
+
+  it('should close existing dialog of same type when showing new one', async () => {
+    const dialog1 = new TestDialog();
+    const dialog2 = new TestDialog();
+    
+    dialog1['dialog'].showModal = vi.fn();
+    dialog1['dialog'].close = vi.fn();
+    dialog2['dialog'].showModal = vi.fn();
+    dialog2['dialog'].close = vi.fn();
+    
+    const showPromise1 = dialog1.show();
+    expect(document.body.contains(dialog1['dialog'])).toBe(true);
+    
+    const showPromise2 = dialog2.show();
+    expect(document.body.contains(dialog2['dialog'])).toBe(true);
+    
+    // dialog1 should have been closed
+    const result1 = await showPromise1;
+    expect(result1).toBe(null);
+    
+    // Cleanup dialog2
+    dialog2['close']('done');
+    await showPromise2;
+  });
 });
