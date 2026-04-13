@@ -21,11 +21,11 @@ async def test_transition_to_proposed(init_mock_db):
     updated_task = await task_queries.update_task_details(
         task_id=str(task.id),
         version=task.version,
-        design_doc="Proposed design"
+        design_doc="# Proposed design\n\nSome details."
     )
     
     assert updated_task.status == TaskStatus.PROPOSED
-    assert updated_task.design_doc == "Proposed design"
+    assert updated_task.design_doc == "# Proposed design\n\nSome details."
     assert updated_task.version == 2
     assert updated_task.history[-1].to_status == TaskStatus.PROPOSED
 
@@ -121,3 +121,26 @@ async def test_update_title_from_design_doc(init_mock_db):
     
     assert updated_task.title == "New Improved Title"
     assert updated_task.status == TaskStatus.PROPOSED
+
+@pytest.mark.asyncio
+async def test_update_title_from_design_doc_missing_header(init_mock_db):
+    pipeline = Pipeline(name="Test Pipeline")
+    await pipeline.insert()
+    
+    task = Task(
+        title="Original Title", 
+        pipeline_id=str(pipeline.id), 
+        status=TaskStatus.INPROGRESS, 
+        want_design_doc=True
+    )
+    await task.insert()
+    
+    # Update with design doc missing an H1 header
+    design_doc = "No top-level header here."
+    
+    with pytest.raises(ValueError, match="Design document must contain a top-level Markdown header"):
+        await task_queries.update_task_details(
+            task_id=str(task.id),
+            version=task.version,
+            design_doc=design_doc
+        )

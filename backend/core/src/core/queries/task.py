@@ -101,8 +101,10 @@ async def update_task_details(
         if task.want_design_doc and task.status == TaskStatus.INPROGRESS:
             # Parse top-level header from design doc to use as task title
             new_title = _parse_title_from_design_doc(design_doc)
-            if new_title:
-                task.title = new_title
+            if not new_title:
+                raise ValueError("Design document must contain a top-level Markdown header (e.g., '# Title') to be used as the task title.")
+            
+            task.title = new_title
             
             task.history.append(StateTransition(from_status=task.status, to_status=TaskStatus.PROPOSED, by=actor))
             task.status = TaskStatus.PROPOSED
