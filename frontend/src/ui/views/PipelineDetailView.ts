@@ -17,6 +17,7 @@ export class PipelineDetailView extends View {
   private currentSortOrder: 'execution' | 'newest' | 'status' = 'execution';
   private allLoadedTasks: Task[] = [];
   private collapsedTasks: Set<string> = new Set();
+  private isFirstLoad: boolean = true;
   private completedTasksPage: number = 0;
   private completedPageSize: number = 5;
   private keydownHandler: ((e: KeyboardEvent) => void) | null = null;
@@ -92,12 +93,24 @@ export class PipelineDetailView extends View {
 
     // Update the local tasks cache
     const index = this.allLoadedTasks.findIndex(t => t._id === task._id);
+    const oldTask = index !== -1 ? { ...this.allLoadedTasks[index] } : null;
+    
     if (index !== -1) {
       this.allLoadedTasks[index] = task;
     } else {
       this.allLoadedTasks.push(task);
     }
     this.updateHeaderStats();
+
+    // Auto-expand if task became active, auto-collapse if it became inactive
+    const isActive = task.status === TaskStatus.INPROGRESS || task.status === TaskStatus.PROPOSED;
+    const wasActive = oldTask ? (oldTask.status === TaskStatus.INPROGRESS || oldTask.status === TaskStatus.PROPOSED) : false;
+
+    if (isActive && !wasActive) {
+      this.collapsedTasks.delete(task._id);
+    } else if (!isActive && wasActive) {
+      this.collapsedTasks.add(task._id);
+    }
 
     // If task is being edited locally, skip external updates to avoid losing state
     if (this.activeEditors.has(task._id)) {
@@ -491,6 +504,16 @@ export class PipelineDetailView extends View {
       this.allLoadedTasks = await this.context.taskClient.listByPipeline(this.pipelineId, true);
       this.updateHeaderStats();
       const allTasks = this.allLoadedTasks;
+
+      // Handle default task collapsing on first load
+      if (this.isFirstLoad && allTasks.length > 0) {
+        allTasks.forEach(t => {
+          if (t.status !== TaskStatus.INPROGRESS && t.status !== TaskStatus.PROPOSED) {
+            this.collapsedTasks.add(t._id!);
+          }
+        });
+        this.isFirstLoad = false;
+      }
       
       const proposedTasks = allTasks.filter(t => !t.deleted && t.status === TaskStatus.PROPOSED);
       const openTasks = allTasks.filter(t => !t.deleted && t.status !== TaskStatus.PROPOSED && !([TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED] as any[]).includes(t.status));
