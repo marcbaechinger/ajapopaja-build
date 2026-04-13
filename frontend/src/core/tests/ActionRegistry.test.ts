@@ -33,4 +33,24 @@ describe('ActionRegistry', () => {
     expect(handler).toHaveBeenCalled();
     document.body.removeChild(button);
   });
+
+  it('should trigger handler on form submit with data-action-submit', async () => {
+    const registry = new ActionRegistry();
+    const handler = vi.fn();
+    registry.register('test_form_submit', handler);
+
+    const form = document.createElement('form');
+    form.setAttribute('data-action-submit', 'test_form_submit');
+    document.body.appendChild(form);
+
+    const event = new Event('submit', { bubbles: true, cancelable: true });
+    form.dispatchEvent(event);
+
+    // Small delay for event loop
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(handler).toHaveBeenCalled();
+    expect(event.defaultPrevented).toBe(true);
+    document.body.removeChild(form);
+  });
 });

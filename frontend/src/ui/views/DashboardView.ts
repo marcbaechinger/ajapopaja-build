@@ -33,9 +33,8 @@ export class DashboardView extends View {
   }
 
   private registerActions() {
-    this.context.actionRegistry.register('create_pipeline', async (e) => {
-      e.preventDefault();
-      const form = (e.target as HTMLElement).closest('form') as HTMLFormElement;
+    this.context.actionRegistry.register('create_pipeline', async (_e, el) => {
+      const form = el as HTMLFormElement;
       const input = form.querySelector('input') as HTMLInputElement;
       const name = input.value.trim();
       
@@ -174,12 +173,12 @@ export class DashboardView extends View {
       <main class="grid gap-8 md:grid-cols-2">
         <section class="bg-app-surface p-6 rounded-xl shadow-xl border border-app-border transition-all hover:border-app-accent-1/50 h-fit">
           <h2 class="text-2xl font-bold mb-4 text-app-accent-1">Create Pipeline</h2>
-          <form id="create-pipeline" class="space-y-4">
+          <form data-action-submit="create_pipeline" class="space-y-4">
             <div>
               <label class="block text-sm font-medium text-app-muted mb-1">Pipeline Name</label>
               <input type="text" placeholder="e.g. My Feature" class="w-full bg-app-bg border border-app-border rounded-lg px-4 py-2 focus:ring-2 focus:ring-app-accent-1 outline-none text-app-text transition-all">
             </div>
-            <button type="submit" data-action-click="create_pipeline" class="w-full bg-app-accent-1 hover:brightness-110 text-white font-bold py-2 rounded-lg transition-all shadow-lg cursor-pointer">
+            <button type="submit" class="w-full bg-app-accent-1 hover:brightness-110 text-white font-bold py-2 rounded-lg transition-all shadow-lg cursor-pointer">
               Create
             </button>
           </form>

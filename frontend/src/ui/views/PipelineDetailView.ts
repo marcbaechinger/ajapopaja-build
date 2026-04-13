@@ -176,9 +176,8 @@ export class PipelineDetailView extends View {
       this.refreshTasks();
     });
 
-    this.context.actionRegistry.register('create_task', async (e) => {
-      e.preventDefault();
-      const form = (e.target as HTMLElement).closest('form') as HTMLFormElement;
+    this.context.actionRegistry.register('create_task', async (_e, el) => {
+      const form = el as HTMLFormElement;
       const titleInput = form.querySelector('#task-title') as HTMLInputElement;
 
       const title = titleInput.value.trim();
@@ -583,19 +582,18 @@ export class PipelineDetailView extends View {
         </header>
 
         <section class="bg-app-surface p-6 rounded-xl shadow-xl border border-app-border w-full">
-          <form id="create-task" class="flex flex-col md:flex-row gap-4 items-end">
+          <form data-action-submit="create_task" class="flex flex-col md:flex-row gap-4 items-end">
             <div class="flex-grow w-full">
               <label class="block text-sm font-medium text-app-muted mb-1">Add New Task</label>
               <input type="text" id="task-title" placeholder="e.g. Implement User Auth" 
                      class="w-full bg-app-bg border border-app-border rounded-lg px-4 py-2 focus:ring-2 focus:ring-app-accent-1 outline-none text-app-text transition-all">
             </div>
-            <button type="submit" data-action-click="create_task" 
+            <button type="submit" 
                     class="w-full md:w-auto bg-app-accent-1 hover:brightness-110 text-white font-bold px-8 py-2 rounded-lg transition-all shadow-lg cursor-pointer h-[42px]">
               Add 
             </button>
           </form>
         </section>
-
         <section class="bg-app-surface p-6 rounded-xl shadow-xl border border-app-border w-full">
           <div class="flex justify-between items-center mb-4">
             <h3 class="text-xl font-bold text-app-accent-2">Task Sequence</h3>

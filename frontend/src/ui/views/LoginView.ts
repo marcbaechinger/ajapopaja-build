@@ -12,9 +12,8 @@ export class LoginView extends View {
   }
 
   private registerActions() {
-    this.context.actionRegistry.register('perform_login', async (e) => {
-      e.preventDefault();
-      const form = e.target as HTMLFormElement;
+    this.context.actionRegistry.register('perform_login', async (_e, el) => {
+      const form = el as HTMLFormElement;
       const username = (form.querySelector('#username') as HTMLInputElement).value;
       const password = (form.querySelector('#password') as HTMLInputElement).value;
       const errorEl = this.container?.querySelector('#login-error') as HTMLElement;

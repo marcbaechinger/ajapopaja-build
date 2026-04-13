@@ -31,6 +31,18 @@ export class ActionRegistry {
         }
       }
     });
+
+    document.body.addEventListener('submit', (event) => {
+      const target = event.target as HTMLElement;
+      const actionElement = target.closest('[data-action-submit]') as HTMLElement;
+
+      if (actionElement) {
+        const actionName = actionElement.getAttribute('data-action-submit');
+        if (actionName) {
+          this.execute(actionName, event, actionElement);
+        }
+      }
+    });
   }
 
   register(name: string, handler: ActionHandler) {
@@ -40,7 +52,7 @@ export class ActionRegistry {
   async execute(name: string, event: Event, element: HTMLElement) {
     const handler = this.handlers.get(name);
     if (handler) {
-      if (event.type === 'click') {
+      if (event.type === 'click' || event.type === 'submit') {
         event.preventDefault();
       }
       event.stopPropagation();
