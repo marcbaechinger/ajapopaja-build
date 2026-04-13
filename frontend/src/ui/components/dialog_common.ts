@@ -94,7 +94,11 @@ export abstract class BaseDialog<T = void> {
     const dialogName = this.constructor.name;
     const existing = BaseDialog.openDialogs.get(dialogName);
     if (existing) {
-      existing.close(null);
+      // Don't open a new one, just shake the existing one
+      existing.dialog.classList.remove('animate-dialog-shake');
+      void existing.dialog.offsetWidth; // Force reflow
+      existing.dialog.classList.add('animate-dialog-shake');
+      return null;
     }
     BaseDialog.openDialogs.set(dialogName, this);
 

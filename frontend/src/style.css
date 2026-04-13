@@ -109,3 +109,13 @@ body {
 .design-doc-edit .CodeMirror.expanded-editor .CodeMirror-scroll {
   max-height: none;
 }
+
+@keyframes dialog-shake {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  10%, 30%, 50%, 70%, 90% { transform: translate(-52%, -50%) scale(1.02); }
+  20%, 40%, 60%, 80% { transform: translate(-48%, -50%) scale(1.02); }
+}
+
+.animate-dialog-shake {
+  animation: dialog-shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+}

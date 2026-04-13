@@ -77,7 +77,7 @@ describe('BaseDialog', () => {
     expect(document.body.contains(dialog['dialog'])).toBe(false);
   });
 
-  it('should close existing dialog of same type when showing new one', async () => {
+  it('should not show new dialog of same type when one is already showing', async () => {
     const dialog1 = new TestDialog();
     const dialog2 = new TestDialog();
     
@@ -90,14 +90,19 @@ describe('BaseDialog', () => {
     expect(document.body.contains(dialog1['dialog'])).toBe(true);
     
     const showPromise2 = dialog2.show();
-    expect(document.body.contains(dialog2['dialog'])).toBe(true);
+    // dialog2 should NOT be in the body
+    expect(document.body.contains(dialog2['dialog'])).toBe(false);
+    expect(dialog2['dialog'].showModal).not.toHaveBeenCalled();
     
-    // dialog1 should have been closed
-    const result1 = await showPromise1;
-    expect(result1).toBe(null);
+    // dialog1 should still be open
+    expect(dialog1['dialog'].close).not.toHaveBeenCalled();
     
-    // Cleanup dialog2
-    dialog2['close']('done');
-    await showPromise2;
+    // showPromise2 should have resolved with null
+    const result2 = await showPromise2;
+    expect(result2).toBe(null);
+    
+    // Cleanup dialog1
+    dialog1['close']('done');
+    await showPromise1;
   });
 });
