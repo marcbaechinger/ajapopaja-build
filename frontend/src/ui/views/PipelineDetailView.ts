@@ -755,8 +755,8 @@ export class PipelineDetailView extends View {
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start flex-grow w-full">
           <!-- Column 1: Preparation & Review -->
-          <div class="flex flex-col gap-8 h-full min-w-0 lg:min-w-[350px]">
-            <div class="bg-app-surface/30 p-6 rounded-3xl border border-app-border/30 flex flex-col h-full">
+          <div class="flex flex-col gap-8 min-w-0 lg:min-w-[350px]">
+            <div class="bg-app-surface/30 p-6 rounded-3xl border border-app-border/30 flex flex-col">
               ${TaskForm.render()}
               <div id="col-prep" class="space-y-10">
                 <!-- Proposed and Created tasks will be rendered here -->
@@ -766,8 +766,8 @@ export class PipelineDetailView extends View {
           </div>
 
           <!-- Column 2: Active Execution -->
-          <div class="flex flex-col gap-8 h-full min-w-0 lg:min-w-[350px]">
-            <div class="bg-app-surface/30 p-6 rounded-3xl border border-app-border/30 flex flex-col h-full">
+          <div class="flex flex-col gap-8 min-w-0 lg:min-w-[350px]">
+            <div class="bg-app-surface/30 p-6 rounded-3xl border border-app-border/30 flex flex-col">
               <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 px-1">
                 <h3 class="text-xl font-black text-app-accent-1 uppercase tracking-tighter shrink-0">Execution Engine</h3>
                 <div class="flex items-center gap-2 w-full sm:w-auto">
@@ -786,8 +786,8 @@ export class PipelineDetailView extends View {
           </div>
 
           <!-- Column 3: History & Analytics -->
-          <div class="flex flex-col gap-8 h-full min-w-0 lg:min-w-[350px]">
-            <div class="bg-app-surface/30 p-6 rounded-3xl border border-app-border/30 flex flex-col h-full">
+          <div class="flex flex-col gap-8 min-w-0 lg:min-w-[350px]">
+            <div class="bg-app-surface/30 p-6 rounded-3xl border border-app-border/30 flex flex-col">
               <div id="col-history" class="space-y-8">
                 <!-- Stats and Completed tasks will be rendered here -->
                 <p class="text-app-muted animate-pulse text-center py-10">Loading history...</p>
