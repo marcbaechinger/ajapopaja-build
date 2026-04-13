@@ -86,19 +86,19 @@ export class TaskItem {
     const designDocHtml = `
         <div class="design-doc-container w-full text-xs bg-app-surface p-3 rounded-lg border border-app-border transition-all ${isProposed ? 'ring-2 ring-purple-500/50 bg-purple-500/5' : ''}"
              data-task-id="${task._id}" data-version="${task.version}">
-          <div class="design-doc-view ${isImplemented || isProposed ? '' : 'cursor-pointer group'}" ${isImplemented || isProposed ? '' : 'data-action-click="edit_design_doc"'}>
+          <div class="design-doc-view ${isImplemented ? '' : 'cursor-pointer group'}" ${isImplemented ? '' : 'data-action-click="edit_design_doc"'}>
             <div class="flex justify-between items-center mb-1">
               <span class="font-bold text-app-accent-2">${isProposed ? 'Proposed Design' : 'Design Document'}</span>
-              ${isImplemented || isProposed ? '' : '<span class="text-[10px] text-app-muted opacity-0 group-hover:opacity-100 transition-opacity">Click to edit</span>'}
+              ${isImplemented ? '' : '<span class="text-[10px] text-app-muted opacity-0 group-hover:opacity-100 transition-opacity">Click to edit</span>'}
             </div>
-            <div class="design-doc-display prose prose-invert prose-sm max-w-none text-app-text/70 overflow-hidden relative transition-all duration-300 ${isProposed ? 'max-h-none' : ''}">
+            <div class="design-doc-display prose prose-invert prose-sm max-w-none text-app-text/70 overflow-hidden relative transition-all duration-300 ${isProposed ? 'expanded' : ''}">
               ${task.design_doc ? DOMPurify.sanitize(marked.parse(task.design_doc) as string) : '<span class="italic text-app-muted">Click to add design doc...</span>'}
-              ${task.design_doc && !isProposed ? '<div class="expand-overlay absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-app-surface to-transparent pointer-events-none"></div>' : ''}
+              ${task.design_doc ? '<div class="expand-overlay absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-app-surface to-transparent pointer-events-none"></div>' : ''}
             </div>
           </div>
-          ${task.design_doc && !isProposed ? `
+          ${task.design_doc ? `
             <button data-action-click="toggle_design_doc_expand" class="mt-2 text-[10px] text-app-accent-2 hover:underline cursor-pointer">
-              Show More
+              ${isProposed ? 'Show Less' : 'Show More'}
             </button>
           ` : ''}
           

@@ -39,4 +39,19 @@ describe('TaskItem', () => {
     expect(html).toContain('Cancel Schedule');
     expect(html).toContain('data-action-click="unschedule_task"');
   });
+
+  it('should render proposed task with expanded design doc and Show Less button', () => {
+    const proposedTask = { 
+      ...mockTask, 
+      status: TaskStatus.PROPOSED,
+      design_doc: '# Proposed Design'
+    };
+    const html = TaskItem.render(proposedTask as any);
+    
+    expect(html).toContain('Proposed Design');
+    expect(html).toContain('design-doc-display');
+    expect(html).toContain('expanded');
+    expect(html).toContain('Show Less');
+    expect(html).toContain('data-action-click="edit_design_doc"');
+  });
 });
