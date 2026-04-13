@@ -1,10 +1,12 @@
 import os
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, APIRouter
+from typing import Optional
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, APIRouter, Query, status
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from jose import JWTError, jwt
 
 from core.db import init_db
 from core.exceptions import (
@@ -15,7 +17,9 @@ from core.exceptions import (
 )
 from api.routes.pipeline import router as pipeline_router
 from api.routes.task import task_router, pipeline_task_router
+from api.routes.auth import router as auth_router
 from api.websocket_manager import manager
+from api.auth import SECRET_KEY, ALGORITHM
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -40,8 +44,30 @@ app.add_middleware(
 
 # Root level WebSocket - Matches BEFORE routers and BEFORE static mount
 @app.websocket("/ws/{client_id}")
-async def websocket_endpoint(websocket: WebSocket, client_id: str):
+async def websocket_endpoint(
+    websocket: WebSocket, 
+    client_id: str,
+    token: Optional[str] = Query(None)
+):
     logger.info(f"WS connection attempt: {client_id}")
+    
+    if not token:
+        logger.warning(f"WS connection rejected: No token for {client_id}")
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            logger.warning(f"WS connection rejected: Invalid token payload for {client_id}")
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+    except JWTError as e:
+        logger.warning(f"WS connection rejected: JWT error for {client_id}: {e}")
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
     await websocket.accept()
     await manager.add_connection(websocket)
     try:
@@ -82,6 +108,7 @@ async def health():
 api_router.include_router(pipeline_router)
 api_router.include_router(task_router)
 api_router.include_router(pipeline_task_router)
+api_router.include_router(auth_router)
 
 app.include_router(api_router)
 

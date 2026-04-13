@@ -3,6 +3,7 @@ import { Navigator } from './Navigator';
 import { PipelineClient } from './clients/PipelineClient';
 import { TaskClient } from './clients/TaskClient';
 import { WebSocketClient } from './WebSocketClient';
+import { AuthService } from './AuthService';
 
 export interface AppState {
   theme: 'light' | 'dark';
@@ -14,14 +15,16 @@ export class AppContext {
   public readonly pipelineClient: PipelineClient;
   public readonly taskClient: TaskClient;
   public readonly wsClient: WebSocketClient;
+  public readonly authService: AuthService;
   private state: AppState;
 
   constructor(containerId: string, apiBaseUrl: string) {
     this.actionRegistry = new ActionRegistry();
     this.navigator = new Navigator(containerId);
-    this.pipelineClient = new PipelineClient(apiBaseUrl);
-    this.taskClient = new TaskClient(apiBaseUrl);
-    this.wsClient = new WebSocketClient(apiBaseUrl);
+    this.authService = new AuthService();
+    this.pipelineClient = new PipelineClient(apiBaseUrl, this.authService);
+    this.taskClient = new TaskClient(apiBaseUrl, this.authService);
+    this.wsClient = new WebSocketClient(apiBaseUrl, this.authService);
     
     const savedTheme = document.documentElement.getAttribute('data-theme') as 'light' | 'dark' | null;
     this.state = {
@@ -36,6 +39,11 @@ export class AppContext {
       const newTheme = this.state.theme === 'light' ? 'dark' : 'light';
       this.state.theme = newTheme;
       document.documentElement.setAttribute('data-theme', newTheme);
+    });
+
+    this.actionRegistry.register('perform_logout', async () => {
+      await this.authService.logout();
+      window.location.hash = '#/login';
     });
   }
 

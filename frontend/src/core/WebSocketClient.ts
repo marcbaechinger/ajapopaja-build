@@ -1,4 +1,5 @@
 import type { WSMessage } from './domain.ts';
+import { AuthService } from './AuthService.ts';
 
 export type WSHandler = (message: WSMessage) => void;
 
@@ -8,19 +9,24 @@ export class WebSocketClient {
   private reconnectTimeout: number = 2000;
   private maxReconnectTimeout: number = 30000;
   private currentReconnectTimeout: number = 2000;
-  private url: string;
+  private baseUrl: string;
+  private authService: AuthService;
 
-  constructor(_apiBaseUrl: string) {
+  constructor(_apiBaseUrl: string, authService: AuthService) {
     // Connect to root /ws to avoid static file mount issues
-    this.url = 'ws://localhost:8000/ws/browser';
+    this.baseUrl = 'ws://localhost:8000/ws/browser';
+    this.authService = authService;
   }
 
 
   public connect() {
     if (this.ws?.readyState === WebSocket.OPEN) return;
 
-    console.log('Connecting to WebSocket:', this.url);
-    this.ws = new WebSocket(this.url);
+    const token = this.authService.getAccessToken();
+    const url = token ? `${this.baseUrl}?token=${token}` : this.baseUrl;
+
+    console.log('Connecting to WebSocket:', this.baseUrl);
+    this.ws = new WebSocket(url);
 
     this.ws.onopen = () => {
       console.log('WebSocket Connected');

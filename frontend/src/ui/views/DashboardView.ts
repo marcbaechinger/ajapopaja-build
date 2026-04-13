@@ -153,7 +153,24 @@ export class DashboardView extends View {
   }
 
   render() {
+    const user = this.context.authService.getUser();
     return `
+      <header class="flex justify-between items-center bg-app-surface p-6 rounded-xl shadow-lg border border-app-border mb-8">
+        <div class="flex flex-col">
+          <h1 class="text-3xl font-black text-app-accent-1 tracking-tight">Ajapopaja <span class="text-app-text/50">Build</span></h1>
+          <p class="text-xs text-app-muted uppercase font-bold tracking-widest mt-1">Unified Agent Workspace</p>
+        </div>
+        <div class="flex items-center gap-4">
+          <div class="flex flex-col items-end mr-2">
+            <span class="text-sm font-bold text-app-text">${user?.username || 'User'}</span>
+            <button data-action-click="perform_logout" class="text-[10px] text-app-muted hover:text-red-400 uppercase font-black tracking-widest transition-colors cursor-pointer">Logout</button>
+          </div>
+          <button data-action-click="toggle_theme" class="p-2 hover:bg-app-bg rounded-lg transition-colors cursor-pointer text-app-muted hover:text-app-accent-2" title="Toggle Theme">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+          </button>
+        </div>
+      </header>
+
       <main class="grid gap-8 md:grid-cols-2">
         <section class="bg-app-surface p-6 rounded-xl shadow-xl border border-app-border transition-all hover:border-app-accent-1/50 h-fit">
           <h2 class="text-2xl font-bold mb-4 text-app-accent-1">Create Pipeline</h2>

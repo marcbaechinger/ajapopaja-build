@@ -1,58 +1,57 @@
 import { Pipeline } from '../domain.ts';
+import { BaseClient } from './BaseClient.ts';
+import { AuthService } from '../AuthService.ts';
 
-export class PipelineClient {
+export class PipelineClient extends BaseClient {
   private baseUrl: string;
 
-  constructor(baseUrl: string) {
+  constructor(baseUrl: string, authService: AuthService) {
+    super(authService);
     this.baseUrl = baseUrl;
   }
 
   async list(includeDeleted: boolean = false): Promise<Pipeline[]> {
     const url = new URL(`${this.baseUrl}/pipelines/`);
     if (includeDeleted) url.searchParams.append('include_deleted', 'true');
-    const response = await fetch(url.toString());
-    if (!response.ok) throw new Error('Failed to fetch pipelines');
+    const response = await this.fetch(url.toString());
     return await response.json();
   }
 
   async get(id: string, includeDeleted: boolean = false): Promise<Pipeline> {
     const url = new URL(`${this.baseUrl}/pipelines/${id}`);
     if (includeDeleted) url.searchParams.append('include_deleted', 'true');
-    const response = await fetch(url.toString());
-    if (response.status === 404) throw new Error(`Pipeline ${id} not found`);
-    if (!response.ok) throw new Error('Failed to fetch pipeline');
+    const response = await this.fetch(url.toString());
     return await response.json();
   }
 
   async create(name: string): Promise<Pipeline> {
-    const response = await fetch(`${this.baseUrl}/pipelines/`, {
+    const response = await this.fetch(`${this.baseUrl}/pipelines/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name })
     });
-    if (!response.ok) throw new Error('Failed to create pipeline');
     return await response.json();
   }
 
   async update(id: string, name: string, version: number): Promise<Pipeline> {
-    const response = await fetch(`${this.baseUrl}/pipelines/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, version })
-    });
-
-    if (response.status === 409) {
-      throw new Error('OCC_CONFLICT');
+    try {
+      const response = await this.fetch(`${this.baseUrl}/pipelines/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, version })
+      });
+      return await response.json();
+    } catch (e: any) {
+      if (e.message?.includes('409') || e.message?.includes('OCC_CONFLICT')) {
+        throw new Error('OCC_CONFLICT');
+      }
+      throw e;
     }
-    
-    if (!response.ok) throw new Error('Failed to update pipeline');
-    return await response.json();
   }
 
   async delete(id: string): Promise<void> {
-    const response = await fetch(`${this.baseUrl}/pipelines/${id}`, {
+    await this.fetch(`${this.baseUrl}/pipelines/${id}`, {
       method: 'DELETE'
     });
-    if (!response.ok) throw new Error('Failed to delete pipeline');
   }
 }

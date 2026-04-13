@@ -551,26 +551,33 @@ export class PipelineDetailView extends View {
       `).join('');
   }
 
-  render() {    return `
+  render() {
+    const user = this.context.authService.getUser();
+    return `
       <div class="space-y-6 max-w-5xl mx-auto px-4 py-8">
         <header class="flex justify-between items-center bg-app-surface p-6 rounded-xl shadow-lg border border-app-border">
-          <div class="flex flex-col">
-            <h2 id="pipeline-title" class="text-3xl font-bold text-app-accent-1">Loading...</h2>
-            <div class="flex flex-wrap items-center gap-3 mt-2">
-              <p class="text-app-muted text-xs font-mono bg-app-bg px-2 py-1 rounded border border-app-border">ID: ${this.pipelineId}</p>
-              <div id="header-stats" class="flex flex-wrap gap-2 text-[10px] uppercase font-bold tracking-wider"></div>
+          <div class="flex gap-6 items-center">
+            <button onclick="window.location.hash = '#'" class="p-3 hover:bg-app-bg rounded-xl transition-all text-app-muted hover:text-app-accent-1 border border-transparent hover:border-app-border group cursor-pointer" title="Back to Dashboard">
+              <svg class="w-6 h-6 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+              </svg>
+            </button>
+            <div class="flex flex-col">
+              <h2 id="pipeline-title" class="text-3xl font-black text-app-accent-1 tracking-tight">Loading...</h2>
+              <div class="flex flex-wrap items-center gap-3 mt-2">
+                <p class="text-app-muted text-[10px] uppercase font-bold tracking-widest bg-app-bg px-2 py-1 rounded border border-app-border">ID: ${this.pipelineId}</p>
+                <div id="header-stats" class="flex flex-wrap gap-2 text-[10px] uppercase font-bold tracking-wider"></div>
+              </div>
             </div>
           </div>
           <div class="flex gap-4 items-center">
+             <div class="flex flex-col items-end mr-2">
+               <span class="text-sm font-bold text-app-text">${user?.username || 'User'}</span>
+               <button data-action-click="perform_logout" class="text-[10px] text-app-muted hover:text-red-400 uppercase font-black tracking-widest transition-colors cursor-pointer">Logout</button>
+             </div>
              <button data-action-click="open_stats" class="text-app-accent-2 hover:brightness-110 font-bold transition-all text-sm px-3 py-1.5 rounded-lg border border-app-border bg-app-bg shadow-sm cursor-pointer" title="Keyboard Shortcut: s">
                <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
                Stats
-             </button>
-             <button onclick="window.location.hash = '#'" class="text-app-accent-1 hover:brightness-110 font-bold transition-all text-sm px-3 py-1.5 rounded-lg border border-app-border bg-app-bg shadow-sm cursor-pointer" title="Back to Dashboard">
-               <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
-               </svg>
-               Dashboard
              </button>
           </div>
         </header>

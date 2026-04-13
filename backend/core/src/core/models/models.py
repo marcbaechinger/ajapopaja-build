@@ -55,3 +55,15 @@ class Pipeline(Document):
 
     class Settings:
         name = "pipelines"
+
+class User(Document):
+    username: str
+    hashed_password: str
+    email: Optional[str] = None
+    full_name: Optional[str] = None
+    disabled: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    class Settings:
+        name = "users"

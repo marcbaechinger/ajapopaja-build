@@ -55,6 +55,15 @@ export class Pipeline {
   deleted: boolean = false;
 }
 
+export interface User {
+  _id?: string;
+  username: string;
+  email?: string | null;
+  full_name?: string | null;
+  disabled: boolean;
+  created_at?: string;
+}
+
 export interface WSMessage {
   type: string;
   id?: string;
