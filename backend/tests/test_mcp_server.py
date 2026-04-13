@@ -36,6 +36,46 @@ async def test_mcp_get_next_task_success():
 
 
 @pytest.mark.asyncio
+async def test_mcp_get_next_task_design_doc_ready():
+    pipeline = Pipeline(name="MCP Pipeline")
+    await pipeline.insert()
+    pid = str(pipeline.id)
+
+    # Task that wants design doc and has it
+    task = Task(
+        title="Design Ready Task", 
+        pipeline_id=pid, 
+        status=TaskStatus.SCHEDULED, 
+        want_design_doc=True,
+        design_doc="# My Design",
+        order=10
+    )
+    await task.insert()
+
+    result = await get_next_task(pid)
+    assert result["id"] == str(task.id)
+    assert result["want_design_doc"] is True
+    assert result["design_doc_ready"] is True
+    assert result["design_doc"] == "# My Design"
+
+    # Task that wants design doc but it's empty
+    task2 = Task(
+        title="Design Not Ready Task", 
+        pipeline_id=pid, 
+        status=TaskStatus.SCHEDULED, 
+        want_design_doc=True,
+        design_doc="",
+        order=20
+    )
+    await task2.insert()
+
+    result2 = await get_next_task(pid)
+    assert result2["id"] == str(task2.id)
+    assert result2["want_design_doc"] is True
+    assert result2["design_doc_ready"] is False
+
+
+@pytest.mark.asyncio
 async def test_mcp_get_next_task_empty():
     result = await get_next_task("nonexistent_pipeline")
     assert "error" in result

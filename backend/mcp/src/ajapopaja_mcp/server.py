@@ -31,7 +31,7 @@ async def get_next_task(pipeline_id: str) -> Dict[str, Any]:
         pipeline_id: The ID of the pipeline to pull from.
 
     Returns:
-        A dictionary containing task details (id, title, description, design_doc, spec, want_design_doc, version).
+        A dictionary containing task details (id, title, description, design_doc, spec, want_design_doc, design_doc_ready, version).
     """
     await init_db()
     task = await task_queries.get_next_task(pipeline_id, actor="mcp")
@@ -45,6 +45,7 @@ async def get_next_task(pipeline_id: str) -> Dict[str, Any]:
             "design_doc": task.design_doc or "",
             "spec": task.spec or "",
             "want_design_doc": task.want_design_doc,
+            "design_doc_ready": task.want_design_doc and bool(task.design_doc),
             "version": task.version,
         }
 
