@@ -25,7 +25,7 @@ describe('HistoryDialog', () => {
 
   const mockTasks = [
     {
-      _id: '1',
+      id: '1',
       title: 'Task 1',
       status: TaskStatus.IMPLEMENTED,
       commit_hash: 'abcdef123456',
@@ -39,7 +39,7 @@ describe('HistoryDialog', () => {
       history: []
     },
     {
-      _id: '2',
+      id: '2',
       title: 'Task 2',
       status: TaskStatus.CREATED,
       pipeline_id: 'pipeline-1',

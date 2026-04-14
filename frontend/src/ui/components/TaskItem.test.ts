@@ -20,7 +20,7 @@ import { TaskStatus } from '../../core/domain.ts';
 
 describe('TaskItem', () => {
   const mockTask = {
-    _id: '1',
+    id: '1',
     title: 'Test Task',
     description: 'This is a description',
     status: TaskStatus.CREATED,

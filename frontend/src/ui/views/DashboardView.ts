@@ -115,10 +115,10 @@ export class DashboardView extends View {
       const pipelinesWithTasks = await Promise.all(
         pipelines.map(async (pipeline) => {
           try {
-            const tasks = pipeline._id ? await this.context.taskClient.listByPipeline(pipeline._id, true) : [];
+            const tasks = pipeline.id ? await this.context.taskClient.listByPipeline(pipeline.id, true) : [];
             return { pipeline, tasks };
           } catch (e) {
-            console.error(`Failed to load tasks for pipeline ${pipeline._id}:`, e);
+            console.error(`Failed to load tasks for pipeline ${pipeline.id}:`, e);
             return { pipeline, tasks: [] };
           }
         })
@@ -142,7 +142,7 @@ export class DashboardView extends View {
 
     return `
       <div class="bg-app-bg p-4 rounded-lg border border-app-border flex flex-col gap-3 transition-all hover:border-app-accent-1 cursor-pointer group mb-4" 
-           data-view-type="pipeline" data-view-id="${pipeline._id}"
+           data-view-type="pipeline" data-view-id="${pipeline.id}"
            data-action-click="view_pipeline">
         <div class="flex justify-between items-start">
           <div class="flex flex-col">

@@ -69,7 +69,7 @@ export class TaskItem {
   }
 
   static render(task: Task, showOrdering: boolean = true, expandHistory: boolean = false, isCollapsed: boolean = false): string {
-    const taskId = task._id || (task as any).id;
+    const taskId = task.id;
     const statusColors: Record<string, string> = {
       [TaskStatus.CREATED]: 'bg-slate-600 text-slate-300',
       [TaskStatus.SCHEDULED]: 'bg-blue-600 text-white animate-pulse',

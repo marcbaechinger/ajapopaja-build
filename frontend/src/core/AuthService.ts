@@ -126,7 +126,7 @@ export class AuthService {
       // fetch /me for full info or just use what we have.
       const user: User = {
         username: data.username,
-        // _id and others will be populated by /me if needed
+        // id and others will be populated by /me if needed
       } as any;
 
       this.setAuth(user, data.access_token);

@@ -36,7 +36,7 @@ export class TaskColumn {
 
     const taskHtml = tasks.length > 0
       ? tasks.map(t => {
-          const taskId = t._id || (t as any).id;
+          const taskId = t.id!;
           return TaskItem.render(t, showOrdering, false, collapsedTasks.has(taskId));
         }).join('')
       : `<p class="text-app-muted italic text-sm py-4 text-center border-2 border-dashed border-app-border/30 rounded-xl">${emptyMessage}</p>`;

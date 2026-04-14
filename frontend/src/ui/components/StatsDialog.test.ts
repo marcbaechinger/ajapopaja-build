@@ -25,7 +25,7 @@ describe('StatsDialog', () => {
 
   const mockTasks = [
     {
-      _id: '1',
+      id: '1',
       title: 'Task 1',
       status: 'implemented',
       pipeline_id: 'p1',

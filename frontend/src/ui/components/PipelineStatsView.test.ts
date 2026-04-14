@@ -23,7 +23,7 @@ describe('PipelineStatsView', () => {
 
   it('calculates granular durations correctly for task with design phase', () => {
     const task: Task = {
-      _id: '1',
+      id: '1',
       title: 'Test Task',
       status: TaskStatus.IMPLEMENTED,
       history: [
@@ -46,7 +46,7 @@ describe('PipelineStatsView', () => {
 
   it('calculates durations correctly for task without design phase', () => {
     const task: Task = {
-      _id: '2',
+      id: '2',
       title: 'Simple Task',
       status: TaskStatus.IMPLEMENTED,
       history: [
@@ -66,7 +66,7 @@ describe('PipelineStatsView', () => {
 
   it('handles multiple inprogress cycles during implementation', () => {
     const task: Task = {
-      _id: '3',
+      id: '3',
       title: 'Complex Task',
       status: TaskStatus.IMPLEMENTED,
       history: [

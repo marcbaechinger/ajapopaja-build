@@ -34,7 +34,7 @@ export interface StateTransition {
 }
 
 export class Task {
-  _id?: string;
+  id?: string;
   title: string = '';
   description?: string | null;
   status: TaskStatus = TaskStatus.CREATED;
@@ -65,7 +65,7 @@ export const PipelineStatus = {
 export type PipelineStatus = typeof PipelineStatus[keyof typeof PipelineStatus];
 
 export class Pipeline {
-  _id?: string;
+  id?: string;
   name: string = '';
   description?: string | null;
   status: PipelineStatus = PipelineStatus.ACTIVE;
@@ -76,7 +76,7 @@ export class Pipeline {
 }
 
 export interface User {
-  _id?: string;
+  id?: string;
   username: string;
   email?: string | null;
   full_name?: string | null;

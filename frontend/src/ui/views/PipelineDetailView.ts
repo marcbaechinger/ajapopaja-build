@@ -139,12 +139,12 @@ export class PipelineDetailView extends View {
 
     const handleCreate = (message: any) => {
       if (message.payload?.pipeline_id === this.pipelineId) {
-        const taskId = message.payload._id || message.payload.id;
+        const taskId = message.payload.id;
         // Only append if it doesn't exist yet
         if (this.container?.querySelector(`[data-view-id="${taskId}"]`)) return;
         
         // Update local cache
-        const index = this.allLoadedTasks.findIndex(t => (t._id || (t as any).id) === taskId);
+        const index = this.allLoadedTasks.findIndex(t => t.id === taskId);
         if (index === -1) {
           this.allLoadedTasks.push(message.payload);
         }
@@ -161,7 +161,7 @@ export class PipelineDetailView extends View {
       if (message.payload?.pipeline_id === this.pipelineId) {
         const taskId = message.payload.task_id;
         // Update local cache
-        this.allLoadedTasks = this.allLoadedTasks.filter(t => (t._id || (t as any).id) !== taskId);
+        this.allLoadedTasks = this.allLoadedTasks.filter(t => t.id !== taskId);
         this.removeTaskFromDOM(taskId);
       }
     }));
@@ -169,7 +169,7 @@ export class PipelineDetailView extends View {
 
   private insertTaskIntoDOM(task: Task) {
     if (!this.container) return;
-    const taskId = task._id || (task as any).id;
+    const taskId = task.id!;
     const listId = this.getTaskColumnId(task.status);
     const list = this.container.querySelector(`#${listId}`);
     
@@ -262,9 +262,9 @@ export class PipelineDetailView extends View {
   private updateSingleTask(task: any) {
     if (!this.container) return;
 
-    const taskId = task._id || task.id;
+    const taskId = task.id;
     // Update the local tasks cache
-    const index = this.allLoadedTasks.findIndex(t => (t._id || (t as any).id) === taskId);
+    const index = this.allLoadedTasks.findIndex(t => t.id === taskId);
     const oldTask = index !== -1 ? { ...this.allLoadedTasks[index] } : null;
     
     if (index !== -1) {
@@ -334,7 +334,7 @@ export class PipelineDetailView extends View {
         this.collapsedTasks.add(taskId);
       }
 
-      const task = this.allLoadedTasks.find(t => (t._id || (t as any).id) === taskId);
+      const task = this.allLoadedTasks.find(t => t.id === taskId);
       if (task) {
         this.updateSingleTask(task);
       }
@@ -684,7 +684,7 @@ export class PipelineDetailView extends View {
       if (this.isFirstLoad && allTasks.length > 0) {
         allTasks.forEach(t => {
           if (t.status !== TaskStatus.INPROGRESS && t.status !== TaskStatus.PROPOSED) {
-            this.collapsedTasks.add(t._id || (t as any).id);
+            this.collapsedTasks.add(t.id!);
           }
         });
         this.isFirstLoad = false;
@@ -812,7 +812,7 @@ export class PipelineDetailView extends View {
       );
 
       completedContainer.innerHTML = tasks.length > 0
-        ? tasks.map(t => TaskItem.render(t, false, false, this.collapsedTasks.has(t._id || (t as any).id))).join('')
+        ? tasks.map(t => TaskItem.render(t, false, false, this.collapsedTasks.has(t.id!))).join('')
         : '<p class="text-app-muted italic text-xs">No older completed tasks.</p>';
 
       if (paginationContainer) {
