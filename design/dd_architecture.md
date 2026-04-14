@@ -61,3 +61,11 @@ To maintain consistency and avoid code duplication, the **FastAPI Server** and t
 *   **Backend Languages**: Python (FastAPI, MCP SDK, websockets)
 *   **Frontend Technologies**: TypeScript (Vanilla), Tailwind CSS v4.
 *   *Note: Further specific library and tooling choices are detailed in the `dd_project_setup.md` document.*
+
+## 6. Security & Authentication
+The system implements a centralized security model to protect management operations and data integrity.
+
+*   **JWT-Based Authentication**: All communication between the **SPA Frontend** and **FastAPI Server** is secured using JSON Web Tokens (JWT).
+*   **User Management**: Password-based login using **bcrypt** for hashing and storage in MongoDB.
+*   **WebSocket Security**: The `/ws` endpoint requires a valid JWT passed as a `token` query parameter during the initial handshake.
+*   **Environment Configuration**: Secrets like `AUTH_SECRET_KEY` are managed via environment variables.

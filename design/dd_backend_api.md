@@ -79,4 +79,16 @@ Similar to the frontend, the server maintains a registry of handlers mapped to m
 ## 6. Implementation Strategy
 1.  **Refactor `main.py`**: Move existing logic into `routes/` and `repositories/`.
 2.  **Add OCC Support**: Update models to include a `version` field and implement version checks in repository functions.
-3.  **Implement WebSocket Layer**: Create the `/ws` endpoint and message dispatcher.
+## 7. Authentication & Security
+The backend implements the **OAuth2 Password Bearer** flow for securing API access.
+
+### 7.1. Authentication Implementation
+- **JWT**: Tokens are issued using the **HS256** algorithm with a configurable `AUTH_SECRET_KEY`.
+- **Token Expiration**: Access tokens expire after 30 minutes; refresh tokens are valid for 7 days.
+- **Password Security**: User passwords are never stored in plain text; they are hashed using **bcrypt** before persistence in MongoDB.
+- **Protected Routes**: Most endpoints in the `/api` prefix require an `Authorization: Bearer <token>` header.
+
+### 7.2. WebSocket Handshake Security
+Since standard browser `WebSocket` APIs do not support setting custom headers, the server allows authentication via a `token` query parameter during the initial handshake:
+- **Endpoint**: `/ws/{client_id}?token=<jwt>`
+- **Validation**: The server decodes and validates the JWT; if invalid or missing, the connection is closed immediately with a `4001` (Unauthorized) policy violation code.

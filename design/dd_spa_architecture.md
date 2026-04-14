@@ -82,4 +82,23 @@ const TaskItem = (task: Task) => `
 ## 9. Recommended Libraries
 - **`nanoid`**: For generating unique client-side IDs.
 - **`dom-purify`**: To sanitize HTML strings before insertion.
-- **`lucide`**: For consistent, lightweight SVG icons.
+## 10. Authentication
+The SPA maintains user sessions via JWT stored securely in `localStorage`.
+
+### 10.1. `AuthService`
+The central manager for user sessions:
+- **State Management**: Tracks current user and access tokens.
+- **Session Persistence**: Saves/restores tokens from `localStorage` on page reload.
+- **Login/Logout Logic**: Interacts with the `/api/auth` endpoints to authenticate users and manage token lifecycle.
+
+### 10.2. `BaseClient` & Token Refresh
+The `BaseClient` automatically intercepts outbound requests to manage authorization:
+1.  **Authorization Header**: Injects the `Authorization: Bearer <token>` header into all API requests.
+2.  **401 Interception**: If a request fails with a `401 Unauthorized`, the client attempts an automatic token refresh via the `AuthService`.
+3.  **Redirection**: If a refresh is not possible (e.g., expired refresh token), the user is redirected to the `LoginView`.
+
+### 10.3. Routing Security
+A high-level `requireAuth` wrapper protects specific routes within `main.ts`. It verifies the `AuthService.isAuthenticated()` state before rendering views like the `DashboardView` or `PipelineDetailView`.
+
+### 10.4. WebSocket Security
+The `WebSocketClient` retrieves the latest access token from the `AuthService` and appends it to the connection URL as a query parameter during the `connect()` phase.
