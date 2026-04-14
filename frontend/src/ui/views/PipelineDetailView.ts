@@ -42,6 +42,14 @@ export class PipelineDetailView extends View {
   private completedPageSize: number = 5;
   private keydownHandler: ((e: KeyboardEvent) => void) | null = null;
 
+  private columnMetadata: Record<string, { title: string, emptyMessage: string }> = {
+    'proposed': { title: 'Proposed', emptyMessage: 'No proposed designs.' },
+    'backlog': { title: 'Backlog', emptyMessage: 'Backlog is empty.' },
+    'inprogress': { title: 'In Progress', emptyMessage: 'No active work.' },
+    'failed': { title: 'Failed', emptyMessage: '' },
+    'scheduled': { title: 'Queue', emptyMessage: 'Nothing scheduled.' },
+  };
+
   constructor(context: AppContext, params: Record<string, string>) {
     super();
     this.context = context;
@@ -49,6 +57,54 @@ export class PipelineDetailView extends View {
     this.registerActions();
     this.setupWebSocket();
     this.setupKeyboardShortcuts();
+  }
+
+  private getTaskColumnId(status: TaskStatus): string {
+    switch (status) {
+      case TaskStatus.PROPOSED: return 'proposed-list';
+      case TaskStatus.CREATED: return 'backlog-list';
+      case TaskStatus.INPROGRESS: return 'inprogress-list';
+      case TaskStatus.FAILED: return 'failed-list';
+      case TaskStatus.SCHEDULED: return 'scheduled-list';
+      case TaskStatus.IMPLEMENTED:
+      case TaskStatus.DISCARDED: return 'completed-task-list';
+      default: return 'backlog-list';
+    }
+  }
+
+  private updateColumnHeaderCount(columnId: string) {
+    if (!this.container) return;
+    const list = this.container.querySelector(`#${columnId}-list`);
+    if (!list) return;
+
+    const count = list.querySelectorAll('[data-view-id]').length;
+    const section = list.closest('section');
+    if (section) {
+      const countEl = section.querySelector('h3 span:last-child');
+      if (countEl) {
+        countEl.textContent = `(${count})`;
+      }
+    }
+  }
+
+  private ensureEmptyMessage(columnId: string) {
+    const list = this.container?.querySelector(`#${columnId}-list`);
+    if (!list) return;
+    if (list.children.length === 0) {
+      const meta = this.columnMetadata[columnId];
+      if (meta && meta.emptyMessage) {
+        list.innerHTML = `<p class="text-app-muted italic text-sm py-4 text-center border-2 border-dashed border-app-border/30 rounded-xl">${meta.emptyMessage}</p>`;
+      }
+    }
+  }
+
+  private removeEmptyMessage(columnId: string) {
+    const list = this.container?.querySelector(`#${columnId}-list`);
+    if (!list) return;
+    const emptyMsg = list.querySelector('p.text-app-muted.italic');
+    if (emptyMsg) {
+      emptyMsg.remove();
+    }
   }
 
   private setupKeyboardShortcuts() {
@@ -86,12 +142,13 @@ export class PipelineDetailView extends View {
         // Only append if it doesn't exist yet
         if (this.container?.querySelector(`[data-view-id="${message.payload._id}"]`)) return;
         
-        const listContainer = this.container?.querySelector('#backlog-list');
-        if (!listContainer) return;
-
-        // For created tasks, a full refresh is safest to maintain sort order
-        // and handle the "No tasks" placeholder correctly.
-        this.refreshTasks();
+        // Update local cache
+        const index = this.allLoadedTasks.findIndex(t => t._id === message.payload._id);
+        if (index === -1) {
+          this.allLoadedTasks.push(message.payload);
+        }
+        
+        this.insertTaskIntoDOM(message.payload);
       }
     };
 
@@ -103,9 +160,100 @@ export class PipelineDetailView extends View {
       if (message.payload?.pipeline_id === this.pipelineId) {
         // Update local cache
         this.allLoadedTasks = this.allLoadedTasks.filter(t => t._id !== message.payload.task_id);
-        this.refreshTasks();
+        this.removeTaskFromDOM(message.payload.task_id);
       }
     }));
+  }
+
+  private insertTaskIntoDOM(task: Task) {
+    if (!this.container) return;
+    const listId = this.getTaskColumnId(task.status);
+    const list = this.container.querySelector(`#${listId}`);
+    
+    if (!list) {
+      // If the list container doesn't exist (like #failed-list when empty), 
+      // it's easier to refresh the column or the whole view.
+      this.refreshTasks();
+      return;
+    }
+
+    this.removeEmptyMessage(listId.replace('-list', ''));
+
+    const isCompleted = ([TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED] as any[]).includes(task.status);
+    const showOrdering = this.currentSortOrder === 'execution' && !isCompleted;
+    const isLastCompleted = listId === 'last-completed-task';
+    
+    const temp = document.createElement('div');
+    temp.innerHTML = TaskItem.render(task, showOrdering, isLastCompleted, this.collapsedTasks.has(task._id!));
+    const newNode = temp.firstElementChild;
+    if (!newNode) return;
+
+    if (task.status === TaskStatus.SCHEDULED && this.currentSortOrder === 'execution') {
+      const items = Array.from(list.querySelectorAll('[data-view-id]'));
+      const nextItem = items.find(item => {
+        const orderAttr = item.querySelector('[data-order]')?.getAttribute('data-order');
+        const order = orderAttr ? parseInt(orderAttr) : Infinity;
+        return order > (task.order || 0);
+      });
+      if (nextItem) {
+        list.insertBefore(newNode, nextItem);
+      } else {
+        list.appendChild(newNode);
+      }
+    } else if (isCompleted) {
+      // Completed tasks have complex logic (Last vs History Feed)
+      this.refreshTasks();
+      return;
+    } else {
+      list.appendChild(newNode);
+    }
+
+    this.updateColumnHeaderCount(listId.replace('-list', ''));
+    this.updateHeaderStats();
+    this.updatePipelineHealth();
+  }
+
+  private removeTaskFromDOM(taskId: string) {
+    if (!this.container) return;
+    const taskEl = this.container.querySelector(`[data-view-id="${taskId}"]`);
+
+    // Cleanup editor if exists
+    const editor = this.activeEditors.get(taskId);
+    if (editor) {
+      editor.toTextArea();
+      this.activeEditors.delete(taskId);
+    }
+
+    if (!taskEl) return;
+    
+    const list = taskEl.parentElement;
+    if (!list) return;
+
+    const listId = list.id;
+    taskEl.remove();
+    
+    this.ensureEmptyMessage(listId.replace('-list', ''));
+    this.updateColumnHeaderCount(listId.replace('-list', ''));
+    this.updateHeaderStats();
+    this.updatePipelineHealth();
+  }
+
+  private updatePipelineHealth() {
+    if (!this.container) return;
+    const historyContainer = this.container.querySelector('#col-history');
+    if (!historyContainer) return;
+
+    // Find the health stats section (it's the first child of col-history)
+    const healthSection = historyContainer.querySelector('.bg-app-bg\\/50') as HTMLElement;
+    if (healthSection) {
+      // Re-render only the inner part of health section
+      const statsTitle = healthSection.querySelector('h3');
+      healthSection.innerHTML = `
+        ${statsTitle ? statsTitle.outerHTML : '<h3 class="text-sm font-black text-app-muted uppercase tracking-widest mb-6 px-1">Pipeline Health</h3>'}
+        ${PipelineStatsView.render(this.allLoadedTasks, true)}
+      `;
+      PipelineStatsView.animateBars(healthSection);
+    }
   }
 
   private updateSingleTask(task: any) {
@@ -121,6 +269,7 @@ export class PipelineDetailView extends View {
       this.allLoadedTasks.push(task);
     }
     this.updateHeaderStats();
+    this.updatePipelineHealth();
 
     // Auto-expand if task became active, auto-collapse if it became inactive
     const isActive = task.status === TaskStatus.INPROGRESS || task.status === TaskStatus.PROPOSED;
@@ -138,19 +287,22 @@ export class PipelineDetailView extends View {
       return;
     }
 
-    const taskEl = this.container.querySelector(`[data-view-id="${task._id}"]`);
+    const taskEl = this.container.querySelector(`[data-view-id="${task._id}"]`) as HTMLElement;
     if (!taskEl) {
-      // If task belongs here but isn't shown, refresh everything
-      this.refreshTasks();
+      this.insertTaskIntoDOM(task);
       return;
     }
 
+    const targetListId = this.getTaskColumnId(task.status);
+    const currentList = taskEl.parentElement;
+    
     const isTaskCompleted = ([TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED] as any[]).includes(task.status);
     const wasTaskCompleted = taskEl.closest('#completed-task-list') !== null || taskEl.closest('#last-completed-task') !== null;
 
-    // If moving between open/completed sections
-    if (isTaskCompleted !== wasTaskCompleted) {
-      this.refreshTasks();
+    // If moving between open/completed sections OR moving between columns
+    if (isTaskCompleted !== wasTaskCompleted || (currentList && currentList.id !== targetListId)) {
+      this.removeTaskFromDOM(task._id);
+      this.insertTaskIntoDOM(task);
       return;
     }
 
@@ -630,6 +782,8 @@ export class PipelineDetailView extends View {
       if (completedTasks.length > 0) {
         this.refreshCompletedTasks();
       }
+
+      PipelineStatsView.animateBars(historyContainer as HTMLElement);
 
       if (completedCountEl) {
         completedCountEl.textContent = `(${completedTasks.length})`;
