@@ -22,15 +22,11 @@ export interface DialogOptions {
 }
 
 export abstract class BaseDialog<T = void> {
-  private static openDialogs: Map<string, BaseDialog<any>> = new Map();
+  private static currentOpenDialog: BaseDialog<any> | null = null;
   protected dialog: HTMLDialogElement;
   private resolveRef: ((value: T | null) => void) | null = null;
-  private container: HTMLDivElement;
 
   constructor(options: DialogOptions) {
-    this.container = document.createElement('div');
-    this.container.className = 'dialog-wrapper dialog-closed';
-
     this.dialog = document.createElement('dialog');
     
     // Apply common classes and layout
@@ -112,11 +108,9 @@ export abstract class BaseDialog<T = void> {
 
   // Unified show method returning a promise
   public async show(): Promise<T | null> {
-    const dialogName = this.constructor.name;
-    const existing = BaseDialog.openDialogs.get(dialogName);
-    if (existing) {
+    if (BaseDialog.currentOpenDialog) {
       // Don't open a new one, just shake the existing one
-      const content = existing.dialog.querySelector('.dialog-content') as HTMLElement;
+      const content = BaseDialog.currentOpenDialog.dialog.querySelector('.dialog-content') as HTMLElement;
       if (content) {
         content.classList.remove('animate-dialog-shake');
         void content.offsetWidth; // Force reflow
@@ -124,7 +118,7 @@ export abstract class BaseDialog<T = void> {
       }
       return null;
     }
-    BaseDialog.openDialogs.set(dialogName, this);
+    BaseDialog.currentOpenDialog = this;
 
     document.body.appendChild(this.dialog);
     this.dialog.showModal();
@@ -142,9 +136,8 @@ export abstract class BaseDialog<T = void> {
 
   // Unified close method
   protected close(result: T | null = null) {
-    const dialogName = this.constructor.name;
-    if (BaseDialog.openDialogs.get(dialogName) === this) {
-      BaseDialog.openDialogs.delete(dialogName);
+    if (BaseDialog.currentOpenDialog === this) {
+      BaseDialog.currentOpenDialog = null;
     }
 
     // Trigger exit transition

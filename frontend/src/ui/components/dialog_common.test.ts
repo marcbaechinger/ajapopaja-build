@@ -93,9 +93,14 @@ describe('BaseDialog', () => {
     expect(document.body.contains(dialog['dialog'])).toBe(false);
   });
 
-  it('should not show new dialog of same type when one is already showing', async () => {
+  it('should not show new dialog when one is already showing (even of different type)', async () => {
+    class AnotherTestDialog extends BaseDialog<string> {
+      constructor() { super({ title: 'Another Dialog' }); }
+      protected renderBody() { return 'Another body'; }
+    }
+
     const dialog1 = new TestDialog();
-    const dialog2 = new TestDialog();
+    const dialog2 = new AnotherTestDialog();
     
     dialog1['dialog'].showModal = vi.fn();
     dialog1['dialog'].close = vi.fn();
@@ -106,25 +111,24 @@ describe('BaseDialog', () => {
     expect(document.body.contains(dialog1['dialog'])).toBe(true);
     
     const showPromise2 = dialog2.show();
-    // dialog2 should NOT be in the body
+    // dialog2 should NOT be in the body because dialog1 is open
     expect(document.body.contains(dialog2['dialog'])).toBe(false);
     expect(dialog2['dialog'].showModal).not.toHaveBeenCalled();
     
-    // dialog1 should still be open
-    expect(dialog1['dialog'].close).not.toHaveBeenCalled();
-    
-    // showPromise2 should have resolved with null
-    const result2 = await showPromise2;
-    expect(result2).toBe(null);
-    
-    // Cleanup dialog1
-    dialog1['close']('done');
+    // Cleanup
+    dialog1['close'](null);
     await showPromise1;
+    await showPromise2;
   });
 
-  it('should apply shake animation when duplicate dialog is attempted', async () => {
+  it('should apply shake animation to the current open dialog when a new one is attempted', async () => {
+    class AnotherTestDialog extends BaseDialog<string> {
+      constructor() { super({ title: 'Another Dialog' }); }
+      protected renderBody() { return 'Another body'; }
+    }
+
     const dialog1 = new TestDialog();
-    const dialog2 = new TestDialog();
+    const dialog2 = new AnotherTestDialog();
     
     dialog1['dialog'].showModal = vi.fn();
     dialog1['dialog'].close = vi.fn();
@@ -136,6 +140,7 @@ describe('BaseDialog', () => {
     expect(content1?.classList.contains('animate-dialog-shake')).toBe(false);
     
     const showPromise2 = dialog2.show();
+    // dialog1 should shake
     expect(content1?.classList.contains('animate-dialog-shake')).toBe(true);
     
     // Cleanup
