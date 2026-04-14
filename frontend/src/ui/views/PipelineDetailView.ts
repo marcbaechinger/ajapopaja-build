@@ -139,11 +139,12 @@ export class PipelineDetailView extends View {
 
     const handleCreate = (message: any) => {
       if (message.payload?.pipeline_id === this.pipelineId) {
+        const taskId = message.payload._id || message.payload.id;
         // Only append if it doesn't exist yet
-        if (this.container?.querySelector(`[data-view-id="${message.payload._id}"]`)) return;
+        if (this.container?.querySelector(`[data-view-id="${taskId}"]`)) return;
         
         // Update local cache
-        const index = this.allLoadedTasks.findIndex(t => t._id === message.payload._id);
+        const index = this.allLoadedTasks.findIndex(t => (t._id || (t as any).id) === taskId);
         if (index === -1) {
           this.allLoadedTasks.push(message.payload);
         }
@@ -158,15 +159,17 @@ export class PipelineDetailView extends View {
     this.unsubs.push(this.context.wsClient.on('TASK_COMPLETED', handleUpdate));
     this.unsubs.push(this.context.wsClient.on('TASK_DELETED', (message: any) => {
       if (message.payload?.pipeline_id === this.pipelineId) {
+        const taskId = message.payload.task_id;
         // Update local cache
-        this.allLoadedTasks = this.allLoadedTasks.filter(t => t._id !== message.payload.task_id);
-        this.removeTaskFromDOM(message.payload.task_id);
+        this.allLoadedTasks = this.allLoadedTasks.filter(t => (t._id || (t as any).id) !== taskId);
+        this.removeTaskFromDOM(taskId);
       }
     }));
   }
 
   private insertTaskIntoDOM(task: Task) {
     if (!this.container) return;
+    const taskId = task._id || (task as any).id;
     const listId = this.getTaskColumnId(task.status);
     const list = this.container.querySelector(`#${listId}`);
     
@@ -184,7 +187,7 @@ export class PipelineDetailView extends View {
     const isLastCompleted = listId === 'last-completed-task';
     
     const temp = document.createElement('div');
-    temp.innerHTML = TaskItem.render(task, showOrdering, isLastCompleted, this.collapsedTasks.has(task._id!));
+    temp.innerHTML = TaskItem.render(task, showOrdering, isLastCompleted, this.collapsedTasks.has(taskId));
     const newNode = temp.firstElementChild;
     if (!newNode) return;
 
@@ -259,8 +262,9 @@ export class PipelineDetailView extends View {
   private updateSingleTask(task: any) {
     if (!this.container) return;
 
+    const taskId = task._id || task.id;
     // Update the local tasks cache
-    const index = this.allLoadedTasks.findIndex(t => t._id === task._id);
+    const index = this.allLoadedTasks.findIndex(t => (t._id || (t as any).id) === taskId);
     const oldTask = index !== -1 ? { ...this.allLoadedTasks[index] } : null;
     
     if (index !== -1) {
@@ -276,18 +280,18 @@ export class PipelineDetailView extends View {
     const wasActive = oldTask ? (oldTask.status === TaskStatus.INPROGRESS || oldTask.status === TaskStatus.PROPOSED) : false;
 
     if (isActive && !wasActive) {
-      this.collapsedTasks.delete(task._id);
+      this.collapsedTasks.delete(taskId);
     } else if (!isActive && wasActive) {
-      this.collapsedTasks.add(task._id);
+      this.collapsedTasks.add(taskId);
     }
 
     // If task is being edited locally, skip external updates to avoid losing state
-    if (this.activeEditors.has(task._id)) {
-      console.log('Skipping update for task being edited:', task._id);
+    if (this.activeEditors.has(taskId)) {
+      console.log('Skipping update for task being edited:', taskId);
       return;
     }
 
-    const taskEl = this.container.querySelector(`[data-view-id="${task._id}"]`) as HTMLElement;
+    const taskEl = this.container.querySelector(`[data-view-id="${taskId}"]`) as HTMLElement;
     if (!taskEl) {
       this.insertTaskIntoDOM(task);
       return;
@@ -330,7 +334,7 @@ export class PipelineDetailView extends View {
         this.collapsedTasks.add(taskId);
       }
 
-      const task = this.allLoadedTasks.find(t => t._id === taskId);
+      const task = this.allLoadedTasks.find(t => (t._id || (t as any).id) === taskId);
       if (task) {
         this.updateSingleTask(task);
       }

@@ -69,6 +69,7 @@ export class TaskItem {
   }
 
   static render(task: Task, showOrdering: boolean = true, expandHistory: boolean = false, isCollapsed: boolean = false): string {
+    const taskId = task._id || (task as any).id;
     const statusColors: Record<string, string> = {
       [TaskStatus.CREATED]: 'bg-slate-600 text-slate-300',
       [TaskStatus.SCHEDULED]: 'bg-blue-600 text-white animate-pulse',
@@ -91,7 +92,7 @@ export class TaskItem {
 
     const specHtml = `
       <div class="spec-container w-full text-xs bg-app-surface p-3 rounded-lg border border-app-border transition-all"
-           data-task-id="${task._id}" data-version="${task.version}">
+           data-task-id="${taskId}" data-version="${task.version}">
         <div class="spec-view ${isCompleted ? '' : 'cursor-pointer group'}" ${isCompleted ? '' : 'data-action-click="edit_spec"'}>
           <div class="flex justify-between items-center mb-1">
             <span class="font-bold text-app-muted">Specification</span>
@@ -108,8 +109,8 @@ export class TaskItem {
         <div class="spec-edit hidden flex flex-col gap-3">
           <span class="font-bold text-app-muted mb-1">Editing Specification</span>
           <div class="flex items-center gap-2 mb-2">
-            <input type="checkbox" id="edit-want-design-doc-${task._id}" class="w-4 h-4 rounded border-app-border bg-app-bg text-app-accent-1 focus:ring-app-accent-1" ${task.want_design_doc ? 'checked' : ''}>
-            <label for="edit-want-design-doc-${task._id}" class="text-xs text-app-text cursor-pointer">Require Design Doc Approval</label>
+            <input type="checkbox" id="edit-want-design-doc-${taskId}" class="w-4 h-4 rounded border-app-border bg-app-bg text-app-accent-1 focus:ring-app-accent-1" ${task.want_design_doc ? 'checked' : ''}>
+            <label for="edit-want-design-doc-${taskId}" class="text-xs text-app-text cursor-pointer">Require Design Doc Approval</label>
           </div>
           <textarea class="w-full bg-app-bg border border-app-border rounded p-2 text-app-text outline-none focus:ring-1 focus:ring-app-accent-1 min-h-[100px]" 
                     placeholder="Provide a detailed specification for the agent...">${task.spec || ''}</textarea>
@@ -127,7 +128,7 @@ export class TaskItem {
 
     const designDocHtml = `
         <div class="design-doc-container w-full text-xs bg-app-surface p-3 rounded-lg border border-app-border transition-all ${isProposed ? 'ring-2 ring-purple-500/50 bg-purple-500/5' : ''}"
-             data-task-id="${task._id}" data-version="${task.version}">
+             data-task-id="${taskId}" data-version="${task.version}">
           <div class="design-doc-view ${isImplemented ? '' : 'cursor-pointer group'}" ${isImplemented ? '' : 'data-action-click="edit_design_doc"'}>
             <div class="flex justify-between items-center mb-1">
               <span class="font-bold text-app-accent-2">${isProposed ? 'Proposed Design' : 'Design Document'}</span>
@@ -167,7 +168,7 @@ export class TaskItem {
 
     return `
       <div class="bg-app-bg p-4 rounded-lg border border-app-border flex flex-col gap-3 transition-all hover:border-app-accent-1/30 ${isSystem ? 'border-l-4 border-l-red-500' : ''} ${isProposed ? 'border-purple-500/50 shadow-lg shadow-purple-500/10' : ''}" 
-           data-view-type="task" data-view-id="${task._id}">
+           data-view-type="task" data-view-id="${taskId}">
         <div class="flex justify-between items-start">
           <div class="flex items-center gap-3">
             <button data-action-click="toggle_task_collapse" class="p-1 text-app-muted hover:text-app-text transition-all cursor-pointer">
