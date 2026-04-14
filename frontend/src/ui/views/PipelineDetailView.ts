@@ -170,6 +170,10 @@ export class PipelineDetailView extends View {
   private insertTaskIntoDOM(task: Task) {
     if (!this.container) return;
     const taskId = task.id!;
+    
+    // Safety check: remove any existing instances of this task first
+    this.removeTaskFromDOM(taskId);
+
     const listId = this.getTaskColumnId(task.status);
     const list = this.container.querySelector(`#${listId}`);
     
@@ -218,7 +222,7 @@ export class PipelineDetailView extends View {
 
   private removeTaskFromDOM(taskId: string) {
     if (!this.container) return;
-    const taskEl = this.container.querySelector(`[data-view-id="${taskId}"]`);
+    const taskEls = this.container.querySelectorAll(`[data-view-id="${taskId}"]`);
 
     // Cleanup editor if exists
     const editor = this.activeEditors.get(taskId);
@@ -227,16 +231,17 @@ export class PipelineDetailView extends View {
       this.activeEditors.delete(taskId);
     }
 
-    if (!taskEl) return;
+    if (taskEls.length === 0) return;
     
-    const list = taskEl.parentElement;
-    if (!list) return;
+    taskEls.forEach(taskEl => {
+      const list = taskEl.parentElement;
+      taskEl.remove();
+      if (list && list.id) {
+        this.ensureEmptyMessage(list.id.replace('-list', ''));
+        this.updateColumnHeaderCount(list.id.replace('-list', ''));
+      }
+    });
 
-    const listId = list.id;
-    taskEl.remove();
-    
-    this.ensureEmptyMessage(listId.replace('-list', ''));
-    this.updateColumnHeaderCount(listId.replace('-list', ''));
     this.updateHeaderStats();
     this.updatePipelineHealth();
   }
