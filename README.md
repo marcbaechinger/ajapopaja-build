@@ -122,3 +122,8 @@ npm run test
 ## 7. License
 
 This project is licensed under the **Apache License 2.0**. See the [LICENSE](LICENSE) file for details.
+
+### Dependency Compliance
+We maintain strict dependency license policies to ensure legal safety.
+- **Audit Tool (JS)**: `npm run license-check`
+- **Audit Tool (Python)**: See [LICENSE_COMPLIANCE.md](LICENSE_COMPLIANCE.md)

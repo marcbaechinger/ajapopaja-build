@@ -2,12 +2,15 @@
   "name": "frontend",
   "private": true,
   "version": "0.0.0",
+  "license": "Apache-2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "vitest"
+    "test": "vitest",
+    "license-check": "npx license-checker --excludePrivatePackages --onlyAllow \"Apache-2.0;MIT;MIT-0;BSD-2-Clause;BSD-3-Clause;ISC;0BSD;CC-BY-3.0;CC-BY-4.0;CC0-1.0;BlueOak-1.0.0;MPL-2.0;Public Domain;Unlicense\"",
+    "license-check:summary": "npx license-checker --summary"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.19",
