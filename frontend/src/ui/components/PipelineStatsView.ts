@@ -16,40 +16,103 @@
 
 import { Task, TaskStatus } from '../../core/domain.ts';
 
+export interface TaskDurations {
+  designTime: number;
+  implementationTime: number;
+  totalWorkTime: number;
+  leadTime: number;
+}
+
 export class PipelineStatsView {
-  static getCompletionDuration(task: Task): number | null {
-    const created = new Date(task.created_at || 0).getTime();
-    let completed = new Date(task.updated_at || 0).getTime();
-    
-    if (task.history && task.history.length > 0) {
-      const implEvent = task.history.find(h => h.to_status === TaskStatus.IMPLEMENTED);
-      if (implEvent) {
-        completed = new Date(implEvent.timestamp).getTime();
+  static getTaskDurations(task: Task): TaskDurations {
+    let designTime = 0;
+    let implementationTime = 0;
+    let hasReachedProposed = false;
+    let lastInprogressStart: number | null = null;
+    let firstScheduledAt: number | null = null;
+    let implementationFinishedAt: number | null = null;
+
+    if (!task.history || task.history.length === 0) {
+      return { designTime: 0, implementationTime: 0, totalWorkTime: 0, leadTime: 0 };
+    }
+
+    const sortedHistory = [...task.history].sort((a, b) => 
+      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+
+    for (const event of sortedHistory) {
+      const timestamp = new Date(event.timestamp).getTime();
+
+      if (event.to_status === TaskStatus.SCHEDULED && firstScheduledAt === null) {
+        firstScheduledAt = timestamp;
+      }
+
+      if (event.to_status === TaskStatus.INPROGRESS) {
+        lastInprogressStart = timestamp;
+      } else if (lastInprogressStart !== null) {
+        const duration = timestamp - lastInprogressStart;
+        if (hasReachedProposed) {
+          implementationTime += duration;
+        } else {
+          designTime += duration;
+        }
+        lastInprogressStart = null;
+      }
+
+      if (event.to_status === TaskStatus.PROPOSED) {
+        hasReachedProposed = true;
+      }
+
+      if (event.to_status === TaskStatus.IMPLEMENTED) {
+        implementationFinishedAt = timestamp;
       }
     }
-    
-    return Math.max(0, completed - created);
+
+    const leadTime = firstScheduledAt && implementationFinishedAt 
+      ? Math.max(0, implementationFinishedAt - firstScheduledAt) 
+      : 0;
+
+    return { 
+      designTime, 
+      implementationTime, 
+      totalWorkTime: designTime + implementationTime,
+      leadTime
+    };
   }
 
-  static calculateCompletionTimes(tasks: Task[]): { avg: string, median: string } {
+  static calculateMetrics(tasks: Task[]): { 
+    work: { avg: string, median: string },
+    lead: { avg: string, median: string }
+  } {
     const implemented = tasks.filter(t => t.status === TaskStatus.IMPLEMENTED);
-    if (implemented.length === 0) return { avg: 'N/A', median: 'N/A' };
+    if (implemented.length === 0) return { 
+      work: { avg: 'N/A', median: 'N/A' },
+      lead: { avg: 'N/A', median: 'N/A' }
+    };
 
-    const times = implemented.map(t => this.getCompletionDuration(t) || 0).sort((a, b) => a - b);
+    const durations = implemented.map(t => this.getTaskDurations(t));
+    
+    const workTimes = durations.map(d => d.totalWorkTime).sort((a, b) => a - b);
+    const leadTimes = durations.map(d => d.leadTime).filter(lt => lt > 0).sort((a, b) => a - b);
 
-    const total = times.reduce((sum, t) => sum + t, 0);
-    const avg = total / times.length;
-    const median = times.length % 2 === 0 
-      ? (times[times.length / 2 - 1] + times[times.length / 2]) / 2 
-      : times[Math.floor(times.length / 2)];
+    const getAvgMedian = (times: number[]) => {
+      if (times.length === 0) return { avg: 'N/A', median: 'N/A' };
+      const total = times.reduce((sum, t) => sum + t, 0);
+      const avg = total / times.length;
+      const median = times.length % 2 === 0 
+        ? (times[times.length / 2 - 1] + times[times.length / 2]) / 2 
+        : times[Math.floor(times.length / 2)];
+      return { avg: this.formatDuration(avg), median: this.formatDuration(median) };
+    };
 
     return {
-      avg: this.formatDuration(avg),
-      median: this.formatDuration(median)
+      work: getAvgMedian(workTimes),
+      lead: getAvgMedian(leadTimes)
     };
   }
 
   static formatDuration(ms: number): string {
+    if (ms <= 0) return '0s';
     if (ms < 1000) return `< 1s`;
     const seconds = Math.floor(ms / 1000);
     const minutes = Math.floor(seconds / 60);
@@ -83,7 +146,7 @@ export class PipelineStatsView {
       total++;
     });
     
-    const completionTimes = this.calculateCompletionTimes(tasks);
+    const metrics = this.calculateMetrics(tasks);
 
     const colors: Record<string, string> = {
       [TaskStatus.CREATED]: 'bg-slate-600',
@@ -112,18 +175,22 @@ export class PipelineStatsView {
     }).join('');
 
     return `
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div class="bg-app-bg p-4 rounded-xl border border-app-border shadow-sm flex flex-col items-center justify-center text-center">
           <span class="text-xs font-bold text-app-muted uppercase tracking-widest mb-1">Total Tasks</span>
           <span class="text-4xl font-extrabold text-app-text">${total}</span>
         </div>
         <div class="bg-app-bg p-4 rounded-xl border border-app-border shadow-sm flex flex-col items-center justify-center text-center">
-          <span class="text-xs font-bold text-app-muted uppercase tracking-widest mb-1">Avg Completion</span>
-          <span class="text-2xl font-bold text-app-accent-1">${completionTimes.avg}</span>
+          <span class="text-xs font-bold text-app-muted uppercase tracking-widest mb-1">Avg Active Work</span>
+          <span class="text-2xl font-bold text-app-accent-1">${metrics.work.avg}</span>
         </div>
         <div class="bg-app-bg p-4 rounded-xl border border-app-border shadow-sm flex flex-col items-center justify-center text-center">
-          <span class="text-xs font-bold text-app-muted uppercase tracking-widest mb-1">Median Completion</span>
-          <span class="text-2xl font-bold text-app-accent-2">${completionTimes.median}</span>
+          <span class="text-xs font-bold text-app-muted uppercase tracking-widest mb-1">Median Active Work</span>
+          <span class="text-2xl font-bold text-app-accent-1">${metrics.work.median}</span>
+        </div>
+        <div class="bg-app-bg p-4 rounded-xl border border-app-border shadow-sm flex flex-col items-center justify-center text-center">
+          <span class="text-xs font-bold text-app-muted uppercase tracking-widest mb-1">Avg Lead Time</span>
+          <span class="text-2xl font-bold text-app-accent-2">${metrics.lead.avg}</span>
         </div>
       </div>
 
