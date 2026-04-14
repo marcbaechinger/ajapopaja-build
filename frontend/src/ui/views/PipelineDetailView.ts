@@ -305,7 +305,7 @@ export class PipelineDetailView extends View {
 
     // If moving between open/completed sections OR moving between columns
     if (isTaskCompleted !== wasTaskCompleted || (currentList && currentList.id !== targetListId)) {
-      this.removeTaskFromDOM(task._id);
+      this.removeTaskFromDOM(taskId);
       this.insertTaskIntoDOM(task);
       return;
     }
@@ -314,7 +314,7 @@ export class PipelineDetailView extends View {
     const temp = document.createElement('div');
     const showOrdering = this.currentSortOrder === 'execution' && !isTaskCompleted;
     const isLastCompleted = taskEl.closest('#last-completed-task') !== null;
-    temp.innerHTML = TaskItem.render(task, showOrdering, isLastCompleted, this.collapsedTasks.has(task._id));
+    temp.innerHTML = TaskItem.render(task, showOrdering, isLastCompleted, this.collapsedTasks.has(taskId));
     const newNode = temp.firstElementChild;
     if (newNode) {
       taskEl.replaceWith(newNode);
@@ -684,7 +684,7 @@ export class PipelineDetailView extends View {
       if (this.isFirstLoad && allTasks.length > 0) {
         allTasks.forEach(t => {
           if (t.status !== TaskStatus.INPROGRESS && t.status !== TaskStatus.PROPOSED) {
-            this.collapsedTasks.add(t._id!);
+            this.collapsedTasks.add(t._id || (t as any).id);
           }
         });
         this.isFirstLoad = false;
@@ -812,7 +812,7 @@ export class PipelineDetailView extends View {
       );
 
       completedContainer.innerHTML = tasks.length > 0
-        ? tasks.map(t => TaskItem.render(t, false, false, this.collapsedTasks.has(t._id!))).join('')
+        ? tasks.map(t => TaskItem.render(t, false, false, this.collapsedTasks.has(t._id || (t as any).id))).join('')
         : '<p class="text-app-muted italic text-xs">No older completed tasks.</p>';
 
       if (paginationContainer) {

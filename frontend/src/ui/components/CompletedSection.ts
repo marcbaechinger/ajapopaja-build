@@ -36,7 +36,7 @@ export class CompletedSection {
           </h3>
           <div id="last-completed-task">
             ${lastCompleted 
-              ? TaskItem.render(lastCompleted, false, true, collapsedTasks.has(lastCompleted._id!))
+              ? TaskItem.render(lastCompleted, false, true, collapsedTasks.has(lastCompleted._id || (lastCompleted as any).id))
               : '<p class="text-app-muted italic text-sm py-4 text-center border border-dashed border-app-border/30 rounded-xl">No tasks completed yet.</p>'}
           </div>
         </div>

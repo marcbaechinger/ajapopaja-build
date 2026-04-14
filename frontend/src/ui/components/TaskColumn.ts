@@ -35,7 +35,10 @@ export class TaskColumn {
     const { id, title, tasks, emptyMessage = 'No tasks in this category.', showOrdering = false, collapsedTasks, badge } = options;
 
     const taskHtml = tasks.length > 0
-      ? tasks.map(t => TaskItem.render(t, showOrdering, false, collapsedTasks.has(t._id!))).join('')
+      ? tasks.map(t => {
+          const taskId = t._id || (t as any).id;
+          return TaskItem.render(t, showOrdering, false, collapsedTasks.has(taskId));
+        }).join('')
       : `<p class="text-app-muted italic text-sm py-4 text-center border-2 border-dashed border-app-border/30 rounded-xl">${emptyMessage}</p>`;
 
     return `
