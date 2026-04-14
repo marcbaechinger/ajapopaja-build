@@ -169,13 +169,13 @@ export class TaskItem {
     return `
       <div class="bg-app-bg p-4 rounded-lg border border-app-border flex flex-col gap-3 transition-all hover:border-app-accent-1/30 ${isSystem ? 'border-l-4 border-l-red-500' : ''} ${isProposed ? 'border-purple-500/50 shadow-lg shadow-purple-500/10' : ''}" 
            data-view-type="task" data-view-id="${taskId}">
-        <div class="flex justify-between items-start">
+        <div class="flex justify-between items-start cursor-pointer group/header" data-action-click="toggle_task_collapse">
           <div class="flex items-center gap-3">
-            <button data-action-click="toggle_task_collapse" class="p-1 text-app-muted hover:text-app-text transition-all cursor-pointer">
+            <div class="p-1 text-app-muted group-hover/header:text-app-text transition-all">
               <svg class="w-4 h-4 transform transition-transform ${isCollapsed ? '' : 'rotate-90'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
               </svg>
-            </button>
+            </div>
             <div class="flex flex-col">
               <span class="font-medium text-app-text text-lg">${task.title}</span>
               <span class="text-xs text-app-muted">Order: ${task.order} ${isSystem ? '• System Task' : ''}</span>
