@@ -1,3 +1,19 @@
+/**
+ * Copyright 2026 Marc Baechinger
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import type { WSMessage } from './domain.ts';
 import { AuthService } from './AuthService.ts';
 
@@ -12,9 +28,12 @@ export class WebSocketClient {
   private baseUrl: string;
   private authService: AuthService;
 
-  constructor(_apiBaseUrl: string, authService: AuthService) {
-    // Connect to root /ws to avoid static file mount issues
-    this.baseUrl = 'ws://localhost:8000/ws/browser';
+  constructor(apiBaseUrl: string, authService: AuthService) {
+    // Derive WS URL from API base URL (e.g., http://host:port/api -> ws://host:port/ws/browser)
+    const url = new URL(apiBaseUrl);
+    const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    // We connect to /ws/browser relative to the host, avoiding the /api prefix
+    this.baseUrl = `${protocol}//${url.host}/ws/browser`;
     this.authService = authService;
   }
 
