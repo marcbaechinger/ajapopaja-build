@@ -92,3 +92,6 @@ The backend implements the **OAuth2 Password Bearer** flow for securing API acce
 Since standard browser `WebSocket` APIs do not support setting custom headers, the server allows authentication via a `token` query parameter during the initial handshake:
 - **Endpoint**: `/ws/{client_id}?token=<jwt>`
 - **Validation**: The server decodes and validates the JWT; if invalid or missing, the connection is closed immediately with a `4001` (Unauthorized) policy violation code.
+
+### 7.3. Log Redaction
+To prevent sensitive information (like JWTs) from leaking into access logs, the backend implements a custom `logging.Filter` (`TokenRedactionFilter`). This filter automatically identifies and redacts the `token` query parameter from all Uvicorn access and error logs before they are written to the console or files.

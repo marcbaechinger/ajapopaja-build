@@ -14,6 +14,7 @@
 
 import os
 import logging
+import re
 from contextlib import asynccontextmanager
 from typing import Optional
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, APIRouter, Query, status
@@ -38,6 +39,30 @@ from api.auth import SECRET_KEY, ALGORITHM
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+class TokenRedactionFilter(logging.Filter):
+    """Filter to redact 'token' query parameter from log messages."""
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.msg, str):
+            record.msg = self._redact(record.msg)
+        if record.args:
+            new_args = []
+            for arg in record.args:
+                if isinstance(arg, str):
+                    new_args.append(self._redact(arg))
+                else:
+                    new_args.append(arg)
+            record.args = tuple(new_args)
+        return True
+
+    def _redact(self, text: str) -> str:
+        # Redacts 'token=...' from URLs or strings
+        # Matches 'token=' followed by any non-whitespace, non-ampersand, non-quote characters
+        return re.sub(r"token=[^& \n\"]+", "token=[REDACTED]", text)
+
+# Apply redaction filter to uvicorn loggers
+for logger_name in ["uvicorn.access", "uvicorn.error"]:
+    logging.getLogger(logger_name).addFilter(TokenRedactionFilter())
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
