@@ -108,17 +108,17 @@ async def websocket_endpoint(
         return
 
     await websocket.accept()
-    await manager.add_connection(websocket)
+    await manager.add_connection(websocket, client_id)
     try:
         while True:
             data = await websocket.receive_text()
             await manager.handle_message(data, websocket)
     except WebSocketDisconnect:
         logger.info(f"WS disconnected: {client_id}")
-        manager.disconnect(websocket)
+        manager.disconnect(websocket, client_id)
     except Exception as e:
         logger.error(f"WS error for {client_id}: {e}")
-        manager.disconnect(websocket)
+        manager.disconnect(websocket, client_id)
 
 # Exception Handlers
 @app.exception_handler(EntityNotFoundError)

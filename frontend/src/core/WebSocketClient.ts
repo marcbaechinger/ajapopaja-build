@@ -27,13 +27,17 @@ export class WebSocketClient {
   private currentReconnectTimeout: number = 2000;
   private baseUrl: string;
   private authService: AuthService;
+  private clientId: string;
 
   constructor(apiBaseUrl: string, authService: AuthService) {
-    // Derive WS URL from API base URL (e.g., http://host:port/api -> ws://host:port/ws/browser)
+    // Generate a unique client ID for this session/tab
+    this.clientId = Math.random().toString(16).substring(2, 10);
+    
+    // Derive WS URL from API base URL (e.g., http://host:port/api -> ws://host:port/ws/{clientId})
     const url = new URL(apiBaseUrl);
     const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-    // We connect to /ws/browser relative to the host, avoiding the /api prefix
-    this.baseUrl = `${protocol}//${url.host}/ws/browser`;
+    // We connect to /ws/{clientId} relative to the host, avoiding the /api prefix
+    this.baseUrl = `${protocol}//${url.host}/ws/${this.clientId}`;
     this.authService = authService;
   }
 

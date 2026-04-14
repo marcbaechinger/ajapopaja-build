@@ -21,15 +21,16 @@ async def test_websocket_connect_disconnect():
     # We don't need the DB for these tests
     manager = ConnectionManager()
     websocket = AsyncMock()
+    client_id = "test_client"
     
-    await manager.connect(websocket)
+    await manager.connect(websocket, client_id)
     assert len(manager.active_connections) == 1
-    assert websocket in manager.active_connections
+    assert manager.active_connections[client_id] == websocket
     websocket.accept.assert_called_once()
     
-    manager.disconnect(websocket)
+    manager.disconnect(websocket, client_id)
     assert len(manager.active_connections) == 0
-    assert websocket not in manager.active_connections
+    assert client_id not in manager.active_connections
 
 @pytest.mark.asyncio
 async def test_websocket_broadcast():
@@ -37,8 +38,8 @@ async def test_websocket_broadcast():
     ws1 = AsyncMock()
     ws2 = AsyncMock()
     
-    await manager.connect(ws1)
-    await manager.connect(ws2)
+    await manager.connect(ws1, "c1")
+    await manager.connect(ws2, "c2")
     
     message = WSMessage(type="TEST", payload={"foo": "bar"})
     await manager.broadcast(message)

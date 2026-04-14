@@ -29,34 +29,40 @@ MessageHandler = Callable[[WSMessage, WebSocket], Awaitable[None]]
 
 class ConnectionManager:
     def __init__(self):
-        self.active_connections: List[WebSocket] = []
+        self.active_connections: Dict[str, WebSocket] = {}
         self.handlers: Dict[str, MessageHandler] = {}
 
-    async def connect(self, websocket: WebSocket):
+    async def connect(self, websocket: WebSocket, client_id: str):
         await websocket.accept()
-        self.active_connections.append(websocket)
-        logger.info(f"New WebSocket connection. Total: {len(self.active_connections)}")
+        self.active_connections[client_id] = websocket
+        logger.info(f"New WebSocket connection: {client_id}. Total: {len(self.active_connections)}")
 
-    async def add_connection(self, websocket: WebSocket):
+    async def add_connection(self, websocket: WebSocket, client_id: str):
         """Adds an already accepted connection."""
-        self.active_connections.append(websocket)
-        logger.info(f"Accepted connection added. Total: {len(self.active_connections)}")
+        self.active_connections[client_id] = websocket
+        logger.info(f"Accepted connection added: {client_id}. Total: {len(self.active_connections)}")
 
-    def disconnect(self, websocket: WebSocket):
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
-            logger.info(f"WebSocket disconnected. Total: {len(self.active_connections)}")
+    def disconnect(self, websocket: WebSocket, client_id: str = None):
+        if client_id and client_id in self.active_connections:
+            if self.active_connections[client_id] == websocket:
+                del self.active_connections[client_id]
+                logger.info(f"WebSocket disconnected: {client_id}. Total: {len(self.active_connections)}")
+                return
+
+        # Fallback if client_id is not provided or doesn't match
+        to_remove = [cid for cid, ws in self.active_connections.items() if ws == websocket]
+        for cid in to_remove:
+            del self.active_connections[cid]
+            logger.info(f"WebSocket disconnected: {cid}. Total: {len(self.active_connections)}")
 
     async def broadcast(self, message: WSMessage):
         """Send a message to all connected clients."""
         data = message.model_dump_json()
-        for connection in self.active_connections:
+        for client_id, connection in self.active_connections.items():
             try:
                 await connection.send_text(data)
             except Exception as e:
-                logger.error(f"Error broadcasting message: {e}")
-                # We don't disconnect here to avoid mutating list during iteration,
-                # disconnection is usually handled by the endpoint loop.
+                logger.error(f"Error broadcasting message to {client_id}: {e}")
 
     def register_handler(self, message_type: str, handler: MessageHandler):
         self.handlers[message_type] = handler
