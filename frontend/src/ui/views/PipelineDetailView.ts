@@ -593,6 +593,19 @@ export class PipelineDetailView extends View {
       }
     });
 
+    this.context.actionRegistry.register('cancel_progress', async (_e, el) => {
+      const taskId = el.closest('[data-view-id]')?.getAttribute('data-view-id');
+      const version = parseInt(el.getAttribute('data-version') || '1');
+      if (!taskId) return;
+
+      try {
+        await this.context.taskClient.updateStatus(taskId, TaskStatus.SCHEDULED, version);
+        // Refresh handled by WS
+      } catch (error) {
+        alert('Failed to cancel progress');
+      }
+    });
+
     this.context.actionRegistry.register('move_task_up', async (_e, el) => {
       const taskId = el.closest('[data-view-id]')?.getAttribute('data-view-id');
       const version = parseInt(el.getAttribute('data-version') || '1');

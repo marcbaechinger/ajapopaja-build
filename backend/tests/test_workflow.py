@@ -156,6 +156,22 @@ async def test_manual_failure_override(init_mock_db):
     assert updated_task.status == TaskStatus.FAILED
 
 @pytest.mark.asyncio
+async def test_transition_inprogress_to_scheduled(init_mock_db):
+    pipeline = Pipeline(name="Test Pipeline")
+    await pipeline.insert()
+    
+    task = Task(title="Task 1", pipeline_id=str(pipeline.id), status=TaskStatus.INPROGRESS)
+    await task.insert()
+    
+    # Unschedule (INPROGRESS -> SCHEDULED)
+    updated_task = await task_queries.update_task_status(str(task.id), TaskStatus.SCHEDULED, task.version)
+    assert updated_task.status == TaskStatus.SCHEDULED
+    assert updated_task.scheduled_at is not None
+    assert updated_task.version == 2
+    assert updated_task.history[-1].from_status == TaskStatus.INPROGRESS
+    assert updated_task.history[-1].to_status == TaskStatus.SCHEDULED
+
+@pytest.mark.asyncio
 async def test_delete_task(init_mock_db):
     pipeline = Pipeline(name="Test Pipeline")
     await pipeline.insert()

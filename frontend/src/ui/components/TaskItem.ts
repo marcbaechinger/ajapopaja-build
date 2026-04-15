@@ -45,7 +45,11 @@ export class TaskItem {
   private static calculateDuration(task: Task): string | null {
     if (!task.history || task.history.length === 0) return null;
 
-    const inProgressEntry = task.history.find(t => t.to_status === TaskStatus.INPROGRESS);
+    // Use the last INPROGRESS entry as the start of the current/final implementation attempt
+    const inProgressEntries = task.history.filter(t => t.to_status === TaskStatus.INPROGRESS);
+    if (inProgressEntries.length === 0) return null;
+    const inProgressEntry = inProgressEntries[inProgressEntries.length - 1];
+
     const implementedEntry = task.history.find(t => t.to_status === TaskStatus.IMPLEMENTED);
 
     if (!inProgressEntry || !implementedEntry) return null;
@@ -250,6 +254,12 @@ export class TaskItem {
                   <button data-action-click="unschedule_task" data-version="${task.version}" 
                           class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1 rounded transition-all shadow-lg cursor-pointer">
                     Cancel Schedule
+                  </button>
+                ` : ''}
+                ${isInProgress ? `
+                  <button data-action-click="cancel_progress" data-version="${task.version}" 
+                          class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1 rounded transition-all shadow-lg cursor-pointer">
+                    Cancel Progress
                   </button>
                 ` : ''}
               `}
