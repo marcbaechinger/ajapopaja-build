@@ -25,6 +25,7 @@ import { TaskForm } from '../components/TaskForm.ts';
 import { TaskColumn } from '../components/TaskColumn.ts';
 import { CompletedSection } from '../components/CompletedSection.ts';
 import { PipelineStatsView } from '../components/PipelineStatsView.ts';
+import { PaginationControl } from '../components/PaginationControl.ts';
 import EasyMDE from 'easymde';
 
 export class PipelineDetailView extends View {
@@ -842,26 +843,13 @@ export class PipelineDetailView extends View {
         : '<p class="text-app-muted italic text-xs">No older completed tasks.</p>';
 
       if (paginationContainer) {
-        const totalPages = Math.ceil(total_count / this.completedPageSize);
-        if (totalPages > 1) {
-          paginationContainer.innerHTML = `
-            <div class="flex justify-between items-center mt-6 pt-4 border-t border-app-border/20">
-              <button data-action-click="prev_completed_page" ${this.completedTasksPage === 0 ? 'disabled' : ''}
-                      class="text-[10px] font-bold uppercase tracking-widest text-app-muted hover:text-app-accent-1 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1">
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
-                Previous
-              </button>
-              <span class="text-[10px] font-bold text-app-muted uppercase tracking-widest">Page ${this.completedTasksPage + 1} of ${totalPages}</span>
-              <button data-action-click="next_completed_page" ${this.completedTasksPage === totalPages - 1 ? 'disabled' : ''}
-                      class="text-[10px] font-bold uppercase tracking-widest text-app-muted hover:text-app-accent-1 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1">
-                Next
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-              </button>
-            </div>
-          `;
-        } else {
-          paginationContainer.innerHTML = '';
-        }
+        paginationContainer.innerHTML = PaginationControl.render({
+          currentPage: this.completedTasksPage,
+          pageSize: this.completedPageSize,
+          totalCount: total_count,
+          prevAction: 'prev_completed_page',
+          nextAction: 'next_completed_page'
+        });
       }
     } catch (error) {
       console.error('Error refreshing completed tasks:', error);

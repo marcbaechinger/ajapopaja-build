@@ -35,9 +35,9 @@ export class CompletedSection {
             ${totalCompletedCount > 0 ? `<span class="text-[10px] bg-green-500/10 text-green-400 px-2 py-0.5 rounded-full border border-green-500/20 font-black tracking-widest">${totalCompletedCount} total</span>` : ''}
           </h3>
           <div id="last-completed-task">
-            ${lastCompleted 
-              ? TaskItem.render(lastCompleted, false, true, collapsedTasks.has(lastCompleted.id!))
-              : '<p class="text-app-muted italic text-sm py-4 text-center border border-dashed border-app-border/30 rounded-xl">No tasks completed yet.</p>'}
+            ${lastCompleted
+        ? TaskItem.render(lastCompleted, false, true, collapsedTasks.has(lastCompleted.id!))
+        : '<p class="text-app-muted italic text-sm py-4 text-center border border-dashed border-app-border/30 rounded-xl">No tasks completed yet.</p>'}
           </div>
         </div>
 
@@ -51,11 +51,11 @@ export class CompletedSection {
             </summary>
             
             <div class="bg-app-surface/30 rounded-2xl border border-app-border/30 p-1">
+              <div id="completed-pagination" class="px-2 pb-2"></div>
               <div id="completed-task-list" class="space-y-3 p-2">
                 <!-- Completed tasks will be rendered here -->
                 <p class="text-app-muted italic text-[10px] text-center py-4">Loading history...</p>
               </div>
-              <div id="completed-pagination" class="px-2 pb-2"></div>
             </div>
           </details>
         </div>
