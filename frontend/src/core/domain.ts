@@ -54,6 +54,18 @@ export class Task {
   scheduled_at?: string;
   deleted: boolean = false;
   history: StateTransition[] = [];
+
+  constructor(json?: any) {
+    if (json) {
+      for (const key of Object.keys(json)) {
+        if (key === '_id') {
+          this.id = json[key];
+        } else {
+          (this as any)[key] = json[key];
+        }
+      }
+    }
+  }
 }
 
 export const PipelineStatus = {
@@ -73,6 +85,18 @@ export class Pipeline {
   created_at?: string;
   updated_at?: string;
   deleted: boolean = false;
+
+  constructor(json?: any) {
+    if (json) {
+      for (const key of Object.keys(json)) {
+        if (key === '_id') {
+          this.id = json[key];
+        } else {
+          (this as any)[key] = json[key];
+        }
+      }
+    }
+  }
 }
 
 export interface User {

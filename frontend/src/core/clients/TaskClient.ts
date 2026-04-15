@@ -30,7 +30,8 @@ export class TaskClient extends BaseClient {
     const url = new URL(`${this.baseUrl}/pipelines/${pipelineId}/tasks/`);
     if (includeDeleted) url.searchParams.append('include_deleted', 'true');
     const response = await this.fetch(url.toString());
-    return await response.json();
+    const data = await response.json();
+    return data.map((t: any) => new Task(t));
   }
 
   async listCompletedByPipeline(pipelineId: string, page: number = 0, limit: number = 5): Promise<{tasks: Task[], total_count: number}> {
@@ -38,14 +39,18 @@ export class TaskClient extends BaseClient {
     url.searchParams.append('page', page.toString());
     url.searchParams.append('limit', limit.toString());
     const response = await this.fetch(url.toString());
-    return await response.json();
+    const data = await response.json();
+    return {
+      tasks: data.tasks.map((t: any) => new Task(t)),
+      total_count: data.total_count
+    };
   }
 
   async get(id: string, includeDeleted: boolean = false): Promise<Task> {
     const url = new URL(`${this.baseUrl}/tasks/${id}`);
     if (includeDeleted) url.searchParams.append('include_deleted', 'true');
     const response = await this.fetch(url.toString());
-    return await response.json();
+    return new Task(await response.json());
   }
 
   async create(pipelineId: string, title: string, design_doc?: string, spec?: string, want_design_doc?: boolean): Promise<Task> {
@@ -54,7 +59,7 @@ export class TaskClient extends BaseClient {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title, pipeline_id: pipelineId, design_doc, spec, want_design_doc })
     });
-    return await response.json();
+    return new Task(await response.json());
   }
 
   async updateStatus(id: string, status: TaskStatus, version: number): Promise<Task> {
@@ -64,7 +69,7 @@ export class TaskClient extends BaseClient {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status, version })
       });
-      return await response.json();
+      return new Task(await response.json());
     } catch (e: any) {
       if (e.message?.includes('409') || e.message?.includes('OCC_CONFLICT')) {
         throw new Error('OCC_CONFLICT');
@@ -80,7 +85,7 @@ export class TaskClient extends BaseClient {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ version, ...details })
       });
-      return await response.json();
+      return new Task(await response.json());
     } catch (e: any) {
       if (e.message?.includes('409') || e.message?.includes('OCC_CONFLICT')) {
         throw new Error('OCC_CONFLICT');
@@ -96,7 +101,7 @@ export class TaskClient extends BaseClient {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ version, commit_hash, completion_info })
       });
-      return await response.json();
+      return new Task(await response.json());
     } catch (e: any) {
       if (e.message?.includes('409') || e.message?.includes('OCC_CONFLICT')) {
         throw new Error('OCC_CONFLICT');
@@ -112,7 +117,7 @@ export class TaskClient extends BaseClient {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ version })
       });
-      return await response.json();
+      return new Task(await response.json());
     } catch (e: any) {
       if (e.message?.includes('409') || e.message?.includes('OCC_CONFLICT')) {
         throw new Error('OCC_CONFLICT');
@@ -128,7 +133,7 @@ export class TaskClient extends BaseClient {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ version })
       });
-      return await response.json();
+      return new Task(await response.json());
     } catch (e: any) {
       if (e.message?.includes('409') || e.message?.includes('OCC_CONFLICT')) {
         throw new Error('OCC_CONFLICT');
@@ -142,7 +147,8 @@ export class TaskClient extends BaseClient {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }
     });
-    return await response.json();
+    const data = await response.json();
+    return data ? new Task(data) : null;
   }
 
   async delete(id: string): Promise<void> {

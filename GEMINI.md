@@ -23,6 +23,7 @@ This document provides a condensed, high-signal context for Gemini CLI and other
   - **Always suggest a commit message** once a task is completed and wait for user confirmation before committing.
 - **Dependency Management**: Use `uv` for all Python operations. It manages the workspace and local `core` linking.
 - **Execution Wrapper**: Always use `uv run --package <pkg>` from the `backend/` directory or provide the full path to `backend/.venv/bin/`.
+- **Frontend Domain Models**: Always convert JSON responses from the backend (API or WebSocket) into Typed domain model objects (e.g., `new Task(data)`) to ensure type safety and consistent behavior. The `Task` and `Pipeline` models specifically handle mapping `_id` to `id`.
 - **Naming Note**: The MCP package is named `ajapopaja_mcp` to avoid conflicts with the `mcp` SDK.
 
 ## 3. Critical Commands & Paths

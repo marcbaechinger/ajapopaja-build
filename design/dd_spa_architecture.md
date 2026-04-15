@@ -20,6 +20,7 @@ This document defines the architecture and design principles for the Ajapopaja B
 - All HTTP communication is encapsulated in client classes (e.g., `PipelineClient`, `TaskClient`).
 - Clients provide a high-level TS API that uses domain entities (`Pipeline`, `Task`).
 - UI and App code **never** make raw `fetch` calls; they interact solely with client methods.
+- **Data Conversion**: All JSON responses (API or WebSocket) MUST be converted into domain model objects (e.g., `new Task(data)`) to ensure type safety and proper property mapping (like `_id` to `id`).
 
 ### Optimistic Concurrency Control (OCC)
 - **Versioning**: Every entity (Pipeline, Task) includes a `version` (integer) field.

@@ -30,14 +30,15 @@ export class PipelineClient extends BaseClient {
     const url = new URL(`${this.baseUrl}/pipelines/`);
     if (includeDeleted) url.searchParams.append('include_deleted', 'true');
     const response = await this.fetch(url.toString());
-    return await response.json();
+    const data = await response.json();
+    return data.map((p: any) => new Pipeline(p));
   }
 
   async get(id: string, includeDeleted: boolean = false): Promise<Pipeline> {
     const url = new URL(`${this.baseUrl}/pipelines/${id}`);
     if (includeDeleted) url.searchParams.append('include_deleted', 'true');
     const response = await this.fetch(url.toString());
-    return await response.json();
+    return new Pipeline(await response.json());
   }
 
   async create(name: string): Promise<Pipeline> {
@@ -46,7 +47,7 @@ export class PipelineClient extends BaseClient {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name })
     });
-    return await response.json();
+    return new Pipeline(await response.json());
   }
 
   async update(id: string, name: string, version: number): Promise<Pipeline> {
@@ -56,7 +57,7 @@ export class PipelineClient extends BaseClient {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, version })
       });
-      return await response.json();
+      return new Pipeline(await response.json());
     } catch (e: any) {
       if (e.message?.includes('409') || e.message?.includes('OCC_CONFLICT')) {
         throw new Error('OCC_CONFLICT');

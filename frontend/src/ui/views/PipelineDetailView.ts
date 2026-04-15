@@ -133,23 +133,24 @@ export class PipelineDetailView extends View {
     const handleUpdate = (message: any) => {
       // Refresh if the updated task belongs to this pipeline
       if (message.payload?.pipeline_id === this.pipelineId) {
-        this.updateSingleTask(message.payload);
+        this.updateSingleTask(new Task(message.payload));
       }
     };
 
     const handleCreate = (message: any) => {
       if (message.payload?.pipeline_id === this.pipelineId) {
-        const taskId = message.payload.id;
+        const task = new Task(message.payload);
+        const taskId = task.id;
         // Only append if it doesn't exist yet
         if (this.container?.querySelector(`[data-view-id="${taskId}"]`)) return;
         
         // Update local cache
         const index = this.allLoadedTasks.findIndex(t => t.id === taskId);
         if (index === -1) {
-          this.allLoadedTasks.push(message.payload);
+          this.allLoadedTasks.push(task);
         }
         
-        this.insertTaskIntoDOM(message.payload);
+        this.insertTaskIntoDOM(task);
       }
     };
 
