@@ -434,6 +434,17 @@ export class PipelineDetailView extends View {
       }
     });
 
+    this.context.actionRegistry.register('toggle_spec_expand', async (_e, el) => {
+      const container = el.closest('.spec-container') as HTMLElement;
+      if (!container) return;
+      
+      const display = container.querySelector('.spec-display');
+      if (!display) return;
+
+      const isExpanded = display.classList.toggle('expanded');
+      el.textContent = isExpanded ? 'Show Less' : 'Show More';
+    });
+
     this.context.actionRegistry.register('edit_design_doc', async (_e, el) => {
       const container = el.closest('.design-doc-container') as HTMLElement;
       if (!container) return;

@@ -130,10 +130,16 @@ export class TaskItem {
               ${isCompleted ? '' : '<span class="text-[10px] text-app-muted opacity-0 group-hover:opacity-100 transition-opacity">Click to edit</span>'}
             </div>
           </div>
-          <div class="text-app-text/70">
+          <div class="spec-display text-app-text/70 overflow-hidden relative transition-all duration-300">
             ${task.spec ? DOMPurify.sanitize(marked.parse(task.spec) as string) : '<span class="italic text-app-muted">No specification provided...</span>'}
+            ${task.spec ? '<div class="expand-overlay absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-app-surface to-transparent pointer-events-none"></div>' : ''}
           </div>
         </div>
+        ${task.spec ? `
+          <button data-action-click="toggle_spec_expand" class="mt-2 text-[10px] text-app-accent-1 hover:underline cursor-pointer">
+            Show More
+          </button>
+        ` : ''}
         
         <div class="spec-edit hidden flex flex-col gap-3">
           <span class="font-bold text-app-muted mb-1">Editing Specification</span>
