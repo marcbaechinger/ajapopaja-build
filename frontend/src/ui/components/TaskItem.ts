@@ -58,6 +58,31 @@ export class TaskItem {
     const end = new Date(implementedEntry.timestamp).getTime();
     const durationMs = end - start;
 
+    return this.formatMs(durationMs);
+  }
+
+  private static calculateDesignDuration(task: Task): string | null {
+    if (!task.history || task.history.length === 0) return null;
+
+    const proposedEntry = task.history.find(t => t.to_status === TaskStatus.PROPOSED);
+    if (!proposedEntry) return null;
+
+    const inProgressEntriesBeforeProposed = task.history.filter(t => 
+      t.to_status === TaskStatus.INPROGRESS && 
+      new Date(t.timestamp).getTime() < new Date(proposedEntry.timestamp).getTime()
+    );
+
+    if (inProgressEntriesBeforeProposed.length === 0) return null;
+    const designStartEntry = inProgressEntriesBeforeProposed[0];
+
+    const start = new Date(designStartEntry.timestamp).getTime();
+    const end = new Date(proposedEntry.timestamp).getTime();
+    const durationMs = end - start;
+
+    return this.formatMs(durationMs);
+  }
+
+  private static formatMs(durationMs: number): string | null {
     if (durationMs < 0) return null;
 
     const seconds = Math.floor((durationMs / 1000) % 60);
@@ -216,7 +241,13 @@ export class TaskItem {
                   ${isImplemented && this.calculateDuration(task) ? `
                     <div class="text-[10px] text-app-muted flex items-center gap-1" title="Implementation Duration">
                       <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                      ${this.calculateDuration(task)}
+                      Impl: ${this.calculateDuration(task)}
+                    </div>
+                  ` : ''}
+                  ${this.calculateDesignDuration(task) ? `
+                    <div class="text-[10px] text-app-muted flex items-center gap-1" title="Design Duration">
+                      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                      Design: ${this.calculateDesignDuration(task)}
                     </div>
                   ` : ''}
                 </div>
