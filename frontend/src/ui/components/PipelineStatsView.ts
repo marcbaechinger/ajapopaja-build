@@ -47,10 +47,6 @@ export class PipelineStatsView {
         firstScheduledAt = timestamp;
       }
 
-      if (event.to_status === TaskStatus.PROPOSED) {
-        hasReachedProposed = true;
-      }
-
       if (event.to_status === TaskStatus.IMPLEMENTED) {
         implementationFinishedAt = timestamp;
       }
@@ -59,15 +55,21 @@ export class PipelineStatsView {
         lastInprogressStart = timestamp;
       } else if (lastInprogressStart !== null) {
         const duration = timestamp - lastInprogressStart;
-        // If we reached PROPOSED at any point before or at this transition,
-        // we consider the active period as implementation time if it was already proposed once.
-        // Actually, if it moves TO PROPOSED, that period was DESIGN time.
-        if (hasReachedProposed && event.to_status !== TaskStatus.PROPOSED) {
+        
+        if (event.to_status === TaskStatus.PROPOSED) {
+          designTime += duration;
+          hasReachedProposed = true;
+        } else if (hasReachedProposed) {
           implementationTime += duration;
         } else {
           designTime += duration;
         }
         lastInprogressStart = null;
+      }
+
+      // If it reaches PROPOSED not via an INPROGRESS transition (shouldn't happen but for robustness)
+      if (event.to_status === TaskStatus.PROPOSED) {
+        hasReachedProposed = true;
       }
     }
 
