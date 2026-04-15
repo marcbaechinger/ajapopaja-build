@@ -87,6 +87,56 @@ describe('PipelineStatsView', () => {
     expect(durations.totalWorkTime).toBe(3000);
   });
 
+  it('handles backward transitions (Cancel Progress) correctly', () => {
+    const task: Task = {
+      id: '4',
+      title: 'Canceled Task',
+      status: TaskStatus.IMPLEMENTED,
+      history: [
+        { to_status: TaskStatus.SCHEDULED, timestamp: new Date(now).toISOString(), by: 'user' },
+        { to_status: TaskStatus.INPROGRESS, timestamp: new Date(now + 1000).toISOString(), by: 'mcp' },
+        { to_status: TaskStatus.SCHEDULED, timestamp: new Date(now + 2000).toISOString(), by: 'user' }, // Canceled progress (1s)
+        { to_status: TaskStatus.INPROGRESS, timestamp: new Date(now + 3000).toISOString(), by: 'mcp' },
+        { to_status: TaskStatus.PROPOSED, timestamp: new Date(now + 5000).toISOString(), by: 'mcp' },   // End design (2s)
+        { to_status: TaskStatus.SCHEDULED, timestamp: new Date(now + 6000).toISOString(), by: 'user' },
+        { to_status: TaskStatus.INPROGRESS, timestamp: new Date(now + 7000).toISOString(), by: 'mcp' },
+        { to_status: TaskStatus.IMPLEMENTED, timestamp: new Date(now + 10000).toISOString(), by: 'mcp' } // End impl (3s)
+      ]
+    } as Task;
+
+    const durations = PipelineStatsView.getTaskDurations(task);
+    
+    // Period 1: INPROGRESS (1000) -> SCHEDULED (2000) = 1s design (since not reached proposed yet)
+    // Period 2: INPROGRESS (3000) -> PROPOSED (5000) = 2s design
+    // Period 3: INPROGRESS (7000) -> IMPLEMENTED (10000) = 3s implementation
+    expect(durations.designTime).toBe(3000);
+    expect(durations.implementationTime).toBe(3000);
+    expect(durations.totalWorkTime).toBe(6000);
+    expect(durations.leadTime).toBe(10000);
+  });
+
+  it('handles INPROGRESS -> SCHEDULED after PROPOSED as implementation time', () => {
+    const task: Task = {
+      id: '5',
+      title: 'Canceled Implementation',
+      status: TaskStatus.IMPLEMENTED,
+      history: [
+        { to_status: TaskStatus.PROPOSED, timestamp: new Date(now).toISOString(), by: 'mcp' }, // Start in proposed
+        { to_status: TaskStatus.SCHEDULED, timestamp: new Date(now + 1000).toISOString(), by: 'user' },
+        { to_status: TaskStatus.INPROGRESS, timestamp: new Date(now + 2000).toISOString(), by: 'mcp' },
+        { to_status: TaskStatus.SCHEDULED, timestamp: new Date(now + 3000).toISOString(), by: 'user' }, // Canceled impl (1s)
+        { to_status: TaskStatus.INPROGRESS, timestamp: new Date(now + 4000).toISOString(), by: 'mcp' },
+        { to_status: TaskStatus.IMPLEMENTED, timestamp: new Date(now + 6000).toISOString(), by: 'mcp' } // End impl (2s)
+      ]
+    } as Task;
+
+    const durations = PipelineStatsView.getTaskDurations(task);
+    
+    expect(durations.designTime).toBe(0);
+    expect(durations.implementationTime).toBe(3000); // 1s + 2s
+    expect(durations.totalWorkTime).toBe(3000);
+  });
+
   it('formats durations correctly', () => {
     expect(PipelineStatsView.formatDuration(500)).toBe('< 1s');
     expect(PipelineStatsView.formatDuration(5000)).toBe('5s');
