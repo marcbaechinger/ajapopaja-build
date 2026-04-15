@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Navigator, View } from '../Navigator';
+import { Navigator, View } from './Navigator';
 
 class MockView implements View {
   id: string;

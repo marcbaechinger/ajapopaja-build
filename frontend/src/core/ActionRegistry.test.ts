@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { ActionRegistry } from '../ActionRegistry';
+import { ActionRegistry } from './ActionRegistry';
 
 describe('ActionRegistry', () => {
   it('should register and execute a handler', async () => {
