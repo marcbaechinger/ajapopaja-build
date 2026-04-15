@@ -176,6 +176,17 @@ export class PipelineDetailView extends View {
     }));
   }
 
+  private taskSortFn(a: Task, b: Task): number {
+    if (this.currentSortOrder === 'execution') {
+      if (a.order !== b.order) return a.order - b.order;
+      return new Date(a.scheduled_at || a.created_at || 0).getTime() - new Date(b.scheduled_at || b.created_at || 0).getTime();
+    } else if (this.currentSortOrder === 'newest') {
+      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+    } else {
+      return a.status.localeCompare(b.status);
+    }
+  }
+
   private insertTaskIntoDOM(task: Task) {
     if (!this.container) return;
     const taskId = task.id!;
@@ -204,12 +215,13 @@ export class PipelineDetailView extends View {
     const newNode = temp.firstElementChild;
     if (!newNode) return;
 
-    if (task.status === TaskStatus.SCHEDULED && this.currentSortOrder === 'execution') {
+    if (!isCompleted && listId !== 'proposed-list') {
       const items = Array.from(list.querySelectorAll('[data-view-id]'));
       const nextItem = items.find(item => {
-        const orderAttr = item.querySelector('[data-order]')?.getAttribute('data-order');
-        const order = orderAttr ? parseInt(orderAttr) : Infinity;
-        return order > (task.order || 0);
+        const itemTaskId = item.getAttribute('data-view-id');
+        const itemTask = this.allLoadedTasks.find(t => t.id === itemTaskId);
+        if (!itemTask) return false;
+        return this.taskSortFn(task, itemTask) < 0;
       });
       if (nextItem) {
         list.insertBefore(newNode, nextItem);
@@ -221,7 +233,8 @@ export class PipelineDetailView extends View {
       this.refreshTasks();
       return;
     } else {
-      list.appendChild(newNode);
+      // Proposed list (newest first) or default
+      list.prepend(newNode);
     }
 
     this.updateColumnHeaderCount(listId.replace('-list', ''));
@@ -317,8 +330,10 @@ export class PipelineDetailView extends View {
     const isTaskCompleted = ([TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED] as any[]).includes(task.status);
     const wasTaskCompleted = taskEl.closest('#completed-task-list') !== null || taskEl.closest('#last-completed-task') !== null;
 
-    // If moving between open/completed sections OR moving between columns
-    if (isTaskCompleted !== wasTaskCompleted || (currentList && currentList.id !== targetListId)) {
+    const orderChanged = oldTask && oldTask.order !== task.order;
+
+    // If moving between open/completed sections OR moving between columns OR order changed
+    if (isTaskCompleted !== wasTaskCompleted || (currentList && currentList.id !== targetListId) || orderChanged) {
       this.removeTaskFromDOM(taskId);
       this.insertTaskIntoDOM(task);
       return;
@@ -737,6 +752,14 @@ export class PipelineDetailView extends View {
       
       const completedTasks = allTasks.filter(t => !t.deleted && ([TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED] as any[]).includes(t.status));
 
+      // Sort columns
+      proposedTasks.sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
+      
+      createdTasks.sort((a, b) => this.taskSortFn(a, b));
+      inProgressTasks.sort((a, b) => this.taskSortFn(a, b));
+      scheduledTasks.sort((a, b) => this.taskSortFn(a, b));
+      failedTasks.sort((a, b) => this.taskSortFn(a, b));
+
       // 1. Render Preparation Column
       prepContainer.innerHTML = `
         ${TaskColumn.render({
@@ -752,27 +775,12 @@ export class PipelineDetailView extends View {
           title: 'Backlog',
           tasks: createdTasks,
           emptyMessage: 'Backlog is empty.',
+          showOrdering: this.currentSortOrder === 'execution',
           collapsedTasks: this.collapsedTasks
         })}
       `;
 
       // 2. Render Active Column
-      // Sort scheduled and failed tasks according to current sort order
-      const sortFn = (a: Task, b: Task) => {
-        if (this.currentSortOrder === 'execution') {
-          if (a.order !== b.order) return a.order - b.order;
-          return new Date(a.scheduled_at || a.created_at || 0).getTime() - new Date(b.scheduled_at || b.created_at || 0).getTime();
-        } else if (this.currentSortOrder === 'newest') {
-          return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
-        } else {
-          return a.status.localeCompare(b.status);
-        }
-      };
-
-      inProgressTasks.sort(sortFn);
-      scheduledTasks.sort(sortFn);
-      failedTasks.sort(sortFn);
-
       activeContainer.innerHTML = `
         ${TaskColumn.render({
           id: 'inprogress',
