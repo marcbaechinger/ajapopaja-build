@@ -59,15 +59,22 @@ export class PipelineDetailView extends View {
     this.setupKeyboardShortcuts();
   }
 
-  private getTaskColumnId(status: TaskStatus): string {
-    switch (status) {
+  private getTaskColumnId(task: Task): string {
+    switch (task.status) {
       case TaskStatus.PROPOSED: return 'proposed-list';
       case TaskStatus.CREATED: return 'backlog-list';
       case TaskStatus.INPROGRESS: return 'inprogress-list';
       case TaskStatus.FAILED: return 'failed-list';
       case TaskStatus.SCHEDULED: return 'scheduled-list';
       case TaskStatus.IMPLEMENTED:
-      case TaskStatus.DISCARDED: return 'completed-task-list';
+      case TaskStatus.DISCARDED:
+        const completedTasks = this.allLoadedTasks
+          .filter(t => !t.deleted && ([TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED] as any[]).includes(t.status))
+          .sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
+        if (completedTasks.length > 0 && completedTasks[0].id === task.id) {
+          return 'last-completed-task';
+        }
+        return 'completed-task-list';
       default: return 'backlog-list';
     }
   }
@@ -175,7 +182,7 @@ export class PipelineDetailView extends View {
     // Safety check: remove any existing instances of this task first
     this.removeTaskFromDOM(taskId);
 
-    const listId = this.getTaskColumnId(task.status);
+    const listId = this.getTaskColumnId(task);
     const list = this.container.querySelector(`#${listId}`);
     
     if (!list) {
@@ -303,7 +310,7 @@ export class PipelineDetailView extends View {
       return;
     }
 
-    const targetListId = this.getTaskColumnId(task.status);
+    const targetListId = this.getTaskColumnId(task);
     const currentList = taskEl.parentElement;
     
     const isTaskCompleted = ([TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED] as any[]).includes(task.status);
