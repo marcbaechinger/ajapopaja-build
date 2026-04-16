@@ -17,33 +17,53 @@
 import { Task } from '../../core/domain.ts';
 import { PipelineStatsView } from './PipelineStatsView.ts';
 import { BaseDialog } from './dialog_common.ts';
+import { PipelineClient } from '../../core/clients/PipelineClient.ts';
 
 export class StatsDialog extends BaseDialog {
   private tasks: Task[];
+  private pipelineId: string;
+  private pipelineClient: PipelineClient;
+  private dailyStats: any[] = [];
 
-  constructor(tasks: Task[]) {
+  constructor(tasks: Task[], pipelineId: string, pipelineClient: PipelineClient) {
     super({
       title: 'Pipeline Statistics',
-      maxWidth: 'max-w-2xl',
+      maxWidth: 'max-w-5xl',
       maxHeight: 'max-h-[90vh]',
       iconSvg: `<svg class="w-6 h-6 text-app-accent-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>`
     });
     this.tasks = tasks;
+    this.pipelineId = pipelineId;
+    this.pipelineClient = pipelineClient;
     
-    // Refresh body with stats
+    this.refreshBody();
+  }
+
+  private refreshBody() {
     const bodyContainer = this.dialog.querySelector('#dialog-body-container') as HTMLElement;
-    bodyContainer.innerHTML = this.renderBody() as string;
-    bodyContainer.classList.add('p-6', 'bg-app-surface');
+    if (bodyContainer) {
+      bodyContainer.innerHTML = this.renderBody();
+      bodyContainer.classList.add('p-6', 'bg-app-surface');
+      PipelineStatsView.animateBars(this.dialog);
+    }
   }
 
   protected renderBody(): string {
     if (!this.tasks) return '';
-    return PipelineStatsView.render(this.tasks);
+    return PipelineStatsView.render(this.tasks, this.dailyStats);
   }
 
   public async show(): Promise<void> {
     const showPromise = super.show();
-    PipelineStatsView.animateBars(this.dialog);
+    
+    // Fetch daily stats
+    try {
+      this.dailyStats = await this.pipelineClient.getDailyStats(this.pipelineId);
+      this.refreshBody();
+    } catch (e) {
+      console.error('Failed to fetch daily stats', e);
+    }
+    
     await showPromise;
   }
 }

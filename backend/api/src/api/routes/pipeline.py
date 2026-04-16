@@ -16,6 +16,7 @@ from fastapi import APIRouter, Body, Depends
 from typing import List, Optional
 from core.models.models import Pipeline, User, PipelineStatus
 from core.queries import pipeline as pipeline_queries
+from core.queries import task as task_queries
 from api.websocket_manager import manager, WSMessage
 from api.auth import get_current_user
 from api.gemini_executor import GeminiExecutor
@@ -83,3 +84,10 @@ async def delete_pipeline(
         payload={"pipeline_id": pipeline_id}
     ))
     return {"status": "ok"}
+
+@router.get("/{pipeline_id}/stats/daily")
+async def get_daily_pipeline_stats(
+    pipeline_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    return await task_queries.get_daily_stats(pipeline_id)

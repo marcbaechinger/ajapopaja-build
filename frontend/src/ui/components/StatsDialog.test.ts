@@ -36,13 +36,17 @@ describe('StatsDialog', () => {
     }
   ];
 
+  const mockPipelineClient = {
+    getDailyStats: vi.fn().mockResolvedValue([])
+  } as any;
+
   it('should render PipelineStatsView content', () => {
     const renderSpy = vi.spyOn(PipelineStatsView, 'render').mockReturnValue('<div id="stats">Stats Content</div>');
     
-    const dialog = new StatsDialog(mockTasks as any);
+    const dialog = new StatsDialog(mockTasks as any, 'p1', mockPipelineClient);
     const dialogElement = dialog['dialog'];
     
-    expect(renderSpy).toHaveBeenCalledWith(mockTasks);
+    expect(renderSpy).toHaveBeenCalledWith(mockTasks, []);
     expect(dialogElement.querySelector('#stats')?.textContent).toBe('Stats Content');
     
     renderSpy.mockRestore();
@@ -50,7 +54,7 @@ describe('StatsDialog', () => {
 
   it('should call animateBars on show', async () => {
     const animateSpy = vi.spyOn(PipelineStatsView, 'animateBars').mockImplementation(() => {});
-    const dialog = new StatsDialog(mockTasks as any);
+    const dialog = new StatsDialog(mockTasks as any, 'p1', mockPipelineClient);
     const dialogElement = dialog['dialog'];
     
     dialogElement.showModal = vi.fn();

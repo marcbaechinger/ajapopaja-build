@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Dict
 from datetime import datetime, UTC
 from beanie import PydanticObjectId
 from core.models.models import Task, TaskStatus, StateTransition
@@ -260,3 +260,45 @@ async def delete_task(task_id: str):
     task.version += 1
     task.updated_at = datetime.now(UTC)
     await task.save()
+
+async def get_daily_stats(pipeline_id: str) -> List[Dict[str, Any]]:
+    tasks = await get_tasks_by_pipeline(pipeline_id, include_deleted=True)
+    daily_stats = {}
+
+    for task in tasks:
+        # History processing
+        last_inprogress_start = None
+        
+        # Track if this task was already counted as "created"
+        # We only count it once for its whole history
+        counted_created = False
+        
+        # Sort history to process in chronological order
+        sorted_history = sorted(task.history, key=lambda x: x.timestamp)
+        
+        for event in sorted_history:
+            day = event.timestamp.date().isoformat()
+            if day not in daily_stats:
+                daily_stats[day] = {"date": day, "created": 0, "implemented": 0, "work_ms": 0}
+            
+            # Tasks Created: Count once when it first enters CREATED or SCHEDULED status
+            if not counted_created and event.to_status in [TaskStatus.CREATED, TaskStatus.SCHEDULED]:
+                daily_stats[day]["created"] += 1
+                counted_created = True
+            
+            # Tasks Implemented
+            if event.to_status == TaskStatus.IMPLEMENTED:
+                daily_stats[day]["implemented"] += 1
+            
+            # Work Time: from INPROGRESS to any other status
+            if event.to_status == TaskStatus.INPROGRESS:
+                last_inprogress_start = event.timestamp
+            elif last_inprogress_start is not None:
+                duration = event.timestamp - last_inprogress_start
+                duration_ms = int(duration.total_seconds() * 1000)
+                daily_stats[day]["work_ms"] += duration_ms
+                last_inprogress_start = None
+
+    # Convert to sorted list by date
+    result = sorted(daily_stats.values(), key=lambda x: x["date"])
+    return result

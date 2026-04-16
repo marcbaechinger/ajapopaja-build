@@ -131,7 +131,7 @@ export class PipelineDetailView extends View {
       // 's' key for stats dialog
       if (e.key === 's' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
-        new StatsDialog(this.allLoadedTasks).show();
+        new StatsDialog(this.allLoadedTasks, this.pipelineId, this.context.pipelineClient).show();
       }
     };
     document.addEventListener('keydown', this.keydownHandler);
@@ -424,7 +424,7 @@ export class PipelineDetailView extends View {
 
     this.context.actionRegistry.register('open_stats', async (e) => {
       e.preventDefault();
-      new StatsDialog(this.allLoadedTasks).show();
+      new StatsDialog(this.allLoadedTasks, this.pipelineId, this.context.pipelineClient).show();
     });
 
     this.context.actionRegistry.register('change_sort_order', async (e) => {

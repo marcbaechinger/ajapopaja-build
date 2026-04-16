@@ -71,4 +71,9 @@ export class PipelineClient extends BaseClient {
       method: 'DELETE'
     });
   }
+
+  async getDailyStats(id: string): Promise<any[]> {
+    const response = await this.fetch(`${this.baseUrl}/pipelines/${id}/stats/daily`);
+    return await response.json();
+  }
 }
