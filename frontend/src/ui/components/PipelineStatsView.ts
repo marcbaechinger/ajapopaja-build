@@ -179,7 +179,7 @@ export class PipelineStatsView {
       `;
     }).join('');
 
-    const dailyRows = dailyStats ? dailyStats.map(day => `
+    const dailyRows = Array.isArray(dailyStats) ? dailyStats.map(day => `
       <tr class="border-b border-app-border/50 text-sm">
         <td class="py-3 font-medium text-app-text">${day.date}</td>
         <td class="py-3 text-center text-app-muted">${day.created}</td>

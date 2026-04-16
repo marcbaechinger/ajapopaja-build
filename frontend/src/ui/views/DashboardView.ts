@@ -164,7 +164,7 @@ export class DashboardView extends View {
         </div>
         
         <div class="pt-2">
-          ${PipelineStatsView.render(tasks, true)}
+          ${PipelineStatsView.render(tasks, undefined, true)}
         </div>
       </div>
     `;

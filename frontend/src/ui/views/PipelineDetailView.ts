@@ -286,7 +286,7 @@ export class PipelineDetailView extends View {
       const statsTitle = healthSection.querySelector('h3');
       healthSection.innerHTML = `
         ${statsTitle ? statsTitle.outerHTML : '<h3 class="text-sm font-black text-app-muted uppercase tracking-widest mb-6 px-1">Pipeline Health</h3>'}
-        ${PipelineStatsView.render(this.allLoadedTasks, true)}
+        ${PipelineStatsView.render(this.allLoadedTasks, undefined, true)}
       `;
       PipelineStatsView.animateBars(healthSection);
     }
@@ -873,7 +873,7 @@ export class PipelineDetailView extends View {
       historyContainer.innerHTML = `
         <div class="bg-app-bg/50 p-6 rounded-3xl border border-app-border/50 shadow-sm mb-4">
           <h3 class="text-sm font-black text-app-muted uppercase tracking-widest mb-6 px-1">Pipeline Health</h3>
-          ${PipelineStatsView.render(allTasks, true)}
+          ${PipelineStatsView.render(allTasks, undefined, true)}
         </div>
         ${CompletedSection.render({
           lastCompleted: completedTasks.length > 0 ? completedTasks[0] : null,
