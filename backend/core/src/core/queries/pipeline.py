@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List
+from typing import List, Optional
 from beanie import PydanticObjectId
-from core.models.models import Pipeline, Task
+from core.models.models import Pipeline, Task, PipelineStatus
 from core.exceptions import EntityNotFoundError, VersionMismatchError
 
 async def get_all_pipelines(include_deleted: bool = False) -> List[Pipeline]:
@@ -38,7 +38,13 @@ async def create_pipeline(pipeline: Pipeline) -> Pipeline:
     await pipeline.insert()
     return pipeline
 
-async def update_pipeline(pipeline_id: str, name: str, version: int) -> Pipeline:
+async def update_pipeline(
+    pipeline_id: str, 
+    version: int,
+    name: Optional[str] = None, 
+    status: Optional[PipelineStatus] = None,
+    workspace_path: Optional[str] = None
+) -> Pipeline:
     pipeline = await get_pipeline_by_id(pipeline_id)
     
     if pipeline.version != version:
@@ -46,7 +52,13 @@ async def update_pipeline(pipeline_id: str, name: str, version: int) -> Pipeline
             f"Pipeline version mismatch. Client has {version}, DB has {pipeline.version}"
         )
     
-    pipeline.name = name
+    if name is not None:
+        pipeline.name = name
+    if status is not None:
+        pipeline.status = status
+    if workspace_path is not None:
+        pipeline.workspace_path = workspace_path
+
     pipeline.version += 1
     await pipeline.save()
     return pipeline

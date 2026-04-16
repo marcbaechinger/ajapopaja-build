@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { Pipeline } from '../domain.ts';
+import { Pipeline, PipelineStatus } from '../domain.ts';
 import { BaseClient } from './BaseClient.ts';
 import { AuthService } from '../AuthService.ts';
 
@@ -41,21 +41,21 @@ export class PipelineClient extends BaseClient {
     return new Pipeline(await response.json());
   }
 
-  async create(name: string): Promise<Pipeline> {
+  async create(name: string, workspacePath?: string): Promise<Pipeline> {
     const response = await this.fetch(`${this.baseUrl}/pipelines/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name })
+      body: JSON.stringify({ name, workspace_path: workspacePath })
     });
     return new Pipeline(await response.json());
   }
 
-  async update(id: string, name: string, version: number): Promise<Pipeline> {
+  async update(id: string, version: number, partial: { name?: string, status?: PipelineStatus, workspace_path?: string | null }): Promise<Pipeline> {
     try {
       const response = await this.fetch(`${this.baseUrl}/pipelines/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, version })
+        body: JSON.stringify({ version, ...partial })
       });
       return new Pipeline(await response.json());
     } catch (e: any) {

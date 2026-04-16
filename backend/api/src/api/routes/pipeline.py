@@ -13,11 +13,12 @@
 # limitations under the License.
 
 from fastapi import APIRouter, Body, Depends
-from typing import List
-from core.models.models import Pipeline, User
+from typing import List, Optional
+from core.models.models import Pipeline, User, PipelineStatus
 from core.queries import pipeline as pipeline_queries
 from api.websocket_manager import manager, WSMessage
 from api.auth import get_current_user
+from api.gemini_executor import GeminiExecutor
 
 router = APIRouter(prefix="/pipelines", tags=["pipelines"])
 
@@ -51,11 +52,19 @@ async def get_pipeline(
 @router.patch("/{pipeline_id}", response_model=Pipeline)
 async def update_pipeline(
     pipeline_id: str, 
-    name: str = Body(..., embed=True), 
     version: int = Body(..., embed=True),
+    name: Optional[str] = Body(None, embed=True), 
+    status: Optional[PipelineStatus] = Body(None, embed=True),
+    workspace_path: Optional[str] = Body(None, embed=True),
     current_user: User = Depends(get_current_user)
 ):
-    updated_pipeline = await pipeline_queries.update_pipeline(pipeline_id, name, version)
+    updated_pipeline = await pipeline_queries.update_pipeline(
+        pipeline_id, version, name=name, status=status, workspace_path=workspace_path
+    )
+    
+    if updated_pipeline.status in [PipelineStatus.PAUSED, PipelineStatus.COMPLETED]:
+        GeminiExecutor.stop_running(pipeline_id)
+
     await manager.broadcast(WSMessage(
         type="PIPELINE_UPDATED",
         payload=updated_pipeline.model_dump(mode='json')
@@ -68,6 +77,7 @@ async def delete_pipeline(
     current_user: User = Depends(get_current_user)
 ):
     await pipeline_queries.delete_pipeline(pipeline_id)
+    GeminiExecutor.stop_running(pipeline_id)
     await manager.broadcast(WSMessage(
         type="PIPELINE_DELETED",
         payload={"pipeline_id": pipeline_id}

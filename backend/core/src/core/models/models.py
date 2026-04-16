@@ -66,6 +66,7 @@ class Pipeline(Document):
     name: str
     description: Optional[str] = None
     status: PipelineStatus = PipelineStatus.ACTIVE
+    workspace_path: Optional[str] = None
     version: int = 1
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

@@ -16,7 +16,7 @@
 
 import { View } from '../../core/Navigator.ts';
 import { AppContext } from '../../core/AppContext.ts';
-import { Pipeline, TaskStatus, Task } from '../../core/domain.ts';
+import { Pipeline, TaskStatus, Task, PipelineStatus } from '../../core/domain.ts';
 import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
 import { TaskItem } from '../components/TaskItem.ts';
 import { HistoryDialog } from '../components/HistoryDialog.ts';
@@ -162,6 +162,12 @@ export class PipelineDetailView extends View {
       }
     };
 
+    this.unsubs.push(this.context.wsClient.on('PIPELINE_UPDATED', (message: any) => {
+      if (message.payload?.id === this.pipelineId || message.payload?._id === this.pipelineId) {
+        this.pipeline = new Pipeline(message.payload);
+        this.updateHeader();
+      }
+    }));
     this.unsubs.push(this.context.wsClient.on('TASK_CREATED', handleCreate));
     this.unsubs.push(this.context.wsClient.on('TASK_UPDATED', handleUpdate));
     this.unsubs.push(this.context.wsClient.on('TASK_STATUS_UPDATED', handleUpdate));
@@ -351,6 +357,53 @@ export class PipelineDetailView extends View {
   }
 
   private registerActions() {
+    this.context.actionRegistry.register('edit_pipeline', async (_e, el) => {
+      const header = el.closest('header') as HTMLElement;
+      if (!header) return;
+      header.querySelector('#pipeline-view-info')?.classList.add('hidden');
+      header.querySelector('#pipeline-edit-info')?.classList.remove('hidden');
+    });
+
+    this.context.actionRegistry.register('cancel_edit_pipeline', async (_e, el) => {
+      const header = el.closest('header') as HTMLElement;
+      if (!header) return;
+      header.querySelector('#pipeline-view-info')?.classList.remove('hidden');
+      header.querySelector('#pipeline-edit-info')?.classList.add('hidden');
+    });
+
+    this.context.actionRegistry.register('save_pipeline', async (_e, el) => {
+      const header = el.closest('header') as HTMLElement;
+      if (!header || !this.pipeline) return;
+
+      const nameInput = header.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
+      const wsInput = header.querySelector('input[name="workspace_path"]') as HTMLInputElement;
+      const statusSelect = header.querySelector('select[name="pipeline_status"]') as HTMLSelectElement;
+
+      const name = nameInput.value.trim();
+      const workspace_path = wsInput.value.trim() || null;
+      const status = statusSelect.value as PipelineStatus;
+
+      if (!name) return;
+
+      try {
+        await this.context.pipelineClient.update(this.pipelineId, this.pipeline.version, {
+          name,
+          workspace_path,
+          status
+        });
+        // Success handled by WS PIPELINE_UPDATED
+        header.querySelector('#pipeline-view-info')?.classList.remove('hidden');
+        header.querySelector('#pipeline-edit-info')?.classList.add('hidden');
+      } catch (error) {
+        if (error instanceof Error && error.message === 'OCC_CONFLICT') {
+          alert('Conflict: Pipeline was updated by someone else. Refreshing...');
+          this.loadPipeline();
+        } else {
+          alert('Failed to update pipeline');
+        }
+      }
+    });
+
     this.context.actionRegistry.register('toggle_task_collapse', async (_e, el) => {
       const taskEl = el.closest('[data-view-id]') as HTMLElement;
       if (!taskEl) return;
@@ -877,8 +930,58 @@ export class PipelineDetailView extends View {
 
   private updateHeader() {
     if (!this.container || !this.pipeline) return;
-    const titleEl = this.container.querySelector('#pipeline-title');
-    if (titleEl) titleEl.textContent = this.pipeline.name;
+    const infoContainer = this.container.querySelector('#pipeline-info-container');
+    if (!infoContainer) return;
+
+    const statusColors: Record<string, string> = {
+      'active': 'bg-green-600/20 text-green-400 border-green-600/30',
+      'paused': 'bg-amber-600/20 text-amber-400 border-amber-600/30',
+      'completed': 'bg-blue-600/20 text-blue-400 border-blue-600/30'
+    };
+
+    infoContainer.innerHTML = `
+      <div id="pipeline-view-info" class="flex flex-col group relative">
+        <div class="flex items-center gap-3">
+          <h2 id="pipeline-title" class="text-3xl font-black text-app-accent-1 tracking-tight">${this.pipeline.name}</h2>
+          <span class="text-[10px] px-2 py-0.5 rounded border font-bold uppercase ${statusColors[this.pipeline.status] || 'bg-slate-600/20 text-slate-400 border-slate-600/30'}">
+            ${this.pipeline.status}
+          </span>
+          <button data-action-click="edit_pipeline" class="opacity-0 group-hover:opacity-100 p-1 hover:bg-app-bg text-app-muted hover:text-app-accent-1 rounded transition-all cursor-pointer" title="Edit Pipeline">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+          </button>
+        </div>
+        <div class="flex flex-wrap items-center gap-3 mt-2">
+          <p class="text-app-muted text-[10px] uppercase font-bold tracking-widest bg-app-bg px-2 py-1 rounded border border-app-border">ID: ${this.pipelineId}</p>
+          <p class="text-app-muted text-[10px] uppercase font-bold tracking-widest bg-app-bg px-2 py-1 rounded border border-app-border">Workspace: ${this.pipeline.workspace_path || 'Default'}</p>
+          <div id="header-stats" class="flex flex-wrap gap-2 text-[10px] uppercase font-bold tracking-wider"></div>
+        </div>
+      </div>
+      <div id="pipeline-edit-info" class="hidden flex flex-col gap-3 bg-app-bg/50 p-4 rounded-xl border border-app-accent-1/30">
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Pipeline Name</label>
+            <input type="text" name="pipeline_name" value="${this.pipeline.name}" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1">
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Status</label>
+            <select name="pipeline_status" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1 cursor-pointer">
+              <option value="active" ${this.pipeline.status === 'active' ? 'selected' : ''}>Active</option>
+              <option value="paused" ${this.pipeline.status === 'paused' ? 'selected' : ''}>Paused</option>
+              <option value="completed" ${this.pipeline.status === 'completed' ? 'selected' : ''}>Completed</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Workspace Path (Optional)</label>
+          <input type="text" name="workspace_path" value="${this.pipeline.workspace_path || ''}" placeholder="Default Project Root" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1">
+        </div>
+        <div class="flex gap-2 justify-end mt-1">
+          <button data-action-click="cancel_edit_pipeline" class="px-3 py-1 rounded text-[10px] font-bold uppercase tracking-widest text-app-muted hover:bg-app-bg transition-all cursor-pointer">Cancel</button>
+          <button data-action-click="save_pipeline" class="px-4 py-1 rounded bg-app-accent-1 text-white text-[10px] font-bold uppercase tracking-widest hover:brightness-110 transition-all shadow-md cursor-pointer">Save Changes</button>
+        </div>
+      </div>
+    `;
+    this.updateHeaderStats();
   }
 
   private updateHeaderStats() {
@@ -940,11 +1043,13 @@ export class PipelineDetailView extends View {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
               </svg>
             </button>
-            <div class="flex flex-col">
-              <h2 id="pipeline-title" class="text-3xl font-black text-app-accent-1 tracking-tight">Loading...</h2>
-              <div class="flex flex-wrap items-center gap-3 mt-2">
-                <p class="text-app-muted text-[10px] uppercase font-bold tracking-widest bg-app-bg px-2 py-1 rounded border border-app-border">ID: ${this.pipelineId}</p>
-                <div id="header-stats" class="flex flex-wrap gap-2 text-[10px] uppercase font-bold tracking-wider"></div>
+            <div id="pipeline-info-container" class="min-w-[400px]">
+              <div class="flex flex-col">
+                <h2 id="pipeline-title" class="text-3xl font-black text-app-accent-1 tracking-tight">Loading...</h2>
+                <div class="flex flex-wrap items-center gap-3 mt-2">
+                  <p class="text-app-muted text-[10px] uppercase font-bold tracking-widest bg-app-bg px-2 py-1 rounded border border-app-border">ID: ${this.pipelineId}</p>
+                  <div id="header-stats" class="flex flex-wrap gap-2 text-[10px] uppercase font-bold tracking-wider"></div>
+                </div>
               </div>
             </div>
           </div>

@@ -35,6 +35,7 @@ from api.routes.task import task_router, pipeline_task_router
 from api.routes.auth import router as auth_router
 from api.websocket_manager import manager
 from api.auth import SECRET_KEY, ALGORITHM
+from api.gemini_executor import GeminiExecutor
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -69,6 +70,8 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing database...")
     await init_db()
     yield
+    logger.info("Shutting down Gemini executors...")
+    GeminiExecutor.stop_all()
 
 app = FastAPI(title="Ajapopaja Build API", lifespan=lifespan)
 

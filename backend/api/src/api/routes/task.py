@@ -19,6 +19,7 @@ from core.models.models import Task, TaskStatus, User
 from core.queries import task as task_queries
 from api.websocket_manager import manager, WSMessage
 from api.auth import get_current_user
+from api.gemini_executor import GeminiExecutor
 
 # Root router for task-specific top-level endpoints
 task_router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -43,6 +44,10 @@ async def update_task_status(
     current_user: User = Depends(get_current_user)
 ):
     updated_task = await task_queries.update_task_status(task_id, status, version, actor="user")
+    
+    if updated_task.status == TaskStatus.SCHEDULED:
+        await GeminiExecutor.ensure_running(updated_task.pipeline_id)
+
     await manager.broadcast(WSMessage(
         type="TASK_STATUS_UPDATED",
         payload=updated_task.model_dump(mode='json')
@@ -71,6 +76,10 @@ async def accept_design(
     current_user: User = Depends(get_current_user)
 ):
     updated_task = await task_queries.accept_design(task_id, version, actor="user")
+    
+    if updated_task.status == TaskStatus.SCHEDULED:
+        await GeminiExecutor.ensure_running(updated_task.pipeline_id)
+
     await manager.broadcast(WSMessage(
         type="TASK_STATUS_UPDATED",
         payload=updated_task.model_dump(mode='json')
@@ -174,6 +183,10 @@ async def create_task(
     current_user: User = Depends(get_current_user)
 ):
     new_task = await task_queries.create_task(pipeline_id, task, actor="user")
+    
+    if new_task.status == TaskStatus.SCHEDULED:
+        await GeminiExecutor.ensure_running(new_task.pipeline_id)
+
     await manager.broadcast(WSMessage(
         type="TASK_CREATED",
         payload=new_task.model_dump(mode='json')
