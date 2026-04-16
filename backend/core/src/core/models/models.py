@@ -68,6 +68,7 @@ class Pipeline(Document):
     status: PipelineStatus = PipelineStatus.ACTIVE
     workspace_path: Optional[str] = None
     manage_gemini: bool = False
+    manage_vibe: bool = False
     version: int = 1
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

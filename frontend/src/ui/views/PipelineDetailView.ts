@@ -34,6 +34,7 @@ export class PipelineDetailView extends View {
   private pipelineId: string;
   private pipeline: Pipeline | null = null;
   private geminiStatus: { running: boolean, log_file: string | null } = { running: false, log_file: null };
+  private vibeStatus: { running: boolean, log_file: string | null } = { running: false, log_file: null };
   private context: AppContext;
   private unsubs: (() => void)[] = [];
   private activeEditors: Map<string, EasyMDE> = new Map();
@@ -191,6 +192,18 @@ export class PipelineDetailView extends View {
     this.unsubs.push(this.context.wsClient.on('GEMINI_PROCESS_STOPPED', (message: any) => {
       if (message.payload?.pipeline_id === this.pipelineId) {
         this.geminiStatus = { running: false, log_file: null };
+        this.updateHeader();
+      }
+    }));
+    this.unsubs.push(this.context.wsClient.on('VIBE_PROCESS_STARTED', (message: any) => {
+      if (message.payload?.pipeline_id === this.pipelineId) {
+        this.vibeStatus = { running: true, log_file: message.payload.log_file_path };
+        this.updateHeader();
+      }
+    }));
+    this.unsubs.push(this.context.wsClient.on('VIBE_PROCESS_STOPPED', (message: any) => {
+      if (message.payload?.pipeline_id === this.pipelineId) {
+        this.vibeStatus = { running: false, log_file: null };
         this.updateHeader();
       }
     }));
@@ -393,11 +406,13 @@ export class PipelineDetailView extends View {
       const wsInput = header.querySelector('input[name="workspace_path"]') as HTMLInputElement;
       const statusSelect = header.querySelector('select[name="pipeline_status"]') as HTMLSelectElement;
       const manageGeminiInput = header.querySelector('input[name="manage_gemini"]') as HTMLInputElement;
+      const manageVibeInput = header.querySelector('input[name="manage_vibe"]') as HTMLInputElement;
 
       const name = nameInput.value.trim();
       const workspace_path = wsInput.value.trim() || null;
       const status = statusSelect.value as PipelineStatus;
       const manage_gemini = manageGeminiInput.checked;
+      const manage_vibe = manageVibeInput.checked;
 
       if (!name) return;
 
@@ -406,7 +421,8 @@ export class PipelineDetailView extends View {
           name,
           workspace_path,
           status,
-          manage_gemini
+          manage_gemini,
+          manage_vibe
         });
         // Success handled by WS PIPELINE_UPDATED
         header.querySelector('#pipeline-view-info')?.classList.remove('hidden');
@@ -444,9 +460,15 @@ export class PipelineDetailView extends View {
       new StatsDialog(this.allLoadedTasks, this.pipelineId, this.context.pipelineClient).show();
     });
 
-    this.context.actionRegistry.register('open_logs', async (e) => {
+    this.context.actionRegistry.register('open_gemini_logs', async (e) => {
       e.preventDefault();
       const url = this.context.pipelineClient.getGeminiLogsStreamUrl(this.pipelineId);
+      new LogViewerDialog(url, this.context.authService).show();
+    });
+
+    this.context.actionRegistry.register('open_vibe_logs', async (e) => {
+      e.preventDefault();
+      const url = this.context.pipelineClient.getVibeLogsStreamUrl(this.pipelineId);
       new LogViewerDialog(url, this.context.authService).show();
     });
 
@@ -790,6 +812,7 @@ export class PipelineDetailView extends View {
     try {
       this.pipeline = await this.context.pipelineClient.get(this.pipelineId);
       this.geminiStatus = await this.context.pipelineClient.getGeminiStatus(this.pipelineId);
+      this.vibeStatus = await this.context.pipelineClient.getVibeStatus(this.pipelineId);
       this.updateHeader();
     } catch (error) {
       console.error('Error loading pipeline:', error);
@@ -971,14 +994,33 @@ export class PipelineDetailView extends View {
             <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
           </span>
           <span class="text-[10px] font-bold uppercase tracking-widest text-green-400">Gemini Running</span>
-          <button data-action-click="open_logs" class="text-[9px] font-black uppercase tracking-tighter text-app-accent-2 hover:underline cursor-pointer ml-1">View Logs</button>
+          <button data-action-click="open_gemini_logs" class="text-[9px] font-black uppercase tracking-tighter text-app-accent-2 hover:underline cursor-pointer ml-1">View Logs</button>
         </div>
       `
       : `
         <div class="flex items-center gap-2 bg-app-bg px-2 py-1 rounded border border-app-border opacity-60 hover:opacity-100 transition-opacity">
           <span class="h-2 w-2 rounded-full bg-app-muted"></span>
           <span class="text-[10px] font-bold uppercase tracking-widest text-app-muted">Gemini Idle</span>
-          <button data-action-click="open_logs" class="text-[9px] font-black uppercase tracking-tighter text-app-muted hover:text-app-text cursor-pointer ml-1">Logs</button>
+          <button data-action-click="open_gemini_logs" class="text-[9px] font-black uppercase tracking-tighter text-app-muted hover:text-app-text cursor-pointer ml-1">Logs</button>
+        </div>
+      `;
+
+    const vibeStatusHtml = this.vibeStatus.running 
+      ? `
+        <div class="flex items-center gap-2 bg-app-bg px-2 py-1 rounded border border-blue-500/30">
+          <span class="relative flex h-2 w-2">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+          </span>
+          <span class="text-[10px] font-bold uppercase tracking-widest text-blue-400">Vibe Running</span>
+          <button data-action-click="open_vibe_logs" class="text-[9px] font-black uppercase tracking-tighter text-app-accent-2 hover:underline cursor-pointer ml-1">View Logs</button>
+        </div>
+      `
+      : `
+        <div class="flex items-center gap-2 bg-app-bg px-2 py-1 rounded border border-app-border opacity-60 hover:opacity-100 transition-opacity">
+          <span class="h-2 w-2 rounded-full bg-app-muted"></span>
+          <span class="text-[10px] font-bold uppercase tracking-widest text-app-muted">Vibe Idle</span>
+          <button data-action-click="open_vibe_logs" class="text-[9px] font-black uppercase tracking-tighter text-app-muted hover:text-app-text cursor-pointer ml-1">Logs</button>
         </div>
       `;
 
@@ -990,6 +1032,7 @@ export class PipelineDetailView extends View {
             ${this.pipeline.status}
           </span>
           ${geminiStatusHtml}
+          ${vibeStatusHtml}
           <button data-action-click="edit_pipeline" class="opacity-0 group-hover:opacity-100 p-1 hover:bg-app-bg text-app-muted hover:text-app-accent-1 rounded transition-all cursor-pointer" title="Edit Pipeline">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
           </button>
@@ -1022,6 +1065,10 @@ export class PipelineDetailView extends View {
         <div class="flex items-center gap-2 mt-1 px-1">
           <input type="checkbox" name="manage_gemini" id="manage_gemini" ${this.pipeline.manage_gemini ? 'checked' : ''} class="w-4 h-4 rounded border-app-border bg-app-bg text-app-accent-1 focus:ring-app-accent-1 cursor-pointer">
           <label for="manage_gemini" class="text-[10px] font-bold uppercase tracking-wider text-app-text cursor-pointer">Manage Gemini CLI process</label>
+        </div>
+        <div class="flex items-center gap-2 mt-1 px-1">
+          <input type="checkbox" name="manage_vibe" id="manage_vibe" ${this.pipeline.manage_vibe ? 'checked' : ''} class="w-4 h-4 rounded border-app-border bg-app-bg text-app-accent-1 focus:ring-app-accent-1 cursor-pointer">
+          <label for="manage_vibe" class="text-[10px] font-bold uppercase tracking-wider text-app-text cursor-pointer">Manage Vibe CLI process</label>
         </div>
         <div class="flex gap-2 justify-end mt-1">
           <button data-action-click="cancel_edit_pipeline" class="px-3 py-1 rounded text-[10px] font-bold uppercase tracking-widest text-app-muted hover:bg-app-bg transition-all cursor-pointer">Cancel</button>

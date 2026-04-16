@@ -113,6 +113,7 @@ export class Pipeline {
   status: PipelineStatus = PipelineStatus.ACTIVE;
   workspace_path?: string | null;
   manage_gemini: boolean = false;
+  manage_vibe: boolean = false;
   version: number = 1;
   created_at?: string;
   updated_at?: string;
@@ -128,6 +129,7 @@ export class Pipeline {
     if (json.status !== undefined && isPipelineStatus(json.status)) this.status = json.status;
     if (json.workspace_path !== undefined) this.workspace_path = json.workspace_path;
     if (json.manage_gemini !== undefined) this.manage_gemini = Boolean(json.manage_gemini);
+    if (json.manage_vibe !== undefined) this.manage_vibe = Boolean(json.manage_vibe);
     if (json.version !== undefined) this.version = Number(json.version);
     if (json.created_at !== undefined) this.created_at = String(json.created_at);
     if (json.updated_at !== undefined) this.updated_at = String(json.updated_at);

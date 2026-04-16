@@ -24,6 +24,7 @@ from core.queries import task as task_queries
 from api.websocket_manager import manager, WSMessage
 from api.auth import get_current_user
 from api.gemini_executor import GeminiExecutor
+from api.vibe_executor import VibeExecutor
 
 router = APIRouter(prefix="/pipelines", tags=["pipelines"])
 
@@ -62,17 +63,23 @@ async def update_pipeline(
     status: Optional[PipelineStatus] = Body(None, embed=True),
     workspace_path: Optional[str] = Body(None, embed=True),
     manage_gemini: Optional[bool] = Body(None, embed=True),
+    manage_vibe: Optional[bool] = Body(None, embed=True),
     current_user: User = Depends(get_current_user)
 ):
     updated_pipeline = await pipeline_queries.update_pipeline(
-        pipeline_id, version, name=name, status=status, workspace_path=workspace_path, manage_gemini=manage_gemini
+        pipeline_id, version, name=name, status=status, workspace_path=workspace_path, manage_gemini=manage_gemini, manage_vibe=manage_vibe
     )
     
     if updated_pipeline.status in [PipelineStatus.PAUSED, PipelineStatus.COMPLETED]:
         GeminiExecutor.stop_running(pipeline_id)
+    VibeExecutor.stop_running(pipeline_id)
+        VibeExecutor.stop_running(pipeline_id)
 
     if manage_gemini is False:
         GeminiExecutor.stop_running(pipeline_id)
+    
+    if manage_vibe is False:
+        VibeExecutor.stop_running(pipeline_id)
 
     await manager.broadcast(WSMessage(
         type="PIPELINE_UPDATED",
@@ -87,6 +94,7 @@ async def delete_pipeline(
 ):
     await pipeline_queries.delete_pipeline(pipeline_id)
     GeminiExecutor.stop_running(pipeline_id)
+    VibeExecutor.stop_running(pipeline_id)
     await manager.broadcast(WSMessage(
         type="PIPELINE_DELETED",
         payload={"pipeline_id": pipeline_id}
@@ -138,6 +146,54 @@ async def stream_gemini_logs(
                 else:
                     # Check if process is still running
                     status = GeminiExecutor.get_status(pipeline_id)
+                    if not status["running"]:
+                        # Final check for data
+                        line = f.readline()
+                        if line:
+                            yield line
+                        break
+                    time.sleep(0.1)
+
+    return StreamingResponse(log_generator(), media_type="text/plain")
+
+@router.get("/{pipeline_id}/vibe/status")
+async def get_vibe_status(
+    pipeline_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    return VibeExecutor.get_status(pipeline_id)
+
+@router.get("/{pipeline_id}/vibe/logs/stream")
+async def stream_vibe_logs(
+    pipeline_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    status = VibeExecutor.get_status(pipeline_id)
+    log_file = status["log_file"]
+    
+    if not log_file or not os.path.exists(log_file):
+        # Try to find the latest log file for this pipeline in the log dir
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../"))
+        log_dir = os.path.join(project_root, ".logs/vibe")
+        if os.path.exists(log_dir):
+            files = [f for f in os.listdir(log_dir) if f.startswith(f"pipeline_{pipeline_id}_") and f.endswith(".log")]
+            if files:
+                files.sort(reverse=True)
+                log_file = os.path.join(log_dir, files[0])
+    
+    if not log_file or not os.path.exists(log_file):
+        raise HTTPException(status_code=404, detail="Log file not found")
+
+    import time
+    def log_generator():
+        with open(log_file, "r") as f:
+            while True:
+                line = f.readline()
+                if line:
+                    yield line
+                else:
+                    # Check if process is still running
+                    status = VibeExecutor.get_status(pipeline_id)
                     if not status["running"]:
                         # Final check for data
                         line = f.readline()
