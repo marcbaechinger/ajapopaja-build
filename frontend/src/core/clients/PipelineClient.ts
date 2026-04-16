@@ -76,4 +76,13 @@ export class PipelineClient extends BaseClient {
     const response = await this.fetch(`${this.baseUrl}/pipelines/${id}/stats/daily`);
     return await response.json();
   }
+
+  async getGeminiStatus(id: string): Promise<{ running: boolean, log_file: string | null }> {
+    const response = await this.fetch(`${this.baseUrl}/pipelines/${id}/gemini/status`);
+    return await response.json();
+  }
+
+  getGeminiLogsStreamUrl(id: string): string {
+    return `${this.baseUrl}/pipelines/${id}/gemini/logs/stream`;
+  }
 }

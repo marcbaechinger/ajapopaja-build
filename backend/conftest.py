@@ -14,11 +14,11 @@
 
 import pytest
 import uuid
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 from pymongo import AsyncMongoClient
 from beanie import init_beanie
 from api.main import app
-from core.models.models import Pipeline, Task
+from core.models.models import Pipeline, Task, User
 
 @pytest.fixture
 async def init_mock_db():
@@ -27,7 +27,7 @@ async def init_mock_db():
     db = client[test_db_name]
     await init_beanie(
         database=db,
-        document_models=[Pipeline, Task]
+        document_models=[Pipeline, Task, User]
     )
     yield test_db_name
     await client.drop_database(test_db_name)
@@ -35,5 +35,5 @@ async def init_mock_db():
 
 @pytest.fixture
 async def async_client():
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         yield client

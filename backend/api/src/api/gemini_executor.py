@@ -16,26 +16,33 @@ import os
 import subprocess
 import logging
 import asyncio
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 from datetime import datetime
 from core.queries import pipeline as pipeline_queries
+from api.websocket_manager import manager, WSMessage
 
 logger = logging.getLogger(__name__)
 
 class GeminiExecutor:
-    _processes: Dict[str, subprocess.Popen] = {}
+    # Maps pipeline_id -> { "process": Popen, "log_file_path": str }
+    _processes: Dict[str, Dict[str, Any]] = {}
 
     @classmethod
     async def ensure_running(cls, pipeline_id: str):
         """Ensures that a Gemini CLI process is running for the given pipeline."""
         if pipeline_id in cls._processes:
-            process = cls._processes[pipeline_id]
+            entry = cls._processes[pipeline_id]
+            process = entry["process"]
             if process.poll() is None:
                 # Process is still running
                 return
             else:
                 logger.info(f"Gemini process for pipeline {pipeline_id} has terminated. Restarting...")
                 del cls._processes[pipeline_id]
+                await manager.broadcast(WSMessage(
+                    type="GEMINI_PROCESS_STOPPED",
+                    payload={"pipeline_id": pipeline_id}
+                ))
 
         # Fetch pipeline to get workspace_path
         pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
@@ -64,12 +71,6 @@ class GeminiExecutor:
         log_file_path = os.path.join(log_dir, f"pipeline_{pipeline_id}_{timestamp}.log")
         
         # Build command
-        # command = [
-        #     "gemini", 
-        #     "--approval-mode", "yolo", 
-        #     f"Use the ajapopaja mcp server to get the next task for pipeline {pipeline_id}. Implement the task, verify it, and complete it. Repeat this until there are no more tasks in the pipeline."
-        # ]
-        # For now, let's use a shell string as described in the design doc for simplicity with Popen
         cmd_str = f"gemini --approval-mode yolo \"Use the ajapopaja mcp server to get the next task for pipeline {pipeline_id}. Implement the task, verify it, and complete it. Repeat this until there are no more tasks in the pipeline.\""
 
         logger.info(f"Starting Gemini executor for pipeline {pipeline_id} in {cwd}")
@@ -85,7 +86,14 @@ class GeminiExecutor:
                 stderr=log_file,
                 start_new_session=True
             )
-            cls._processes[pipeline_id] = process
+            cls._processes[pipeline_id] = {
+                "process": process,
+                "log_file_path": log_file_path
+            }
+            await manager.broadcast(WSMessage(
+                type="GEMINI_PROCESS_STARTED",
+                payload={"pipeline_id": pipeline_id, "log_file_path": log_file_path}
+            ))
         except Exception as e:
             logger.error(f"Failed to start Gemini executor for pipeline {pipeline_id}: {e}")
 
@@ -93,7 +101,8 @@ class GeminiExecutor:
     def stop_running(cls, pipeline_id: str):
         """Stops the Gemini CLI process for the given pipeline."""
         if pipeline_id in cls._processes:
-            process = cls._processes[pipeline_id]
+            entry = cls._processes[pipeline_id]
+            process = entry["process"]
             if process.poll() is None:
                 logger.info(f"Stopping Gemini executor for pipeline {pipeline_id}")
                 process.terminate()
@@ -102,6 +111,41 @@ class GeminiExecutor:
                 except subprocess.TimeoutExpired:
                     process.kill()
             del cls._processes[pipeline_id]
+            # We don't await broadcast here because this is sync, 
+            # but we can use asyncio.create_task if we have a loop,
+            # or better, move stop_running to async if possible.
+            # For now, since it's called from API routes which are async,
+            # let's consider if we should make it async.
+            # Actually, the manager.broadcast is async.
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.create_task(manager.broadcast(WSMessage(
+                        type="GEMINI_PROCESS_STOPPED",
+                        payload={"pipeline_id": pipeline_id}
+                    )))
+            except Exception:
+                pass
+
+    @classmethod
+    def get_status(cls, pipeline_id: str) -> dict:
+        """Returns the status of the Gemini CLI process for the given pipeline."""
+        if pipeline_id in cls._processes:
+            entry = cls._processes[pipeline_id]
+            process = entry["process"]
+            if process.poll() is None:
+                return {
+                    "running": True,
+                    "log_file": entry["log_file_path"]
+                }
+            else:
+                # Clean up stale process
+                del cls._processes[pipeline_id]
+        
+        return {
+            "running": False,
+            "log_file": None
+        }
 
     @classmethod
     def stop_all(cls):

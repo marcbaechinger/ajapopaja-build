@@ -26,12 +26,14 @@ import { TaskColumn } from '../components/TaskColumn.ts';
 import { CompletedSection } from '../components/CompletedSection.ts';
 import { PipelineStatsView } from '../components/PipelineStatsView.ts';
 import { PaginationControl } from '../components/PaginationControl.ts';
+import { LogViewerDialog } from '../components/LogViewerDialog.ts';
 import EasyMDE from 'easymde';
 
 export class PipelineDetailView extends View {
   private container: HTMLElement | null = null;
   private pipelineId: string;
   private pipeline: Pipeline | null = null;
+  private geminiStatus: { running: boolean, log_file: string | null } = { running: false, log_file: null };
   private context: AppContext;
   private unsubs: (() => void)[] = [];
   private activeEditors: Map<string, EasyMDE> = new Map();
@@ -178,6 +180,18 @@ export class PipelineDetailView extends View {
         // Update local cache
         this.allLoadedTasks = this.allLoadedTasks.filter(t => t.id !== taskId);
         this.removeTaskFromDOM(taskId);
+      }
+    }));
+    this.unsubs.push(this.context.wsClient.on('GEMINI_PROCESS_STARTED', (message: any) => {
+      if (message.payload?.pipeline_id === this.pipelineId) {
+        this.geminiStatus = { running: true, log_file: message.payload.log_file_path };
+        this.updateHeader();
+      }
+    }));
+    this.unsubs.push(this.context.wsClient.on('GEMINI_PROCESS_STOPPED', (message: any) => {
+      if (message.payload?.pipeline_id === this.pipelineId) {
+        this.geminiStatus = { running: false, log_file: null };
+        this.updateHeader();
       }
     }));
   }
@@ -428,6 +442,12 @@ export class PipelineDetailView extends View {
     this.context.actionRegistry.register('open_stats', async (e) => {
       e.preventDefault();
       new StatsDialog(this.allLoadedTasks, this.pipelineId, this.context.pipelineClient).show();
+    });
+
+    this.context.actionRegistry.register('open_logs', async (e) => {
+      e.preventDefault();
+      const url = this.context.pipelineClient.getGeminiLogsStreamUrl(this.pipelineId);
+      new LogViewerDialog(url, this.context.authService).show();
     });
 
     this.context.actionRegistry.register('change_sort_order', async (e) => {
@@ -769,6 +789,7 @@ export class PipelineDetailView extends View {
   async loadPipeline() {
     try {
       this.pipeline = await this.context.pipelineClient.get(this.pipelineId);
+      this.geminiStatus = await this.context.pipelineClient.getGeminiStatus(this.pipelineId);
       this.updateHeader();
     } catch (error) {
       console.error('Error loading pipeline:', error);
@@ -942,6 +963,25 @@ export class PipelineDetailView extends View {
       'completed': 'bg-blue-600/20 text-blue-400 border-blue-600/30'
     };
 
+    const geminiStatusHtml = this.geminiStatus.running 
+      ? `
+        <div class="flex items-center gap-2 bg-app-bg px-2 py-1 rounded border border-green-500/30">
+          <span class="relative flex h-2 w-2">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+          </span>
+          <span class="text-[10px] font-bold uppercase tracking-widest text-green-400">Gemini Running</span>
+          <button data-action-click="open_logs" class="text-[9px] font-black uppercase tracking-tighter text-app-accent-2 hover:underline cursor-pointer ml-1">View Logs</button>
+        </div>
+      `
+      : `
+        <div class="flex items-center gap-2 bg-app-bg px-2 py-1 rounded border border-app-border opacity-60 hover:opacity-100 transition-opacity">
+          <span class="h-2 w-2 rounded-full bg-app-muted"></span>
+          <span class="text-[10px] font-bold uppercase tracking-widest text-app-muted">Gemini Idle</span>
+          <button data-action-click="open_logs" class="text-[9px] font-black uppercase tracking-tighter text-app-muted hover:text-app-text cursor-pointer ml-1">Logs</button>
+        </div>
+      `;
+
     infoContainer.innerHTML = `
       <div id="pipeline-view-info" class="flex flex-col group relative">
         <div class="flex items-center gap-3">
@@ -949,6 +989,7 @@ export class PipelineDetailView extends View {
           <span class="text-[10px] px-2 py-0.5 rounded border font-bold uppercase ${statusColors[this.pipeline.status] || 'bg-slate-600/20 text-slate-400 border-slate-600/30'}">
             ${this.pipeline.status}
           </span>
+          ${geminiStatusHtml}
           <button data-action-click="edit_pipeline" class="opacity-0 group-hover:opacity-100 p-1 hover:bg-app-bg text-app-muted hover:text-app-accent-1 rounded transition-all cursor-pointer" title="Edit Pipeline">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
           </button>
