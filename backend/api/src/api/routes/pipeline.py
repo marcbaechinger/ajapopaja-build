@@ -57,13 +57,17 @@ async def update_pipeline(
     name: Optional[str] = Body(None, embed=True), 
     status: Optional[PipelineStatus] = Body(None, embed=True),
     workspace_path: Optional[str] = Body(None, embed=True),
+    manage_gemini: Optional[bool] = Body(None, embed=True),
     current_user: User = Depends(get_current_user)
 ):
     updated_pipeline = await pipeline_queries.update_pipeline(
-        pipeline_id, version, name=name, status=status, workspace_path=workspace_path
+        pipeline_id, version, name=name, status=status, workspace_path=workspace_path, manage_gemini=manage_gemini
     )
     
     if updated_pipeline.status in [PipelineStatus.PAUSED, PipelineStatus.COMPLETED]:
+        GeminiExecutor.stop_running(pipeline_id)
+
+    if manage_gemini is False:
         GeminiExecutor.stop_running(pipeline_id)
 
     await manager.broadcast(WSMessage(

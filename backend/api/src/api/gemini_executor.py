@@ -43,6 +43,10 @@ class GeminiExecutor:
             logger.error(f"Pipeline {pipeline_id} not found. Cannot start Gemini executor.")
             return
 
+        if not pipeline.manage_gemini:
+            logger.debug(f"Gemini management is disabled for pipeline {pipeline_id}.")
+            return
+
         # Determine execution directory
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../"))
         cwd = project_root

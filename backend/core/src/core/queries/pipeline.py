@@ -43,7 +43,8 @@ async def update_pipeline(
     version: int,
     name: Optional[str] = None, 
     status: Optional[PipelineStatus] = None,
-    workspace_path: Optional[str] = None
+    workspace_path: Optional[str] = None,
+    manage_gemini: Optional[bool] = None
 ) -> Pipeline:
     pipeline = await get_pipeline_by_id(pipeline_id)
     
@@ -58,6 +59,8 @@ async def update_pipeline(
         pipeline.status = status
     if workspace_path is not None:
         pipeline.workspace_path = workspace_path
+    if manage_gemini is not None:
+        pipeline.manage_gemini = manage_gemini
 
     pipeline.version += 1
     await pipeline.save()

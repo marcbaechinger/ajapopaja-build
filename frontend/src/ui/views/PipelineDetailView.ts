@@ -378,10 +378,12 @@ export class PipelineDetailView extends View {
       const nameInput = header.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
       const wsInput = header.querySelector('input[name="workspace_path"]') as HTMLInputElement;
       const statusSelect = header.querySelector('select[name="pipeline_status"]') as HTMLSelectElement;
+      const manageGeminiInput = header.querySelector('input[name="manage_gemini"]') as HTMLInputElement;
 
       const name = nameInput.value.trim();
       const workspace_path = wsInput.value.trim() || null;
       const status = statusSelect.value as PipelineStatus;
+      const manage_gemini = manageGeminiInput.checked;
 
       if (!name) return;
 
@@ -389,7 +391,8 @@ export class PipelineDetailView extends View {
         await this.context.pipelineClient.update(this.pipelineId, this.pipeline.version, {
           name,
           workspace_path,
-          status
+          status,
+          manage_gemini
         });
         // Success handled by WS PIPELINE_UPDATED
         header.querySelector('#pipeline-view-info')?.classList.remove('hidden');
@@ -974,6 +977,10 @@ export class PipelineDetailView extends View {
         <div>
           <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Workspace Path (Optional)</label>
           <input type="text" name="workspace_path" value="${this.pipeline.workspace_path || ''}" placeholder="Default Project Root" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1">
+        </div>
+        <div class="flex items-center gap-2 mt-1 px-1">
+          <input type="checkbox" name="manage_gemini" id="manage_gemini" ${this.pipeline.manage_gemini ? 'checked' : ''} class="w-4 h-4 rounded border-app-border bg-app-bg text-app-accent-1 focus:ring-app-accent-1 cursor-pointer">
+          <label for="manage_gemini" class="text-[10px] font-bold uppercase tracking-wider text-app-text cursor-pointer">Manage Gemini CLI process</label>
         </div>
         <div class="flex gap-2 justify-end mt-1">
           <button data-action-click="cancel_edit_pipeline" class="px-3 py-1 rounded text-[10px] font-bold uppercase tracking-widest text-app-muted hover:bg-app-bg transition-all cursor-pointer">Cancel</button>

@@ -25,7 +25,7 @@ def clear_executor():
 
 @pytest.mark.asyncio
 async def test_ensure_running_starts_process(init_mock_db):
-    pipeline = Pipeline(name="Test Pipeline", workspace_path="/tmp/test_ws")
+    pipeline = Pipeline(name="Test Pipeline", workspace_path="/tmp/test_ws", manage_gemini=True)
     await pipeline.insert()
     pipeline_id = str(pipeline.id)
 
@@ -56,6 +56,18 @@ async def test_stop_running(init_mock_db):
 
     assert mock_process.terminate.called
     assert pipeline_id not in GeminiExecutor._processes
+
+@pytest.mark.asyncio
+async def test_ensure_running_skips_when_disabled(init_mock_db):
+    pipeline = Pipeline(name="Test Pipeline", workspace_path="/tmp/test_ws", manage_gemini=False)
+    await pipeline.insert()
+    pipeline_id = str(pipeline.id)
+
+    with patch("subprocess.Popen") as mock_popen, \
+         patch("builtins.open", MagicMock()):
+        await GeminiExecutor.ensure_running(pipeline_id)
+        assert not mock_popen.called
+        assert pipeline_id not in GeminiExecutor._processes
 
 @pytest.mark.asyncio
 async def test_ensure_running_idempotent(init_mock_db):
