@@ -26,8 +26,6 @@ from core.exceptions import EntityNotFoundError, VersionMismatchError
 mcp = FastMCP("Ajapopaja Build MCP")
 
 
-
-
 async def notify_api(task_id: str):
     """Notifies the API that a task has changed via WebSocket manager directly."""
     try:

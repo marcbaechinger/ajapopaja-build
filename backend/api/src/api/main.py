@@ -16,11 +16,20 @@ import os
 import logging
 import re
 from contextlib import asynccontextmanager
-from typing import Optional
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, APIRouter, Query, status
+from typing import Optional, Union
+from fastapi import (
+    FastAPI,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+    APIRouter,
+    Query,
+    status,
+)
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.routing import Route
 from jose import JWTError, jwt
 
 from core.db import init_db
@@ -43,8 +52,10 @@ from ajapopaja_mcp.server import mcp
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 class TokenRedactionFilter(logging.Filter):
     """Filter to redact 'token' query parameter from log messages."""
+
     def filter(self, record: logging.LogRecord) -> bool:
         if isinstance(record.msg, str):
             record.msg = self._redact(record.msg)
@@ -63,9 +74,11 @@ class TokenRedactionFilter(logging.Filter):
         # Matches 'token=' followed by any non-whitespace, non-ampersand, non-quote characters
         return re.sub(r"token=[^& \n\"]+", "token=[REDACTED]", text)
 
+
 # Apply redaction filter to uvicorn loggers
 for logger_name in ["uvicorn.access", "uvicorn.error"]:
     logging.getLogger(logger_name).addFilter(TokenRedactionFilter())
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -80,8 +93,7 @@ async def lifespan(app: FastAPI):
 mcp_app = mcp.http_app(path="/")
 
 app = FastAPI(
-    title="Ajapopaja Build API", 
-    lifespan=combine_lifespans(lifespan, mcp_app.lifespan)
+    title="Ajapopaja Build API", lifespan=combine_lifespans(lifespan, mcp_app.lifespan)
 )
 
 # CORS Configuration
@@ -93,42 +105,57 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # Exception Handlers
 @app.exception_handler(EntityNotFoundError)
 async def entity_not_found_handler(request: Request, exc: EntityNotFoundError):
     return JSONResponse(status_code=404, content={"detail": str(exc)})
 
+
 @app.exception_handler(VersionMismatchError)
 async def version_mismatch_handler(request: Request, exc: VersionMismatchError):
     return JSONResponse(status_code=409, content={"detail": str(exc)})
+
 
 @app.exception_handler(ValidationError)
 async def validation_error_handler(request: Request, exc: ValidationError):
     return JSONResponse(status_code=422, content={"detail": str(exc)})
 
+
 @app.exception_handler(AjapopajaError)
 async def generic_ajapopaja_error_handler(request: Request, exc: AjapopajaError):
     return JSONResponse(status_code=400, content={"detail": str(exc)})
 
-# Surgical handler for /mcp without trailing slash to avoid 405/307 issues
-@app.api_route("/mcp", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
-async def mcp_no_slash_handler(request: Request):
-    # Proxy to mcp_app by stripping the path (mcp_app expects /)
-    # We update the scope so the sub-app sees it as its root
-    scope = dict(request.scope)
-    scope["path"] = "/"
-    scope["raw_path"] = b"/"
-    return await mcp_app(scope, request.receive, request._send)
+
+# Surgical raw ASGI adapter for /mcp without trailing slash to avoid 405/307 issues
+# Using a class-based ASGI application ensures Starlette doesn't wrap it in its
+# function-to-response converter, which resolves both the TypeError and the
+# "Unexpected ASGI message" conflict.
+class MCPSlashlessRouter:
+    async def __call__(self, scope, receive, send):
+        # Proxy to mcp_app by stripping the path (mcp_app expects /)
+        scope["path"] = "/"
+        scope["raw_path"] = b"/"
+        await mcp_app(scope, receive, send)
+
+
+# We use the Starlette Route directly and add it to the app's router
+app.router.routes.append(
+    Route(
+        "/mcp",
+        MCPSlashlessRouter(),
+        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    )
+)
+
 
 # Root level WebSocket - Matches BEFORE routers and BEFORE static mount
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(
-    websocket: WebSocket, 
-    client_id: str,
-    token: Optional[str] = Query(None)
+    websocket: WebSocket, client_id: str, token: Optional[str] = Query(None)
 ):
     logger.info(f"WS connection attempt: {client_id}")
-    
+
     if not token:
         logger.warning(f"WS connection rejected: No token for {client_id}")
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
@@ -136,9 +163,11 @@ async def websocket_endpoint(
 
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
+        username: Union[str, None] = payload.get("sub")
         if username is None:
-            logger.warning(f"WS connection rejected: Invalid token payload for {client_id}")
+            logger.warning(
+                f"WS connection rejected: Invalid token payload for {client_id}"
+            )
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return
     except JWTError as e:
@@ -159,12 +188,15 @@ async def websocket_endpoint(
         logger.error(f"WS error for {client_id}: {e}")
         manager.disconnect(websocket, client_id)
 
+
 # API Router for all other endpoints
 api_router = APIRouter(prefix="/api")
+
 
 @api_router.get("/health")
 async def health():
     return {"status": "ok", "message": "Ajapopaja API is running"}
+
 
 api_router.include_router(pipeline_router)
 api_router.include_router(task_router)
@@ -173,14 +205,16 @@ api_router.include_router(auth_router)
 
 app.include_router(api_router)
 
-# Mount MCP server at /mcp
+# Mount MCP server at /mcp (handles /mcp/ and subpaths)
 app.mount("/mcp", mcp_app)
 
 # Serve SPA static files - Mount last resort
 frontend_path = os.environ.get("FRONTEND_DIST_PATH")
 if not frontend_path:
     # Fallback to local dev path
-    frontend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../frontend/dist"))
+    frontend_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "../../../../frontend/dist")
+    )
 
 if os.path.exists(frontend_path):
     logger.info(f"Serving SPA from: {frontend_path}")
@@ -190,4 +224,5 @@ else:
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
