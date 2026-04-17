@@ -76,9 +76,8 @@ async def lifespan(app: FastAPI):
     GeminiExecutor.stop_all()
 
 
-# Create MCP ASGI app. Using path="/mcp" and mounting at root 
-# ensures http://localhost:8000/mcp works exactly as expected.
-mcp_app = mcp.http_app(path="/mcp")
+# Create MCP ASGI app with internal path at root
+mcp_app = mcp.http_app(path="/")
 
 app = FastAPI(
     title="Ajapopaja Build API", 
@@ -110,6 +109,16 @@ async def validation_error_handler(request: Request, exc: ValidationError):
 @app.exception_handler(AjapopajaError)
 async def generic_ajapopaja_error_handler(request: Request, exc: AjapopajaError):
     return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+# Surgical handler for /mcp without trailing slash to avoid 405/307 issues
+@app.api_route("/mcp", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+async def mcp_no_slash_handler(request: Request):
+    # Proxy to mcp_app by stripping the path (mcp_app expects /)
+    # We update the scope so the sub-app sees it as its root
+    scope = dict(request.scope)
+    scope["path"] = "/"
+    scope["raw_path"] = b"/"
+    return await mcp_app(scope, request.receive, request._send)
 
 # Root level WebSocket - Matches BEFORE routers and BEFORE static mount
 @app.websocket("/ws/{client_id}")
@@ -164,8 +173,8 @@ api_router.include_router(auth_router)
 
 app.include_router(api_router)
 
-# Mount MCP server at root so it can handle /mcp directly
-app.mount("/", mcp_app)
+# Mount MCP server at /mcp
+app.mount("/mcp", mcp_app)
 
 # Serve SPA static files - Mount last resort
 frontend_path = os.environ.get("FRONTEND_DIST_PATH")
