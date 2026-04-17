@@ -36,6 +36,7 @@ from api.routes.auth import router as auth_router
 from api.websocket_manager import manager
 from api.auth import SECRET_KEY, ALGORITHM
 from api.gemini_executor import GeminiExecutor
+from fastmcp.utilities.lifespan import combine_lifespans
 from ajapopaja_mcp.server import mcp
 
 # Configure logging
@@ -74,10 +75,21 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down Gemini executors...")
     GeminiExecutor.stop_all()
 
-app = FastAPI(title="Ajapopaja Build API", lifespan=lifespan)
+
+# Create MCP ASGI app
+mcp_app = mcp.http_app(path="/")
+
+app = FastAPI(
+    title="Ajapopaja Build API", 
+    lifespan=combine_lifespans(lifespan, mcp_app.lifespan)
+)
+
+# Mount MCP server
+app.mount("/mcp", mcp_app)
+
 
 # Integrate FastMCP
-mcp.setup_fastapi(app)
+
 
 # CORS Configuration
 app.add_middleware(
