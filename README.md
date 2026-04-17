@@ -80,7 +80,7 @@ docker run --rm \
   --add-host=host.docker.internal:host-gateway \
   -e MONGODB_URI=mongodb://host.docker.internal:27017/ \
   ajapopaja-build:1.0.0 \
-  uv run --package api python src/api/seed_user.py
+  uv run --package api python api/src/api/seed_user.py
 ```
 This creates a user with username `admin` and password `admin`.
 
