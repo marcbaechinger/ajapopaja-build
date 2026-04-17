@@ -58,7 +58,7 @@ Run these commands from the project root. To stop a server, use `Ctrl+C`.
 | :--- | :--- | :--- |
 | **FastAPI Server** | `cd backend && uv run --package api uvicorn api.main:app --reload` | [http://localhost:8000](http://localhost:8000) |
 | **API Docs (Swagger)** | (Run FastAPI first) | [http://localhost:8000/docs](http://localhost:8000/docs) |
-| **MCP Server** | Integrated in API (or run separately for local dev) | [http://localhost:8000/sse](http://localhost:8000/sse) |
+| **MCP Server** | Integrated in API (or run separately for local dev) | [http://localhost:8000/mcp/sse](http://localhost:8000/mcp/sse) |
 | **SPA Frontend** | `cd frontend && npm run dev` | [http://localhost:5173](http://localhost:5173) |
 
 ---
