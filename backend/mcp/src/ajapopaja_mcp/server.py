@@ -22,7 +22,6 @@ from core.queries import task as task_queries
 from core.exceptions import EntityNotFoundError, VersionMismatchError
 
 # Create an MCP server
-# Updated fields: spec, want_design_doc
 mcp = FastMCP("Ajapopaja Build MCP")
 
 API_BASE_URL = "http://localhost:8000/api"
@@ -37,7 +36,7 @@ async def notify_api(task_id: str):
         logging.error(f"Failed to notify API for task {task_id}: {e}")
 
 
-@mcp.tool()
+@mcp.tool
 async def get_next_task(pipeline_id: str) -> Dict[str, Any]:
     """
     Fetches the first available scheduled task in a pipeline and marks it inprogress.
@@ -74,7 +73,7 @@ async def get_next_task(pipeline_id: str) -> Dict[str, Any]:
     return {"error": "No scheduled tasks found in this pipeline."}
 
 
-@mcp.tool()
+@mcp.tool
 async def update_task_design_doc(task_id: str, design_doc: str, version: int) -> str:
     """
     Updates the design document field for a specific task.
@@ -107,7 +106,7 @@ async def update_task_design_doc(task_id: str, design_doc: str, version: int) ->
         return f"An unexpected error occurred: {str(e)}"
 
 
-@mcp.tool()
+@mcp.tool
 async def complete_task(
     task_id: str, commit_hash: str, completion_info: str, version: int
 ) -> str:
@@ -152,7 +151,7 @@ async def complete_task(
         return f"An unexpected error occurred: {str(e)}"
 
 
-@mcp.tool()
+@mcp.tool
 async def get_task_status(task_id: str) -> Dict[str, Any]:
     """
     Retrieves current status and verification results for a task.

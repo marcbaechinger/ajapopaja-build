@@ -72,7 +72,6 @@ async def update_pipeline(
     
     if updated_pipeline.status in [PipelineStatus.PAUSED, PipelineStatus.COMPLETED]:
         GeminiExecutor.stop_running(pipeline_id)
-    VibeExecutor.stop_running(pipeline_id)
         VibeExecutor.stop_running(pipeline_id)
 
     if manage_gemini is False:
