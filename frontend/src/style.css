@@ -65,20 +65,25 @@ body {
 }
 
 /* Markdown Code Blocks Styling */
-.prose pre {
+.prose pre,
+.editor-preview pre {
   @apply !bg-black/30 !border !border-app-border/50 !rounded-xl !p-4 !my-4 !shadow-inner;
 }
 
-.prose code {
+.prose code,
+.editor-preview code {
   @apply !bg-app-surface/80 !text-app-accent-2 !px-1.5 !py-0.5 !rounded-md !font-mono;
 }
 
 .prose code::before,
-.prose code::after {
+.prose code::after,
+.editor-preview code::before,
+.editor-preview code::after {
   content: none !important;
 }
 
-.prose pre code {
+.prose pre code,
+.editor-preview pre code {
   @apply !bg-transparent !text-app-text/90 !p-0 !rounded-none;
 }
 
