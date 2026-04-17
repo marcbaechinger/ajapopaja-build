@@ -73,6 +73,17 @@ Use the provided build script to compile the frontend and package the backend:
 ./docker-build.sh 1.0.0
 ```
 
+### First-time Setup: Create Admin User
+After building the image, you need to create the initial user in your database:
+```bash
+docker run --rm \
+  --add-host=host.docker.internal:host-gateway \
+  -e MONGODB_URI=mongodb://host.docker.internal:27017/ \
+  ajapopaja-build:1.0.0 \
+  uv run --package api python src/api/seed_user.py
+```
+This creates a user with username `admin` and password `admin`.
+
 ### Run the Container
 If you have MongoDB running on your host system, use the following command:
 ```bash

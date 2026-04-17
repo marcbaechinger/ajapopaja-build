@@ -28,14 +28,14 @@ COPY backend/mcp/src ./backend/mcp/src
 WORKDIR /app/backend
 RUN uv sync --frozen --no-dev
 
-# Copy frontend build artifacts
-COPY --from=frontend-builder /app/frontend/dist /app/frontend/dist
+# Copy frontend build artifacts to a stable path
+COPY --from=frontend-builder /app/frontend/dist /app/frontend_dist
 
 # Environment variables
 ENV MONGODB_URI=mongodb://host.docker.internal:27017/
 ENV DATABASE_NAME=ajapopaja
 ENV PORT=8000
-ENV FRONTEND_DIST_PATH=/app/backend/frontend/dist
+ENV FRONTEND_DIST_PATH=/app/frontend_dist
 ENV PYTHONPATH=/app/backend/api/src:/app/backend/core/src:/app/backend/mcp/src
 
 # Workdir MUST be the backend directory so uv can find pyproject.toml
