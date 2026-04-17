@@ -187,3 +187,24 @@ async def test_mcp_get_task_status():
     result = await get_task_status(str(task.id))
     assert result["id"] == str(task.id)
     assert result["status"] == TaskStatus.FAILED
+
+
+@pytest.mark.asyncio
+async def test_mcp_mounting_and_precedence(async_client, init_mock_db):
+    """Verifies that MCP is mounted correctly and does not interfere with /api routes."""
+    # Test /api/health (Standard FastAPI route)
+    response = await async_client.get("/api/health")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+
+    # Test /mcp (MCP Mount)
+    # FastMCP streamable-http requires a lifespan to initialize its task group.
+    # In this test environment, we might get a RuntimeError if the lifespan is not fully triggered,
+    # but receiving that error actually CONFIRMS that the request was routed to the mcp_app.
+    try:
+        response = await async_client.post("/mcp")
+        # If it doesn't raise, we check it's not a 404/405 from the parent app
+        assert response.status_code != 405
+        assert response.status_code != 404
+    except RuntimeError as e:
+        assert "Task group is not initialized" in str(e) or "lifespan" in str(e)

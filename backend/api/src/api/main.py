@@ -76,20 +76,14 @@ async def lifespan(app: FastAPI):
     GeminiExecutor.stop_all()
 
 
-# Create MCP ASGI app
-mcp_app = mcp.http_app(path="/")
+# Create MCP ASGI app. Using path="/mcp" and mounting at root 
+# ensures http://localhost:8000/mcp works exactly as expected.
+mcp_app = mcp.http_app(path="/mcp")
 
 app = FastAPI(
     title="Ajapopaja Build API", 
     lifespan=combine_lifespans(lifespan, mcp_app.lifespan)
 )
-
-# Mount MCP server
-app.mount("/mcp", mcp_app)
-
-
-# Integrate FastMCP
-
 
 # CORS Configuration
 app.add_middleware(
@@ -99,6 +93,23 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Exception Handlers
+@app.exception_handler(EntityNotFoundError)
+async def entity_not_found_handler(request: Request, exc: EntityNotFoundError):
+    return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+@app.exception_handler(VersionMismatchError)
+async def version_mismatch_handler(request: Request, exc: VersionMismatchError):
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+@app.exception_handler(ValidationError)
+async def validation_error_handler(request: Request, exc: ValidationError):
+    return JSONResponse(status_code=422, content={"detail": str(exc)})
+
+@app.exception_handler(AjapopajaError)
+async def generic_ajapopaja_error_handler(request: Request, exc: AjapopajaError):
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 # Root level WebSocket - Matches BEFORE routers and BEFORE static mount
 @app.websocket("/ws/{client_id}")
@@ -139,23 +150,6 @@ async def websocket_endpoint(
         logger.error(f"WS error for {client_id}: {e}")
         manager.disconnect(websocket, client_id)
 
-# Exception Handlers
-@app.exception_handler(EntityNotFoundError)
-async def entity_not_found_handler(request: Request, exc: EntityNotFoundError):
-    return JSONResponse(status_code=404, content={"detail": str(exc)})
-
-@app.exception_handler(VersionMismatchError)
-async def version_mismatch_handler(request: Request, exc: VersionMismatchError):
-    return JSONResponse(status_code=409, content={"detail": str(exc)})
-
-@app.exception_handler(ValidationError)
-async def validation_error_handler(request: Request, exc: ValidationError):
-    return JSONResponse(status_code=422, content={"detail": str(exc)})
-
-@app.exception_handler(AjapopajaError)
-async def generic_ajapopaja_error_handler(request: Request, exc: AjapopajaError):
-    return JSONResponse(status_code=400, content={"detail": str(exc)})
-
 # API Router for all other endpoints
 api_router = APIRouter(prefix="/api")
 
@@ -169,6 +163,9 @@ api_router.include_router(pipeline_task_router)
 api_router.include_router(auth_router)
 
 app.include_router(api_router)
+
+# Mount MCP server at root so it can handle /mcp directly
+app.mount("/", mcp_app)
 
 # Serve SPA static files - Mount last resort
 frontend_path = os.environ.get("FRONTEND_DIST_PATH")
