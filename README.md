@@ -58,7 +58,7 @@ Run these commands from the project root. To stop a server, use `Ctrl+C`.
 | :--- | :--- | :--- |
 | **FastAPI Server** | `cd backend && uv run --package api uvicorn api.main:app --reload` | [http://localhost:8000](http://localhost:8000) |
 | **API Docs (Swagger)** | (Run FastAPI first) | [http://localhost:8000/docs](http://localhost:8000/docs) |
-| **MCP Server** | `cd backend && uv run --package ajapopaja-mcp python mcp/src/ajapopaja_mcp/server.py` | Stdout/JSON-RPC |
+| **MCP Server** | Integrated in API (or run separately for local dev) | [http://localhost:8000/sse](http://localhost:8000/sse) |
 | **SPA Frontend** | `cd frontend && npm run dev` | [http://localhost:5173](http://localhost:5173) |
 
 ---
@@ -84,7 +84,24 @@ docker run --rm \
 ```
 This creates a user with username `admin` and password `admin`.
 
-### Run the Container
+### Local Deployment as System Service
+
+A deployment script is provided to build the image, save it to `/data/ajapopaja/docker`, and install it as a Linux system service.
+
+1.  **Run the deployment script:**
+    ```bash
+    ./deploy-local.sh
+    ```
+2.  **Manage the service:**
+    ```bash
+    sudo systemctl start ajapopaja-build
+    sudo systemctl stop ajapopaja-build
+    sudo systemctl status ajapopaja-build
+    ```
+3.  **Configure environment:**
+    Edit `/etc/ajapopaja-build.env` to change the port or database URI, then restart the service.
+
+### Run the Container Manually
 If you have MongoDB running on your host system, use the following command:
 ```bash
 docker run -p 8000:8000 \
