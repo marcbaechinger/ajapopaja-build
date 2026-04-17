@@ -63,6 +63,25 @@ body {
 .editor-preview {
   @apply !bg-app-bg !text-app-text prose prose-invert prose-base max-w-none;
 }
+
+/* Markdown Code Blocks Styling */
+.prose pre {
+  @apply !bg-black/30 !border !border-app-border/50 !rounded-xl !p-4 !my-4 !shadow-inner;
+}
+
+.prose code {
+  @apply !bg-app-surface/80 !text-app-accent-2 !px-1.5 !py-0.5 !rounded-md !font-mono;
+}
+
+.prose code::before,
+.prose code::after {
+  content: none !important;
+}
+
+.prose pre code {
+  @apply !bg-transparent !text-app-text/90 !p-0 !rounded-none;
+}
+
 .CodeMirror-fullscreen {
   @apply !fixed !inset-4 !z-50 !bg-app-bg !w-auto !border !border-app-border !shadow-2xl !rounded-xl overflow-hidden !text-lg;
   top: 60px !important; /* Avoid overlap with our fake modal container padding */
