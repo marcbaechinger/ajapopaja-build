@@ -36,6 +36,7 @@ from api.routes.auth import router as auth_router
 from api.websocket_manager import manager
 from api.auth import SECRET_KEY, ALGORITHM
 from api.gemini_executor import GeminiExecutor
+from ajapopaja_mcp.server import mcp
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -74,6 +75,9 @@ async def lifespan(app: FastAPI):
     GeminiExecutor.stop_all()
 
 app = FastAPI(title="Ajapopaja Build API", lifespan=lifespan)
+
+# Integrate FastMCP
+mcp.setup_fastapi(app)
 
 # CORS Configuration
 app.add_middleware(

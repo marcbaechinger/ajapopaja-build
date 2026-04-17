@@ -17,6 +17,7 @@ import httpx
 import re
 from typing import Any, Dict
 from fastmcp import FastMCP
+from api.websocket_manager import manager
 from core.db import init_db
 from core.queries import task as task_queries
 from core.exceptions import EntityNotFoundError, VersionMismatchError
@@ -24,14 +25,13 @@ from core.exceptions import EntityNotFoundError, VersionMismatchError
 # Create an MCP server
 mcp = FastMCP("Ajapopaja Build MCP")
 
-API_BASE_URL = "http://localhost:8000/api"
+
 
 
 async def notify_api(task_id: str):
-    """Notifies the API that a task has changed."""
+    """Notifies the API that a task has changed via WebSocket manager directly."""
     try:
-        async with httpx.AsyncClient() as client:
-            await client.post(f"{API_BASE_URL}/tasks/{task_id}/notify")
+        await manager.notify_task_update(task_id)
     except Exception as e:
         logging.error(f"Failed to notify API for task {task_id}: {e}")
 

@@ -15,6 +15,7 @@
 from fastapi import WebSocket
 from typing import List, Dict, Any, Callable, Awaitable
 from pydantic import BaseModel, Field
+from core.queries import task as task_queries
 import json
 import logging
 
@@ -79,5 +80,14 @@ class ConnectionManager:
         except Exception as e:
             logger.error(f"Error handling WebSocket message: {e}")
 
+    async def notify_task_update(self, task_id: str):
+        """Fetch updated task and broadcast to clients."""
+        task = await task_queries.get_task_by_id(task_id)
+        await self.broadcast(WSMessage(
+            type="TASK_UPDATED",
+            payload=task.model_dump(mode='json')
+        ))
+
+# Global instance
 # Global instance
 manager = ConnectionManager()
