@@ -20,8 +20,9 @@ from core.queries.task import get_daily_stats
 @pytest.mark.asyncio
 async def test_get_daily_stats(init_mock_db):
     pipeline_id = "test_pipeline"
-    now = datetime.now(UTC)
-    yesterday = now - timedelta(days=1)
+    # Use fixed dates to avoid "day boundary" issues during test execution
+    now = datetime(2026, 4, 17, 10, 0, 0)
+    yesterday = datetime(2026, 4, 16, 10, 0, 0)
     
     # Task 1: Created yesterday, implemented today
     task1 = Task(
@@ -53,8 +54,8 @@ async def test_get_daily_stats(init_mock_db):
     
     assert len(stats) == 2
     
-    yesterday_str = yesterday.date().isoformat()
-    now_str = now.date().isoformat()
+    yesterday_str = "2026-04-16"
+    now_str = "2026-04-17"
     
     yesterday_stats = next(s for s in stats if s["date"] == yesterday_str)
     assert yesterday_stats["created"] == 1
@@ -64,8 +65,4 @@ async def test_get_daily_stats(init_mock_db):
     now_stats = next(s for s in stats if s["date"] == now_str)
     assert now_stats["created"] == 1
     assert now_stats["implemented"] == 1
-    # Task 1 worked for 2 hours (7200000 ms)
-    # Task 2 worked for 30 mins but hasn't finished yet in history (so not counted in this V1 logic)
-    # Wait, my V1 logic: "last_inprogress_start" is reset when it transitions to something else.
-    # Task 2 is still INPROGRESS at the end of history, so last_inprogress_start is not None, but loop ends.
     assert now_stats["work_ms"] == 2 * 3600 * 1000 

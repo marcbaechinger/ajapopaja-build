@@ -16,7 +16,7 @@ import logging
 import httpx
 import re
 from typing import Any, Dict
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 from core.db import init_db
 from core.queries import task as task_queries
 from core.exceptions import EntityNotFoundError, VersionMismatchError
