@@ -117,6 +117,7 @@ export class TaskItem {
     const isInProgress = task.status === TaskStatus.INPROGRESS;
 
     const isImplemented = task.status === TaskStatus.IMPLEMENTED;
+    const isDiscarded = task.status === TaskStatus.DISCARDED;
     const isCompleted = ([TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED] as any[]).includes(task.status);
 
     const specHtml = `
@@ -164,10 +165,11 @@ export class TaskItem {
     const designDocHtml = `
         <div class="design-doc-container w-full text-xs bg-app-surface p-3 rounded-lg border border-app-border transition-all ${isProposed ? 'ring-2 ring-purple-500/50 bg-purple-500/5' : ''}"
              data-task-id="${taskId}" data-version="${task.version}">
-          <div class="design-doc-view ${isImplemented ? '' : 'cursor-pointer group'}" ${isImplemented ? '' : 'data-action-click="edit_design_doc"'}>
+          <div class="design-doc-view cursor-pointer group" data-action-click="${(isImplemented || isDiscarded) ? 'view_design_doc' : 'edit_design_doc'}">
             <div class="flex justify-between items-center mb-1">
               <span class="font-bold text-app-accent-2">${isProposed ? 'Proposed Design' : 'Design Document'}</span>
-              ${isImplemented ? '' : '<span class="text-[10px] text-app-muted opacity-0 group-hover:opacity-100 transition-opacity">Click to edit</span>'}
+              ${(isImplemented || isDiscarded) ? '<span class="text-[10px] text-app-accent-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2">Click to view</span>' : ''}
+              ${(isImplemented || isDiscarded) ? '' : '<span class="text-[10px] text-app-muted opacity-0 group-hover:opacity-100 transition-opacity">Click to edit</span>'}
             </div>
             <div class="design-doc-display prose prose-invert prose-sm max-w-none text-app-text/70 overflow-hidden relative transition-all duration-300 ${isProposed ? 'expanded' : ''}">
               ${task.design_doc ? DOMPurify.sanitize(marked.parse(task.design_doc) as string) : '<span class="italic text-app-muted">Click to add design doc...</span>'}

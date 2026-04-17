@@ -22,6 +22,7 @@ import { TaskItem } from '../components/TaskItem.ts';
 import { HistoryDialog } from '../components/HistoryDialog.ts';
 import { StatsDialog } from '../components/StatsDialog.ts';
 import { TaskForm } from '../components/TaskForm.ts';
+import { DesignDocDialog } from '../components/DesignDocDialog.ts';
 import { TaskColumn } from '../components/TaskColumn.ts';
 import { CompletedSection } from '../components/CompletedSection.ts';
 import { PipelineStatsView } from '../components/PipelineStatsView.ts';
@@ -556,6 +557,17 @@ export class PipelineDetailView extends View {
 
       const isExpanded = display.classList.toggle('expanded');
       el.textContent = isExpanded ? 'Show Less' : 'Show More';
+    });
+
+    this.context.actionRegistry.register('view_design_doc', async (_e, el) => {
+      const container = el.closest('.design-doc-container') as HTMLElement;
+      if (!container) return;
+      const taskId = container.getAttribute('data-task-id');
+      if (!taskId) return;
+      const task = this.allLoadedTasks.find(t => t.id === taskId);
+      if (task && task.design_doc) {
+        new DesignDocDialog('Design Document', task.design_doc).show();
+      }
     });
 
     this.context.actionRegistry.register('edit_design_doc', async (_e, el) => {
