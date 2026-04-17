@@ -13,23 +13,21 @@ WORKDIR /app
 # Install system dependencies (if any)
 RUN apt-get update && apt-get install -y --no-install-recommends     git     && rm -rf /var/lib/apt/lists/*
 
-# Copy backend workspace files
+# Copy backend workspace definition
 COPY backend/pyproject.toml backend/uv.lock ./backend/
 COPY backend/api/pyproject.toml ./backend/api/
 COPY backend/core/pyproject.toml ./backend/core/
 COPY backend/mcp/pyproject.toml ./backend/mcp/
 
-# Install dependencies using uv
+# To satisfy uv sync for workspace members, we need the source code
+# before we sync because they are installed as editables/local members.
+COPY backend/api/src ./backend/api/src
+COPY backend/core/src ./backend/core/src
+COPY backend/mcp/src ./backend/mcp/src
+
+# Install dependencies and the project
 WORKDIR /app/backend
-RUN uv sync --frozen --no-install-project
-
-# Copy backend source code
-COPY backend/api/src ./api/src
-COPY backend/core/src ./core/src
-COPY backend/mcp/src ./mcp/src
-
-# Install the project
-RUN uv sync --frozen
+RUN uv sync --frozen --no-dev
 
 # Copy frontend build artifacts
 WORKDIR /app
@@ -41,10 +39,6 @@ ENV DATABASE_NAME=ajapopaja
 ENV PORT=8000
 ENV FRONTEND_DIST_PATH=/app/frontend/dist
 ENV PYTHONPATH=/app/backend/api/src:/app/backend/core/src:/app/backend/mcp/src
-
-# The API serves the frontend from ../../../../frontend/dist relative to main.py
-# In the container, main.py is at /app/backend/api/src/api/main.py
-# ../../../../frontend/dist resolves to /app/frontend/dist, which is where we copied it.
 
 EXPOSE 8000
 
