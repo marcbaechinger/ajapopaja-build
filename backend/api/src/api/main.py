@@ -155,7 +155,11 @@ api_router.include_router(auth_router)
 app.include_router(api_router)
 
 # Serve SPA static files - Mount last resort
-frontend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../frontend/dist"))
+frontend_path = os.environ.get("FRONTEND_DIST_PATH")
+if not frontend_path:
+    # Fallback to local dev path
+    frontend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../frontend/dist"))
+
 if os.path.exists(frontend_path):
     logger.info(f"Serving SPA from: {frontend_path}")
     app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
