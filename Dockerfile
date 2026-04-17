@@ -34,7 +34,7 @@ COPY --from=frontend-builder /app/frontend/dist /app/frontend_dist
 # Environment variables
 ENV MONGODB_URI=mongodb://host.docker.internal:27017/
 ENV DATABASE_NAME=ajapopaja_build_prod
-ENV PORT=8000
+ENV PORT=8081
 ENV FRONTEND_DIST_PATH=/app/frontend_dist
 ENV PYTHONPATH=/app/backend/api/src:/app/backend/core/src:/app/backend/mcp/src
 

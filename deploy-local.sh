@@ -20,14 +20,14 @@ sudo chmod 644 $DEST_DIR/$IMAGE_NAME.tar
 
 echo "4. Setting up environment file at $ENV_FILE..."
 if [ ! -f "$ENV_FILE" ]; then
-    sudo bash -c "cat <<EOT > $ENV_FILE
+  sudo bash -c "cat <<EOT > $ENV_FILE
 MONGODB_URI=mongodb://host.docker.internal:27017/
 DATABASE_NAME=ajapopaja_build_prod
-PORT=8000
+PORT=8081
 EOT"
-    echo "Created default environment file."
+  echo "Created default environment file."
 else
-    echo "Environment file already exists, skipping."
+  echo "Environment file already exists, skipping."
 fi
 
 echo "5. Installing systemd service..."
