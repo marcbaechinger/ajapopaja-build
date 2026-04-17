@@ -10,7 +10,7 @@ RUN npm run build
 FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim AS final
 WORKDIR /app
 
-# Install system dependencies (if any)
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends     git     && rm -rf /var/lib/apt/lists/*
 
 # Copy backend workspace definition
@@ -19,8 +19,7 @@ COPY backend/api/pyproject.toml ./backend/api/
 COPY backend/core/pyproject.toml ./backend/core/
 COPY backend/mcp/pyproject.toml ./backend/mcp/
 
-# To satisfy uv sync for workspace members, we need the source code
-# before we sync because they are installed as editables/local members.
+# Copy backend source code
 COPY backend/api/src ./backend/api/src
 COPY backend/core/src ./backend/core/src
 COPY backend/mcp/src ./backend/mcp/src
@@ -30,15 +29,17 @@ WORKDIR /app/backend
 RUN uv sync --frozen --no-dev
 
 # Copy frontend build artifacts
-WORKDIR /app
 COPY --from=frontend-builder /app/frontend/dist /app/frontend/dist
 
 # Environment variables
 ENV MONGODB_URI=mongodb://host.docker.internal:27017/
 ENV DATABASE_NAME=ajapopaja
 ENV PORT=8000
-ENV FRONTEND_DIST_PATH=/app/frontend/dist
+ENV FRONTEND_DIST_PATH=/app/backend/frontend/dist
 ENV PYTHONPATH=/app/backend/api/src:/app/backend/core/src:/app/backend/mcp/src
+
+# Workdir MUST be the backend directory so uv can find pyproject.toml
+WORKDIR /app/backend
 
 EXPOSE 8000
 
