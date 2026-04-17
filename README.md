@@ -63,7 +63,31 @@ Run these commands from the project root. To stop a server, use `Ctrl+C`.
 
 ---
 
-## 4. Testing & Quality Assurance
+## 4. Docker Build & Deployment
+
+You can build a production-ready Docker image that contains both the backend and the frontend.
+
+### Build the Image
+Use the provided build script to compile the frontend and package the backend:
+```bash
+./docker-build.sh 1.0.0
+```
+
+### Run the Container
+If you have MongoDB running on your host system, use the following command:
+```bash
+docker run -p 8000:8000 \
+  --add-host=host.docker.internal:host-gateway \
+  -e MONGODB_URI=mongodb://host.docker.internal:27017/ \
+  -e PORT=8000 \
+  ajapopaja-build:1.0.0
+```
+
+The application will be accessible at [http://localhost:8000](http://localhost:8000).
+
+---
+
+## 5. Testing & Quality Assurance
 
 ### Python Backend
 Run all backend tests from the `backend/` directory:
@@ -91,7 +115,7 @@ npm run test
 
 ---
 
-## 5. Key Features & Recent Achievements
+## 6. Key Features & Recent Achievements
 
 ### 🚀 Automated Agent Workflow
 - **State Machine Lifecycle**: Tasks follow a strict, reliable path: `created` → `scheduled` -> `inprogress` → `implemented` (or `failed`/`discarded`).
@@ -106,7 +130,7 @@ npm run test
 
 ---
 
-## 6. Engineering Guidelines for AI Agents
+## 7. Engineering Guidelines for AI Agents
 
 ### Recommended CWD
 - **Root Directory (`ajapopaja-build/`)**: Always start here to maintain full context.
@@ -119,7 +143,7 @@ npm run test
 
 ---
 
-## 7. License
+## 8. License
 
 This project is licensed under the **Apache License 2.0**. See the [LICENSE](LICENSE) file for details.
 
