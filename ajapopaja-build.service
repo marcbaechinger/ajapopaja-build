@@ -1,0 +1,23 @@
+[Unit]
+Description=Ajapopaja Build Service
+After=docker.service
+Requires=docker.service
+
+[Service]
+Restart=always
+EnvironmentFile=/etc/ajapopaja-build.env
+ExecStartPre=-/usr/bin/docker stop ajapopaja-build
+ExecStartPre=-/usr/bin/docker rm ajapopaja-build
+# Load the image in case it was updated or missing
+ExecStartPre=/usr/bin/docker load -i /data/ajapopaja/docker/ajapopaja-build.tar
+ExecStart=/usr/bin/docker run --name ajapopaja-build \
+  -p ${PORT}:${PORT} \
+  --add-host=host.docker.internal:host-gateway \
+  -e MONGODB_URI=${MONGODB_URI} \
+  -e DATABASE_NAME=${DATABASE_NAME} \
+  -e PORT=${PORT} \
+  ajapopaja-build:latest
+ExecStop=/usr/bin/docker stop ajapopaja-build
+
+[Install]
+WantedBy=multi-user.target
