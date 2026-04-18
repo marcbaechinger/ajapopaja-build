@@ -51,6 +51,50 @@ async def read_source_file(pipeline_id: str, path: str) -> str:
 
 
 @register_tool(tool_type=READ_ONLY)
+async def read_source_file_by_range(
+    pipeline_id: str, path: str, start_line: int, end_line: int
+) -> str:
+    """
+    Fetch a specific, contiguous range of lines from a file in a project.
+    Both start_line and end_line are 1-based and inclusive.
+
+    Args:
+        pipeline_id: The ID of the pipeline to which the project belongs.
+        path: Path to the source file relative to the project root.
+        start_line: First line to return (1-based, inclusive).
+        end_line: Last line to return (1-based, inclusive).
+    """
+    try:
+        pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
+        if not pipeline or not pipeline.workspace_abs_path:
+            return f"Error: Workspace root is missing for pipeline {pipeline_id}."
+
+        try:
+            full_path = safe_join(pipeline.workspace_abs_path, path)
+        except ValueError as e:
+            return f"Error: {str(e)}"
+
+        if not os.path.isfile(full_path):
+            return f"Error: File '{path}' does not exist."
+
+        if start_line > end_line:
+            return ""
+
+        lines = []
+        with open(full_path, "r") as f:
+            for i, line in enumerate(f, 1):
+                if i >= start_line and i <= end_line:
+                    lines.append(line.rstrip("\n"))
+                if i > end_line:
+                    break
+
+        # If start_line is greater than the total number of lines, return empty string
+        return "\n".join(lines)
+    except Exception as e:
+        return f"Error reading file range: {str(e)}"
+
+
+@register_tool(tool_type=READ_ONLY)
 async def list_project_structure(
     pipeline_id: str, path: str = ".", list_files: bool = False
 ) -> List[str]:

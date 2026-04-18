@@ -16,7 +16,7 @@ import pytest
 import os
 import tempfile
 import shutil
-from api.assistant.tools.file_tools import read_source_file, list_project_structure
+from api.assistant.tools.file_tools import read_source_file, read_source_file_by_range, list_project_structure
 from core.models.models import Pipeline
 
 
@@ -101,3 +101,41 @@ async def test_list_project_structure_sanitization(init_mock_db):
         # Should contain summary for root and src
         assert any("./ (0 files)" in item for item in result)
         assert any("src/ (1 files)" in item for item in result)
+
+
+@pytest.mark.asyncio
+async def test_read_source_file_by_range(init_mock_db):
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        file_name = "range_test.txt"
+        file_path = os.path.join(tmp_dir, file_name)
+        with open(file_path, "w") as f:
+            for i in range(1, 11):
+                f.write(f"Line {i}\n")
+
+        pipeline = Pipeline(name="Range Pipeline", workspace_path=tmp_dir)
+        await pipeline.insert()
+        pipeline_id = str(pipeline.id)
+
+        # Valid range
+        result = await read_source_file_by_range(pipeline_id, file_name, 3, 5)
+        assert result == "Line 3\nLine 4\nLine 5"
+
+        # Single line
+        result = await read_source_file_by_range(pipeline_id, file_name, 1, 1)
+        assert result == "Line 1"
+
+        # Range exceeds file bounds (partially)
+        result = await read_source_file_by_range(pipeline_id, file_name, 9, 15)
+        assert result == "Line 9\nLine 10"
+
+        # Range exceeds file bounds (completely)
+        result = await read_source_file_by_range(pipeline_id, file_name, 11, 20)
+        assert result == ""
+
+        # start_line > end_line
+        result = await read_source_file_by_range(pipeline_id, file_name, 5, 3)
+        assert result == ""
+
+        # File not found
+        result = await read_source_file_by_range(pipeline_id, "nonexistent.txt", 1, 5)
+        assert "Error: File 'nonexistent.txt' does not exist." in result
