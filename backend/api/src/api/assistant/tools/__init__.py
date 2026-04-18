@@ -16,3 +16,4 @@ from . import pipeline_tools
 from . import task_tools
 from . import file_tools
 from . import git_tools
+from . import search_tools
