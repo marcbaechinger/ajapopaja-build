@@ -90,3 +90,25 @@ async def test_git_tools(init_mock_db, git_repo):
         f.write("Modified line\n")
     diff = await git_diff(pipeline_id)
     assert "+Modified line" in diff
+
+@pytest.mark.asyncio
+async def test_git_path_sanitization(init_mock_db, git_repo):
+    pipeline = Pipeline(name="Git Pipeline", workspace_path=git_repo)
+    await pipeline.insert()
+    pipeline_id = str(pipeline.id)
+
+    # Test path traversal in git_blame
+    blame = await git_blame(pipeline_id, "../../../../etc/passwd")
+    assert "Error: Invalid file path." in blame
+
+    # Test absolute path in git_blame
+    blame = await git_blame(pipeline_id, "/etc/passwd")
+    assert "Error: Invalid file path." in blame
+
+    # Test path traversal in git_diff
+    diff = await git_diff(pipeline_id, file_path="../../../../etc/passwd")
+    assert "Error: Invalid file path." in diff
+
+    # Test absolute path in git_diff
+    diff = await git_diff(pipeline_id, file_path="/etc/passwd")
+    assert "Error: Invalid file path." in diff

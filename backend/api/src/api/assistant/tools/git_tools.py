@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import subprocess
 from typing import Optional, List
 from core.queries import pipeline as pipeline_queries
@@ -19,6 +20,15 @@ from api.assistant.decorators import register_tool
 
 # Tool Categories
 READ_ONLY = "read_only"
+
+
+def _sanitize_path(workspace: str, rel_path: str) -> Optional[str]:
+    if ".." in rel_path or rel_path.startswith("/"):
+        return None
+    full = os.path.join(workspace, rel_path)
+    if not os.path.abspath(full).startswith(os.path.abspath(workspace)):
+        return None
+    return full
 
 
 async def _run_git_command(workspace_path: str, args: List[str]) -> str:
@@ -112,10 +122,14 @@ async def git_blame(
     if not pipeline or not pipeline.workspace_path:
         return "Error: Workspace path not found."
 
+    full_path = _sanitize_path(pipeline.workspace_path, file_path)
+    if not full_path:
+        return "Error: Invalid file path. Must be relative and within workspace."
+
     args = ["blame"]
     if line_number:
         args.extend(["-L", f"{line_number},{line_number}"])
-    args.append(file_path)
+    args.append(full_path)
 
     return await _run_git_command(pipeline.workspace_path, args)
 
@@ -178,6 +192,9 @@ async def git_diff(
             args.append(commit_a)
 
     if file_path:
-        args.extend(["--", file_path])
+        full_path = _sanitize_path(pipeline.workspace_path, file_path)
+        if not full_path:
+            return "Error: Invalid file path. Must be relative and within workspace."
+        args.extend(["--", full_path])
 
     return await _run_git_command(pipeline.workspace_path, args)
