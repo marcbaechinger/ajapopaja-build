@@ -14,33 +14,28 @@
 
 from functools import wraps
 from typing import Callable, Dict, Any, Optional
-from .tool_registry import registry
+from api.assistant.tool_registry import registry
+
 
 def register_tool(
     name: Optional[str] = None,
     description: Optional[str] = None,
     tool_type: str = "read_only",
-    parameters: Optional[Dict[str, Any]] = None
+    parameters: Optional[Dict[str, Any]] = None,
 ):
     def decorator(func: Callable):
-        nonlocal name, description
-        
-        tool_name = name or func.__name__
-        tool_description = description or func.__doc__ or "No description provided."
-        tool_parameters = parameters or {"type": "object", "properties": {}}
-
         registry.register_tool(
-            name=tool_name,
-            description=tool_description,
+            func=func,
+            name=name,
+            description=description,
             tool_type=tool_type,
-            parameters=tool_parameters,
-            func=func
+            parameters=parameters,
         )
-        
+
         @wraps(func)
         def wrapper(*args, **kwargs):
             return func(*args, **kwargs)
-        
+
         return wrapper
-    
+
     return decorator

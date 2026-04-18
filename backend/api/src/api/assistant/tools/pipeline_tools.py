@@ -14,28 +14,25 @@
 
 from typing import List, Dict
 from core.queries import pipeline as pipeline_queries
-from ..decorators import register_tool
+from api.assistant.decorators import register_tool
 
-@register_tool(
-    name="list_pipelines",
-    description="Returns a list of all pipelines.",
-    tool_type="read_only",
-    parameters={"type": "object", "properties": {}}
-)
+
+@register_tool()
 async def list_pipelines() -> List[Dict]:
+    """
+    Returns a list of all pipelines available in the system.
+    """
     pipelines = await pipeline_queries.get_all_pipelines()
     return [p.model_dump(mode="json") for p in pipelines]
 
-@register_tool(
-    name="get_pipeline_details",
-    description="Returns details for a specific pipeline.",
-    tool_type="read_only",
-    parameters={
-        "type": "object",
-        "properties": {"pipeline_id": {"type": "string"}},
-        "required": ["pipeline_id"],
-    }
-)
+
+@register_tool()
 async def get_pipeline_details(pipeline_id: str) -> Dict:
+    """
+    Returns detailed information for a specific pipeline.
+
+    Args:
+        pipeline_id: The unique identifier of the pipeline to retrieve.
+    """
     pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
     return pipeline.model_dump(mode="json")

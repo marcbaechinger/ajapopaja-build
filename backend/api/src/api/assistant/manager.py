@@ -15,7 +15,8 @@
 import time
 from typing import Dict, Optional, Callable, Awaitable
 from core.models.models import UserChat
-from .session import AssistantSession
+from api.assistant.session import AssistantSession
+
 
 class AssistantManager:
     def __init__(self):
@@ -23,9 +24,11 @@ class AssistantManager:
         self.last_access: Dict[str, float] = {}
         self.session_ttl = 30 * 60  # 30 minutes
 
-    async def get_or_create_session(self, user_id: str, on_update: Callable[[Dict], Awaitable[None]]) -> AssistantSession:
+    async def get_or_create_session(
+        self, user_id: str, on_update: Callable[[Dict], Awaitable[None]]
+    ) -> AssistantSession:
         self._cleanup_sessions()
-        
+
         if user_id in self.sessions:
             # Update callback because WebSocket might be different
             self.sessions[user_id].on_update = on_update
@@ -43,9 +46,14 @@ class AssistantManager:
 
     def _cleanup_sessions(self):
         now = time.time()
-        to_delete = [uid for uid, last in self.last_access.items() if now - last > self.session_ttl]
+        to_delete = [
+            uid
+            for uid, last in self.last_access.items()
+            if now - last > self.session_ttl
+        ]
         for uid in to_delete:
             del self.sessions[uid]
             del self.last_access[uid]
+
 
 manager = AssistantManager()

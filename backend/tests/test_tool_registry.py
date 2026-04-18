@@ -43,8 +43,8 @@ def test_tool_registry_list_unregister():
     async def tool1(): pass
     async def tool2(): pass
     
-    registry.register_tool("t1", "d1", "read_only", {}, tool1)
-    registry.register_tool("t2", "d2", "write_access", {}, tool2)
+    registry.register_tool(tool1, name="t1", description="d1", tool_type="read_only", parameters={})
+    registry.register_tool(tool2, name="t2", description="d2", tool_type="write_access", parameters={})
     
     tools = registry.list_tools()
     assert len(tools) == 2
@@ -86,3 +86,36 @@ async def test_register_tool_decorator():
     tool2 = global_registry.get_tool("default_name_tool")
     assert tool2 is not None
     assert tool2.description == "This is a docstring."
+
+@pytest.mark.asyncio
+async def test_automatic_metadata_extraction():
+    from api.assistant.tool_registry import ToolRegistry
+    registry = ToolRegistry()
+    
+    @register_tool(tool_type="read_only")
+    async def complex_tool(pipeline_id: str, count: int = 5):
+        """
+        A complex tool description.
+        
+        Args:
+            pipeline_id: The ID of the pipeline.
+            count: How many items to return.
+        """
+        return f"{pipeline_id}: {count}"
+    
+    # We need to manually register it to the local registry for this test 
+    # as the decorator uses the global one.
+    registry.register_tool(complex_tool, tool_type="read_only")
+    
+    tool = registry.get_tool("complex_tool")
+    assert tool is not None
+    assert tool.description == "A complex tool description."
+    assert tool.parameters["type"] == "object"
+    assert "pipeline_id" in tool.parameters["properties"]
+    assert "count" in tool.parameters["properties"]
+    assert tool.parameters["properties"]["pipeline_id"]["type"] == "string"
+    assert tool.parameters["properties"]["pipeline_id"]["description"] == "The ID of the pipeline."
+    assert tool.parameters["properties"]["count"]["type"] == "number"
+    assert tool.parameters["properties"]["count"]["description"] == "How many items to return."
+    assert "pipeline_id" in tool.parameters["required"]
+    assert "count" not in tool.parameters["required"]

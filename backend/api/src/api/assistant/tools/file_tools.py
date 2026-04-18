@@ -14,30 +14,23 @@
 
 import os
 import glob
-from typing import List, Dict
+from typing import List
 from core.queries import pipeline as pipeline_queries
-from ..decorators import register_tool
+from api.assistant.decorators import register_tool
 
 # Tool Categories
 READ_ONLY = "read_only"
 
-@register_tool(
-    name="read_source_file",
-    description="Reads the content of a source file from the project.",
-    tool_type=READ_ONLY,
-    parameters={
-        "type": "object",
-        "properties": {
-            "pipeline_id": {"type": "string"},
-            "path": {
-                "type": "string",
-                "description": "Relative path to the file from project root.",
-            },
-        },
-        "required": ["pipeline_id", "path"],
-    }
-)
+
+@register_tool(tool_type=READ_ONLY)
 async def read_source_file(pipeline_id: str, path: str) -> str:
+    """
+    Reads the content of a source file from the project.
+
+    Args:
+        pipeline_id: The ID of the pipeline to which the project belongs.
+        path: Relative path to the file from the project root.
+    """
     try:
         pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
         if not pipeline.workspace_path:
@@ -60,23 +53,16 @@ async def read_source_file(pipeline_id: str, path: str) -> str:
     except Exception as e:
         return f"Error reading file: {str(e)}"
 
-@register_tool(
-    name="list_project_structure",
-    description="Lists files in the project structure.",
-    tool_type=READ_ONLY,
-    parameters={
-        "type": "object",
-        "properties": {
-            "pipeline_id": {"type": "string"},
-            "path": {
-                "type": "string",
-                "description": "Subdirectory to list (optional).",
-            },
-        },
-        "required": ["pipeline_id"],
-    }
-)
+
+@register_tool(tool_type=READ_ONLY)
 async def list_project_structure(pipeline_id: str, path: str = ".") -> List[str]:
+    """
+    Lists files in the project structure for a given pipeline.
+
+    Args:
+        pipeline_id: The ID of the pipeline whose project structure should be listed.
+        path: Subdirectory to list (optional, defaults to root).
+    """
     try:
         pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
         if not pipeline.workspace_path:

@@ -18,7 +18,6 @@ import ollama
 from typing import List, Dict, Any, Optional, Callable, Awaitable
 from core.models.models import ChatMessage, UserChat
 from .tool_registry import registry
-from . import tools  # Ensure tools are registered
 
 MODEL_NAME = "qwen3.5:9b"  # Or any model that supports tool calling
 READ_ONLY = "read_only"
@@ -130,25 +129,25 @@ class AssistantSession:
 
         for chunk in response:
             # Handle chunk being an object or a dict
-            msg = getattr(chunk, 'message', None)
+            msg = getattr(chunk, "message", None)
             if not msg and isinstance(chunk, dict):
                 msg = chunk.get("message")
-            
+
             if msg:
                 # Handle text streaming
-                content = getattr(msg, 'content', '')
+                content = getattr(msg, "content", "")
                 if not content and isinstance(msg, dict):
                     content = msg.get("content", "")
-                
+
                 if content:
                     full_content += content
                     await self.on_update({"type": "chunk", "content": content})
 
                 # Handle tool calls
-                tc = getattr(msg, 'tool_calls', None)
+                tc = getattr(msg, "tool_calls", None)
                 if not tc and isinstance(msg, dict):
                     tc = msg.get("tool_calls", [])
-                
+
                 if tc:
                     tool_calls.extend(tc)
 
@@ -156,38 +155,42 @@ class AssistantSession:
             # Convert tool calls to dicts for Pydantic/Storage
             tool_calls_dicts = []
             for tc in tool_calls:
-                if hasattr(tc, 'model_dump'):
+                if hasattr(tc, "model_dump"):
                     tool_calls_dicts.append(tc.model_dump())
-                elif hasattr(tc, 'dict'):
+                elif hasattr(tc, "dict"):
                     tool_calls_dicts.append(tc.dict())
                 elif isinstance(tc, dict):
                     tool_calls_dicts.append(tc)
                 else:
                     # Manual fallback if not a Pydantic model
-                    tool_calls_dicts.append({
-                        "id": getattr(tc, 'id', None) or "legacy_id",
-                        "type": getattr(tc, 'type', 'function'),
-                        "function": {
-                            "name": tc.function.name,
-                            "arguments": tc.function.arguments
+                    tool_calls_dicts.append(
+                        {
+                            "id": getattr(tc, "id", None) or "legacy_id",
+                            "type": getattr(tc, "type", "function"),
+                            "function": {
+                                "name": tc.function.name,
+                                "arguments": tc.function.arguments,
+                            },
                         }
-                    })
+                    )
 
-            self.history.append(ChatMessage(
-                role="assistant", 
-                content=full_content,
-                tool_calls=tool_calls_dicts if tool_calls_dicts else None
-            ))
+            self.history.append(
+                ChatMessage(
+                    role="assistant",
+                    content=full_content,
+                    tool_calls=tool_calls_dicts if tool_calls_dicts else None,
+                )
+            )
             await self._save_history()
 
         if tool_calls:
             # For simplicity, handle first tool call for now
             # Use the dict version for our own logic
             tool_call_dict = tool_calls_dicts[0]
-            
+
             tool_name = tool_call_dict.get("function", {}).get("name")
             if not tool_name:
-                 return
+                return
 
             tool_def = registry.get_tool(tool_name)
 
@@ -199,9 +202,9 @@ class AssistantSession:
                 result = await self._execute_tool(tool_call_dict)
                 self.history.append(
                     ChatMessage(
-                        role="tool", 
-                        content=json.dumps(result), 
-                        tool_calls=[tool_call_dict]
+                        role="tool",
+                        content=json.dumps(result),
+                        tool_calls=[tool_call_dict],
                     )
                 )
                 await self._save_history()
@@ -214,7 +217,9 @@ class AssistantSession:
                         "type": "tool_request",
                         "id": tool_call_dict.get("id") or "legacy_id",
                         "tool": tool_name,
-                        "arguments": tool_call_dict.get("function", {}).get("arguments"),
+                        "arguments": tool_call_dict.get("function", {}).get(
+                            "arguments"
+                        ),
                     }
                 )
 
@@ -245,9 +250,6 @@ class AssistantSession:
         # Convert history to serializable dicts
         history_data = []
         for msg in self.history:
-            history_data.append(msg.model_dump(mode='json'))
-        
-        await self.on_update({
-            "type": "assistant_history",
-            "messages": history_data
-        })
+            history_data.append(msg.model_dump(mode="json"))
+
+        await self.on_update({"type": "assistant_history", "messages": history_data})
