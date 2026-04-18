@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 .venv/
 venv/
+virtual/
 .pytest_cache/
 .coverage
 htmlcov/
