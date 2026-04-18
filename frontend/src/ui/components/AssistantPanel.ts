@@ -19,24 +19,116 @@ import type { AssistantResponse } from '../../core/AssistantService.ts';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 
+type PanelPosition = 'tl' | 'tc' | 'tr' | 'bl' | 'bc' | 'br' | 'center' | 'full';
+type PanelSize = 'normal' | 'expanded';
+
+interface PanelSettings {
+  position: PanelPosition;
+  size: PanelSize;
+}
+
 export class AssistantPanel {
   private context: AppContext;
   private container: HTMLElement;
   private isOpen: boolean = false;
   private currentAssistantMessage: HTMLElement | null = null;
   private messageContainer: HTMLElement | null = null;
+  private settings: PanelSettings = {
+    position: 'center',
+    size: 'normal'
+  };
 
   constructor(context: AppContext) {
     this.context = context;
+    this.loadSettings();
     this.container = this.createContainer();
     document.body.appendChild(this.container);
     this.setupEventListeners();
+    this.applySettings();
+  }
+
+  private loadSettings() {
+    const saved = localStorage.getItem('assistant-panel-settings');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        this.settings = { ...this.settings, ...parsed };
+      } catch (e) {}
+    }
+  }
+
+  private saveSettings() {
+    localStorage.setItem('assistant-panel-settings', JSON.stringify(this.settings));
+    this.applySettings();
+  }
+
+  private applySettings() {
+    // Base classes
+    this.container.className = 'fixed bg-app-surface border border-app-border rounded-2xl shadow-2xl transition-all duration-300 z-50 flex flex-col overflow-hidden';
+    
+    if (this.isOpen) {
+      this.container.classList.add('opacity-100', 'scale-100', 'pointer-events-auto');
+    } else {
+      this.container.classList.add('opacity-0', 'scale-95', 'pointer-events-none');
+    }
+
+    if (this.settings.position === 'full') {
+      this.container.classList.add('bottom-0', 'left-0', 'right-0', 'w-full', 'rounded-b-none');
+      if (this.settings.size === 'expanded') {
+        this.container.classList.add('h-[85vh]');
+      } else {
+        this.container.classList.add('h-[50vh]');
+      }
+    } else {
+      if (this.settings.size === 'expanded') {
+        this.container.classList.add('w-[800px]', 'max-w-[95vw]', 'h-[85vh]');
+      } else {
+        this.container.classList.add('w-96', 'max-h-[70vh]');
+      }
+
+      switch (this.settings.position) {
+        case 'tl': this.container.classList.add('top-4', 'left-4'); break;
+        case 'tr': this.container.classList.add('top-4', 'right-4'); break;
+        case 'bl': this.container.classList.add('bottom-4', 'left-4'); break;
+        case 'br': this.container.classList.add('bottom-4', 'right-4'); break;
+        case 'tc': this.container.classList.add('top-4', 'left-1/2', '-translate-x-1/2'); break;
+        case 'bc': this.container.classList.add('bottom-4', 'left-1/2', '-translate-x-1/2'); break;
+        case 'center': this.container.classList.add('top-1/2', 'left-1/2', '-translate-x-1/2', '-translate-y-1/2'); break;
+      }
+    }
+
+    // Update active states on position buttons
+    this.container.querySelectorAll('.pos-btn').forEach(btn => {
+      const b = btn as HTMLElement;
+      if (b.dataset.pos === this.settings.position) {
+        b.classList.add('bg-app-accent-2');
+      } else {
+        b.classList.remove('bg-app-accent-2');
+      }
+    });
+
+    // Update active states on size buttons
+    this.container.querySelectorAll('.size-btn').forEach(btn => {
+      const b = btn as HTMLElement;
+      if (b.dataset.size === this.settings.size) {
+        b.classList.add('border-app-accent-2', 'text-app-accent-2');
+        b.classList.remove('border-app-border', 'text-app-text');
+      } else {
+        b.classList.remove('border-app-accent-2', 'text-app-accent-2');
+        b.classList.add('border-app-border', 'text-app-text');
+      }
+    });
+    
+    // Auto-scroll when expanding height
+    if (this.isOpen) {
+        setTimeout(() => this.scrollToBottom(), 300);
+    }
   }
 
   private createContainer(): HTMLElement {
     const el = document.createElement('div');
     el.id = 'assistant-panel';
-    el.className = 'fixed bottom-24 right-8 w-96 bg-app-surface border border-app-border rounded-2xl shadow-2xl transition-all duration-300 transform translate-x-[120%] z-50 flex flex-col overflow-hidden max-h-[70vh]';
+    // classes are managed by applySettings()
     
     el.innerHTML = `
       <div class="bg-app-bg p-4 border-b border-app-border flex justify-between items-center shrink-0">
@@ -47,18 +139,44 @@ export class AssistantPanel {
           <span class="font-black text-app-accent-2 uppercase tracking-widest text-sm">Assistant</span>
         </div>
         <div class="flex gap-2">
-          <button id="assistant-clear" class="p-1.5 hover:bg-app-bg text-app-muted hover:text-app-text rounded-lg transition-colors cursor-pointer" title="Clear History">
+          <button id="assistant-settings-toggle" class="p-1.5 hover:bg-app-bg text-app-muted hover:text-app-text rounded-lg transition-colors cursor-pointer focus:ring-2 outline-none focus:ring-app-accent-2" title="Panel Settings">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+          </button>
+          <button id="assistant-clear" class="p-1.5 hover:bg-app-bg text-app-muted hover:text-app-text rounded-lg transition-colors cursor-pointer focus:ring-2 outline-none focus:ring-app-accent-2" title="Clear History">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
           </button>
-          <button id="assistant-close" class="p-1.5 hover:bg-app-bg text-app-muted hover:text-app-text rounded-lg transition-colors cursor-pointer">
+          <button id="assistant-close" class="p-1.5 hover:bg-app-bg text-app-muted hover:text-app-text rounded-lg transition-colors cursor-pointer focus:ring-2 outline-none focus:ring-app-accent-2">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
           </button>
         </div>
       </div>
       
+      <div id="assistant-settings-drawer" class="hidden bg-app-bg border-b border-app-border p-4 flex flex-col gap-4 shrink-0 shadow-inner">
+        <div class="flex justify-between items-center">
+          <span class="text-[10px] font-bold text-app-muted uppercase tracking-widest">Position</span>
+          <div class="grid grid-cols-3 gap-1" role="group" aria-label="Select Panel Position">
+            <button class="pos-btn w-6 h-4 border border-app-border rounded-sm hover:border-app-accent-2 transition-colors cursor-pointer focus:ring-2 outline-none focus:ring-app-accent-2" data-pos="tl" title="Top Left" aria-label="Position Top Left"></button>
+            <button class="pos-btn w-6 h-4 border border-app-border rounded-sm hover:border-app-accent-2 transition-colors cursor-pointer focus:ring-2 outline-none focus:ring-app-accent-2" data-pos="tc" title="Top Center" aria-label="Position Top Center"></button>
+            <button class="pos-btn w-6 h-4 border border-app-border rounded-sm hover:border-app-accent-2 transition-colors cursor-pointer focus:ring-2 outline-none focus:ring-app-accent-2" data-pos="tr" title="Top Right" aria-label="Position Top Right"></button>
+            <button class="pos-btn w-full h-4 border border-app-border rounded-sm hover:border-app-accent-2 transition-colors col-span-3 cursor-pointer focus:ring-2 outline-none focus:ring-app-accent-2" data-pos="center" title="Center" aria-label="Position Center"></button>
+            <button class="pos-btn w-6 h-4 border border-app-border rounded-sm hover:border-app-accent-2 transition-colors cursor-pointer focus:ring-2 outline-none focus:ring-app-accent-2" data-pos="bl" title="Bottom Left" aria-label="Position Bottom Left"></button>
+            <button class="pos-btn w-6 h-4 border border-app-border rounded-sm hover:border-app-accent-2 transition-colors cursor-pointer focus:ring-2 outline-none focus:ring-app-accent-2" data-pos="bc" title="Bottom Center" aria-label="Position Bottom Center"></button>
+            <button class="pos-btn w-6 h-4 border border-app-border rounded-sm hover:border-app-accent-2 transition-colors cursor-pointer focus:ring-2 outline-none focus:ring-app-accent-2" data-pos="br" title="Bottom Right" aria-label="Position Bottom Right"></button>
+            <button class="pos-btn w-full h-4 border border-app-border rounded-sm hover:border-app-accent-2 transition-colors col-span-3 mt-1 cursor-pointer focus:ring-2 outline-none focus:ring-app-accent-2" data-pos="full" title="Full Width" aria-label="Position Full Width"></button>
+          </div>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-[10px] font-bold text-app-muted uppercase tracking-widest">Size</span>
+          <div class="flex gap-2" role="group" aria-label="Select Panel Size">
+             <button class="size-btn px-3 py-1 text-[10px] uppercase font-bold tracking-widest border border-app-border rounded hover:border-app-accent-2 transition-colors cursor-pointer focus:ring-2 outline-none focus:ring-app-accent-2" data-size="normal" aria-label="Normal Size">Normal</button>
+             <button class="size-btn px-3 py-1 text-[10px] uppercase font-bold tracking-widest border border-app-border rounded hover:border-app-accent-2 transition-colors cursor-pointer focus:ring-2 outline-none focus:ring-app-accent-2" data-size="expanded" aria-label="Expanded Size">Expanded</button>
+          </div>
+        </div>
+      </div>
+      
       <div id="assistant-messages" class="flex-grow overflow-y-auto p-4 space-y-4 custom-scrollbar bg-app-surface/50">
          <div class="flex flex-col gap-1">
-           <div class="bg-app-bg p-3 rounded-2xl rounded-tl-none border border-app-border text-sm text-app-text max-w-[90%]">
+           <div class="bg-app-bg p-3 rounded-2xl rounded-tl-none border border-app-border text-sm text-app-text max-w-[90%] shadow-sm">
              Hello! I'm your AI assistant. How can I help you with your tasks or pipelines today?
            </div>
          </div>
@@ -70,7 +188,7 @@ export class AssistantPanel {
                     class="w-full bg-app-surface border border-app-border rounded-xl pl-4 pr-12 py-3 text-sm text-app-text outline-none focus:ring-2 focus:ring-app-accent-2 transition-all resize-none max-h-32"
                     placeholder="Ask me anything..."
                     rows="1"></textarea>
-          <button type="submit" class="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-app-accent-2 text-white rounded-lg hover:brightness-110 transition-all shadow-lg cursor-pointer">
+          <button type="submit" class="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-app-accent-2 text-white rounded-lg hover:brightness-110 transition-all shadow-lg cursor-pointer focus:ring-2 focus:ring-offset-2 focus:ring-app-accent-2 outline-none" aria-label="Send Message">
              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
           </button>
         </form>
@@ -86,6 +204,33 @@ export class AssistantPanel {
     this.container.querySelector('#assistant-close')?.addEventListener('click', () => this.close());
     this.container.querySelector('#assistant-clear')?.addEventListener('click', () => {
       this.context.assistantService.clearHistory();
+    });
+
+    const settingsDrawer = this.container.querySelector('#assistant-settings-drawer');
+    this.container.querySelector('#assistant-settings-toggle')?.addEventListener('click', () => {
+      settingsDrawer?.classList.toggle('hidden');
+    });
+
+    this.container.querySelectorAll('.pos-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const target = e.currentTarget as HTMLElement;
+        const pos = target.dataset.pos as PanelPosition;
+        if (pos) {
+          this.settings.position = pos;
+          this.saveSettings();
+        }
+      });
+    });
+
+    this.container.querySelectorAll('.size-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const target = e.currentTarget as HTMLElement;
+        const size = target.dataset.size as PanelSize;
+        if (size) {
+          this.settings.size = size;
+          this.saveSettings();
+        }
+      });
     });
 
     const form = this.container.querySelector('#assistant-form') as HTMLFormElement;
@@ -124,15 +269,14 @@ export class AssistantPanel {
 
   private open() {
     this.isOpen = true;
-    this.container.classList.remove('translate-x-[120%]');
-    this.container.classList.add('translate-x-0');
+    this.applySettings();
     this.container.querySelector('textarea')?.focus();
+    this.scrollToBottom();
   }
 
   private close() {
     this.isOpen = false;
-    this.container.classList.remove('translate-x-0');
-    this.container.classList.add('translate-x-[120%]');
+    this.applySettings();
   }
 
   private handleResponse(response: AssistantResponse) {
@@ -155,7 +299,7 @@ export class AssistantPanel {
       if (this.messageContainer) {
         this.messageContainer.innerHTML = `
           <div class="flex flex-col gap-1">
-             <div class="bg-app-bg p-3 rounded-2xl rounded-tl-none border border-app-border text-sm text-app-text max-w-[90%]">
+             <div class="bg-app-bg p-3 rounded-2xl rounded-tl-none border border-app-border text-sm text-app-text max-w-[90%] shadow-sm">
                History cleared. How can I help you?
              </div>
           </div>
@@ -178,7 +322,7 @@ export class AssistantPanel {
     
     msgEl.innerHTML = `
       <div class="${isUser ? 'ml-auto bg-app-accent-2 text-white rounded-tr-none' : (isError ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-app-bg border-app-border text-app-text rounded-tl-none')} 
-                  p-3 rounded-2xl border text-sm max-w-[90%] bubble-content prose prose-invert prose-xs prose-p:my-0 shadow-sm">
+                  p-3 rounded-2xl border text-sm max-w-[90%] bubble-content prose-theme prose-xs prose-p:my-0 shadow-sm">
         ${isUser ? text : (text ? DOMPurify.sanitize(marked.parse(text) as string) : '<span class="animate-pulse">...</span>')}
       </div>
     `;
@@ -208,7 +352,7 @@ export class AssistantPanel {
       <div class="text-xs font-bold text-app-text">${request.tool}</div>
       <pre class="text-[10px] bg-app-surface p-2 rounded border border-app-border overflow-x-auto text-app-muted">${args}</pre>
       <div class="flex gap-2">
-        <button class="confirm-tool flex-grow bg-app-accent-2 text-white py-1.5 rounded-lg text-xs font-bold hover:brightness-110 transition-all cursor-pointer">
+        <button class="confirm-tool flex-grow bg-app-accent-2 text-white py-1.5 rounded-lg text-xs font-bold hover:brightness-110 transition-all cursor-pointer focus:ring-2 focus:ring-offset-2 focus:ring-app-accent-2 outline-none">
           Confirm & Execute
         </button>
       </div>
