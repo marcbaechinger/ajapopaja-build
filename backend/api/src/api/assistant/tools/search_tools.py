@@ -73,7 +73,7 @@ async def grep(
     args = ["grep", "-rnI"]
     if ignore_case:
         args.append("-i")
-    if context_lines is not None and context_lines > 0:
+    if context_lines is not None and int(context_lines) > 0:
         args.append(f"-C{context_lines}")
     
     if file_glob:
