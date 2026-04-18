@@ -77,7 +77,7 @@ export class PipelineClient extends BaseClient {
     return await response.json();
   }
 
-  async getGeminiStatus(id: string): Promise<{ running: boolean, log_file: string | null }> {
+  async getGeminiStatus(id: string): Promise<{ running: boolean, log_file: string | null, available: boolean }> {
     const response = await this.fetch(`${this.baseUrl}/pipelines/${id}/gemini/status`);
     return await response.json();
   }
@@ -86,7 +86,7 @@ export class PipelineClient extends BaseClient {
     return `${this.baseUrl}/pipelines/${id}/gemini/logs/stream`;
   }
 
-  async getVibeStatus(id: string): Promise<{ running: boolean, log_file: string | null }> {
+  async getVibeStatus(id: string): Promise<{ running: boolean, log_file: string | null, available: boolean }> {
     const response = await this.fetch(`${this.baseUrl}/pipelines/${id}/vibe/status`);
     return await response.json();
   }

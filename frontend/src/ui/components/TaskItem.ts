@@ -120,7 +120,7 @@ export class TaskItem {
     const isDiscarded = task.status === TaskStatus.DISCARDED;
     const isCompleted = ([TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED] as any[]).includes(task.status);
 
-    const isEditableTitle = [TaskStatus.CREATED, TaskStatus.PROPOSED].includes(task.status as TaskStatus);
+    const isEditableTitle = ([TaskStatus.CREATED, TaskStatus.PROPOSED] as any[]).includes(task.status);
 
     const specHtml = `
       <div class="spec-container w-full text-xs bg-app-surface p-3 rounded-lg border border-app-border transition-all"

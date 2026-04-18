@@ -186,25 +186,25 @@ export class PipelineDetailView extends View {
     }));
     this.unsubs.push(this.context.wsClient.on('GEMINI_PROCESS_STARTED', (message: any) => {
       if (message.payload?.pipeline_id === this.pipelineId) {
-        this.geminiStatus = { running: true, log_file: message.payload.log_file_path };
+        this.geminiStatus = { ...this.geminiStatus, running: true, log_file: message.payload.log_file_path };
         this.updateHeader();
       }
     }));
     this.unsubs.push(this.context.wsClient.on('GEMINI_PROCESS_STOPPED', (message: any) => {
       if (message.payload?.pipeline_id === this.pipelineId) {
-        this.geminiStatus = { running: false, log_file: null };
+        this.geminiStatus = { ...this.geminiStatus, running: false, log_file: null };
         this.updateHeader();
       }
     }));
     this.unsubs.push(this.context.wsClient.on('VIBE_PROCESS_STARTED', (message: any) => {
       if (message.payload?.pipeline_id === this.pipelineId) {
-        this.vibeStatus = { running: true, log_file: message.payload.log_file_path };
+        this.vibeStatus = { ...this.vibeStatus, running: true, log_file: message.payload.log_file_path };
         this.updateHeader();
       }
     }));
     this.unsubs.push(this.context.wsClient.on('VIBE_PROCESS_STOPPED', (message: any) => {
       if (message.payload?.pipeline_id === this.pipelineId) {
-        this.vibeStatus = { running: false, log_file: null };
+        this.vibeStatus = { ...this.vibeStatus, running: false, log_file: null };
         this.updateHeader();
       }
     }));
