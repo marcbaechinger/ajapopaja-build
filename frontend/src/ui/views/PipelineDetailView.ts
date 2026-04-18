@@ -246,6 +246,19 @@ export class PipelineDetailView extends View {
       }
     });
 
+    this.context.actionRegistry.register('copy_pipeline_id', async (_e, el) => {
+      try {
+        await navigator.clipboard.writeText(this.pipelineId);
+        const originalHtml = el.innerHTML;
+        el.innerHTML = `<svg class="w-3 h-3 text-green-500 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`;
+        setTimeout(() => {
+          el.innerHTML = originalHtml;
+        }, 2000);
+      } catch (err) {
+        console.error('Failed to copy pipeline ID:', err);
+      }
+    });
+
     this.context.actionRegistry.register('open_gemini_logs', (e) => {
       e.preventDefault();
       const url = this.context.pipelineClient.getGeminiLogsStreamUrl(this.pipelineId);
@@ -885,7 +898,12 @@ export class PipelineDetailView extends View {
           </button>
         </div>
         <div class="flex flex-wrap items-center gap-3 mt-2">
-          <p class="text-app-muted text-[10px] uppercase font-bold tracking-widest bg-app-bg px-2 py-1 rounded border border-app-border">ID: ${this.pipelineId}</p>
+          <div class="flex items-center bg-app-bg rounded border border-app-border overflow-hidden">
+            <p class="text-app-muted text-[10px] uppercase font-bold tracking-widest px-2 py-1">ID: ${this.pipelineId}</p>
+            <button data-action-click="copy_pipeline_id" class="px-2 py-1 bg-app-surface border-l border-app-border text-app-muted hover:text-app-accent-2 transition-colors cursor-pointer group/copy" title="Copy ID">
+               <svg class="w-3 h-3 group-hover/copy:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+            </button>
+          </div>
           <p class="text-app-muted text-[10px] uppercase font-bold tracking-widest bg-app-bg px-2 py-1 rounded border border-app-border">Workspace: ${this.pipeline.workspace_path || 'Default'}</p>
           <div id="header-stats" class="flex flex-wrap gap-2 text-[10px] uppercase font-bold tracking-wider"></div>
         </div>
@@ -989,7 +1007,12 @@ export class PipelineDetailView extends View {
               <div class="flex flex-col">
                 <h2 id="pipeline-title" class="text-3xl font-black text-app-accent-1 tracking-tight">Loading...</h2>
                 <div class="flex flex-wrap items-center gap-3 mt-2">
-                  <p class="text-app-muted text-[10px] uppercase font-bold tracking-widest bg-app-bg px-2 py-1 rounded border border-app-border">ID: ${this.pipelineId}</p>
+                  <div class="flex items-center bg-app-bg rounded border border-app-border overflow-hidden">
+                    <p class="text-app-muted text-[10px] uppercase font-bold tracking-widest px-2 py-1">ID: ${this.pipelineId}</p>
+                    <button data-action-click="copy_pipeline_id" class="px-2 py-1 bg-app-surface border-l border-app-border text-app-muted hover:text-app-accent-2 transition-colors cursor-pointer group/copy" title="Copy ID">
+                       <svg class="w-3 h-3 group-hover/copy:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                    </button>
+                  </div>
                   <div id="header-stats" class="flex flex-wrap gap-2 text-[10px] uppercase font-bold tracking-wider"></div>
                 </div>
               </div>
