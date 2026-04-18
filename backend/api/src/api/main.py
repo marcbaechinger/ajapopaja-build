@@ -127,48 +127,63 @@ async def generic_ajapopaja_error_handler(request: Request, exc: AjapopajaError)
     return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
-# Surgical raw ASGI adapter for /mcp without trailing slash to avoid 405/307 issues
-# Using a class-based ASGI application ensures Starlette doesn't wrap it in its
-# function-to-response converter, which resolves both the TypeError and the
-# "Unexpected ASGI message" conflict.
-class MCPSlashlessRouter:
-    def __init__(self, path: str = "/"):
-        self.path = path
+# Surgical raw ASGI adapter for MCP to handle prefix stripping and root-level access
+class MCPProxy:
+    def __init__(self, strip_prefix: Optional[str] = None):
+        self.strip_prefix = strip_prefix
 
     async def __call__(self, scope, receive, send):
-        # Proxy to mcp_app by stripping the path
-        scope["path"] = self.path
-        scope["raw_path"] = self.path.encode("ascii")
+        path = scope.get("path", "")
+        if self.strip_prefix and path.startswith(self.strip_prefix):
+            # Strip prefix (e.g., /mcp) and ensure it starts with /
+            new_path = path[len(self.strip_prefix) :] or "/"
+            scope["path"] = new_path
+            scope["raw_path"] = new_path.encode("ascii")
+
         await mcp_app(scope, receive, send)
 
 
 # We use the Starlette Route directly and add it to the app's router
-app.router.routes.extend(
-    [
-        Route(
-            "/mcp",
-            MCPSlashlessRouter(),
-            methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        ),
-        # Support root-level POSTs for MCP clients configured to hit root
-        Route(
-            "/",
-            MCPSlashlessRouter(),
-            methods=["POST"],
-        ),
-        # Support root-level SSE for MCP clients configured to hit root
-        Route(
-            "/sse",
-            MCPSlashlessRouter("/sse"),
-            methods=["GET"],
-        ),
-        # Support root-level messages for MCP clients configured to hit root
-        Route(
-            "/messages",
-            MCPSlashlessRouter("/messages"),
-            methods=["POST"],
-        ),
-    ]
+# Insert at the beginning to ensure it matches before SPA or other greedy routes
+app.router.routes.insert(
+    0,
+    Route(
+        "/mcp",
+        MCPProxy(strip_prefix="/mcp"),
+        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    ),
+)
+app.router.routes.insert(
+    1,
+    Route(
+        "/mcp/{path:path}",
+        MCPProxy(strip_prefix="/mcp"),
+        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    ),
+)
+app.router.routes.insert(
+    2,
+    Route(
+        "/",
+        MCPProxy(),
+        methods=["POST"],
+    ),
+)
+app.router.routes.insert(
+    3,
+    Route(
+        "/sse",
+        MCPProxy(),
+        methods=["GET"],
+    ),
+)
+app.router.routes.insert(
+    4,
+    Route(
+        "/messages",
+        MCPProxy(),
+        methods=["POST"],
+    ),
 )
 
 
