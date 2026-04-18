@@ -133,7 +133,7 @@ export class TaskItem {
               ${isCompleted ? '' : '<span class="text-[10px] text-app-muted opacity-0 group-hover:opacity-100 transition-opacity">Click to edit</span>'}
             </div>
           </div>
-          <div class="spec-display prose prose-invert prose-xs max-w-none text-app-text/70 overflow-hidden relative transition-all duration-300">
+          <div class="spec-display prose-theme prose-xs max-w-none text-app-text/70 overflow-hidden relative transition-all duration-300">
             ${task.spec ? DOMPurify.sanitize(marked.parse(task.spec) as string) : '<span class="italic text-app-muted">No specification provided...</span>'}
             ${task.spec ? '<div class="expand-overlay absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-app-surface to-transparent pointer-events-none"></div>' : ''}
           </div>
@@ -173,7 +173,7 @@ export class TaskItem {
               ${(isImplemented || isDiscarded) ? '<span class="text-[10px] text-app-accent-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2">Click to view</span>' : ''}
               ${(isImplemented || isDiscarded) ? '' : '<span class="text-[10px] text-app-muted opacity-0 group-hover:opacity-100 transition-opacity">Click to edit</span>'}
             </div>
-            <div class="design-doc-display prose prose-invert prose-sm max-w-none text-app-text/70 overflow-hidden relative transition-all duration-300 ${isProposed ? 'expanded' : ''}">
+            <div class="design-doc-display prose-theme prose-sm max-w-none text-app-text/70 overflow-hidden relative transition-all duration-300 ${isProposed ? 'expanded' : ''}">
               ${task.design_doc ? DOMPurify.sanitize(marked.parse(task.design_doc) as string) : '<span class="italic text-app-muted">Click to add design doc...</span>'}
               ${task.design_doc ? '<div class="expand-overlay absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-app-surface to-transparent pointer-events-none"></div>' : ''}
             </div>
@@ -338,7 +338,7 @@ export class TaskItem {
                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                  Implementation Summary
               </div>
-              <div class="prose prose-invert prose-sm max-w-none text-app-text/80 marker:text-green-500">
+              <div class="prose-theme prose-sm max-w-none text-app-text/80 marker:text-green-500">
                 ${DOMPurify.sanitize(marked.parse(task.completion_info) as string)}
               </div>
             </div>

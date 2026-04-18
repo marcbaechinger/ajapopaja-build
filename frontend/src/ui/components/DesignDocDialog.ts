@@ -47,7 +47,7 @@ export class DesignDocDialog extends BaseDialog<void> {
     const html = DOMPurify.sanitize(marked.parse(this.content) as string);
     return `
       <div class="p-8">
-        <article class="prose prose-invert prose-base max-w-none prose-headings:text-app-accent-2 prose-a:text-app-accent-1">
+        <article class="prose-theme prose-base max-w-none prose-headings:text-app-accent-2 prose-a:text-app-accent-1">
           ${html}
         </article>
       </div>
