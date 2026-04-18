@@ -14,6 +14,7 @@ This document defines the architecture and design principles for the Ajapopaja B
 - Acts as a Singleton or a shared instance passed to components.
 - Holds the global state (current user, active pipeline, theme status).
 - Manages instances of collaborators (Backend Clients, Action Registry, Navigator).
+- Handles global keyboard shortcuts (e.g., `Ctrl+K` for global search).
 
 ## 4. Backend Communication
 ### Dedicated Clients
@@ -46,7 +47,7 @@ This document defines the architecture and design principles for the Ajapopaja B
 
 ## 6. Layout & Navigation
 ### View Management
-- **Main Views**: `PipelineView`, `TaskView`, `DashboardView`.
+- **Main Views**: `PipelineDetailView`, `DashboardView`, `LoginView`.
 - **Container**: All main views render into the `#content` DOM element.
 - **Navigator**:
     - Listens to `hashchange` events (e.g., `#pipeline/123`).
@@ -74,32 +75,59 @@ const TaskItem = (task: Task) => `
 ```
 
 ## 8. Dialog System
-### `ConfirmationDialog`
-- Reusable component for simple confirm/cancel flows.
-- Uses Tailwind-styled native `<dialog>` elements with backdrop blur.
-- **Promise Pattern**: `show(): Promise<boolean>` (resolves to `true` on "Confirm", `false` on "Cancel" or backdrop click).
-- Centralized logic for centering, backdrop interaction, and Escape key handling.
+### `BaseDialog`
+- An abstract base class providing a consistent foundation for all modal dialogs.
+- Uses native HTML `<dialog>` elements with custom Tailwind styling.
+- Features standardized backdrop blur, animations (fade/scale/shake), and fixed top-margin positioning for stability.
+- **Promise Pattern**: Returns a Promise that resolves when the dialog is closed, facilitating async workflows.
 
-## 9. Recommended Libraries
-- **`nanoid`**: For generating unique client-side IDs.
-- **`dom-purify`**: To sanitize HTML strings before insertion.
-## 10. Authentication
+### Specialized Dialogs
+- **`ConfirmationDialog`**: For simple confirm/cancel flows.
+- **`SearchDialog`**: Provides global task search with keyword and status filtering, debounced input, and pagination.
+- **`LogViewerDialog`**: Real-time streaming of backend logs using the Fetch API (ReadableStream) with automatic "Follow Mode" scrolling.
+- **`StatsDialog`**: Visualizes pipeline health and velocity using the `PipelineStatsView` component.
+- **`DesignDocDialog`**: Dedicated reader for full Design Documents with Markdown rendering.
+
+## 9. Advanced UI Features
+### Markdown Rendering & Styling
+- Integrated `marked` for Markdown parsing and `dompurify` for safe injection.
+- **Prose Styling**: Standardized typography using Tailwind Typography (`prose`) with custom theme overrides.
+- **Code Highlighting**: Global CSS overrides for fenced code blocks, ensuring high contrast and consistent dark backgrounds across all previews and displays.
+
+### Real-Time Logs
+- Streaming log implementation that handles chunked data transfer and UI updates without blocking the main thread.
+
+## 10. MCP Interface
+The system provides a Model Context Protocol (MCP) server allowing AI agents to interact with the pipeline autonomously.
+
+### Core MCP Tools
+- **`get_next_task`**: Fetches and reserves the next scheduled task for an agent.
+- **`update_task_design_doc`**: Allows agents to propose implementation plans.
+- **`complete_task`**: Finalizes implementation with commit references and summaries.
+- **`get_task_status`**: Polls for verification results or current state.
+
+## 11. Recommended Libraries
+- **`marked`**: For Markdown parsing.
+- **`dompurify`**: To sanitize HTML strings before insertion.
+- **`easymde`**: For a rich Markdown editing experience.
+
+## 12. Authentication
 The SPA maintains user sessions via JWT stored securely in `localStorage`.
 
-### 10.1. `AuthService`
+### 12.1. `AuthService`
 The central manager for user sessions:
 - **State Management**: Tracks current user and access tokens.
 - **Session Persistence**: Saves/restores tokens from `localStorage` on page reload.
 - **Login/Logout Logic**: Interacts with the `/api/auth` endpoints to authenticate users and manage token lifecycle.
 
-### 10.2. `BaseClient` & Token Refresh
+### 12.2. `BaseClient` & Token Refresh
 The `BaseClient` automatically intercepts outbound requests to manage authorization:
 1.  **Authorization Header**: Injects the `Authorization: Bearer <token>` header into all API requests.
 2.  **401 Interception**: If a request fails with a `401 Unauthorized`, the client attempts an automatic token refresh via the `AuthService`.
 3.  **Redirection**: If a refresh is not possible (e.g., expired refresh token), the user is redirected to the `LoginView`.
 
-### 10.3. Routing Security
+### 12.3. Routing Security
 A high-level `requireAuth` wrapper protects specific routes within `main.ts`. It verifies the `AuthService.isAuthenticated()` state before rendering views like the `DashboardView` or `PipelineDetailView`.
 
-### 10.4. WebSocket Security
+### 12.4. WebSocket Security
 The `WebSocketClient` retrieves the latest access token from the `AuthService` and appends it to the connection URL as a query parameter during the `connect()` phase.
