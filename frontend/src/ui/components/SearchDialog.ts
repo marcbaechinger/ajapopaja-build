@@ -19,6 +19,7 @@ import { BaseDialog } from './dialog_common.ts';
 import { AppContext } from '../../core/AppContext.ts';
 import { TaskItem } from './TaskItem.ts';
 import { PaginationControl } from './PaginationControl.ts';
+import { DesignDocDialog } from './DesignDocDialog.ts';
 
 export class SearchDialog extends BaseDialog {
   private context: AppContext;
@@ -182,9 +183,14 @@ export class SearchDialog extends BaseDialog {
         this.performSearch(this.currentPage - 1);
       } else if (action === 'next_search_page') {
         this.performSearch(this.currentPage + 1);
-      } else if (action === 'toggle_task_collapse' || action === 'edit_title' || action === 'view_design_doc' || action === 'edit_spec') {
+      } else if (action === 'view_design_doc') {
+        const taskId = actionElement.closest('[data-task-id]')?.getAttribute('data-task-id');
+        const task = this.results.find(t => t.id === taskId);
+        if (task && task.design_doc) {
+          new DesignDocDialog('Design Document', task.design_doc).show();
+        }
+      } else if (action === 'toggle_task_collapse' || action === 'edit_title' || action === 'edit_spec') {
         // Handle task item collapse toggle locally for better UX
-        // In search results, we treat title/spec clicks also as toggle collapse
         const taskItem = actionElement.closest('[data-view-type="task"]');
         if (taskItem) {
            const body = taskItem.querySelector('.task-body');
