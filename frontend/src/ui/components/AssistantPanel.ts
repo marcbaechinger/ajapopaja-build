@@ -285,13 +285,39 @@ export class AssistantPanel {
   }
 
   private handleResponse(response: AssistantResponse) {
-    if (response.type === 'chunk') {
+    if (response.type === 'chunk' || response.type === 'thinking') {
       if (!this.currentAssistantMessage) {
         this.currentAssistantMessage = this.addMessage('assistant', '');
       }
-      const bubble = this.currentAssistantMessage.querySelector('.bubble-content') as HTMLElement;
-      bubble.dataset.rawContent = (bubble.dataset.rawContent || '') + response.content;
-      bubble.innerHTML = DOMPurify.sanitize(marked.parse(bubble.dataset.rawContent) as string);
+      
+      if (response.type === 'thinking') {
+        const details = this.currentAssistantMessage.querySelector('.thinking-container') as HTMLDetailsElement;
+        const thinkingContent = this.currentAssistantMessage.querySelector('.thinking-content') as HTMLElement;
+        if (details) {
+            details.classList.remove('hidden');
+            if (!details.hasAttribute('data-user-closed')) {
+              details.open = true;
+            }
+            thinkingContent.dataset.rawContent = (thinkingContent.dataset.rawContent || '') + (response.content || '');
+            thinkingContent.textContent = thinkingContent.dataset.rawContent;
+            thinkingContent.scrollTop = thinkingContent.scrollHeight;
+        }
+      } else if (response.type === 'chunk') {
+        const bubble = this.currentAssistantMessage.querySelector('.bubble-content') as HTMLElement;
+        // Check if there's only the pulse span inside
+        const pulseSpan = bubble.querySelector('.animate-pulse');
+        if (pulseSpan) {
+            pulseSpan.remove();
+        }
+        
+        bubble.dataset.rawContent = (bubble.dataset.rawContent || '') + (response.content || '');
+        bubble.innerHTML = DOMPurify.sanitize(marked.parse(bubble.dataset.rawContent) as string);
+
+        const details = this.currentAssistantMessage.querySelector('.thinking-container') as HTMLDetailsElement;
+        if (details && !details.classList.contains('hidden') && !details.hasAttribute('data-user-interacted')) {
+           details.open = false;
+        }
+      }
       this.scrollToBottom();
     } else if (response.type === 'tool_request') {
       this.currentAssistantMessage = null;
@@ -314,8 +340,8 @@ export class AssistantPanel {
         this.handleHistory(response.messages || []);
     }
     
-    // If not a chunk, reset current message
-    if (response.type !== 'chunk') {
+    // If not a chunk or thinking, reset current message
+    if (response.type !== 'chunk' && response.type !== 'thinking') {
       this.currentAssistantMessage = null;
     }
   }
@@ -338,7 +364,7 @@ export class AssistantPanel {
     }
   }
 
-  private addMessage(role: 'user' | 'assistant' | 'error', text: string): HTMLElement {
+  private addMessage(role: 'user' | 'assistant' | 'error', text: string, thought?: string): HTMLElement {
     const msgEl = document.createElement('div');
     msgEl.className = 'flex flex-col gap-1 group relative';
     
@@ -346,11 +372,22 @@ export class AssistantPanel {
     const isError = role === 'error';
     const isAssistant = role === 'assistant';
     
+    const thinkingHtml = isAssistant ? `
+      <details class="thinking-container mb-2 group/thinking ${thought ? '' : 'hidden'}" ${thought ? '' : 'open'}>
+        <summary class="text-[10px] uppercase font-bold tracking-widest text-app-muted cursor-pointer hover:text-app-text select-none flex items-center gap-1">
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+          Thinking
+        </summary>
+        <div class="thinking-content mt-1 p-2 bg-app-surface/50 border-l-2 border-app-accent-2/50 text-[11px] text-app-muted italic font-mono whitespace-pre-wrap max-h-48 overflow-y-auto custom-scrollbar">${thought || ''}</div>
+      </details>
+    ` : '';
+    
     msgEl.innerHTML = `
       <div class="relative max-w-[90%] ${isUser ? 'ml-auto' : ''}">
         <div class="${isUser ? 'bg-app-accent-2 text-white rounded-tr-none' : (isError ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-app-bg border-app-border text-app-text rounded-tl-none')} 
-                    p-3 rounded-2xl border text-sm bubble-content prose-theme prose-xs prose-p:my-0 shadow-sm">
-          ${isUser ? text : (text ? DOMPurify.sanitize(marked.parse(text) as string) : '<span class="animate-pulse">...</span>')}
+                    p-3 rounded-2xl border text-sm prose-theme prose-xs prose-p:my-0 shadow-sm">
+          ${thinkingHtml}
+          <div class="bubble-content">${isUser ? text : (text ? DOMPurify.sanitize(marked.parse(text) as string) : '<span class="animate-pulse">...</span>')}</div>
         </div>
         ${isAssistant ? `
           <button class="copy-btn absolute -right-2 -top-2 p-1.5 bg-app-surface/90 hover:bg-app-surface border border-app-border rounded-lg text-app-muted hover:text-app-accent-2 transition-all opacity-0 group-hover:opacity-100 cursor-pointer focus:ring-2 focus:ring-app-accent-2 outline-none z-10 shadow-md" title="Copy Markdown">
@@ -363,6 +400,20 @@ export class AssistantPanel {
     if (!isUser) {
       const bubble = msgEl.querySelector('.bubble-content') as HTMLElement;
       bubble.dataset.rawContent = text;
+      
+      const details = msgEl.querySelector('.thinking-container') as HTMLDetailsElement;
+      if (details) {
+          details.addEventListener('toggle', (e) => {
+              if (e.isTrusted) { // Only record manual toggles
+                 details.setAttribute('data-user-interacted', 'true');
+                 if (!details.open) {
+                     details.setAttribute('data-user-closed', 'true');
+                 } else {
+                     details.removeAttribute('data-user-closed');
+                 }
+              }
+          });
+      }
       
       if (isAssistant) {
         msgEl.querySelector('.copy-btn')?.addEventListener('click', (e) => {
@@ -423,7 +474,7 @@ export class AssistantPanel {
       if (msg.role === 'user') {
         this.addMessage('user', msg.content);
       } else if (msg.role === 'assistant') {
-        const msgEl = this.addMessage('assistant', msg.content);
+        const msgEl = this.addMessage('assistant', msg.content, msg.thought);
         if (msg.tool_calls && msg.tool_calls.length > 0) {
             const footer = document.createElement('div');
             footer.className = 'mt-2 flex flex-wrap gap-1';

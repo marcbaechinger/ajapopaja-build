@@ -100,6 +100,7 @@ class User(Document):
 class ChatMessage(BaseModel):
     role: str  # "user", "assistant", "system", "tool"
     content: str
+    thought: Optional[str] = None
     tool_calls: Optional[List[Dict[str, Any]]] = None
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 

@@ -18,7 +18,7 @@ import { WebSocketClient } from './WebSocketClient.ts';
 import { AuthService } from './AuthService.ts';
 
 export interface AssistantResponse {
-  type: 'chunk' | 'tool_request' | 'error' | 'cleared' | 'assistant_history';
+  type: 'chunk' | 'tool_request' | 'error' | 'cleared' | 'assistant_history' | 'thinking';
   content?: string;
   id?: string;
   tool?: string;

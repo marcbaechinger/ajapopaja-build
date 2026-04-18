@@ -134,6 +134,7 @@ class AssistantSession:
         )
 
         full_content = ""
+        full_thought = ""
         tool_calls = []
 
         for chunk in response:
@@ -143,6 +144,17 @@ class AssistantSession:
                 msg = chunk.get("message")
 
             if msg:
+                # Handle thinking streaming
+                thought = getattr(msg, "thought", "")
+                if not thought and hasattr(msg, "reasoning_content"):
+                    thought = getattr(msg, "reasoning_content", "")
+                if not thought and isinstance(msg, dict):
+                    thought = msg.get("thought", "") or msg.get("reasoning_content", "")
+                
+                if thought:
+                    full_thought += thought
+                    await self.on_update({"type": "thinking", "content": thought})
+
                 # Handle text streaming
                 content = getattr(msg, "content", "")
                 if not content and isinstance(msg, dict):
@@ -160,7 +172,7 @@ class AssistantSession:
                 if tc:
                     tool_calls.extend(tc)
 
-        if full_content or tool_calls:
+        if full_content or full_thought or tool_calls:
             # Convert tool calls to dicts for Pydantic/Storage
             tool_calls_dicts = []
             for tc in tool_calls:
@@ -187,6 +199,7 @@ class AssistantSession:
                 ChatMessage(
                     role="assistant",
                     content=full_content,
+                    thought=full_thought if full_thought else None,
                     tool_calls=tool_calls_dicts if tool_calls_dicts else None,
                 )
             )
