@@ -180,9 +180,10 @@ export class SearchDialog extends BaseDialog {
         this.performSearch(this.currentPage - 1);
       } else if (action === 'next_search_page') {
         this.performSearch(this.currentPage + 1);
-      } else if (action === 'toggle_task_collapse') {
+      } else if (action === 'toggle_task_collapse' || action === 'edit_title' || action === 'view_design_doc' || action === 'edit_spec') {
         // Handle task item collapse toggle locally for better UX
-        const taskItem = target.closest('[data-view-type="task"]');
+        // In search results, we treat title/spec clicks also as toggle collapse
+        const taskItem = actionElement.closest('[data-view-type="task"]');
         if (taskItem) {
            const body = taskItem.querySelector('.task-body');
            const icon = taskItem.querySelector('svg.transform');
