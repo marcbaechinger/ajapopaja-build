@@ -13,6 +13,8 @@
 # limitations under the License.
 
 import os
+import json
+import re
 from pathlib import Path
 from typing import Optional, List
 import git
@@ -90,6 +92,76 @@ async def git_show_commit(pipeline_id: str, commit_sha: str) -> str:
     try:
         repo = git.Repo(pipeline.workspace_abs_path)
         return repo.git.show("--stat", commit_sha)
+    except git.exc.GitCommandError as e:
+        return f"Error executing git command: {e}"
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+
+@register_tool(tool_type=READ_ONLY)
+async def git_commit_hunks(pipeline_id: str, commit_sha: str) -> str:
+    """
+    Returns a JSON string containing the hunks (changed line ranges) of a commit.
+    Each hunk includes the file path, first_line, last_line, and type (addition, deletion, change).
+
+    Args:
+        pipeline_id: The ID of the pipeline to which the project belongs.
+        commit_sha: The SHA of the commit to show.
+    """
+    pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
+    if not pipeline or not pipeline.workspace_abs_path:
+        return "Error: Workspace path not found."
+
+    try:
+        repo = git.Repo(pipeline.workspace_abs_path)
+        # unified=0 gives only the hunk headers and changed lines, no context.
+        # format="" removes the commit metadata header from git show output.
+        patch_text = repo.git.show(commit_sha, unified=0, format="")
+
+        hunks = []
+        current_file = None
+
+        # Pattern for hunk header: @@ -a,b +c,d @@
+        # Groups: 1=a, 2=b, 3=c, 4=d
+        hunk_header_re = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
+
+        for line in patch_text.splitlines():
+            if line.startswith("--- a/"):
+                current_file = line[6:]
+            elif line.startswith("+++ b/"):
+                new_file = line[6:]
+                if new_file != "/dev/null":
+                    current_file = new_file
+                continue
+
+            match = hunk_header_re.match(line)
+            if match and current_file:
+                # b and d default to 1 if omitted.
+                b = int(match.group(2)) if match.group(2) else 1
+                c = int(match.group(3))
+                d = int(match.group(4)) if match.group(4) else 1
+
+                hunk_type = "change"
+                if b == 0:
+                    hunk_type = "addition"
+                elif d == 0:
+                    hunk_type = "deletion"
+
+                # For additions/changes, coordinates in the new file are c to c+d-1
+                # For deletions, c is the line where deletion happened (length 0).
+                first_line = c
+                last_line = c + d - 1 if d > 0 else c
+
+                hunks.append(
+                    {
+                        "file": current_file,
+                        "first_line": first_line,
+                        "last_line": last_line,
+                        "type": hunk_type,
+                    }
+                )
+
+        return json.dumps(hunks)
     except git.exc.GitCommandError as e:
         return f"Error executing git command: {e}"
     except Exception as e:

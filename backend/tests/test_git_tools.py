@@ -19,6 +19,7 @@ import subprocess
 from api.assistant.tools.git_tools import (
     git_log,
     git_show_commit,
+    git_commit_hunks,
     git_blame,
     git_status,
     git_branch_list,
@@ -90,6 +91,64 @@ async def test_git_tools(init_mock_db, git_repo):
         f.write("Modified line\n")
     diff = await git_diff(pipeline_id)
     assert "+Modified line" in diff
+
+
+@pytest.mark.asyncio
+async def test_git_commit_hunks(init_mock_db, git_repo):
+    pipeline = Pipeline(name="Git Hunks Pipeline", workspace_path=git_repo)
+    await pipeline.insert()
+    pipeline_id = str(pipeline.id)
+
+    # 1. Prepare files
+    file1 = os.path.join(git_repo, "file1.txt")  # Exists
+    file3 = os.path.join(git_repo, "file3.txt")
+    with open(file3, "w") as f:
+        f.write("To be deleted\n")
+    run_git(git_repo, ["add", "file3.txt"])
+    run_git(git_repo, ["commit", "-m", "Prepare for hunks"])
+
+    # 2. Actual commit with changes, deletion, addition
+    # Change file1.txt
+    with open(file1, "w") as f:
+        f.write("Line 1\nLine 2 modified\nLine 3\n")
+
+    # Delete file3.txt
+    run_git(git_repo, ["rm", "file3.txt"])
+
+    # Addition: file4.txt
+    file4 = os.path.join(git_repo, "file4.txt")
+    with open(file4, "w") as f:
+        f.write("Real addition\n")
+    run_git(git_repo, ["add", "file1.txt", "file4.txt"])
+    run_git(git_repo, ["commit", "-m", "Hunk commit"])
+
+    # Get SHA
+    log = await git_log(pipeline_id)
+    sha = log.split("\n")[0].split(" | ")[0]
+
+    # Test git_commit_hunks
+    import json
+
+    hunks_json = await git_commit_hunks(pipeline_id, sha)
+    hunks = json.loads(hunks_json)
+
+    # Verify hunks
+    hunk_files = [h["file"] for h in hunks]
+    assert "file1.txt" in hunk_files
+    assert "file3.txt" in hunk_files
+    assert "file4.txt" in hunk_files
+
+    for h in hunks:
+        if h["file"] == "file1.txt":
+            assert h["type"] == "change"
+            assert h["first_line"] == 2
+            assert h["last_line"] == 2
+        if h["file"] == "file3.txt":
+            assert h["type"] == "deletion"
+        if h["file"] == "file4.txt":
+            assert h["type"] == "addition"
+            assert h["first_line"] == 1
+            assert h["last_line"] == 1
 
 @pytest.mark.asyncio
 async def test_git_path_sanitization(init_mock_db, git_repo):
