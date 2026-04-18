@@ -205,45 +205,42 @@ export class SearchDialog extends BaseDialog {
       const actionElement = target.closest('[data-action-click]');
       if (!actionElement) return;
 
-      e.stopPropagation();
-
       const action = actionElement.getAttribute('data-action-click');
+      if (!action) return;
+
       const taskId = actionElement.closest('[data-task-id]')?.getAttribute('data-task-id');
       const version = parseInt(actionElement.getAttribute('data-version') || actionElement.closest('[data-version]')?.getAttribute('data-version') || '1');
 
       if (action === 'prev_search_page') {
+        e.stopPropagation();
+        e.preventDefault();
         this.performSearch(this.currentPage - 1);
       } else if (action === 'next_search_page') {
+        e.stopPropagation();
+        e.preventDefault();
         this.performSearch(this.currentPage + 1);
-      } else if (action === 'toggle_task_collapse' || action === 'edit_title') {
-        // Handle task item collapse toggle locally for better UX
-        const taskItem = actionElement.closest('[data-view-type="task"]');
-        if (taskItem) {
-           const body = taskItem.querySelector('.task-body');
-           const icon = taskItem.querySelector('svg.transform');
-           if (body && icon) {
-             const isHidden = body.classList.toggle('hidden');
-             icon.classList.toggle('rotate-90', !isHidden);
-           }
-        }
-      } else if (action === 'view_design_doc' || action === 'toggle_design_doc_expand') {
-        const container = actionElement.closest('.design-doc-container');
-        const display = container?.querySelector('.design-doc-display');
-        const btn = container?.querySelector('[data-action-click="toggle_design_doc_expand"]');
-        if (display && btn) {
+      } else if (action === 'toggle_design_doc_expand') {
+        e.stopPropagation();
+        e.preventDefault();
+        const docContainer = actionElement.closest('.design-doc-container');
+        const display = docContainer?.querySelector('.design-doc-display');
+        if (display) {
           const isExpanded = display.classList.toggle('expanded');
-          btn.textContent = isExpanded ? 'Show Less' : 'Show More';
+          actionElement.textContent = isExpanded ? 'Show Less' : 'Show More';
         }
-      } else if (action === 'toggle_spec_expand' || action === 'edit_spec') {
-        const container = actionElement.closest('.spec-container');
-        const display = container?.querySelector('.spec-display');
-        const btn = container?.querySelector('[data-action-click="toggle_spec_expand"]');
-        if (display && btn) {
+      } else if (action === 'toggle_spec_expand') {
+        e.stopPropagation();
+        e.preventDefault();
+        const specContainer = actionElement.closest('.spec-container');
+        const display = specContainer?.querySelector('.spec-display');
+        if (display) {
           const isExpanded = display.classList.toggle('expanded');
-          btn.textContent = isExpanded ? 'Show Less' : 'Show More';
+          actionElement.textContent = isExpanded ? 'Show Less' : 'Show More';
         }
-      } else if (taskId) {
-        // Handle common task actions
+      } else if (taskId && action !== 'toggle_task_collapse' && action !== 'edit_title' && action !== 'edit_spec' && action !== 'view_design_doc') {
+        // Handle actions that need search refresh
+        e.stopPropagation();
+        e.preventDefault();
         try {
           if (action === 'delete_task') {
             const confirmed = await new ConfirmationDialog('Delete Task', 'Are you sure you want to delete this task?', 'Delete').show();
@@ -272,6 +269,9 @@ export class SearchDialog extends BaseDialog {
           alert(`Failed to perform action: ${action}`);
         }
       }
+      // Actions like toggle_task_collapse, edit_title, edit_spec, view_design_doc 
+      // are allowed to bubble up to the global ActionRegistry which has handlers 
+      // registered in PipelineDetailView.
     });
   }
 
