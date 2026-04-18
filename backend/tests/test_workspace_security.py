@@ -66,8 +66,9 @@ async def test_pipeline_workspace_validation(init_mock_db, monkeypatch, tmp_path
     assert p2.workspace_abs_path == root / "legacy-project"
     
     # Absolute path rejection (outside root)
-    with pytest.raises(ValueError, match="outside config.WORKSPACES_ROOT"):
-        Pipeline(name="P3", workspace_path="/tmp/outside")
+    p3 = Pipeline(name="P3", workspace_path="/tmp/outside")
+    assert p3.workspace_path is None
+    assert p3.workspace_abs_path is None
     
     # Traversal rejection
     with pytest.raises(ValueError, match="cannot escape root"):

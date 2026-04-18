@@ -89,14 +89,14 @@ class Pipeline(Document):
                     rel_path = os.path.relpath(v, config.WORKSPACES_ROOT)
                     # Check if it's actually within config.WORKSPACES_ROOT
                     if rel_path.startswith(".."):
-                        raise ValueError(
-                            f"Absolute path {v} is outside config.WORKSPACES_ROOT {config.WORKSPACES_ROOT}"
-                        )
+                        import logging
+                        logging.warning(f"Absolute path {v} is outside config.WORKSPACES_ROOT {config.WORKSPACES_ROOT}. Nullifying workspace_path.")
+                        return None
                     v = rel_path
                 except ValueError as e:
-                    raise ValueError(
-                        f"Could not migrate absolute path {v} to config.WORKSPACES_ROOT {config.WORKSPACES_ROOT}: {e}"
-                    )
+                    import logging
+                    logging.warning(f"Could not migrate absolute path {v} to config.WORKSPACES_ROOT {config.WORKSPACES_ROOT}: {e}. Nullifying workspace_path.")
+                    return None
 
             return sanitize_relative_path(v)
         return v
