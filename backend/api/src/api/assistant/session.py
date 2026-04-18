@@ -17,9 +17,11 @@ import json
 import ollama
 from typing import List, Dict, Any, Optional, Callable, Awaitable
 from core.models.models import ChatMessage, UserChat
-from .tools import TOOLS, TOOL_MAP, READ_ONLY, get_tool_definition
+from .tool_registry import registry
+from . import tools  # Ensure tools are registered
 
 MODEL_NAME = "qwen3.5:9b"  # Or any model that supports tool calling
+READ_ONLY = "read_only"
 
 
 class AssistantSession:
@@ -103,14 +105,14 @@ class AssistantSession:
 
         # Ollama tools format
         ollama_tools = []
-        for t in TOOLS:
+        for t in registry.list_tools():
             ollama_tools.append(
                 {
                     "type": "function",
                     "function": {
-                        "name": t["name"],
-                        "description": t["description"],
-                        "parameters": t["parameters"],
+                        "name": t.name,
+                        "description": t.description,
+                        "parameters": t.parameters,
                     },
                 }
             )
@@ -187,13 +189,13 @@ class AssistantSession:
             if not tool_name:
                  return
 
-            tool_def = get_tool_definition(tool_name)
+            tool_def = registry.get_tool(tool_name)
 
             if not tool_def:
                 # Error handling
                 return
 
-            if tool_def["type"] == READ_ONLY:
+            if tool_def.type == READ_ONLY:
                 result = await self._execute_tool(tool_call_dict)
                 self.history.append(
                     ChatMessage(
@@ -220,8 +222,8 @@ class AssistantSession:
         tool_name = tool_call["function"]["name"]
         args = tool_call["function"]["arguments"]
 
-        func = TOOL_MAP.get(tool_name)
-        if not func:
+        tool = registry.get_tool(tool_name)
+        if not tool:
             return {"error": f"Tool {tool_name} not found."}
 
         try:
@@ -229,7 +231,7 @@ class AssistantSession:
             if isinstance(args, str):
                 args = json.loads(args)
 
-            result = await func(**args)
+            result = await tool.func(**args)
             return result
         except Exception as e:
             return {"error": str(e)}

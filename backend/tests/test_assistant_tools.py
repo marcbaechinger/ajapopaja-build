@@ -16,7 +16,7 @@ import pytest
 import os
 import tempfile
 import shutil
-from api.assistant.tools import read_source_file, list_project_structure
+from api.assistant.tools.file_tools import read_source_file, list_project_structure
 from core.models.models import Pipeline
 
 
