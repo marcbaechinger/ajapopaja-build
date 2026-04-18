@@ -16,6 +16,7 @@ from typing import List, Dict, Optional
 from core.models.models import Task
 from core.queries import task as task_queries
 from api.assistant.decorators import register_tool
+from api.websocket_manager import manager, WSMessage
 
 # Tool Categories
 READ_ONLY = "read_only"
@@ -66,6 +67,10 @@ async def create_task(
         title=title, spec=spec, want_design_doc=want_design_doc, pipeline_id=pipeline_id
     )
     new_task = await task_queries.create_task(pipeline_id, task, actor="assistant")
+    
+    await manager.broadcast(
+        WSMessage(type="TASK_CREATED", payload=new_task.model_dump(mode="json"))
+    )
     return new_task.model_dump(mode="json")
 
 
@@ -82,6 +87,8 @@ async def update_task_spec(task_id: str, spec: str) -> Dict:
     updated_task = await task_queries.update_task_details(
         task_id, task.version, spec=spec, actor="assistant"
     )
+    
+    await manager.notify_task_update(task_id)
     return updated_task.model_dump(mode="json")
 
 
@@ -98,4 +105,6 @@ async def update_design_doc(task_id: str, design_doc: str) -> Dict:
     updated_task = await task_queries.update_task_details(
         task_id, task.version, design_doc=design_doc, actor="assistant"
     )
+    
+    await manager.notify_task_update(task_id)
     return updated_task.model_dump(mode="json")
