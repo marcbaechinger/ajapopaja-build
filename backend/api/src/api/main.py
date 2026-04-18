@@ -89,22 +89,16 @@ async def lifespan(app: FastAPI):
     GeminiExecutor.stop_all()
 
 
-# Create MCP ASGI app with internal path at root
-mcp_app = mcp.http_app(path="/")
+# Create MCP ASGI app
+mcp_app = mcp.http_app(path="/mcp")
 
 app = FastAPI(
     title="Ajapopaja Build API", lifespan=combine_lifespans(lifespan, mcp_app.lifespan)
 )
 
-# Map MCP endpoints at root level
-# We add these early to ensure they are checked before any other routes
-app.add_route("/", mcp_app, methods=["POST"])
-app.add_route("/sse", mcp_app, methods=["GET"])
-app.add_route("/messages", mcp_app, methods=["POST"])
-
-# Map MCP endpoints with /mcp prefix
-app.add_route("/mcp", mcp_app, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
-app.add_route("/mcp/{path:path}", mcp_app, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+# Map MCP endpoints explicitly to avoid routing/method ambiguity
+app.add_route("/mcp", mcp_app, methods=["GET", "POST", "OPTIONS"])
+app.add_route("/mcp/{path:path}", mcp_app, methods=["GET", "POST", "OPTIONS"])
 
 # CORS Configuration
 app.add_middleware(
