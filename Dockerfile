@@ -37,6 +37,7 @@ ENV APP_VERSION=$BUILD_VERSION
 
 # Environment variables
 ENV MONGODB_URI=mongodb://host.docker.internal:27017/
+ENV OLLAMA_HOST=http://host.docker.internal:11434
 ENV DATABASE_NAME=ajapopaja_build_prod
 ENV PORT=8081
 ENV FRONTEND_DIST_PATH=/app/frontend_dist

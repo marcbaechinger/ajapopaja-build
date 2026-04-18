@@ -14,8 +14,8 @@
 
 import os
 import glob
-from typing import List, Optional, Dict, Any
-from core.models.models import Pipeline, Task, TaskStatus
+from typing import List, Dict
+from core.models.models import Task
 from core.queries import task as task_queries
 from core.queries import pipeline as pipeline_queries
 
@@ -29,10 +29,7 @@ TOOLS = [
         "name": "list_pipelines",
         "description": "Returns a list of all pipelines.",
         "type": READ_ONLY,
-        "parameters": {
-            "type": "object",
-            "properties": {}
-        }
+        "parameters": {"type": "object", "properties": {}},
     },
     {
         "name": "get_pipeline_details",
@@ -40,11 +37,9 @@ TOOLS = [
         "type": READ_ONLY,
         "parameters": {
             "type": "object",
-            "properties": {
-                "pipeline_id": {"type": "string"}
-            },
-            "required": ["pipeline_id"]
-        }
+            "properties": {"pipeline_id": {"type": "string"}},
+            "required": ["pipeline_id"],
+        },
     },
     {
         "name": "list_tasks",
@@ -52,11 +47,9 @@ TOOLS = [
         "type": READ_ONLY,
         "parameters": {
             "type": "object",
-            "properties": {
-                "pipeline_id": {"type": "string"}
-            },
-            "required": ["pipeline_id"]
-        }
+            "properties": {"pipeline_id": {"type": "string"}},
+            "required": ["pipeline_id"],
+        },
     },
     {
         "name": "get_task",
@@ -64,11 +57,9 @@ TOOLS = [
         "type": READ_ONLY,
         "parameters": {
             "type": "object",
-            "properties": {
-                "task_id": {"type": "string"}
-            },
-            "required": ["task_id"]
-        }
+            "properties": {"task_id": {"type": "string"}},
+            "required": ["task_id"],
+        },
     },
     {
         "name": "create_task",
@@ -79,11 +70,14 @@ TOOLS = [
             "properties": {
                 "pipeline_id": {"type": "string"},
                 "title": {"type": "string"},
-                "spec": {"type": "string", "description": "The task specification in Markdown."},
-                "want_design_doc": {"type": "boolean"}
+                "spec": {
+                    "type": "string",
+                    "description": "The task specification in Markdown.",
+                },
+                "want_design_doc": {"type": "boolean"},
             },
-            "required": ["pipeline_id", "title"]
-        }
+            "required": ["pipeline_id", "title"],
+        },
     },
     {
         "name": "update_task_spec",
@@ -91,12 +85,9 @@ TOOLS = [
         "type": WRITE_ACCESS,
         "parameters": {
             "type": "object",
-            "properties": {
-                "task_id": {"type": "string"},
-                "spec": {"type": "string"}
-            },
-            "required": ["task_id", "spec"]
-        }
+            "properties": {"task_id": {"type": "string"}, "spec": {"type": "string"}},
+            "required": ["task_id", "spec"],
+        },
     },
     {
         "name": "update_design_doc",
@@ -106,10 +97,10 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "task_id": {"type": "string"},
-                "design_doc": {"type": "string"}
+                "design_doc": {"type": "string"},
             },
-            "required": ["task_id", "design_doc"]
-        }
+            "required": ["task_id", "design_doc"],
+        },
     },
     {
         "name": "read_source_file",
@@ -118,10 +109,13 @@ TOOLS = [
         "parameters": {
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "Relative path to the file from project root."}
+                "path": {
+                    "type": "string",
+                    "description": "Relative path to the file from project root.",
+                }
             },
-            "required": ["path"]
-        }
+            "required": ["path"],
+        },
     },
     {
         "name": "list_project_structure",
@@ -130,70 +124,98 @@ TOOLS = [
         "parameters": {
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "Subdirectory to list (optional)."}
-            }
-        }
-    }
+                "path": {
+                    "type": "string",
+                    "description": "Subdirectory to list (optional).",
+                }
+            },
+        },
+    },
 ]
+
 
 # Tool Implementations
 async def list_pipelines() -> List[Dict]:
     pipelines = await pipeline_queries.get_all_pipelines()
-    return [p.model_dump(mode='json') for p in pipelines]
+    return [p.model_dump(mode="json") for p in pipelines]
+
 
 async def get_pipeline_details(pipeline_id: str) -> Dict:
     pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
-    return pipeline.model_dump(mode='json')
+    return pipeline.model_dump(mode="json")
+
 
 async def list_tasks(pipeline_id: str) -> List[Dict]:
     tasks = await task_queries.get_tasks_by_pipeline(pipeline_id)
-    return [t.model_dump(mode='json') for t in tasks]
+    return [t.model_dump(mode="json") for t in tasks]
+
 
 async def get_task(task_id: str) -> Dict:
     task = await task_queries.get_task_by_id(task_id)
-    return task.model_dump(mode='json')
+    return task.model_dump(mode="json")
 
-async def create_task(pipeline_id: str, title: str, spec: str = None, want_design_doc: bool = False) -> Dict:
-    task = Task(title=title, spec=spec, want_design_doc=want_design_doc, pipeline_id=pipeline_id)
+
+async def create_task(
+    pipeline_id: str, title: str, spec: str = None, want_design_doc: bool = False
+) -> Dict:
+    task = Task(
+        title=title, spec=spec, want_design_doc=want_design_doc, pipeline_id=pipeline_id
+    )
     new_task = await task_queries.create_task(pipeline_id, task, actor="assistant")
-    return new_task.model_dump(mode='json')
+    return new_task.model_dump(mode="json")
+
 
 async def update_task_spec(task_id: str, spec: str) -> Dict:
     task = await task_queries.get_task_by_id(task_id)
-    updated_task = await task_queries.update_task_details(task_id, task.version, spec=spec, actor="assistant")
-    return updated_task.model_dump(mode='json')
+    updated_task = await task_queries.update_task_details(
+        task_id, task.version, spec=spec, actor="assistant"
+    )
+    return updated_task.model_dump(mode="json")
+
 
 async def update_design_doc(task_id: str, design_doc: str) -> Dict:
     task = await task_queries.get_task_by_id(task_id)
-    updated_task = await task_queries.update_task_details(task_id, task.version, design_doc=design_doc, actor="assistant")
-    return updated_task.model_dump(mode='json')
+    updated_task = await task_queries.update_task_details(
+        task_id, task.version, design_doc=design_doc, actor="assistant"
+    )
+    return updated_task.model_dump(mode="json")
+
 
 async def read_source_file(path: str) -> str:
     # Basic path traversal protection
     if ".." in path or path.startswith("/"):
         return "Error: Invalid path."
-    
+
     try:
         with open(path, "r") as f:
             return f.read()
     except Exception as e:
         return f"Error reading file: {str(e)}"
 
+
 async def list_project_structure(path: str = ".") -> List[str]:
     if ".." in path or path.startswith("/"):
         return ["Error: Invalid path."]
-    
+
     try:
         files = glob.glob(os.path.join(path, "**"), recursive=True)
         # Filter out __pycache__, .git, node_modules etc
-        ignored = ["__pycache__", ".git", "node_modules", ".venv", "dist", ".pytest_cache"]
+        ignored = [
+            "__pycache__",
+            ".git",
+            "node_modules",
+            ".venv",
+            "dist",
+            ".pytest_cache",
+        ]
         result = []
         for f in files:
             if not any(ig in f for ig in ignored):
                 result.append(f)
-        return result[:100] # Limit output
+        return result[:100]  # Limit output
     except Exception as e:
         return [f"Error listing files: {str(e)}"]
+
 
 TOOL_MAP = {
     "list_pipelines": list_pipelines,
@@ -204,8 +226,9 @@ TOOL_MAP = {
     "update_task_spec": update_task_spec,
     "update_design_doc": update_design_doc,
     "read_source_file": read_source_file,
-    "list_project_structure": list_project_structure
+    "list_project_structure": list_project_structure,
 }
+
 
 def get_tool_definition(name: str):
     for tool in TOOLS:

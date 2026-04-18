@@ -22,6 +22,7 @@ echo "4. Setting up environment file at $ENV_FILE..."
 if [ ! -f "$ENV_FILE" ]; then
   sudo bash -c "cat <<EOT > $ENV_FILE
 MONGODB_URI=mongodb://host.docker.internal:27017/
+OLLAMA_HOST=http://host.docker.internal:11434
 DATABASE_NAME=ajapopaja_build_prod
 PORT=8081
 EOT"
