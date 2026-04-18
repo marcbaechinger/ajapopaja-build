@@ -19,6 +19,7 @@ import { BaseDialog } from './dialog_common.ts';
 import { AppContext } from '../../core/AppContext.ts';
 import { TaskItem } from './TaskItem.ts';
 import { PaginationControl } from './PaginationControl.ts';
+import { ConfirmationDialog } from './ConfirmationDialog.ts';
 
 export class SearchDialog extends BaseDialog {
   private context: AppContext;
@@ -129,7 +130,7 @@ export class SearchDialog extends BaseDialog {
 
     return this.results.map(task => `
       <div class="search-result-item" data-task-id="${task.id}">
-        ${TaskItem.render(task, false, false, true)}
+        ${TaskItem.render(task, false, false, true, true)}
       </div>
     `).join('');
   }
@@ -170,8 +171,36 @@ export class SearchDialog extends BaseDialog {
       });
     });
 
-    // Handle pagination clicks within the dialog
-    container.addEventListener('click', (e) => {
+    // Handle status change select
+    container.addEventListener('change', async (e) => {
+      const target = e.target as HTMLElement;
+      const actionElement = target.closest('[data-action-change]');
+      if (!actionElement) return;
+
+      const action = actionElement.getAttribute('data-action-change');
+      if (action === 'change_task_status') {
+        const select = actionElement as HTMLSelectElement;
+        const taskId = select.getAttribute('data-task-id');
+        const version = parseInt(select.getAttribute('data-version') || '1');
+        const newStatus = select.value as TaskStatus;
+
+        if (taskId) {
+          try {
+            await this.context.taskClient.updateStatus(taskId, newStatus, version);
+            // Refresh results to show updated state
+            this.performSearch(this.currentPage);
+          } catch (err) {
+            console.error('Failed to update task status', err);
+            alert('Failed to update task status');
+            // Reset select value
+            this.updateUI();
+          }
+        }
+      }
+    });
+
+    // Handle pagination clicks and task actions within the dialog
+    container.addEventListener('click', async (e) => {
       const target = e.target as HTMLElement;
       const actionElement = target.closest('[data-action-click]');
       if (!actionElement) return;
@@ -179,6 +208,9 @@ export class SearchDialog extends BaseDialog {
       e.stopPropagation();
 
       const action = actionElement.getAttribute('data-action-click');
+      const taskId = actionElement.closest('[data-task-id]')?.getAttribute('data-task-id');
+      const version = parseInt(actionElement.getAttribute('data-version') || actionElement.closest('[data-version]')?.getAttribute('data-version') || '1');
+
       if (action === 'prev_search_page') {
         this.performSearch(this.currentPage - 1);
       } else if (action === 'next_search_page') {
@@ -209,6 +241,35 @@ export class SearchDialog extends BaseDialog {
         if (display && btn) {
           const isExpanded = display.classList.toggle('expanded');
           btn.textContent = isExpanded ? 'Show Less' : 'Show More';
+        }
+      } else if (taskId) {
+        // Handle common task actions
+        try {
+          if (action === 'delete_task') {
+            const confirmed = await new ConfirmationDialog('Delete Task', 'Are you sure you want to delete this task?', 'Delete').show();
+            if (confirmed) {
+              await this.context.taskClient.delete(taskId);
+              this.performSearch(this.currentPage);
+            }
+          } else if (action === 'fail_task') {
+             await this.context.taskClient.updateStatus(taskId, TaskStatus.FAILED, version);
+             this.performSearch(this.currentPage);
+          } else if (action === 'schedule_task') {
+             await this.context.taskClient.updateStatus(taskId, TaskStatus.SCHEDULED, version);
+             this.performSearch(this.currentPage);
+          } else if (action === 'unschedule_task' || action === 'cancel_progress') {
+             await this.context.taskClient.updateStatus(taskId, TaskStatus.CREATED, version);
+             this.performSearch(this.currentPage);
+          } else if (action === 'accept_design') {
+             await this.context.taskClient.acceptDesign(taskId, version);
+             this.performSearch(this.currentPage);
+          } else if (action === 'reject_design') {
+             await this.context.taskClient.rejectDesign(taskId, version);
+             this.performSearch(this.currentPage);
+          }
+        } catch (err) {
+          console.error(`Action ${action} failed`, err);
+          alert(`Failed to perform action: ${action}`);
         }
       }
     });

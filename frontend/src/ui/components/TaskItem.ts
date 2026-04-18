@@ -97,7 +97,7 @@ export class TaskItem {
     return parts.join(' ');
   }
 
-  static render(task: Task, showOrdering: boolean = true, expandHistory: boolean = false, isCollapsed: boolean = false): string {
+  static render(task: Task, showOrdering: boolean = true, expandHistory: boolean = false, isCollapsed: boolean = false, showStatusSelector: boolean = false): string {
     const taskId = task.id;
     const statusColors: Record<string, string> = {
       [TaskStatus.CREATED]: 'bg-slate-600 text-slate-300',
@@ -234,9 +234,20 @@ export class TaskItem {
               <span class="text-xs text-app-muted">Order: ${task.order} ${isSystem ? '• System Task' : ''}</span>
             </div>
           </div>
-          <span class="text-xs px-2 py-1 rounded font-bold uppercase ${statusColors[task.status] || 'bg-slate-600'}">
-            ${task.status}
-          </span>
+            <div class="flex items-center gap-2">
+              <span class="text-xs px-2 py-1 rounded font-bold uppercase ${statusColors[task.status] || 'bg-slate-600'}">
+                ${task.status}
+              </span>
+              ${showStatusSelector ? `
+                <select data-action-change="change_task_status" data-task-id="${taskId}" data-version="${task.version}"
+                        class="bg-app-surface border border-app-border text-[10px] font-bold uppercase tracking-widest text-app-text px-2 py-1 rounded outline-none focus:ring-1 focus:ring-app-accent-1 cursor-pointer">
+                  ${Object.values(TaskStatus).map(s => `
+                    <option value="${s}" ${task.status === s ? 'selected' : ''}>${s}</option>
+                  `).join('')}
+                </select>
+              ` : ''}
+            </div>
+          </div>
         </div>
         
         <div class="task-body flex flex-col gap-3 ${isCollapsed ? 'hidden' : ''}">
