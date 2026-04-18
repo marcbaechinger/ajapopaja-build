@@ -43,6 +43,7 @@ from api.routes.pipeline import router as pipeline_router
 from api.routes.task import task_router, pipeline_task_router
 from api.routes.auth import router as auth_router
 from api.websocket_manager import manager
+from api.assistant.ws_handler import register_assistant_handlers
 from api.auth import SECRET_KEY, ALGORITHM
 from api.gemini_executor import GeminiExecutor
 from fastmcp.utilities.lifespan import combine_lifespans
@@ -84,6 +85,7 @@ for logger_name in ["uvicorn.access", "uvicorn.error"]:
 async def lifespan(app: FastAPI):
     logger.info("Initializing database...")
     await init_db()
+    register_assistant_handlers()
     yield
     logger.info("Shutting down Gemini executors...")
     GeminiExecutor.stop_all()

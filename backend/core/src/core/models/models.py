@@ -88,3 +88,18 @@ class User(Document):
 
     class Settings:
         name = "users"
+
+class ChatMessage(BaseModel):
+    role: str  # "user", "assistant", "system", "tool"
+    content: str
+    tool_calls: Optional[List[Dict[str, Any]]] = None
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+class UserChat(Document):
+    user_id: str
+    history: List[ChatMessage] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    class Settings:
+        name = "assistant_chats"

@@ -90,6 +90,14 @@ export class WebSocketClient {
     this.handlers.get(type)?.delete(handler);
   }
 
+  public send(type: string, payload: any) {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type, payload }));
+    } else {
+      console.warn('WebSocket not connected. Message not sent:', type);
+    }
+  }
+
   private notifyHandlers(message: WSMessage) {
     // Notify specific type handlers
     this.handlers.get(message.type)?.forEach(handler => handler(message));

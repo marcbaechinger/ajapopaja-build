@@ -188,6 +188,10 @@ export class DashboardView extends View {
             <span class="text-xs font-bold uppercase tracking-widest">Search</span>
             <span class="text-[10px] bg-app-surface px-1.5 py-0.5 rounded border border-app-border text-app-muted group-hover:text-app-accent-2 group-hover:border-app-accent-2/30 transition-colors ml-1">K</span>
           </button>
+          <button data-action-click="toggle_assistant" class="flex items-center gap-2 bg-app-bg hover:bg-app-surface px-4 py-2 rounded-xl border border-app-border text-app-muted hover:text-app-accent-2 transition-all cursor-pointer group" title="AI Assistant (Ctrl+Alt+A)">
+            <svg class="w-4 h-4 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+            <span class="text-xs font-bold uppercase tracking-widest">Assistant</span>
+          </button>
           <div class="w-px h-8 bg-app-border mx-2"></div>
           <div class="flex items-center gap-3 bg-app-bg px-4 py-2 rounded-xl border border-app-border">
             <div class="flex flex-col items-end">

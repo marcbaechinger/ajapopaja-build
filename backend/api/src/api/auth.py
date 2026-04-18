@@ -90,5 +90,19 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
     return user
 
 
+async def get_current_user_from_token(token: Optional[str]) -> Optional[User]:
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            return None
+        user = await User.find_one(User.username == username)
+        return user
+    except Exception:
+        return None
+
+
 def get_token_from_query(request: Request) -> Optional[str]:
     return request.query_params.get("token")

@@ -21,7 +21,9 @@ import { TaskClient } from './clients/TaskClient';
 import { SystemClient } from './clients/SystemClient';
 import { WebSocketClient } from './WebSocketClient';
 import { AuthService } from './AuthService';
+import { AssistantService } from './AssistantService';
 import { SearchDialog } from '../ui/components/SearchDialog';
+import { AssistantPanel } from '../ui/components/AssistantPanel';
 
 export interface AppState {
   theme: 'light' | 'dark';
@@ -35,6 +37,7 @@ export class AppContext {
   public readonly systemClient: SystemClient;
   public readonly wsClient: WebSocketClient;
   public readonly authService: AuthService;
+  public readonly assistantService: AssistantService;
   private state: AppState;
 
   constructor(containerId: string, apiBaseUrl: string) {
@@ -45,6 +48,10 @@ export class AppContext {
     this.taskClient = new TaskClient(apiBaseUrl, this.authService);
     this.systemClient = new SystemClient(this.authService);
     this.wsClient = new WebSocketClient(apiBaseUrl, this.authService);
+    this.assistantService = new AssistantService(this.wsClient, this.authService);
+    
+    // Initialize singleton components
+    new AssistantPanel(this);
     
     const savedTheme = document.documentElement.getAttribute('data-theme') as 'light' | 'dark' | null;
     this.state = {
@@ -83,6 +90,13 @@ export class AppContext {
         new SearchDialog(this, pipelineId || undefined).show();
       }
     });
+
+    this.actionRegistry.register('toggle_assistant', () => {
+      if (this.authService.isAuthenticated()) {
+        const event = new CustomEvent('toggle-assistant');
+        window.dispatchEvent(event);
+      }
+    });
   }
 
   private setupGlobalShortcuts() {
@@ -91,6 +105,12 @@ export class AppContext {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
         this.actionRegistry.execute('open_search', e, document.body);
+      }
+      
+      // Ctrl+Alt+A or Cmd+Alt+A for assistant
+      if ((e.ctrlKey || e.metaKey) && e.altKey && e.key === 'a') {
+        e.preventDefault();
+        this.actionRegistry.execute('toggle_assistant', e, document.body);
       }
     });
   }
