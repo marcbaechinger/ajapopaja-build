@@ -238,3 +238,14 @@ class AssistantSession:
         self.history = []
         await self._save_history()
         await self.on_update({"type": "cleared"})
+
+    async def emit_history(self):
+        # Convert history to serializable dicts
+        history_data = []
+        for msg in self.history:
+            history_data.append(msg.model_dump(mode='json'))
+        
+        await self.on_update({
+            "type": "assistant_history",
+            "messages": history_data
+        })

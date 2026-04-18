@@ -18,12 +18,13 @@ import { WebSocketClient } from './WebSocketClient.ts';
 import { AuthService } from './AuthService.ts';
 
 export interface AssistantResponse {
-  type: 'chunk' | 'tool_request' | 'error' | 'cleared';
+  type: 'chunk' | 'tool_request' | 'error' | 'cleared' | 'assistant_history';
   content?: string;
   id?: string;
   tool?: string;
   arguments?: any;
   message?: string;
+  messages?: any[];
 }
 
 export class AssistantService {
@@ -62,6 +63,12 @@ export class AssistantService {
 
   public clearHistory() {
     this.wsClient.send('assistant_clear', {
+      token: this.authService.getAccessToken()
+    });
+  }
+
+  public requestHistory() {
+    this.wsClient.send('assistant_load_history', {
       token: this.authService.getAccessToken()
     });
   }

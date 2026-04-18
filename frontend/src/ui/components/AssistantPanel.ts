@@ -31,6 +31,7 @@ export class AssistantPanel {
   private context: AppContext;
   private container: HTMLElement;
   private isOpen: boolean = false;
+  private hasLoadedHistory: boolean = false;
   private currentAssistantMessage: HTMLElement | null = null;
   private messageContainer: HTMLElement | null = null;
   private settings: PanelSettings = {
@@ -272,6 +273,10 @@ export class AssistantPanel {
     this.applySettings();
     this.container.querySelector('textarea')?.focus();
     this.scrollToBottom();
+
+    if (!this.hasLoadedHistory) {
+        this.context.assistantService.requestHistory();
+    }
   }
 
   private close() {
@@ -305,6 +310,8 @@ export class AssistantPanel {
           </div>
         `;
       }
+    } else if (response.type === 'assistant_history') {
+        this.handleHistory(response.messages || []);
     }
     
     // If not a chunk, reset current message
@@ -371,5 +378,45 @@ export class AssistantPanel {
     if (this.messageContainer) {
       this.messageContainer.scrollTop = this.messageContainer.scrollHeight;
     }
+  }
+
+  private handleHistory(messages: any[]) {
+    if (this.messageContainer) {
+      this.messageContainer.innerHTML = '';
+    }
+    this.hasLoadedHistory = true;
+
+    messages.forEach(msg => {
+      if (msg.role === 'user') {
+        this.addMessage('user', msg.content);
+      } else if (msg.role === 'assistant') {
+        const msgEl = this.addMessage('assistant', msg.content);
+        if (msg.tool_calls && msg.tool_calls.length > 0) {
+            const footer = document.createElement('div');
+            footer.className = 'mt-2 flex flex-wrap gap-1';
+            msg.tool_calls.forEach((tc: any) => {
+                footer.innerHTML += `<span class="text-[9px] bg-app-surface border border-app-border px-1.5 py-0.5 rounded text-app-muted italic">Used tool: ${tc.function?.name || 'unknown'}</span>`;
+            });
+            msgEl.querySelector('.bubble-content')?.appendChild(footer);
+        }
+      } else if (msg.role === 'tool') {
+        const el = document.createElement('div');
+        el.className = 'flex justify-center my-1';
+        el.innerHTML = `<span class="text-[10px] text-app-muted italic border-b border-app-border border-dashed pb-0.5">Tool result received</span>`;
+        this.messageContainer?.appendChild(el);
+      }
+    });
+
+    if (messages.length === 0) {
+        this.messageContainer!.innerHTML = `
+          <div class="flex flex-col gap-1">
+             <div class="bg-app-bg p-3 rounded-2xl rounded-tl-none border border-app-border text-sm text-app-text max-w-[90%] shadow-sm">
+               Hello! I'm your AI assistant. How can I help you with your tasks or pipelines today?
+             </div>
+          </div>
+        `;
+    }
+
+    this.scrollToBottom();
   }
 }
