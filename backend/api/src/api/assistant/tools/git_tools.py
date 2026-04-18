@@ -64,12 +64,17 @@ async def git_log(
             kwargs["since"] = since
         if until:
             kwargs["until"] = until
-            
+
         commits = list(repo.iter_commits(max_count=limit, **kwargs))
         if not commits:
             return "No commits found."
-            
-        return "\n".join([f"{c.hexsha} | {c.author.name} | {c.committed_datetime.strftime('%Y-%m-%d')} | {c.summary}" for c in commits])
+
+        return "\n".join(
+            [
+                f"{c.hexsha} | {c.author.name} | {c.committed_datetime.strftime('%Y-%m-%d')} | {c.summary}"
+                for c in commits
+            ]
+        )
     except git.exc.GitCommandError as e:
         return f"Error executing git command: {e}"
     except Exception as e:
@@ -98,15 +103,119 @@ async def git_show_commit(pipeline_id: str, commit_sha: str) -> str:
         return f"Error: {str(e)}"
 
 
+def _parse_patch_to_hunks(patch_text: str) -> list[dict]:
+    hunks = []
+    current_file = None
+    # Pattern for hunk header: @@ -a,b +c,d @@
+    hunk_header_re = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
+
+    for line in patch_text.splitlines():
+        if line.startswith("--- a/"):
+            current_file = line[6:]
+        elif line.startswith("+++ b/"):
+            new_file = line[6:]
+            if new_file != "/dev/null":
+                current_file = new_file
+            continue
+
+        match = hunk_header_re.match(line)
+        if match and current_file:
+            b = int(match.group(2)) if match.group(2) else 1
+            c = int(match.group(3))
+            d = int(match.group(4)) if match.group(4) else 1
+
+            hunk_type = "change"
+            if b == 0:
+                hunk_type = "addition"
+            elif d == 0:
+                hunk_type = "deletion"
+
+            first_line = c
+            last_line = c + d - 1 if d > 0 else c
+
+            hunks.append(
+                {
+                    "file": current_file,
+                    "first_line": first_line,
+                    "last_line": last_line,
+                    "type": hunk_type,
+                }
+            )
+    return hunks
+
+
+async def _get_repo_hunks(pipeline_id: str, diff_args: list) -> str:
+    """Internal helper to fetch repo and parse requested diff."""
+    pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
+    if not pipeline or not pipeline.workspace_abs_path:
+        return "Error: Workspace path not found."
+
+    try:
+        repo = git.Repo(pipeline.workspace_abs_path)
+        # unified=0: no context; format="": no metadata
+        patch_text = repo.git.diff(*diff_args, unified=0)
+        hunks = _parse_patch_to_hunks(patch_text)
+        return json.dumps(hunks)
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+
+@register_tool(tool_type=READ_ONLY)
+async def git_staged_hunks(pipeline_id: str) -> str:
+    """
+    Retrieves the specific line ranges (hunks) of changes that have been added to the
+    Git index (staged) but not yet committed.
+
+    Use this tool when you need to see what code is prepared for the next commit.
+
+    Args:
+        pipeline_id: The unique identifier of the pipeline/project workspace.
+
+    Returns:
+        A JSON string list of objects. Each object contains:
+        - "file": The relative path to the modified file.
+        - "first_line": The starting line number of the change in the new version.
+        - "last_line": The ending line number of the change in the new version.
+        - "type": The nature of the change ('addition', 'deletion', or 'change').
+    """
+    return await _get_repo_hunks(pipeline_id, ["--cached"])
+
+
+@register_tool(tool_type=READ_ONLY)
+async def git_unstaged_hunks(pipeline_id: str) -> str:
+    """
+    Retrieves the specific line ranges (hunks) of modifications in the working directory
+    that have NOT yet been staged (git add) or committed.
+
+    Use this tool to identify "dirty" files or local edits that are currently being
+    worked on but aren't part of the next commit yet.
+
+    Args:
+        pipeline_id: The unique identifier of the pipeline/project workspace.
+
+    Returns:
+        A JSON string list of objects (hunks). Each hunk identifies the file,
+        the line range affected, and the type of modification.
+    """
+    return await _get_repo_hunks(pipeline_id, [])
+
+
 @register_tool(tool_type=READ_ONLY)
 async def git_commit_hunks(pipeline_id: str, commit_sha: str) -> str:
     """
-    Returns a JSON string containing the hunks (changed line ranges) of a commit.
-    Each hunk includes the file path, first_line, last_line, and type (addition, deletion, change).
+    Retrieves the line-level changes (hunks) introduced by a specific historical commit.
+
+    This is useful for auditing historical changes, understanding the impact of a
+    specific PR/Commit, or identifying where a bug might have been introduced.
 
     Args:
-        pipeline_id: The ID of the pipeline to which the project belongs.
-        commit_sha: The SHA of the commit to show.
+        pipeline_id: The unique identifier of the pipeline/project workspace.
+        commit_sha: The full or short SHA-1 hash of the git commit to inspect.
+
+    Returns:
+        A JSON string list of objects. For deletions, 'first_line' and 'last_line'
+        represent the point in the file where the code was removed. For additions
+        and changes, they represent the range in the resulting file.
     """
     pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
     if not pipeline or not pipeline.workspace_abs_path:
@@ -114,56 +223,9 @@ async def git_commit_hunks(pipeline_id: str, commit_sha: str) -> str:
 
     try:
         repo = git.Repo(pipeline.workspace_abs_path)
-        # unified=0 gives only the hunk headers and changed lines, no context.
-        # format="" removes the commit metadata header from git show output.
+        # unified=0 removes context lines; format="" removes commit metadata
         patch_text = repo.git.show(commit_sha, unified=0, format="")
-
-        hunks = []
-        current_file = None
-
-        # Pattern for hunk header: @@ -a,b +c,d @@
-        # Groups: 1=a, 2=b, 3=c, 4=d
-        hunk_header_re = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
-
-        for line in patch_text.splitlines():
-            if line.startswith("--- a/"):
-                current_file = line[6:]
-            elif line.startswith("+++ b/"):
-                new_file = line[6:]
-                if new_file != "/dev/null":
-                    current_file = new_file
-                continue
-
-            match = hunk_header_re.match(line)
-            if match and current_file:
-                # b and d default to 1 if omitted.
-                b = int(match.group(2)) if match.group(2) else 1
-                c = int(match.group(3))
-                d = int(match.group(4)) if match.group(4) else 1
-
-                hunk_type = "change"
-                if b == 0:
-                    hunk_type = "addition"
-                elif d == 0:
-                    hunk_type = "deletion"
-
-                # For additions/changes, coordinates in the new file are c to c+d-1
-                # For deletions, c is the line where deletion happened (length 0).
-                first_line = c
-                last_line = c + d - 1 if d > 0 else c
-
-                hunks.append(
-                    {
-                        "file": current_file,
-                        "first_line": first_line,
-                        "last_line": last_line,
-                        "type": hunk_type,
-                    }
-                )
-
-        return json.dumps(hunks)
-    except git.exc.GitCommandError as e:
-        return f"Error executing git command: {e}"
+        return json.dumps(_parse_patch_to_hunks(patch_text))
     except Exception as e:
         return f"Error: {str(e)}"
 
@@ -275,7 +337,9 @@ async def git_diff(
         if file_path:
             full_path = _sanitize_path(str(pipeline.workspace_abs_path), file_path)
             if not full_path:
-                return "Error: Invalid file path. Must be relative and within workspace."
+                return (
+                    "Error: Invalid file path. Must be relative and within workspace."
+                )
             args.extend(["--", full_path])
 
         return repo.git.diff(*args)

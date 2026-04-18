@@ -150,6 +150,7 @@ async def test_git_commit_hunks(init_mock_db, git_repo):
             assert h["first_line"] == 1
             assert h["last_line"] == 1
 
+
 @pytest.mark.asyncio
 async def test_git_path_sanitization(init_mock_db, git_repo):
     pipeline = Pipeline(name="Git Pipeline", workspace_path=git_repo)
@@ -171,3 +172,57 @@ async def test_git_path_sanitization(init_mock_db, git_repo):
     # Test absolute path in git_diff
     diff = await git_diff(pipeline_id, file_path="/etc/passwd")
     assert "Error: Invalid file path." in diff
+
+
+def test_parse_patch_to_hunks_real_life_deletion():
+    from api.assistant.tools.git_tools import _parse_patch_to_hunks
+
+    # This is a snippet representing commit 87eaa722696212caeab88d3bfc7780d5ac26e00b
+    patch_text = """diff --git a/backend/api/pyproject.toml b/backend/api/pyproject.toml
+index e510243..e791839 100644
+--- a/backend/api/pyproject.toml
++++ b/backend/api/pyproject.toml
+@@ -15,0 +16 @@ dependencies = [
++    "gitpython>=3.1.46",
+diff --git a/backend/api/src/api/assistant/tools/git_tools.py b/backend/api/src/api/assistant/tools/git_tools.py
+index 4cc0cd9..1040e40 100644
+--- a/backend/api/src/api/assistant/tools/git_tools.py
++++ b/backend/api/src/api/assistant/tools/git_tools.py
+@@ -16 +15,0 @@ import os
+-import subprocess
+@@ -34,18 +33,0 @@ def _sanitize_path(workspace: str, rel_path: str) -> Optional[str]:
+-async def _run_git_command(workspace_path: str, args: List[str]) -> str:
+-    try:
+-        # Filter out empty strings if any
+-        cmd_args = [arg for arg in args if arg]
+-        result = subprocess.run(
+-            ["git"] + cmd_args,
+-            cwd=workspace_path,
+-            capture_output=True,
+-            text=True,
+-            check=False,
+-        )
+-        if result.returncode != 0:
+-            return f"Error executing git command: {result.stderr}"
+-        return result.stdout
+-    except Exception as e:
+-        return f"Error: {str(e)}"
+-
+-
+"""
+    hunks = _parse_patch_to_hunks(patch_text)
+
+    assert len(hunks) == 3
+
+    assert hunks[0]["file"] == "backend/api/pyproject.toml"
+    assert hunks[0]["type"] == "addition"
+
+    assert hunks[1]["file"] == "backend/api/src/api/assistant/tools/git_tools.py"
+    assert hunks[1]["type"] == "deletion"
+    assert hunks[1]["first_line"] == 15
+    assert hunks[1]["last_line"] == 15
+
+    assert hunks[2]["file"] == "backend/api/src/api/assistant/tools/git_tools.py"
+    assert hunks[2]["type"] == "deletion"
+    assert hunks[2]["first_line"] == 33
+    assert hunks[2]["last_line"] == 33
