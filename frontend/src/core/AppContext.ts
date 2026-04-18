@@ -107,8 +107,8 @@ export class AppContext {
         this.actionRegistry.execute('open_search', e, document.body);
       }
       
-      // Ctrl+Alt+A or Cmd+Alt+A for assistant
-      if ((e.ctrlKey || e.metaKey) && e.altKey && e.key === 'a') {
+      // Ctrl+Alt+A or Cmd+Alt+A or Ctrl+Shift+A for assistant
+      if ((e.ctrlKey || e.metaKey) && (e.altKey || e.shiftKey) && e.key.toLowerCase() === 'a') {
         e.preventDefault();
         this.actionRegistry.execute('toggle_assistant', e, document.body);
       }
