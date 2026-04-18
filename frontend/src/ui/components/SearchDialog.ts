@@ -23,6 +23,7 @@ import { ConfirmationDialog } from './ConfirmationDialog.ts';
 
 export class SearchDialog extends BaseDialog {
   private context: AppContext;
+  private pipelineId?: string;
   private keywords: string = '';
   private selectedStatuses: Set<TaskStatus> = new Set();
   private results: Task[] = [];
@@ -32,14 +33,15 @@ export class SearchDialog extends BaseDialog {
   private isSearching: boolean = false;
   private searchTimeout: any = null;
 
-  constructor(context: AppContext) {
+  constructor(context: AppContext, pipelineId?: string) {
     super({
-      title: 'Global Task Search',
+      title: pipelineId ? 'Search Pipeline Tasks' : 'Global Task Search',
       maxWidth: 'max-w-4xl',
       maxHeight: 'max-h-[85vh]',
       iconSvg: `<svg class="w-6 h-6 text-app-accent-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>`
     });
     this.context = context;
+    this.pipelineId = pipelineId;
     
     // Re-render body now that properties are initialized
     const bodyContainer = this.dialog.querySelector('#dialog-body-container') as HTMLElement;
@@ -71,7 +73,7 @@ export class SearchDialog extends BaseDialog {
         <div class="relative group">
           <input type="text" id="search-keywords" 
                  class="w-full bg-app-surface border border-app-border rounded-xl px-12 py-4 text-lg text-app-text outline-none focus:ring-2 focus:ring-app-accent-2 transition-all shadow-inner"
-                 placeholder="Search by keywords in title, spec, or design doc..."
+                 placeholder="${this.pipelineId ? 'Search in this pipeline...' : 'Search by keywords in title, spec, or design doc...'}"
                  value="${this.keywords}">
           <div class="absolute left-4 top-1/2 -translate-y-1/2 text-app-muted group-focus-within:text-app-accent-2 transition-colors">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
@@ -93,6 +95,11 @@ export class SearchDialog extends BaseDialog {
               <span class="text-xs text-app-muted group-hover:text-app-text transition-colors capitalize">${status}</span>
             </label>
           `).join('')}
+          ${this.pipelineId ? `
+            <div class="ml-auto text-[10px] text-app-muted uppercase font-bold tracking-widest bg-app-bg px-2 py-1 rounded border border-app-border">
+              Scoped to Pipeline: ${this.pipelineId}
+            </div>
+          ` : ''}
         </div>
       </div>
 
@@ -289,6 +296,7 @@ export class SearchDialog extends BaseDialog {
       const { tasks, total_count } = await this.context.taskClient.search({
         keywords: this.keywords,
         statuses: Array.from(this.selectedStatuses),
+        pipelineId: this.pipelineId,
         page: this.currentPage,
         limit: this.pageSize
       });

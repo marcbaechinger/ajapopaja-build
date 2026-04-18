@@ -67,9 +67,20 @@ export class AppContext {
       window.location.hash = '#/login';
     });
 
-    this.actionRegistry.register('open_search', () => {
+    this.actionRegistry.register('open_search', (_e, el) => {
       if (this.authService.isAuthenticated()) {
-        new SearchDialog(this).show();
+        // Try to get pipelineId from element or URL hash
+        let pipelineId = el.closest('[data-pipeline-id]')?.getAttribute('data-pipeline-id');
+        
+        if (!pipelineId) {
+          const hash = window.location.hash;
+          const match = hash.match(/#\/pipeline\/([a-f0-9]+)/);
+          if (match) {
+            pipelineId = match[1];
+          }
+        }
+        
+        new SearchDialog(this, pipelineId || undefined).show();
       }
     });
   }
