@@ -304,3 +304,33 @@ async def get_daily_stats(pipeline_id: str) -> List[Dict[str, Any]]:
     # Convert to sorted list by date
     result = sorted(daily_stats.values(), key=lambda x: x["date"])
     return result
+
+async def search_tasks(
+    keywords: Optional[str] = None,
+    statuses: Optional[List[TaskStatus]] = None,
+    pipeline_id: Optional[str] = None,
+    page: int = 0,
+    limit: int = 20
+) -> (List[Task], int):
+    filters = {"deleted": False}
+    
+    if pipeline_id:
+        filters["pipeline_id"] = pipeline_id
+        
+    if statuses:
+        filters["status"] = {"$in": statuses}
+        
+    if keywords:
+        # Case-insensitive search in title, spec, and design_doc
+        regex_filter = {"$regex": keywords, "$options": "i"}
+        filters["$or"] = [
+            {"title": regex_filter},
+            {"spec": regex_filter},
+            {"design_doc": regex_filter}
+        ]
+        
+    query = Task.find(filters)
+    total_count = await query.count()
+    tasks = await query.sort(-Task.updated_at).skip(page * limit).limit(limit).to_list()
+    
+    return tasks, total_count

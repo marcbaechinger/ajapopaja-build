@@ -28,6 +28,28 @@ class CompletedTasksResponse(BaseModel):
     tasks: List[Task]
     total_count: int
 
+class SearchTasksResponse(BaseModel):
+    tasks: List[Task]
+    total_count: int
+
+@task_router.get("/search", response_model=SearchTasksResponse)
+async def search_tasks(
+    keywords: Optional[str] = None,
+    statuses: Optional[List[TaskStatus]] = None,
+    pipeline_id: Optional[str] = None,
+    page: int = 0,
+    limit: int = 20,
+    current_user: User = Depends(get_current_user)
+):
+    tasks, total_count = await task_queries.search_tasks(
+        keywords=keywords,
+        statuses=statuses,
+        pipeline_id=pipeline_id,
+        page=page,
+        limit=limit
+    )
+    return SearchTasksResponse(tasks=tasks, total_count=total_count)
+
 @task_router.get("/{task_id}", response_model=Task)
 async def get_task(
     task_id: str, 

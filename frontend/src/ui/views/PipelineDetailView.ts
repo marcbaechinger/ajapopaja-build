@@ -186,338 +186,134 @@ export class PipelineDetailView extends View {
     }));
     this.unsubs.push(this.context.wsClient.on('GEMINI_PROCESS_STARTED', (message: any) => {
       if (message.payload?.pipeline_id === this.pipelineId) {
-        this.geminiStatus = { ...this.geminiStatus, running: true, log_file: message.payload.log_file_path };
+        this.geminiStatus.running = true;
         this.updateHeader();
       }
     }));
     this.unsubs.push(this.context.wsClient.on('GEMINI_PROCESS_STOPPED', (message: any) => {
       if (message.payload?.pipeline_id === this.pipelineId) {
-        this.geminiStatus = { ...this.geminiStatus, running: false, log_file: null };
+        this.geminiStatus.running = false;
         this.updateHeader();
       }
     }));
     this.unsubs.push(this.context.wsClient.on('VIBE_PROCESS_STARTED', (message: any) => {
       if (message.payload?.pipeline_id === this.pipelineId) {
-        this.vibeStatus = { ...this.vibeStatus, running: true, log_file: message.payload.log_file_path };
+        this.vibeStatus.running = true;
         this.updateHeader();
       }
     }));
     this.unsubs.push(this.context.wsClient.on('VIBE_PROCESS_STOPPED', (message: any) => {
       if (message.payload?.pipeline_id === this.pipelineId) {
-        this.vibeStatus = { ...this.vibeStatus, running: false, log_file: null };
+        this.vibeStatus.running = false;
         this.updateHeader();
       }
     }));
   }
 
-  private taskSortFn(a: Task, b: Task): number {
-    if (this.currentSortOrder === 'execution') {
-      if (a.order !== b.order) return a.order - b.order;
-      return new Date(a.scheduled_at || a.created_at || 0).getTime() - new Date(b.scheduled_at || b.created_at || 0).getTime();
-    } else if (this.currentSortOrder === 'newest') {
-      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
-    } else {
-      return a.status.localeCompare(b.status);
-    }
-  }
-
-  private insertTaskIntoDOM(task: Task) {
-    if (!this.container) return;
-    const taskId = task.id!;
-    
-    // Safety check: remove any existing instances of this task first
-    this.removeTaskFromDOM(taskId);
-
-    const listId = this.getTaskColumnId(task);
-    const list = this.container.querySelector(`#${listId}`);
-    
-    if (!list) {
-      // If the list container doesn't exist (like #failed-list when empty), 
-      // it's easier to refresh the column or the whole view.
-      this.refreshTasks();
-      return;
-    }
-
-    this.removeEmptyMessage(listId.replace('-list', ''));
-
-    const isCompleted = ([TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED] as any[]).includes(task.status);
-    const showOrdering = this.currentSortOrder === 'execution' && !isCompleted;
-    const isLastCompleted = listId === 'last-completed-task';
-    
-    const temp = document.createElement('div');
-    temp.innerHTML = TaskItem.render(task, showOrdering, isLastCompleted, this.collapsedTasks.has(taskId));
-    const newNode = temp.firstElementChild;
-    if (!newNode) return;
-
-    if (!isCompleted && listId !== 'proposed-list') {
-      const items = Array.from(list.querySelectorAll('[data-view-id]'));
-      const nextItem = items.find(item => {
-        const itemTaskId = item.getAttribute('data-view-id');
-        const itemTask = this.allLoadedTasks.find(t => t.id === itemTaskId);
-        if (!itemTask) return false;
-        return this.taskSortFn(task, itemTask) < 0;
-      });
-      if (nextItem) {
-        list.insertBefore(newNode, nextItem);
-      } else {
-        list.appendChild(newNode);
-      }
-    } else if (isCompleted) {
-      // Completed tasks have complex logic (Last vs History Feed)
-      this.refreshTasks();
-      return;
-    } else {
-      // Proposed list (newest first) or default
-      list.prepend(newNode);
-    }
-
-    this.updateColumnHeaderCount(listId.replace('-list', ''));
-    this.updateHeaderStats();
-    this.updatePipelineHealth();
-  }
-
-  private removeTaskFromDOM(taskId: string) {
-    if (!this.container) return;
-    const taskEls = this.container.querySelectorAll(`[data-view-id="${taskId}"]`);
-
-    // Cleanup editor if exists
-    const editor = this.activeEditors.get(taskId);
-    if (editor) {
-      editor.toTextArea();
-      this.activeEditors.delete(taskId);
-    }
-
-    if (taskEls.length === 0) return;
-    
-    taskEls.forEach(taskEl => {
-      const list = taskEl.parentElement;
-      taskEl.remove();
-      if (list && list.id) {
-        this.ensureEmptyMessage(list.id.replace('-list', ''));
-        this.updateColumnHeaderCount(list.id.replace('-list', ''));
-      }
-    });
-
-    this.updateHeaderStats();
-    this.updatePipelineHealth();
-  }
-
-  private updatePipelineHealth() {
-    if (!this.container) return;
-    const historyContainer = this.container.querySelector('#col-history');
-    if (!historyContainer) return;
-
-    // Find the health stats section (it's the first child of col-history)
-    const healthSection = historyContainer.querySelector('.bg-app-bg\\/50') as HTMLElement;
-    if (healthSection) {
-      // Re-render only the inner part of health section
-      const statsTitle = healthSection.querySelector('h3');
-      healthSection.innerHTML = `
-        ${statsTitle ? statsTitle.outerHTML : '<h3 class="text-sm font-black text-app-muted uppercase tracking-widest mb-6 px-1">Pipeline Health</h3>'}
-        ${PipelineStatsView.render(this.allLoadedTasks, undefined, true)}
-      `;
-      PipelineStatsView.animateBars(healthSection);
-    }
-  }
-
-  private updateSingleTask(task: any) {
-    if (!this.container) return;
-
-    const taskId = task.id;
-    // Update the local tasks cache
-    const index = this.allLoadedTasks.findIndex(t => t.id === taskId);
-    const oldTask = index !== -1 ? { ...this.allLoadedTasks[index] } : null;
-    
-    if (index !== -1) {
-      this.allLoadedTasks[index] = task;
-    } else {
-      this.allLoadedTasks.push(task);
-    }
-    this.updateHeaderStats();
-    this.updatePipelineHealth();
-
-    // Auto-expand if task became active, auto-collapse if it became inactive
-    const isActive = task.status === TaskStatus.INPROGRESS || task.status === TaskStatus.PROPOSED;
-    const wasActive = oldTask ? (oldTask.status === TaskStatus.INPROGRESS || oldTask.status === TaskStatus.PROPOSED) : false;
-
-    if (isActive && !wasActive) {
-      this.collapsedTasks.delete(taskId);
-    } else if (!isActive && wasActive) {
-      this.collapsedTasks.add(taskId);
-    }
-
-    // If task is being edited locally, skip external updates to avoid losing state
-    if (this.activeEditors.has(taskId)) {
-      console.log('Skipping update for task being edited:', taskId);
-      return;
-    }
-
-    const taskEl = this.container.querySelector(`[data-view-id="${taskId}"]`) as HTMLElement;
-    if (!taskEl) {
-      this.insertTaskIntoDOM(task);
-      return;
-    }
-
-    const targetListId = this.getTaskColumnId(task);
-    const currentList = taskEl.parentElement;
-    
-    const isTaskCompleted = ([TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED] as any[]).includes(task.status);
-    const wasTaskCompleted = taskEl.closest('#completed-task-list') !== null || taskEl.closest('#last-completed-task') !== null;
-
-    const orderChanged = oldTask && oldTask.order !== task.order;
-
-    // If moving between open/completed sections OR moving between columns OR order changed
-    if (isTaskCompleted !== wasTaskCompleted || (currentList && currentList.id !== targetListId) || orderChanged) {
-      this.removeTaskFromDOM(taskId);
-      this.insertTaskIntoDOM(task);
-      return;
-    }
-
-    // Render new HTML and replace inline
-    const temp = document.createElement('div');
-    const showOrdering = this.currentSortOrder === 'execution' && !isTaskCompleted;
-    const isLastCompleted = taskEl.closest('#last-completed-task') !== null;
-    temp.innerHTML = TaskItem.render(task, showOrdering, isLastCompleted, this.collapsedTasks.has(taskId));
-    const newNode = temp.firstElementChild;
-    if (newNode) {
-      taskEl.replaceWith(newNode);
-    }
-  }
-
   private registerActions() {
-    this.context.actionRegistry.register('edit_pipeline', async (_e, el) => {
-      const header = el.closest('header') as HTMLElement;
-      if (!header) return;
-      header.querySelector('#pipeline-view-info')?.classList.add('hidden');
-      header.querySelector('#pipeline-edit-info')?.classList.remove('hidden');
+    this.context.actionRegistry.register('edit_pipeline', () => {
+      this.container?.querySelector('#pipeline-view-info')?.classList.add('hidden');
+      this.container?.querySelector('#pipeline-edit-info')?.classList.remove('hidden');
     });
 
-    this.context.actionRegistry.register('cancel_edit_pipeline', async (_e, el) => {
-      const header = el.closest('header') as HTMLElement;
-      if (!header) return;
-      header.querySelector('#pipeline-view-info')?.classList.remove('hidden');
-      header.querySelector('#pipeline-edit-info')?.classList.add('hidden');
+    this.context.actionRegistry.register('cancel_edit_pipeline', () => {
+      this.container?.querySelector('#pipeline-view-info')?.classList.remove('hidden');
+      this.container?.querySelector('#pipeline-edit-info')?.classList.add('hidden');
     });
 
-    this.context.actionRegistry.register('save_pipeline', async (_e, el) => {
-      const header = el.closest('header') as HTMLElement;
-      if (!header || !this.pipeline) return;
+    this.context.actionRegistry.register('save_pipeline', async () => {
+      const editInfo = this.container?.querySelector('#pipeline-edit-info');
+      if (!editInfo || !this.pipeline) return;
 
-      const nameInput = header.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
-      const wsInput = header.querySelector('input[name="workspace_path"]') as HTMLInputElement;
-      const statusSelect = header.querySelector('select[name="pipeline_status"]') as HTMLSelectElement;
-      const manageGeminiInput = header.querySelector('input[name="manage_gemini"]') as HTMLInputElement;
-      const manageVibeInput = header.querySelector('input[name="manage_vibe"]') as HTMLInputElement;
-
-      const name = nameInput.value.trim();
-      const workspace_path = wsInput.value.trim() || null;
-      const status = statusSelect.value as PipelineStatus;
-      const manage_gemini = manageGeminiInput.checked;
-      const manage_vibe = manageVibeInput.checked;
-
-      if (!name) return;
+      const nameInput = editInfo.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
+      const statusSelect = editInfo.querySelector('select[name="pipeline_status"]') as HTMLSelectElement;
+      const workspaceInput = editInfo.querySelector('input[name="workspace_path"]') as HTMLInputElement;
+      const geminiCheck = editInfo.querySelector('input[name="manage_gemini"]') as HTMLInputElement;
+      const vibeCheck = editInfo.querySelector('input[name="manage_vibe"]') as HTMLInputElement;
 
       try {
         await this.context.pipelineClient.update(this.pipelineId, this.pipeline.version, {
-          name,
-          workspace_path,
-          status,
-          manage_gemini,
-          manage_vibe
+          name: nameInput.value.trim(),
+          status: statusSelect.value as PipelineStatus,
+          workspace_path: workspaceInput.value.trim() || undefined,
+          manage_gemini: geminiCheck.checked,
+          manage_vibe: vibeCheck.checked
         });
-        // Success handled by WS PIPELINE_UPDATED
-        header.querySelector('#pipeline-view-info')?.classList.remove('hidden');
-        header.querySelector('#pipeline-edit-info')?.classList.add('hidden');
+        this.container?.querySelector('#pipeline-view-info')?.classList.remove('hidden');
+        this.container?.querySelector('#pipeline-edit-info')?.classList.add('hidden');
       } catch (error) {
-        if (error instanceof Error && error.message === 'OCC_CONFLICT') {
-          alert('Conflict: Pipeline was updated by someone else. Refreshing...');
-          this.loadPipeline();
-        } else {
-          alert('Failed to update pipeline');
-        }
+        alert('Failed to update pipeline');
       }
     });
 
-    this.context.actionRegistry.register('toggle_task_collapse', async (_e, el) => {
-      const taskEl = el.closest('[data-view-id]') as HTMLElement;
-      if (!taskEl) return;
-      const taskId = taskEl.getAttribute('data-view-id');
-      if (!taskId) return;
-
-      if (this.collapsedTasks.has(taskId)) {
-        this.collapsedTasks.delete(taskId);
-      } else {
-        this.collapsedTasks.add(taskId);
-      }
-
-      const task = this.allLoadedTasks.find(t => t.id === taskId);
-      if (task) {
-        this.updateSingleTask(task);
-      }
-    });
-
-    this.context.actionRegistry.register('open_stats', async (e) => {
-      e.preventDefault();
-      new StatsDialog(this.allLoadedTasks, this.pipelineId, this.context.pipelineClient).show();
-    });
-
-    this.context.actionRegistry.register('open_gemini_logs', async (e) => {
+    this.context.actionRegistry.register('open_gemini_logs', (e) => {
       e.preventDefault();
       const url = this.context.pipelineClient.getGeminiLogsStreamUrl(this.pipelineId);
       new LogViewerDialog(url, this.context.authService).show();
     });
 
-    this.context.actionRegistry.register('open_vibe_logs', async (e) => {
+    this.context.actionRegistry.register('open_vibe_logs', (e) => {
       e.preventDefault();
       const url = this.context.pipelineClient.getVibeLogsStreamUrl(this.pipelineId);
       new LogViewerDialog(url, this.context.authService).show();
     });
 
-    this.context.actionRegistry.register('change_sort_order', async (e) => {
-      const select = e.target as HTMLSelectElement;
-      this.currentSortOrder = select.value as any;
+    this.context.actionRegistry.register('open_stats', () => {
+      new StatsDialog(this.allLoadedTasks, this.pipelineId, this.context.pipelineClient).show();
+    });
+
+    this.context.actionRegistry.register('change_sort_order', async (_e, el) => {
+      this.currentSortOrder = (el as HTMLSelectElement).value as any;
       this.refreshTasks();
     });
 
-    this.context.actionRegistry.register('prev_completed_page', async (e) => {
-      e.preventDefault();
+    this.context.actionRegistry.register('create_task', async (_e, el) => {
+      const form = el as HTMLFormElement;
+      const titleInput = form.querySelector('input[name="task_title"]') as HTMLInputElement;
+      const title = titleInput.value.trim();
+      if (!title) return;
+
+      try {
+        await this.context.taskClient.create(this.pipelineId, title);
+        titleInput.value = '';
+        // UI refresh handled via WebSocket
+      } catch (error) {
+        alert('Failed to create task');
+      }
+    });
+
+    this.context.actionRegistry.register('prev_completed_page', () => {
       if (this.completedTasksPage > 0) {
         this.completedTasksPage--;
         this.refreshCompletedTasks();
       }
     });
 
-    this.context.actionRegistry.register('next_completed_page', async (e) => {
-      e.preventDefault();
+    this.context.actionRegistry.register('next_completed_page', () => {
       this.completedTasksPage++;
       this.refreshCompletedTasks();
     });
 
-    this.context.actionRegistry.register('create_task', async (_e, el) => {
-      const form = el as HTMLFormElement;
-      const titleInput = form.querySelector('#task-title') as HTMLInputElement;
+    this.context.actionRegistry.register('toggle_task_collapse', (_e, el) => {
+      const taskId = el.closest('[data-view-id]')?.getAttribute('data-view-id');
+      if (!taskId) return;
 
-      const title = titleInput.value.trim();
+      const body = el.closest('[data-view-id]')?.querySelector('.task-body');
+      const icon = el.querySelector('svg.transform');
+      if (!body || !icon) return;
 
-      if (!title) return;
-
-      try {
-        await this.context.taskClient.create(this.pipelineId, title);
-        titleInput.value = '';
-        // Refresh handled by WS
-      } catch (error) {
-        alert('Failed to create task');
-      }
+      const isHidden = body.classList.toggle('hidden');
+      icon.classList.toggle('rotate-90', !isHidden);
+      
+      if (isHidden) this.collapsedTasks.add(taskId);
+      else this.collapsedTasks.delete(taskId);
     });
-
 
     this.context.actionRegistry.register('edit_title', async (_e, el) => {
       const container = el.closest('.title-container') as HTMLElement;
       if (!container) return;
-      
       container.querySelector('.title-view')?.classList.add('hidden');
       container.querySelector('.title-edit')?.classList.remove('hidden');
-      
       const input = container.querySelector('input');
       input?.focus();
       input?.select();
@@ -526,7 +322,6 @@ export class PipelineDetailView extends View {
     this.context.actionRegistry.register('cancel_title_edit', async (_e, el) => {
       const container = el.closest('.title-container') as HTMLElement;
       if (!container) return;
-      
       container.querySelector('.title-view')?.classList.remove('hidden');
       container.querySelector('.title-edit')?.classList.add('hidden');
     });
@@ -534,17 +329,17 @@ export class PipelineDetailView extends View {
     this.context.actionRegistry.register('save_title', async (_e, el) => {
       const container = el.closest('.title-container') as HTMLElement;
       if (!container) return;
-      
       const taskId = container.getAttribute('data-task-id');
       const version = parseInt(container.getAttribute('data-version') || '1');
-      if (!taskId) return;
+      const input = container.querySelector('input');
+      if (!taskId || !input) return;
 
-      const title = (container.querySelector('input') as HTMLInputElement).value.trim();
-      if (!title) return;
+      const newTitle = input.value.trim();
+      if (!newTitle) return;
 
       try {
-        await this.context.taskClient.updateDetails(taskId, version, { title });
-        // UI refresh via WS
+        await this.context.taskClient.updateDetails(taskId, version, { title: newTitle });
+        // WS will refresh
       } catch (error) {
         alert('Failed to save title');
       }
@@ -553,10 +348,9 @@ export class PipelineDetailView extends View {
     this.context.actionRegistry.register('edit_spec', async (_e, el) => {
       const container = el.closest('.spec-container') as HTMLElement;
       if (!container) return;
-      
       container.querySelector('.spec-view')?.classList.add('hidden');
+      container.querySelector('[data-action-click="toggle_spec_expand"]')?.classList.add('hidden');
       container.querySelector('.spec-edit')?.classList.remove('hidden');
-      
       const textarea = container.querySelector('textarea');
       textarea?.focus();
     });
@@ -564,25 +358,26 @@ export class PipelineDetailView extends View {
     this.context.actionRegistry.register('cancel_spec_edit', async (_e, el) => {
       const container = el.closest('.spec-container') as HTMLElement;
       if (!container) return;
-      
       container.querySelector('.spec-view')?.classList.remove('hidden');
+      container.querySelector('[data-action-click="toggle_spec_expand"]')?.classList.remove('hidden');
       container.querySelector('.spec-edit')?.classList.add('hidden');
     });
 
     this.context.actionRegistry.register('save_spec', async (_e, el) => {
       const container = el.closest('.spec-container') as HTMLElement;
       if (!container) return;
-      
       const taskId = container.getAttribute('data-task-id');
       const version = parseInt(container.getAttribute('data-version') || '1');
-      if (!taskId) return;
+      const textarea = container.querySelector('textarea');
+      const wantDesignCheck = container.querySelector('input[type="checkbox"]') as HTMLInputElement;
+      if (!taskId || !textarea) return;
 
-      const spec = (container.querySelector('textarea') as HTMLTextAreaElement).value.trim();
-      const want_design_doc = (container.querySelector('input[type="checkbox"]') as HTMLInputElement).checked;
+      const newSpec = textarea.value.trim();
+      const wantDesignDoc = wantDesignCheck.checked;
 
       try {
-        await this.context.taskClient.updateDetails(taskId, version, { spec, want_design_doc });
-        // UI refresh via WS
+        await this.context.taskClient.updateDetails(taskId, version, { spec: newSpec, want_design_doc: wantDesignDoc });
+        // WS will refresh
       } catch (error) {
         alert('Failed to save specification');
       }
@@ -940,7 +735,7 @@ export class PipelineDetailView extends View {
           tasks: inProgressTasks,
           emptyMessage: 'No active work.',
           collapsedTasks: this.collapsedTasks,
-          badge: { text: 'Running', class: 'bg-amber-500/20 text-amber-400 border border-amber-500/30' }
+          badge: { text: 'Running', class: 'bg-amber-500/20 text-amber-400 border-amber-500/30' }
         })}
         ${TaskColumn.render({
           id: 'failed',
@@ -948,7 +743,7 @@ export class PipelineDetailView extends View {
           tasks: failedTasks,
           emptyMessage: '',
           collapsedTasks: this.collapsedTasks,
-          badge: { text: 'Attention', class: 'bg-red-500/20 text-red-400 border border-red-500/30' }
+          badge: { text: 'Attention', class: 'bg-red-500/20 text-red-400 border-red-500/30' }
         })}
         ${TaskColumn.render({
           id: 'scheduled',
@@ -1062,7 +857,7 @@ export class PipelineDetailView extends View {
         <div class="flex items-center gap-2 bg-app-bg px-2 py-1 rounded border border-blue-500/30">
           <span class="relative flex h-2 w-2">
             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-            <span class="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
           </span>
           <span class="text-[10px] font-bold uppercase tracking-widest text-blue-400">Vibe Running</span>
           <button data-action-click="open_vibe_logs" class="text-[9px] font-black uppercase tracking-tighter text-app-accent-2 hover:underline cursor-pointer ml-1">View Logs</button>
@@ -1201,6 +996,11 @@ export class PipelineDetailView extends View {
             </div>
           </div>
           <div class="flex gap-4 items-center">
+             <button data-action-click="open_search" class="flex items-center gap-2 bg-app-bg hover:bg-app-surface px-4 py-2 rounded-xl border border-app-border text-app-muted hover:text-app-accent-2 transition-all cursor-pointer group mr-4" title="Global Search (Ctrl+K)">
+               <svg class="w-4 h-4 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+               <span class="text-xs font-bold uppercase tracking-widest">Search</span>
+               <span class="text-[10px] bg-app-surface px-1.5 py-0.5 rounded border border-app-border text-app-muted group-hover:text-app-accent-2 group-hover:border-app-accent-2/30 transition-colors ml-1">K</span>
+             </button>
              <div class="flex flex-col items-end mr-2">
                <span class="text-sm font-bold text-app-text">${user?.username || 'User'}</span>
                <button data-action-click="perform_logout" class="text-[10px] text-app-muted hover:text-red-400 uppercase font-black tracking-widest transition-colors cursor-pointer">Logout</button>
@@ -1272,6 +1072,84 @@ export class PipelineDetailView extends View {
     if (this.keydownHandler) {
       document.removeEventListener('keydown', this.keydownHandler);
       this.keydownHandler = null;
+    }
+  }
+
+  private taskSortFn(a: Task, b: Task): number {
+    if (this.currentSortOrder === 'execution') {
+      return a.order - b.order;
+    } else if (this.currentSortOrder === 'newest') {
+      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+    } else {
+      return a.status.localeCompare(b.status);
+    }
+  }
+
+  private insertTaskIntoDOM(task: Task) {
+    if (!this.container) return;
+    const columnId = this.getTaskColumnId(task);
+    const list = this.container.querySelector(`#${columnId}`);
+    if (!list) return;
+
+    this.removeEmptyMessage(columnId);
+    
+    const taskHtml = TaskItem.render(task, columnId === 'backlog-list' || columnId === 'scheduled-list', false, this.collapsedTasks.has(task.id!));
+    const temp = document.createElement('div');
+    temp.innerHTML = taskHtml;
+    const taskEl = temp.firstElementChild as HTMLElement;
+    
+    // Simple insertion (at top for now, refreshTasks will handle proper sorting later)
+    list.prepend(taskEl);
+    this.updateColumnHeaderCount(columnId);
+  }
+
+  private removeTaskFromDOM(taskId: string) {
+    const el = this.container?.querySelector(`[data-view-id="${taskId}"]`);
+    if (el) {
+      const columnId = el.closest('[id]')?.id;
+      el.remove();
+      if (columnId) {
+        this.updateColumnHeaderCount(columnId);
+        this.ensureEmptyMessage(columnId);
+      }
+    }
+  }
+
+  private updateSingleTask(task: Task) {
+    const taskId = task.id;
+    const el = this.container?.querySelector(`[data-view-id="${taskId}"]`);
+    
+    // Update local cache
+    const index = this.allLoadedTasks.findIndex(t => t.id === taskId);
+    if (index !== -1) {
+      this.allLoadedTasks[index] = task;
+    } else {
+      this.allLoadedTasks.push(task);
+    }
+    this.updateHeaderStats();
+
+    if (el) {
+      const currentColumnId = el.parentElement?.id;
+      const targetColumnId = this.getTaskColumnId(task);
+
+      if (currentColumnId === targetColumnId) {
+        // Just update content
+        const taskHtml = TaskItem.render(task, targetColumnId === 'backlog-list' || targetColumnId === 'scheduled-list', false, this.collapsedTasks.has(task.id!));
+        const temp = document.createElement('div');
+        temp.innerHTML = taskHtml;
+        el.replaceWith(temp.firstElementChild as HTMLElement);
+      } else {
+        // Move to different column
+        el.remove();
+        if (currentColumnId) {
+          this.updateColumnHeaderCount(currentColumnId);
+          this.ensureEmptyMessage(currentColumnId);
+        }
+        this.insertTaskIntoDOM(task);
+      }
+    } else {
+      // New task or was hidden
+      this.insertTaskIntoDOM(task);
     }
   }
 }

@@ -46,6 +46,31 @@ export class TaskClient extends BaseClient {
     };
   }
 
+  async search(options: {
+    keywords?: string,
+    statuses?: TaskStatus[],
+    pipelineId?: string,
+    page?: number,
+    limit?: number
+  }): Promise<{tasks: Task[], total_count: number}> {
+    const url = new URL(`${this.baseUrl}/tasks/search`);
+    if (options.keywords) url.searchParams.append('keywords', options.keywords);
+    if (options.pipelineId) url.searchParams.append('pipeline_id', options.pipelineId);
+    if (options.page !== undefined) url.searchParams.append('page', options.page.toString());
+    if (options.limit !== undefined) url.searchParams.append('limit', options.limit.toString());
+    
+    if (options.statuses) {
+      options.statuses.forEach(status => url.searchParams.append('statuses', status));
+    }
+
+    const response = await this.fetch(url.toString());
+    const data = await response.json();
+    return {
+      tasks: data.tasks.map((t: any) => new Task(t)),
+      total_count: data.total_count
+    };
+  }
+
   async get(id: string, includeDeleted: boolean = false): Promise<Task> {
     const url = new URL(`${this.baseUrl}/tasks/${id}`);
     if (includeDeleted) url.searchParams.append('include_deleted', 'true');

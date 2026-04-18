@@ -20,6 +20,7 @@ import { PipelineClient } from './clients/PipelineClient';
 import { TaskClient } from './clients/TaskClient';
 import { WebSocketClient } from './WebSocketClient';
 import { AuthService } from './AuthService';
+import { SearchDialog } from '../ui/components/SearchDialog';
 
 export interface AppState {
   theme: 'light' | 'dark';
@@ -48,6 +49,7 @@ export class AppContext {
     };
 
     this.initGlobalActions();
+    this.setupGlobalShortcuts();
   }
 
   private initGlobalActions() {
@@ -60,6 +62,22 @@ export class AppContext {
     this.actionRegistry.register('perform_logout', async () => {
       await this.authService.logout();
       window.location.hash = '#/login';
+    });
+
+    this.actionRegistry.register('open_search', () => {
+      if (this.authService.isAuthenticated()) {
+        new SearchDialog(this).show();
+      }
+    });
+  }
+
+  private setupGlobalShortcuts() {
+    document.addEventListener('keydown', (e) => {
+      // Ctrl+K or Cmd+K for search
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        this.actionRegistry.execute('open_search', e, document.body);
+      }
     });
   }
 
