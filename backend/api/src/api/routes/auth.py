@@ -24,7 +24,8 @@ from api.auth import (
     SECRET_KEY, 
     ALGORITHM,
     ACCESS_TOKEN_EXPIRE_MINUTES,
-    get_current_user
+    get_current_user,
+    get_password_hash
 )
 from pydantic import BaseModel
 from typing import Optional
