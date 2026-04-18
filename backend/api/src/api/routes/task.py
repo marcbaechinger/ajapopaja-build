@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from fastapi import APIRouter, Body, Depends
+from fastapi import APIRouter, Body, Depends, Query
 from typing import List, Optional
 from pydantic import BaseModel
 from core.models.models import Task, TaskStatus, User
@@ -35,7 +35,7 @@ class SearchTasksResponse(BaseModel):
 @task_router.get("/search", response_model=SearchTasksResponse)
 async def search_tasks(
     keywords: Optional[str] = None,
-    statuses: Optional[List[TaskStatus]] = None,
+    statuses: Optional[List[TaskStatus]] = Query(None),
     pipeline_id: Optional[str] = None,
     page: int = 0,
     limit: int = 20,
