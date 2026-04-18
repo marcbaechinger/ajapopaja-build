@@ -143,3 +143,80 @@ async def nvim_set_quickfix(
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+
+@register_tool(tool_type=WRITE_ACCESS)
+async def nvim_show_diff(
+    pipeline_id: str, path: str, commit_hash: str = "HEAD~1"
+) -> Dict:
+    """
+    Shows a side-by-side diff between the current file and a previous version in Neovim.
+
+    Args:
+        pipeline_id: The ID of the pipeline (used to resolve absolute path).
+        path: Path to the file relative to the project root.
+        commit_hash: The commit hash or reference to compare against (defaults to HEAD~1).
+    """
+    try:
+        pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
+        if not pipeline or not pipeline.workspace_abs_path:
+            return {"success": False, "error": "Workspace path not found"}
+
+        try:
+            full_path = str(safe_join(pipeline.workspace_abs_path, path))
+        except ValueError as e:
+            return {"success": False, "error": str(e)}
+
+        # 1. Get the content of the file from the git history
+        cmd = ["git", "show", f"{commit_hash}:{path}"]
+        try:
+            import subprocess
+            result = subprocess.run(
+                cmd,
+                cwd=str(pipeline.workspace_abs_path),
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            old_content = result.stdout
+        except subprocess.CalledProcessError as e:
+            return {"success": False, "error": f"Git error: {e.stderr}"}
+
+        # 2. Prepare the Lua script to set up the side-by-side view
+        # We pass arguments cleanly to avoid string escaping issues in Lua
+        lua_script = """
+        local file_path, old_text, commit_short = ...
+        
+        -- Open the current file
+        vim.cmd("edit " .. vim.fn.fnameescape(file_path))
+        vim.cmd("diffthis")
+        
+        -- Create a vertical split for the 'Old' version
+        vim.cmd("vnew")
+        local buf = vim.api.nvim_get_current_buf()
+        
+        -- Set buffer options: temporary, no file, name it for clarity
+        local filename = vim.fn.fnamemodify(file_path, ":t")
+        local buf_name = "PREVIOUS_" .. commit_short .. "_" .. filename
+        
+        -- Handle potential buffer name collision
+        pcall(vim.api.nvim_buf_set_name, buf, buf_name)
+        
+        vim.bo[buf].buftype = "nofile"
+        vim.bo[buf].swapfile = false
+        
+        -- Insert the old content
+        local lines = vim.split(old_text, "\\n", {plain=true})
+        -- remove trailing empty line from split if old_text ends with newline
+        if lines[#lines] == "" then table.remove(lines) end
+        
+        vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+        
+        -- Enable diff mode on the scratch buffer
+        vim.cmd("diffthis")
+        """
+        
+        commit_short = commit_hash[:7]
+        return _nvim_client_call("nvim_exec_lua", [lua_script, [full_path, old_content, commit_short]])
+
+    except Exception as e:
+        return {"success": False, "error": str(e)}
