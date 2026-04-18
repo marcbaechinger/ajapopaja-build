@@ -510,6 +510,46 @@ export class PipelineDetailView extends View {
       }
     });
 
+
+    this.context.actionRegistry.register('edit_title', async (_e, el) => {
+      const container = el.closest('.title-container') as HTMLElement;
+      if (!container) return;
+      
+      container.querySelector('.title-view')?.classList.add('hidden');
+      container.querySelector('.title-edit')?.classList.remove('hidden');
+      
+      const input = container.querySelector('input');
+      input?.focus();
+      input?.select();
+    });
+
+    this.context.actionRegistry.register('cancel_title_edit', async (_e, el) => {
+      const container = el.closest('.title-container') as HTMLElement;
+      if (!container) return;
+      
+      container.querySelector('.title-view')?.classList.remove('hidden');
+      container.querySelector('.title-edit')?.classList.add('hidden');
+    });
+
+    this.context.actionRegistry.register('save_title', async (_e, el) => {
+      const container = el.closest('.title-container') as HTMLElement;
+      if (!container) return;
+      
+      const taskId = container.getAttribute('data-task-id');
+      const version = parseInt(container.getAttribute('data-version') || '1');
+      if (!taskId) return;
+
+      const title = (container.querySelector('input') as HTMLInputElement).value.trim();
+      if (!title) return;
+
+      try {
+        await this.context.taskClient.updateDetails(taskId, version, { title });
+        // UI refresh via WS
+      } catch (error) {
+        alert('Failed to save title');
+      }
+    });
+
     this.context.actionRegistry.register('edit_spec', async (_e, el) => {
       const container = el.closest('.spec-container') as HTMLElement;
       if (!container) return;

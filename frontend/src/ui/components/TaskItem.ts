@@ -120,6 +120,8 @@ export class TaskItem {
     const isDiscarded = task.status === TaskStatus.DISCARDED;
     const isCompleted = ([TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED] as any[]).includes(task.status);
 
+    const isEditableTitle = [TaskStatus.CREATED, TaskStatus.PROPOSED].includes(task.status as TaskStatus);
+
     const specHtml = `
       <div class="spec-container w-full text-xs bg-app-surface p-3 rounded-lg border border-app-border transition-all"
            data-task-id="${taskId}" data-version="${task.version}">
@@ -213,8 +215,22 @@ export class TaskItem {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
               </svg>
             </div>
-            <div class="flex flex-col">
-              <span class="font-medium text-app-text text-lg">${task.title}</span>
+            <div class="title-container flex flex-col" data-task-id="${taskId}" data-version="${task.version}">
+              <div class="title-view flex items-center gap-2 ${isEditableTitle ? 'cursor-pointer group/title' : ''}" 
+                   ${isEditableTitle ? 'data-action-click="edit_title"' : ''}>
+                <span class="font-medium text-app-text text-lg">${task.title}</span>
+                ${isEditableTitle ? '<svg class="w-3 h-3 text-app-muted opacity-0 group-hover/title:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>' : ''}
+              </div>
+              ${isEditableTitle ? `
+                <div class="title-edit hidden flex flex-col gap-2 mt-1">
+                  <input type="text" class="w-full bg-app-bg border border-app-border rounded px-2 py-1 text-lg text-app-text outline-none focus:ring-1 focus:ring-app-accent-1" 
+                         value="${task.title.replace(/"/g, '&quot;')}" placeholder="Task title">
+                  <div class="flex gap-2 justify-end">
+                    <button data-action-click="cancel_title_edit" class="text-[10px] text-app-muted hover:text-app-text px-2 py-1 cursor-pointer">Cancel</button>
+                    <button data-action-click="save_title" class="text-[10px] bg-app-accent-1 text-white px-3 py-1 rounded hover:brightness-110 cursor-pointer">Save</button>
+                  </div>
+                </div>
+              ` : ''}
               <span class="text-xs text-app-muted">Order: ${task.order} ${isSystem ? '• System Task' : ''}</span>
             </div>
           </div>

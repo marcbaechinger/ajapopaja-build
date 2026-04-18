@@ -84,4 +84,28 @@ describe('TaskItem', () => {
     expect(html).toContain('Show More');
     expect(html).toContain('data-action-click="toggle_spec_expand"');
   });
+
+  it('should render editable title for CREATED tasks', () => {
+    const html = TaskItem.render(mockTask as any);
+    expect(html).toContain('title-view');
+    expect(html).toContain('data-action-click="edit_title"');
+    expect(html).toContain('title-edit');
+    expect(html).toContain('data-action-click="save_title"');
+  });
+
+  it('should render editable title for PROPOSED tasks', () => {
+    const proposedTask = { ...mockTask, status: TaskStatus.PROPOSED };
+    const html = TaskItem.render(proposedTask as any);
+    expect(html).toContain('title-view');
+    expect(html).toContain('data-action-click="edit_title"');
+    expect(html).toContain('title-edit');
+  });
+
+  it('should render static title for SCHEDULED tasks', () => {
+    const scheduledTask = { ...mockTask, status: TaskStatus.SCHEDULED };
+    const html = TaskItem.render(scheduledTask as any);
+    expect(html).toContain('title-view');
+    expect(html).not.toContain('data-action-click="edit_title"');
+    expect(html).not.toContain('title-edit');
+  });
 });

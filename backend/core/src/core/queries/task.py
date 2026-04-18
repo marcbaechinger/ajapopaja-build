@@ -101,6 +101,8 @@ async def update_task_details(
         )
     
     if title is not None:
+        if task.status not in [TaskStatus.CREATED, TaskStatus.PROPOSED]:
+            raise ValueError(f"Task title can only be updated in CREATED or PROPOSED state, currently {task.status}")
         task.title = title
     if description is not None:
         task.description = description
