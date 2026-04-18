@@ -25,3 +25,15 @@ if not WORKSPACES_ROOT.is_dir():
         f"WORKSPACES_ROOT '{WORKSPACES_ROOT}' does not exist or is not a directory. "
         "Please create it or configure the WORKSPACES_ROOT environment variable correctly."
     )
+
+# Common directories to ignore across all file and search tools
+IGNORED_DIRECTORIES = [
+    ".git",
+    "node_modules",
+    ".venv",
+    "__pycache__",
+    "dist",
+    ".pytest_cache",
+    ".logs",
+]
+

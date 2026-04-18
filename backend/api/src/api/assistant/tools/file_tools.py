@@ -17,6 +17,7 @@ import glob
 from pathlib import Path
 from typing import List
 from core.queries import pipeline as pipeline_queries
+from core.config import IGNORED_DIRECTORIES
 from core.utils.path_utils import safe_join
 from api.assistant.decorators import register_tool
 
@@ -75,15 +76,7 @@ async def list_project_structure(
             return [f"Error: Path '{path}' is not a directory."]
 
         # Filter out __pycache__, .git, node_modules etc
-        ignored = [
-            "__pycache__",
-            ".git",
-            "node_modules",
-            ".venv",
-            "dist",
-            ".pytest_cache",
-            ".logs",
-        ]
+        ignored = IGNORED_DIRECTORIES
         result = []
         workspace_root = str(pipeline.workspace_abs_path)
 

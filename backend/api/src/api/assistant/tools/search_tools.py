@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Optional, List
 from core.queries import pipeline as pipeline_queries
 from core.utils.path_utils import safe_join
+from core.config import IGNORED_DIRECTORIES
 from api.assistant.decorators import register_tool
 
 READ_ONLY = "read_only"
@@ -79,7 +80,7 @@ async def grep(
         args.append(f"--include={file_glob}")
         
     # Ignore common dirs like .git, node_modules, .venv, __pycache__
-    for ignore_dir in [".git", "node_modules", ".venv", "__pycache__", "dist", ".logs"]:
+    for ignore_dir in IGNORED_DIRECTORIES:
         args.append(f"--exclude-dir={ignore_dir}")
 
     args.append("-E") # Extended regex
@@ -138,7 +139,7 @@ async def find(
          output = result.stdout
          # Filter out ignored directories manually
          lines = output.splitlines()
-         ignored = [".git/", "node_modules/", ".venv/", "__pycache__/", "dist/", ".logs/"]
+         ignored = [f"{d}/" for d in IGNORED_DIRECTORIES]
          filtered_lines = [l for l in lines if not any(ig in l for ig in ignored)]
          return "\n".join(filtered_lines)[:10000]
     except Exception as e:
@@ -172,7 +173,8 @@ async def tree(
     if not os.path.isdir(full_path):
         return f"Error: Directory not found: {path}"
 
-    args = ["tree", "--noreport", "-I", ".git|node_modules|.venv|__pycache__|dist|.pytest_cache|.logs"]
+    ignore_pattern = "|".join(IGNORED_DIRECTORIES)
+    args = ["tree", "--noreport", "-I", ignore_pattern]
     if depth is not None:
         args.extend(["-L", str(depth)])
     if follow_symlinks:
@@ -199,7 +201,7 @@ def _python_tree(directory: str, max_depth: Optional[int] = None, current_depth:
     except PermissionError:
         return ""
         
-    ignored = [".git", "node_modules", ".venv", "__pycache__", "dist", ".pytest_cache", ".logs"]
+    ignored = IGNORED_DIRECTORIES
     items = [item for item in items if item not in ignored]
     
     for i, item in enumerate(items):
