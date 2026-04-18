@@ -12,10 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 from enum import Enum
 from typing import List, Optional, Dict, Any
 from datetime import datetime, UTC
-from pydantic import Field, BaseModel
+from pydantic import Field, BaseModel, field_validator
 from beanie import Document
 
 class TaskStatus(str, Enum):
@@ -73,6 +74,13 @@ class Pipeline(Document):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     deleted: bool = False
+
+    @field_validator("workspace_path")
+    @classmethod
+    def validate_workspace_path(cls, v):
+        if v is not None and v != "" and not os.path.isabs(v):
+            raise ValueError("workspace_path must be an absolute path")
+        return v
 
     class Settings:
         name = "pipelines"
