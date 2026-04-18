@@ -63,7 +63,7 @@ export class SearchDialog extends BaseDialog {
     if (!this.selectedStatuses) return '';
 
     const container = document.createElement('div');
-    container.className = 'flex flex-col h-full bg-app-surface';
+    container.className = 'flex flex-col grow min-h-0 bg-app-surface';
     
     container.innerHTML = `
       <div class="p-6 border-b border-app-border bg-app-bg shrink-0">
