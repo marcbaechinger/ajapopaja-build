@@ -57,11 +57,12 @@ class AssistantSession:
             self.is_processing = False
 
     async def confirm_tool(self, tool_call_id: str):
-        if not self.pending_tool_call or self.pending_tool_call["id"] != tool_call_id:
+        pending_id = (self.pending_tool_call or {}).get("id") or "legacy_id"
+        if not self.pending_tool_call or pending_id != tool_call_id:
             await self.on_update(
                 {
                     "type": "error",
-                    "message": "No pending tool call found or ID mismatch.",
+                    "message": f"No pending tool call found or ID mismatch. Expected {pending_id}, got {tool_call_id}",
                 }
             )
             return
@@ -79,9 +80,9 @@ class AssistantSession:
                 content=json.dumps(result),
                 tool_calls=[
                     {
-                        "id": tool_call["id"],
+                        "id": tool_call.get("id", "legacy_id"),
                         "type": "function",
-                        "function": tool_call["function"],
+                        "function": tool_call.get("function", {}),
                     }
                 ],
             )
@@ -126,17 +127,28 @@ class AssistantSession:
         tool_calls = []
 
         for chunk in response:
-            if "message" in chunk:
-                msg = chunk["message"]
-
+            # Handle chunk being an object or a dict
+            msg = getattr(chunk, 'message', None)
+            if not msg and isinstance(chunk, dict):
+                msg = chunk.get("message")
+            
+            if msg:
                 # Handle text streaming
-                if "content" in msg and msg["content"]:
-                    full_content += msg["content"]
-                    await self.on_update({"type": "chunk", "content": msg["content"]})
+                content = getattr(msg, 'content', '')
+                if not content and isinstance(msg, dict):
+                    content = msg.get("content", "")
+                
+                if content:
+                    full_content += content
+                    await self.on_update({"type": "chunk", "content": content})
 
                 # Handle tool calls
-                if "tool_calls" in msg and msg["tool_calls"]:
-                    tool_calls.extend(msg["tool_calls"])
+                tc = getattr(msg, 'tool_calls', None)
+                if not tc and isinstance(msg, dict):
+                    tc = msg.get("tool_calls", [])
+                
+                if tc:
+                    tool_calls.extend(tc)
 
         if full_content or tool_calls:
             # Convert tool calls to dicts for Pydantic/Storage
@@ -146,10 +158,12 @@ class AssistantSession:
                     tool_calls_dicts.append(tc.model_dump())
                 elif hasattr(tc, 'dict'):
                     tool_calls_dicts.append(tc.dict())
+                elif isinstance(tc, dict):
+                    tool_calls_dicts.append(tc)
                 else:
                     # Manual fallback if not a Pydantic model
                     tool_calls_dicts.append({
-                        "id": getattr(tc, 'id', None),
+                        "id": getattr(tc, 'id', None) or "legacy_id",
                         "type": getattr(tc, 'type', 'function'),
                         "function": {
                             "name": tc.function.name,
@@ -166,11 +180,13 @@ class AssistantSession:
 
         if tool_calls:
             # For simplicity, handle first tool call for now
-            tool_call = tool_calls[0]
             # Use the dict version for our own logic
             tool_call_dict = tool_calls_dicts[0]
             
-            tool_name = tool_call_dict["function"]["name"]
+            tool_name = tool_call_dict.get("function", {}).get("name")
+            if not tool_name:
+                 return
+
             tool_def = get_tool_definition(tool_name)
 
             if not tool_def:
@@ -194,9 +210,9 @@ class AssistantSession:
                 await self.on_update(
                     {
                         "type": "tool_request",
-                        "id": tool_call_dict.get("id", "legacy_id"),
+                        "id": tool_call_dict.get("id") or "legacy_id",
                         "tool": tool_name,
-                        "arguments": tool_call_dict["function"]["arguments"],
+                        "arguments": tool_call_dict.get("function", {}).get("arguments"),
                     }
                 )
 
