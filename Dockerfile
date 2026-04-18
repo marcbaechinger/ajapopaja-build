@@ -31,6 +31,10 @@ RUN uv sync --frozen --no-dev
 # Copy frontend build artifacts to a stable path
 COPY --from=frontend-builder /app/frontend/dist /app/frontend_dist
 
+# Versioning
+ARG BUILD_VERSION=dev
+ENV APP_VERSION=$BUILD_VERSION
+
 # Environment variables
 ENV MONGODB_URI=mongodb://host.docker.internal:27017/
 ENV DATABASE_NAME=ajapopaja_build_prod

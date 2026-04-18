@@ -4,9 +4,10 @@ set -e
 
 VERSION=${1:-latest}
 IMAGE_NAME="ajapopaja-build"
+GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
-echo "Building Docker image ${IMAGE_NAME}:${VERSION}..."
-docker build -t ${IMAGE_NAME}:${VERSION} .
+echo "Building Docker image ${IMAGE_NAME}:${VERSION} (Commit: ${GIT_COMMIT})..."
+docker build --build-arg BUILD_VERSION=${GIT_COMMIT} -t ${IMAGE_NAME}:${VERSION} .
 
 echo "Build complete."
 echo "You can run the container with (adjust PORT as needed):"

@@ -236,6 +236,11 @@ async def health():
     return {"status": "ok", "message": "Ajapopaja API is running"}
 
 
+@api_router.get("/version")
+async def version():
+    return {"version": os.environ.get("APP_VERSION", "dev")}
+
+
 api_router.include_router(pipeline_router)
 api_router.include_router(task_router)
 api_router.include_router(pipeline_task_router)

@@ -18,6 +18,7 @@ import { ActionRegistry } from './ActionRegistry';
 import { Navigator } from './Navigator';
 import { PipelineClient } from './clients/PipelineClient';
 import { TaskClient } from './clients/TaskClient';
+import { SystemClient } from './clients/SystemClient';
 import { WebSocketClient } from './WebSocketClient';
 import { AuthService } from './AuthService';
 import { SearchDialog } from '../ui/components/SearchDialog';
@@ -31,6 +32,7 @@ export class AppContext {
   public readonly navigator: Navigator;
   public readonly pipelineClient: PipelineClient;
   public readonly taskClient: TaskClient;
+  public readonly systemClient: SystemClient;
   public readonly wsClient: WebSocketClient;
   public readonly authService: AuthService;
   private state: AppState;
@@ -41,6 +43,7 @@ export class AppContext {
     this.authService = new AuthService();
     this.pipelineClient = new PipelineClient(apiBaseUrl, this.authService);
     this.taskClient = new TaskClient(apiBaseUrl, this.authService);
+    this.systemClient = new SystemClient(this.authService);
     this.wsClient = new WebSocketClient(apiBaseUrl, this.authService);
     
     const savedTheme = document.documentElement.getAttribute('data-theme') as 'light' | 'dark' | null;

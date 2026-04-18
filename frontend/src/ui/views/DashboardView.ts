@@ -177,7 +177,10 @@ export class DashboardView extends View {
         <header class="flex justify-between items-center bg-app-surface p-6 rounded-xl shadow-lg border border-app-border mb-8">
         <div class="flex flex-col">
           <h1 class="text-3xl font-black text-app-accent-1 tracking-tight">Ajapopaja <span class="text-app-text/50">Build</span></h1>
-          <p class="text-xs text-app-muted uppercase font-bold tracking-widest mt-1">Unified Agent Workspace</p>
+          <div class="flex items-center gap-2 mt-1">
+            <p class="text-xs text-app-muted uppercase font-bold tracking-widest">Unified Agent Workspace</p>
+            <span id="app-version" class="text-[10px] text-app-accent-2/50 font-mono"></span>
+          </div>
         </div>
         <div class="flex items-center gap-4">
           <button data-action-click="open_search" class="flex items-center gap-2 bg-app-bg hover:bg-app-surface px-4 py-2 rounded-xl border border-app-border text-app-muted hover:text-app-accent-2 transition-all cursor-pointer group" title="Global Search (Ctrl+K)">
@@ -230,6 +233,16 @@ export class DashboardView extends View {
   mount(container: HTMLElement) {
     this.container = container;
     this.refreshList();
+    this.updateVersion();
+  }
+
+  private async updateVersion() {
+    if (!this.container) return;
+    const versionEl = this.container.querySelector('#app-version');
+    if (versionEl) {
+      const version = await this.context.systemClient.getVersion();
+      versionEl.textContent = `v${version}`;
+    }
   }
 
   unmount() {
