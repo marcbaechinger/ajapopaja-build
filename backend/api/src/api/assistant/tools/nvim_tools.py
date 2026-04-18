@@ -153,8 +153,8 @@ async def nvim_set_quickfix(
         # 'r' tells Neovim to replace the current list
         # Passing resolved_matches via arguments to avoid string escaping issues
         lua_script = """
-        local matches, title = ...
-        vim.fn.setqflist(matches, 'r', {{title = title}})
+        local matches, title = arg[1], arg[2]
+        vim.fn.setqflist(matches, 'r', {title = title})
         vim.cmd('copen') -- Automatically open the quickfix window for the user
         """
 
