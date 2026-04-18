@@ -44,8 +44,9 @@ export class SearchDialog extends BaseDialog {
     const bodyContainer = this.dialog.querySelector('#dialog-body-container') as HTMLElement;
     if (bodyContainer) {
       // Remove overflow-y-auto from the parent container to allow internal scrolling
+      // Use overflow-hidden to be absolutely sure the body container doesn't scroll
       bodyContainer.classList.remove('overflow-y-auto');
-      bodyContainer.classList.add('flex', 'flex-col');
+      bodyContainer.classList.add('flex', 'flex-col', 'overflow-hidden', 'min-h-0');
       
       bodyContainer.innerHTML = '';
       const bodyContent = this.renderBody();
