@@ -17,7 +17,7 @@ import os
 import json
 import socket
 from unittest.mock import patch, MagicMock, AsyncMock
-from api.assistant.tools.nvim_tools import open_file_in_nvim
+from api.assistant.tools.nvim_tools import open_file_in_nvim, nvim_set_quickfix
 from core.models.models import Pipeline
 from pathlib import Path
 
@@ -57,3 +57,38 @@ async def test_open_file_in_nvim_no_socket(init_mock_db):
         result = await open_file_in_nvim(pipeline_id, "src/main.py")
         assert result["success"] is False
         assert "Neovim socket not found" in result["error"]
+
+@pytest.mark.asyncio
+async def test_nvim_set_quickfix_success(init_mock_db):
+    pipeline = Pipeline(name="Test Pipeline", workspace_path="/tmp/test_ws")
+    await pipeline.insert()
+    pipeline_id = str(pipeline.id)
+
+    matches = [
+        {"filename": "src/main.py", "lnum": 10, "text": "error 1"},
+        {"filename": "src/utils.py", "lnum": 5, "text": "error 2"},
+    ]
+
+    with patch("os.path.exists", return_value=True):
+        mock_socket_instance = MagicMock()
+        mock_socket_instance.__enter__.return_value = mock_socket_instance
+        mock_socket_instance.recv.return_value = json.dumps({"jsonrpc": "2.0", "result": None, "id": 1}).encode("utf-8")
+        
+        with patch("socket.socket", return_value=mock_socket_instance):
+            result = await nvim_set_quickfix(pipeline_id, matches, "Test Results")
+            
+            assert result["success"] is True, f"Error: {result.get('error')}"
+            mock_socket_instance.connect.assert_called_with("/tmp/nvimsocket")
+            
+            # Verify payload
+            sent_data = mock_socket_instance.sendall.call_args[0][0].decode("utf-8")
+            payload = json.loads(sent_data)
+            assert payload["method"] == "nvim_exec_lua"
+            assert len(payload["params"]) == 2
+            
+            # Verify paths were resolved
+            passed_matches = payload["params"][1][0]
+            passed_title = payload["params"][1][1]
+            assert passed_title == "Test Results"
+            assert passed_matches[0]["filename"] == "/tmp/test_ws/src/main.py"
+            assert passed_matches[1]["filename"] == "/tmp/test_ws/src/utils.py"
