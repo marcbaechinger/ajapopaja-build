@@ -14,8 +14,11 @@
 
 import inspect
 import re
+import logging
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Any, Optional, get_type_hints
+
+logger = logging.getLogger(__name__)
 
 @dataclass
 class ToolDefinition:
@@ -64,6 +67,7 @@ class ToolRegistry:
             parameters=parameters,
             func=func
         )
+        logger.info(f"Registered tool: '{tool_name}' (type: {tool_type})")
 
     def get_tool(self, name: str) -> Optional[ToolDefinition]:
         return self._tools.get(name)
@@ -98,11 +102,14 @@ class ToolRegistry:
             if param.default is inspect.Parameter.empty:
                 required.append(param_name)
                 
-        return {
+        schema = {
             "type": "object",
-            "properties": properties,
-            "required": required
+            "properties": properties
         }
+        if required:
+            schema["required"] = required
+            
+        return schema
 
     def _python_type_to_json(self, hint: Any) -> str:
         """Simple mapping of Python types to JSON schema types."""

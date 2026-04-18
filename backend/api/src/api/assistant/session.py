@@ -14,12 +14,16 @@
 
 import asyncio
 import json
+import logging
 import ollama
 from typing import List, Dict, Any, Optional, Callable, Awaitable
 from core.models.models import ChatMessage, UserChat
 from .tool_registry import registry
+from . import tools  # Ensure all tools in the package are imported and registered
 
-MODEL_NAME = "qwen3.5:9b"  # Or any model that supports tool calling
+logger = logging.getLogger(__name__)
+
+MODEL_NAME = "gpt-oss:20b"  # Or any model that supports tool calling
 READ_ONLY = "read_only"
 
 
@@ -104,7 +108,8 @@ class AssistantSession:
 
         # Ollama tools format
         ollama_tools = []
-        for t in registry.list_tools():
+        registered_tools = registry.list_tools()
+        for t in registered_tools:
             ollama_tools.append(
                 {
                     "type": "function",
@@ -115,6 +120,10 @@ class AssistantSession:
                     },
                 }
             )
+
+        logger.info(
+            f"Presenting {len(ollama_tools)} tools to Ollama model '{MODEL_NAME}': {[t.name for t in registered_tools]}"
+        )
 
         response = await asyncio.to_thread(
             ollama.chat,
@@ -227,8 +236,11 @@ class AssistantSession:
         tool_name = tool_call["function"]["name"]
         args = tool_call["function"]["arguments"]
 
+        logger.info(f"Ollama model called tool: '{tool_name}' with args: {args}")
+
         tool = registry.get_tool(tool_name)
         if not tool:
+            logger.warning(f"Ollama tried to call an unknown tool: '{tool_name}'")
             return {"error": f"Tool {tool_name} not found."}
 
         try:
@@ -236,9 +248,12 @@ class AssistantSession:
             if isinstance(args, str):
                 args = json.loads(args)
 
+            logger.debug(f"Executing tool '{tool_name}' with parsed args: {args}")
             result = await tool.func(**args)
+            logger.info(f"Tool '{tool_name}' execution successful")
             return result
         except Exception as e:
+            logger.error(f"Error executing tool '{tool_name}': {str(e)}", exc_info=True)
             return {"error": str(e)}
 
     async def clear_history(self):
