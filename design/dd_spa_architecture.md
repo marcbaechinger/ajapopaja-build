@@ -3,10 +3,15 @@
 ## 1. Overview
 This document defines the architecture and design principles for the Ajapopaja Build Single Page Application (SPA). The SPA is built using **Vanilla TypeScript** and **Tailwind CSS v4**, adhering to Object-Oriented (OO) principles to ensure a maintainable, extensible, and replaceable codebase.
 
+- **Main Entry Point**: `frontend/src/main.ts`
+- **Global Styles**: `frontend/src/style.css`
+
 ## 2. Core Architectural Principles
 - **OO Design**: Every major entity and UI component is represented as a class or a well-defined interface.
 - **Component Decomposition**: Large views are broken down into subcomponents to promote reuse and simplify testing.
 - **Interfaces**: Used extensively for backend clients and UI collaborators to allow for easy swapping (e.g., MockClient vs. HttpClient).
+
+- **Domain Models**: `frontend/src/core/domain.ts`
 
 ## 3. Application Lifecycle & Context
 ### `AppContext`
@@ -16,12 +21,18 @@ This document defines the architecture and design principles for the Ajapopaja B
 - Manages instances of collaborators (Backend Clients, Action Registry, Navigator).
 - Handles global keyboard shortcuts (e.g., `Ctrl+K` for global search).
 
+- **File Path**: `frontend/src/core/AppContext.ts`
+
 ## 4. Backend Communication
 ### Dedicated Clients
 - All HTTP communication is encapsulated in client classes (e.g., `PipelineClient`, `TaskClient`).
 - Clients provide a high-level TS API that uses domain entities (`Pipeline`, `Task`).
 - UI and App code **never** make raw `fetch` calls; they interact solely with client methods.
 - **Data Conversion**: All JSON responses (API or WebSocket) MUST be converted into domain model objects (e.g., `new Task(data)`) to ensure type safety and proper property mapping (like `_id` to `id`).
+
+- **Base Client**: `frontend/src/core/clients/BaseClient.ts`
+- **Pipeline Client**: `frontend/src/core/clients/PipelineClient.ts`
+- **Task Client**: `frontend/src/core/clients/TaskClient.ts`
 
 ### Optimistic Concurrency Control (OCC)
 - **Versioning**: Every entity (Pipeline, Task) includes a `version` (integer) field.
@@ -35,6 +46,8 @@ This document defines the architecture and design principles for the Ajapopaja B
 - **Message Structure**: `{ "type": "TASK_UPDATED", "payload": { ... } }`.
 - **WebSocketClient**: Manages the persistent connection, automatic reconnection, and subscription-based event handling (`on(type, handler)`).
 
+- **File Path**: `frontend/src/core/WebSocketClient.ts`
+
 ## 5. Action Registry & Event Delegation
 ### Centralized Action Registry
 - Decouples UI triggers from implementation logic.
@@ -45,6 +58,8 @@ This document defines the architecture and design principles for the Ajapopaja B
     3. Handler extracts data from attributes or the `closest('[data-view-id]')` container.
     4. Handler performs logic (API call -> Model Update -> DOM Update).
 
+- **File Path**: `frontend/src/core/ActionRegistry.ts`
+
 ## 6. Layout & Navigation
 ### View Management
 - **Main Views**: `PipelineDetailView`, `DashboardView`, `LoginView`.
@@ -53,6 +68,11 @@ This document defines the architecture and design principles for the Ajapopaja B
     - Listens to `hashchange` events (e.g., `#pipeline/123`).
     - Maps hashes to View constructors.
     - Handles "Back" button support and initial routing.
+
+- **Navigator**: `frontend/src/core/Navigator.ts`
+- **Login View**: `frontend/src/ui/views/LoginView.ts`
+- **Dashboard View**: `frontend/src/ui/views/DashboardView.ts`
+- **Pipeline Detail View**: `frontend/src/ui/views/PipelineDetailView.ts`
 
 ### UI Consistency
 - Standardized Tailwind classes for common elements (cards, buttons, inputs).
@@ -64,15 +84,10 @@ This document defines the architecture and design principles for the Ajapopaja B
 - **Data Attributes**: Root elements of views use `data-view-type` and `data-view-id`.
 - **Traversal**: Child elements find context using `el.closest("[data-view-container]")`.
 
-**Example Pattern:**
-```typescript
-const TaskItem = (task: Task) => `
-  <li class="p-3 border-b border-app-border" data-view-type="task" data-view-id="${task.id}">
-    <span class="font-bold">${task.title}</span>
-    <button data-action-click="edit_task" class="...">Edit</button>
-  </li>
-`;
-```
+- **Task Item**: `frontend/src/ui/components/TaskItem.ts`
+- **Task Column**: `frontend/src/ui/components/TaskColumn.ts`
+- **Task Form**: `frontend/src/ui/components/TaskForm.ts`
+- **Pipeline Stats**: `frontend/src/ui/components/PipelineStatsView.ts`
 
 ## 8. Dialog System
 ### `BaseDialog`
@@ -81,6 +96,8 @@ const TaskItem = (task: Task) => `
 - Features standardized backdrop blur, animations (fade/scale/shake), and fixed top-margin positioning for stability.
 - **Promise Pattern**: Returns a Promise that resolves when the dialog is closed, facilitating async workflows.
 
+- **Base Dialog**: `frontend/src/ui/components/dialog_common.ts`
+
 ### Specialized Dialogs
 - **`ConfirmationDialog`**: For simple confirm/cancel flows.
 - **`SearchDialog`**: Provides global task search with keyword and status filtering, debounced input, and pagination.
@@ -88,11 +105,19 @@ const TaskItem = (task: Task) => `
 - **`StatsDialog`**: Visualizes pipeline health and velocity using the `PipelineStatsView` component.
 - **`DesignDocDialog`**: Dedicated reader for full Design Documents with Markdown rendering.
 
+- **Confirmation Dialog**: `frontend/src/ui/components/ConfirmationDialog.ts`
+- **Search Dialog**: `frontend/src/ui/components/SearchDialog.ts`
+- **Log Viewer Dialog**: `frontend/src/ui/components/LogViewerDialog.ts`
+- **Stats Dialog**: `frontend/src/ui/components/StatsDialog.ts`
+- **Design Doc Dialog**: `frontend/src/ui/components/DesignDocDialog.ts`
+
 ## 9. Advanced UI Features
 ### Markdown Rendering & Styling
 - Integrated `marked` for Markdown parsing and `dompurify` for safe injection.
 - **Prose Styling**: Standardized typography using Tailwind Typography (`prose`) with custom theme overrides.
 - **Code Highlighting**: Global CSS overrides for fenced code blocks, ensuring high contrast and consistent dark backgrounds across all previews and displays.
+
+- **CSS Overrides**: `frontend/src/style.css`
 
 ### Real-Time Logs
 - Streaming log implementation that handles chunked data transfer and UI updates without blocking the main thread.
@@ -105,6 +130,8 @@ The system provides a Model Context Protocol (MCP) server allowing AI agents to 
 - **`update_task_design_doc`**: Allows agents to propose implementation plans.
 - **`complete_task`**: Finalizes implementation with commit references and summaries.
 - **`get_task_status`**: Polls for verification results or current state.
+
+- **MCP Server**: `backend/mcp/src/ajapopaja_mcp/server.py`
 
 ## 11. Recommended Libraries
 - **`marked`**: For Markdown parsing.
@@ -119,6 +146,8 @@ The central manager for user sessions:
 - **State Management**: Tracks current user and access tokens.
 - **Session Persistence**: Saves/restores tokens from `localStorage` on page reload.
 - **Login/Logout Logic**: Interacts with the `/api/auth` endpoints to authenticate users and manage token lifecycle.
+
+- **File Path**: `frontend/src/core/AuthService.ts`
 
 ### 12.2. `BaseClient` & Token Refresh
 The `BaseClient` automatically intercepts outbound requests to manage authorization:
