@@ -82,6 +82,7 @@ async def list_project_structure(
             ".venv",
             "dist",
             ".pytest_cache",
+            ".logs",
         ]
         result = []
         workspace_root = str(pipeline.workspace_abs_path)

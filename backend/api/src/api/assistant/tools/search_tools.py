@@ -79,7 +79,7 @@ async def grep(
         args.append(f"--include={file_glob}")
         
     # Ignore common dirs like .git, node_modules, .venv, __pycache__
-    for ignore_dir in [".git", "node_modules", ".venv", "__pycache__", "dist"]:
+    for ignore_dir in [".git", "node_modules", ".venv", "__pycache__", "dist", ".logs"]:
         args.append(f"--exclude-dir={ignore_dir}")
 
     args.append("-E") # Extended regex
@@ -138,7 +138,7 @@ async def find(
          output = result.stdout
          # Filter out ignored directories manually
          lines = output.splitlines()
-         ignored = [".git/", "node_modules/", ".venv/", "__pycache__/", "dist/"]
+         ignored = [".git/", "node_modules/", ".venv/", "__pycache__/", "dist/", ".logs/"]
          filtered_lines = [l for l in lines if not any(ig in l for ig in ignored)]
          return "\n".join(filtered_lines)[:10000]
     except Exception as e:
@@ -172,7 +172,7 @@ async def tree(
     if not os.path.isdir(full_path):
         return f"Error: Directory not found: {path}"
 
-    args = ["tree", "--noreport", "-I", ".git|node_modules|.venv|__pycache__|dist|.pytest_cache"]
+    args = ["tree", "--noreport", "-I", ".git|node_modules|.venv|__pycache__|dist|.pytest_cache|.logs"]
     if depth is not None:
         args.extend(["-L", str(depth)])
     if follow_symlinks:
@@ -199,7 +199,7 @@ def _python_tree(directory: str, max_depth: Optional[int] = None, current_depth:
     except PermissionError:
         return ""
         
-    ignored = [".git", "node_modules", ".venv", "__pycache__", "dist", ".pytest_cache"]
+    ignored = [".git", "node_modules", ".venv", "__pycache__", "dist", ".pytest_cache", ".logs"]
     items = [item for item in items if item not in ignored]
     
     for i, item in enumerate(items):

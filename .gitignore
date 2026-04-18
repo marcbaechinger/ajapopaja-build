@@ -30,4 +30,5 @@ Thumbs.db
 
 # Project Specific
 .env
+.logs/
 .gemini_security/
