@@ -132,20 +132,43 @@ async def generic_ajapopaja_error_handler(request: Request, exc: AjapopajaError)
 # function-to-response converter, which resolves both the TypeError and the
 # "Unexpected ASGI message" conflict.
 class MCPSlashlessRouter:
+    def __init__(self, path: str = "/"):
+        self.path = path
+
     async def __call__(self, scope, receive, send):
-        # Proxy to mcp_app by stripping the path (mcp_app expects /)
-        scope["path"] = "/"
-        scope["raw_path"] = b"/"
+        # Proxy to mcp_app by stripping the path
+        scope["path"] = self.path
+        scope["raw_path"] = self.path.encode("ascii")
         await mcp_app(scope, receive, send)
 
 
 # We use the Starlette Route directly and add it to the app's router
-app.router.routes.append(
-    Route(
-        "/mcp",
-        MCPSlashlessRouter(),
-        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    )
+app.router.routes.extend(
+    [
+        Route(
+            "/mcp",
+            MCPSlashlessRouter(),
+            methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        ),
+        # Support root-level POSTs for MCP clients configured to hit root
+        Route(
+            "/",
+            MCPSlashlessRouter(),
+            methods=["POST"],
+        ),
+        # Support root-level SSE for MCP clients configured to hit root
+        Route(
+            "/sse",
+            MCPSlashlessRouter("/sse"),
+            methods=["GET"],
+        ),
+        # Support root-level messages for MCP clients configured to hit root
+        Route(
+            "/messages",
+            MCPSlashlessRouter("/messages"),
+            methods=["POST"],
+        ),
+    ]
 )
 
 
