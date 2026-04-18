@@ -22,7 +22,7 @@ export class TaskForm {
           <div class="flex flex-col gap-1.5">
             <label class="text-[10px] font-black text-app-muted uppercase tracking-widest px-1">Quick Add Task</label>
             <div class="flex flex-col sm:flex-row gap-2">
-              <input type="text" id="task-title" placeholder="What needs to be done?" 
+              <input type="text" id="task-title" name="task_title" placeholder="What needs to be done?" 
                      class="flex-grow bg-app-bg border border-app-border rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-app-accent-1 outline-none text-app-text transition-all text-sm shadow-sm min-w-0"
                      required>
               <button type="submit" 
