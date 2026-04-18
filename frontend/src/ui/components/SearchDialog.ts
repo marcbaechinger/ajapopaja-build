@@ -175,6 +175,8 @@ export class SearchDialog extends BaseDialog {
       const actionElement = target.closest('[data-action-click]');
       if (!actionElement) return;
 
+      e.stopPropagation();
+
       const action = actionElement.getAttribute('data-action-click');
       if (action === 'prev_search_page') {
         this.performSearch(this.currentPage - 1);
