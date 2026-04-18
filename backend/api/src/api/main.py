@@ -96,6 +96,16 @@ app = FastAPI(
     title="Ajapopaja Build API", lifespan=combine_lifespans(lifespan, mcp_app.lifespan)
 )
 
+# Map MCP endpoints at root level
+# We add these early to ensure they are checked before any other routes
+app.add_route("/", mcp_app, methods=["POST"])
+app.add_route("/sse", mcp_app, methods=["GET"])
+app.add_route("/messages", mcp_app, methods=["POST"])
+
+# Map MCP endpoints with /mcp prefix
+app.add_route("/mcp", mcp_app, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+app.add_route("/mcp/{path:path}", mcp_app, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+
 # CORS Configuration
 app.add_middleware(
     CORSMiddleware,
@@ -125,66 +135,6 @@ async def validation_error_handler(request: Request, exc: ValidationError):
 @app.exception_handler(AjapopajaError)
 async def generic_ajapopaja_error_handler(request: Request, exc: AjapopajaError):
     return JSONResponse(status_code=400, content={"detail": str(exc)})
-
-
-# Surgical raw ASGI adapter for MCP to handle prefix stripping and root-level access
-class MCPProxy:
-    def __init__(self, strip_prefix: Optional[str] = None):
-        self.strip_prefix = strip_prefix
-
-    async def __call__(self, scope, receive, send):
-        path = scope.get("path", "")
-        if self.strip_prefix and path.startswith(self.strip_prefix):
-            # Strip prefix (e.g., /mcp) and ensure it starts with /
-            new_path = path[len(self.strip_prefix) :] or "/"
-            scope["path"] = new_path
-            scope["raw_path"] = new_path.encode("ascii")
-
-        await mcp_app(scope, receive, send)
-
-
-# We use the Starlette Route directly and add it to the app's router
-# Insert at the beginning to ensure it matches before SPA or other greedy routes
-app.router.routes.insert(
-    0,
-    Route(
-        "/mcp",
-        MCPProxy(strip_prefix="/mcp"),
-        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    ),
-)
-app.router.routes.insert(
-    1,
-    Route(
-        "/mcp/{path:path}",
-        MCPProxy(strip_prefix="/mcp"),
-        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    ),
-)
-app.router.routes.insert(
-    2,
-    Route(
-        "/",
-        MCPProxy(),
-        methods=["POST"],
-    ),
-)
-app.router.routes.insert(
-    3,
-    Route(
-        "/sse",
-        MCPProxy(),
-        methods=["GET"],
-    ),
-)
-app.router.routes.insert(
-    4,
-    Route(
-        "/messages",
-        MCPProxy(),
-        methods=["POST"],
-    ),
-)
 
 
 # Root level WebSocket - Matches BEFORE routers and BEFORE static mount
@@ -247,9 +197,6 @@ api_router.include_router(pipeline_task_router)
 api_router.include_router(auth_router)
 
 app.include_router(api_router)
-
-# Mount MCP server at /mcp (handles /mcp/ and subpaths)
-app.mount("/mcp", mcp_app)
 
 # Serve SPA static files - Mount last resort
 frontend_path = os.environ.get("FRONTEND_DIST_PATH")
