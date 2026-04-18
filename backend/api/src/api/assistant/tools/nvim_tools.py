@@ -15,6 +15,7 @@
 import socket
 import json
 import os
+import msgpack
 from typing import Dict, Optional
 from api.assistant.decorators import register_tool
 from core.queries import pipeline as pipeline_queries
@@ -28,39 +29,54 @@ NVIM_SOCKET = "/tmp/nvimsocket"
 
 
 def _nvim_client_call(method: str, params: list) -> Dict:
-    """Helper to send JSON-RPC requests to the Neovim socket."""
+    """Helper to send MessagePack-RPC requests to the Neovim socket."""
     if not os.path.exists(NVIM_SOCKET):
         return {
             "success": False,
             "error": f"Neovim socket not found at {NVIM_SOCKET}. Ensure Neovim is running with '--listen {NVIM_SOCKET}'.",
         }
 
-    payload = {
-        "jsonrpc": "2.0",
-        "method": method,
-        "params": params,
-        "id": 1,
-    }
+    # MessagePack-RPC Request format: [type, msgid, method, params]
+    # type 0 = Request
+    # msgid = An integer ID to match responses
+    payload = [0, 1, method, params]
 
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
             s.settimeout(2.0)
             s.connect(NVIM_SOCKET)
-            s.sendall(json.dumps(payload).encode("utf-8"))
+            
+            # Use msgpack to pack the list into binary
+            s.sendall(msgpack.packb(payload))
 
             try:
                 response_data = s.recv(4096)
                 if response_data:
-                    response = json.loads(response_data.decode("utf-8"))
-                    if "error" in response and response["error"]:
-                        return {"success": False, "error": response["error"]}
-                    return {"success": True, "response": response}
+                    # Unpack the binary response
+                    # Format: [type, msgid, error, result]
+                    response = msgpack.unpackb(response_data)
+                    
+                    # Index 2 is the 'error' field
+                    if response[2] is not None:
+                        # decode error msg if it's bytes
+                        err = response[2]
+                        if isinstance(err, list) and len(err) > 1 and isinstance(err[1], bytes):
+                            err = err[1].decode('utf-8')
+                        elif isinstance(err, bytes):
+                            err = err.decode('utf-8')
+                        return {"success": False, "error": str(err)}
+                    
+                    return {"success": True, "response": response[3]}
             except socket.timeout:
-                return {"success": True, "info": "Command sent, but no response received (timeout)."}
+                return {
+                    "success": True,
+                    "info": "Command sent, but no response received (timeout).",
+                }
 
         return {"success": True}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
 
 
 @register_tool(tool_type=WRITE_ACCESS)
@@ -89,6 +105,8 @@ async def open_file_in_nvim(
         cmd = f"edit {full_path}"
         if line_number:
             cmd += f" | {line_number}"
+
+        print(f"opening in vim: {cmd}")
 
         return _nvim_client_call("nvim_command", [cmd])
 
@@ -122,7 +140,9 @@ async def nvim_set_quickfix(
         for match in matches:
             if "filename" in match:
                 try:
-                    full_path = str(safe_join(pipeline.workspace_abs_path, match["filename"]))
+                    full_path = str(
+                        safe_join(pipeline.workspace_abs_path, match["filename"])
+                    )
                     match["filename"] = full_path
                 except ValueError:
                     # If invalid path, we skip or keep relative? Skipping the match might be safer
@@ -132,13 +152,15 @@ async def nvim_set_quickfix(
         # We use Lua to call setqflist and open the window
         # 'r' tells Neovim to replace the current list
         # Passing resolved_matches via arguments to avoid string escaping issues
-        lua_script = f"""
+        lua_script = """
         local matches, title = ...
         vim.fn.setqflist(matches, 'r', {{title = title}})
         vim.cmd('copen') -- Automatically open the quickfix window for the user
         """
 
-        return _nvim_client_call("nvim_exec_lua", [lua_script, [resolved_matches, title]])
+        return _nvim_client_call(
+            "nvim_exec_lua", [lua_script, [resolved_matches, title]]
+        )
 
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -170,6 +192,7 @@ async def nvim_show_diff(
         cmd = ["git", "show", f"{commit_hash}:{path}"]
         try:
             import subprocess
+
             result = subprocess.run(
                 cmd,
                 cwd=str(pipeline.workspace_abs_path),
@@ -214,9 +237,11 @@ async def nvim_show_diff(
         -- Enable diff mode on the scratch buffer
         vim.cmd("diffthis")
         """
-        
+
         commit_short = commit_hash[:7]
-        return _nvim_client_call("nvim_exec_lua", [lua_script, [full_path, old_content, commit_short]])
+        return _nvim_client_call(
+            "nvim_exec_lua", [lua_script, [full_path, old_content, commit_short]]
+        )
 
     except Exception as e:
         return {"success": False, "error": str(e)}
