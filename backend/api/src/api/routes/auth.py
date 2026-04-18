@@ -41,6 +41,30 @@ class UserResponse(BaseModel):
     email: Optional[str] = None
     full_name: Optional[str] = None
 
+class UserCreate(BaseModel):
+    username: str
+    password: str
+    email: Optional[str] = None
+    full_name: Optional[str] = None
+
+@router.post("/register", response_model=UserResponse)
+async def register_user(user_in: UserCreate):
+    existing_user = await User.find_one(User.username == user_in.username)
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already registered",
+        )
+    
+    new_user = User(
+        username=user_in.username,
+        hashed_password=get_password_hash(user_in.password),
+        email=user_in.email,
+        full_name=user_in.full_name
+    )
+    await new_user.insert()
+    return new_user
+
 @router.post("/login", response_model=Token)
 async def login_for_access_token(
     response: Response,

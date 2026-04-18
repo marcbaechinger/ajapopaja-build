@@ -77,8 +77,11 @@ export class LoginView extends View {
               Sign In
             </button>
           </form>
-          
+
           <div class="mt-8 pt-6 border-t border-app-border text-center">
+            <p class="text-sm text-app-muted mb-4">
+              Don't have an account? <a href="#/register" class="text-app-accent-1 font-bold hover:underline">Sign Up</a>
+            </p>
             <p class="text-xs text-app-muted italic">
               Default credentials: <span class="font-mono text-app-accent-2">admin / admin</span>
             </p>

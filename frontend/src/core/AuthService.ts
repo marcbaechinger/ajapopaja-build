@@ -137,6 +137,21 @@ export class AuthService {
     }
   }
 
+  public async register(username: string, password: string, email?: string, fullName?: string): Promise<boolean> {
+    try {
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password, email, full_name: fullName }),
+      });
+
+      return response.ok;
+    } catch (e) {
+      console.error('Registration failed', e);
+      return false;
+    }
+  }
+
   public async logout() {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });

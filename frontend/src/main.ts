@@ -19,6 +19,7 @@ import { AppContext } from './core/AppContext';
 import { DashboardView } from './ui/views/DashboardView';
 import { PipelineDetailView } from './ui/views/PipelineDetailView';
 import { LoginView } from './ui/views/LoginView';
+import { RegisterView } from './ui/views/RegisterView';
 
 // API Base URL - Configurable via Vite environment variables with dynamic fallback
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 
@@ -45,6 +46,7 @@ const requireAuth = (factory: (params: Record<string, string>) => any) => {
 app.navigator.register('/', requireAuth(() => new DashboardView(app)));
 app.navigator.register('/pipeline/:id', requireAuth((params) => new PipelineDetailView(app, params)));
 app.navigator.register('/login', () => new LoginView(app));
+app.navigator.register('/register', () => new RegisterView(app));
 
 // Start the application
 app.start();
