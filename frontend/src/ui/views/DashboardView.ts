@@ -189,9 +189,15 @@ export class DashboardView extends View {
             <span class="text-[10px] bg-app-surface px-1.5 py-0.5 rounded border border-app-border text-app-muted group-hover:text-app-accent-2 group-hover:border-app-accent-2/30 transition-colors ml-1">K</span>
           </button>
           <div class="w-px h-8 bg-app-border mx-2"></div>
-          <div class="flex flex-col items-end mr-2">
-            <span class="text-sm font-bold text-app-text">${user?.username || 'User'}</span>
-            <button data-action-click="perform_logout" class="text-[10px] text-app-muted hover:text-red-400 uppercase font-black tracking-widest transition-colors cursor-pointer">Logout</button>
+          <div class="flex items-center gap-3 bg-app-bg px-4 py-2 rounded-xl border border-app-border">
+            <div class="flex flex-col items-end">
+              <span class="text-xs font-bold text-app-text">${user?.username || 'User'}</span>
+              <span class="text-[9px] text-app-muted uppercase font-black tracking-widest">Logged In</span>
+            </div>
+            <div class="w-px h-6 bg-app-border mx-1"></div>
+            <button data-action-click="perform_logout" class="p-1.5 hover:bg-red-500/10 text-app-muted hover:text-red-400 rounded-lg transition-all cursor-pointer group/logout" title="Logout">
+              <svg class="w-4 h-4 group-hover/logout:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+            </button>
           </div>
           <button data-action-click="toggle_theme" class="p-2 hover:bg-app-bg rounded-lg transition-colors cursor-pointer text-app-muted hover:text-app-accent-2" title="Toggle Theme">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
