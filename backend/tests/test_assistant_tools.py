@@ -52,11 +52,11 @@ async def test_read_source_file_sanitization(init_mock_db):
             # Since both are in /tmp, we can likely reach it with enough ..
             # But our sanitization should block any ".."
             result = await read_source_file(pipeline_id, "../secret.txt")
-            assert "Error: Invalid path" in result
+            assert "escapes root" in result
 
             #  Test absolute path
             result = await read_source_file(pipeline_id, outside_file_path)
-            assert "Error: Invalid path" in result
+            assert "escapes root" in result
 
             #  Test missing workspace_path
             pipeline_no_path = Pipeline(name="No Path Pipeline")
@@ -83,14 +83,21 @@ async def test_list_project_structure_sanitization(init_mock_db):
         await pipeline.insert()
         pipeline_id = str(pipeline.id)
 
-        # Test valid list
+        # Test valid list (default: list_files=False)
         result = await list_project_structure(pipeline_id, "src")
-        assert "src/main.py" in result
+        # Should contain summary for src
+        assert any("src/ (1 files)" in item for item in result)
+
+        # Test valid list with files (list_files=True)
+        result = await list_project_structure(pipeline_id, "src", list_files=True)
+        assert any("src/main.py" in item for item in result)
 
         # Test path traversal
         result = await list_project_structure(pipeline_id, "..")
-        assert any("Error: Invalid path" in item for item in result)
+        assert any("escapes root" in item for item in result)
 
-        # Test root list
+        # Test root list (default)
         result = await list_project_structure(pipeline_id)
-        assert "src/main.py" in result
+        # Should contain summary for root and src
+        assert any("./ (0 files)" in item for item in result)
+        assert any("src/ (1 files)" in item for item in result)

@@ -49,6 +49,7 @@ The project is structured as a monorepo with a Python backend and a TypeScript/V
 Set the following environment variables (or use a `.env` file in the root):
 - `MONGODB_URI`: Connection string (default: `mongodb://localhost:27017`)
 - `DATABASE_NAME`: Database name (default: `ajapopaja_build`)
+- `WORKSPACES_ROOT`: Root directory for all pipeline workspaces (default: `/home/marc-baechinger/monolit/code`). All `workspace_path` values in pipelines are relative to this root.
 
 ### Execution Commands
 
@@ -110,9 +111,9 @@ docker run -p 8000:8000 \
   --add-host=host.docker.internal:host-gateway \
   -e MONGODB_URI=mongodb://host.docker.internal:27017/ \
   -e PORT=8000 \
+  -e WORKSPACES_ROOT=/home/marc-baechinger/monolit/code \
   ajapopaja-build:1.0.0
 ```
-
 The application will be accessible at [http://localhost:8000](http://localhost:8000).
 
 ---
@@ -157,6 +158,11 @@ npm run test
 - **Multi-Column Dashboard**: A three-column "Execution Engine" layout separating *Preparation*, *Active Execution*, and *History/Analytics*.
 - **Live Updates**: Integrated WebSockets ensure the UI reacts instantly to agent progress.
 - **Advanced History Tracking**: Server-side paging for completed tasks and detailed status history.
+
+### 🔒 Workspace Security
+- **Rooted Relative Paths**: All pipeline workspaces are confined to a single directory tree defined by `WORKSPACES_ROOT`.
+- **Path Traversal Protection**: The system enforces that all file operations remain within the designated workspace, preventing unauthorized access to other parts of the file system.
+- **Automatic Migration**: Existing absolute paths are automatically migrated to relative paths if they are located within the `WORKSPACES_ROOT`.
 
 ---
 

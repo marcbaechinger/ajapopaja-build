@@ -14,10 +14,14 @@
 
 import os
 from enum import Enum
+from pathlib import Path
 from typing import List, Optional, Dict, Any
 from datetime import datetime, UTC
 from pydantic import Field, BaseModel, field_validator
 from beanie import Document
+
+from core import config
+from core.utils.path_utils import safe_join, sanitize_relative_path
 
 class TaskStatus(str, Enum):
     CREATED = "created"
@@ -78,9 +82,30 @@ class Pipeline(Document):
     @field_validator("workspace_path")
     @classmethod
     def validate_workspace_path(cls, v):
-        if v is not None and v != "" and not os.path.isabs(v):
-            raise ValueError("workspace_path must be an absolute path")
+        if v is not None and v != "":
+            if os.path.isabs(v):
+                # Migration logic: if it's an absolute path, try to make it relative to config.WORKSPACES_ROOT
+                try:
+                    rel_path = os.path.relpath(v, config.WORKSPACES_ROOT)
+                    # Check if it's actually within config.WORKSPACES_ROOT
+                    if rel_path.startswith(".."):
+                        raise ValueError(
+                            f"Absolute path {v} is outside config.WORKSPACES_ROOT {config.WORKSPACES_ROOT}"
+                        )
+                    v = rel_path
+                except ValueError as e:
+                    raise ValueError(
+                        f"Could not migrate absolute path {v} to config.WORKSPACES_ROOT {config.WORKSPACES_ROOT}: {e}"
+                    )
+
+            return sanitize_relative_path(v)
         return v
+
+    @property
+    def workspace_abs_path(self) -> Optional[Path]:
+        if not self.workspace_path:
+            return None
+        return safe_join(config.WORKSPACES_ROOT, self.workspace_path)
 
     class Settings:
         name = "pipelines"

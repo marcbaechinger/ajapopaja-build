@@ -14,8 +14,10 @@
 
 import os
 import subprocess
+from pathlib import Path
 from typing import Optional, List
 from core.queries import pipeline as pipeline_queries
+from core.utils.path_utils import safe_join
 from api.assistant.decorators import register_tool
 
 # Tool Categories
@@ -23,12 +25,10 @@ READ_ONLY = "read_only"
 
 
 def _sanitize_path(workspace: str, rel_path: str) -> Optional[str]:
-    if ".." in rel_path or rel_path.startswith("/"):
+    try:
+        return str(safe_join(Path(workspace), rel_path))
+    except Exception:
         return None
-    full = os.path.join(workspace, rel_path)
-    if not os.path.abspath(full).startswith(os.path.abspath(workspace)):
-        return None
-    return full
 
 
 async def _run_git_command(workspace_path: str, args: List[str]) -> str:
@@ -68,7 +68,7 @@ async def git_log(
         limit: Maximum number of commits to return (default: 20).
     """
     pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
-    if not pipeline or not pipeline.workspace_path:
+    if not pipeline or not pipeline.workspace_abs_path:
         return "Error: Workspace path not found."
 
     args = [
@@ -85,7 +85,7 @@ async def git_log(
     if until:
         args.append(f"--until={until}")
 
-    return await _run_git_command(pipeline.workspace_path, args)
+    return await _run_git_command(str(pipeline.workspace_abs_path), args)
 
 
 @register_tool(tool_type=READ_ONLY)
@@ -98,11 +98,11 @@ async def git_show_commit(pipeline_id: str, commit_sha: str) -> str:
         commit_sha: The SHA of the commit to show.
     """
     pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
-    if not pipeline or not pipeline.workspace_path:
+    if not pipeline or not pipeline.workspace_abs_path:
         return "Error: Workspace path not found."
 
     return await _run_git_command(
-        pipeline.workspace_path, ["show", "--stat", commit_sha]
+        str(pipeline.workspace_abs_path), ["show", "--stat", commit_sha]
     )
 
 
@@ -119,10 +119,10 @@ async def git_blame(
         line_number: Specific line number to blame (optional).
     """
     pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
-    if not pipeline or not pipeline.workspace_path:
+    if not pipeline or not pipeline.workspace_abs_path:
         return "Error: Workspace path not found."
 
-    full_path = _sanitize_path(pipeline.workspace_path, file_path)
+    full_path = _sanitize_path(str(pipeline.workspace_abs_path), file_path)
     if not full_path:
         return "Error: Invalid file path. Must be relative and within workspace."
 
@@ -131,7 +131,7 @@ async def git_blame(
         args.extend(["-L", f"{line_number},{line_number}"])
     args.append(full_path)
 
-    return await _run_git_command(pipeline.workspace_path, args)
+    return await _run_git_command(str(pipeline.workspace_abs_path), args)
 
 
 @register_tool(tool_type=READ_ONLY)
@@ -143,10 +143,10 @@ async def git_status(pipeline_id: str) -> str:
         pipeline_id: The ID of the pipeline to which the project belongs.
     """
     pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
-    if not pipeline or not pipeline.workspace_path:
+    if not pipeline or not pipeline.workspace_abs_path:
         return "Error: Workspace path not found."
 
-    return await _run_git_command(pipeline.workspace_path, ["status"])
+    return await _run_git_command(str(pipeline.workspace_abs_path), ["status"])
 
 
 @register_tool(tool_type=READ_ONLY)
@@ -158,10 +158,10 @@ async def git_branch_list(pipeline_id: str) -> str:
         pipeline_id: The ID of the pipeline to which the project belongs.
     """
     pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
-    if not pipeline or not pipeline.workspace_path:
+    if not pipeline or not pipeline.workspace_abs_path:
         return "Error: Workspace path not found."
 
-    return await _run_git_command(pipeline.workspace_path, ["branch", "-a"])
+    return await _run_git_command(str(pipeline.workspace_abs_path), ["branch", "-a"])
 
 
 @register_tool(tool_type=READ_ONLY)
@@ -181,7 +181,7 @@ async def git_diff(
         file_path: Specific file to diff (optional).
     """
     pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
-    if not pipeline or not pipeline.workspace_path:
+    if not pipeline or not pipeline.workspace_abs_path:
         return "Error: Workspace path not found."
 
     args = ["diff"]
@@ -192,9 +192,9 @@ async def git_diff(
             args.append(commit_a)
 
     if file_path:
-        full_path = _sanitize_path(pipeline.workspace_path, file_path)
+        full_path = _sanitize_path(str(pipeline.workspace_abs_path), file_path)
         if not full_path:
             return "Error: Invalid file path. Must be relative and within workspace."
         args.extend(["--", full_path])
 
-    return await _run_git_command(pipeline.workspace_path, args)
+    return await _run_git_command(str(pipeline.workspace_abs_path), args)

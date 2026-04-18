@@ -14,8 +14,10 @@
 
 import os
 import glob
+from pathlib import Path
 from typing import List
 from core.queries import pipeline as pipeline_queries
+from core.utils.path_utils import safe_join
 from api.assistant.decorators import register_tool
 
 # Tool Categories
@@ -33,20 +35,13 @@ async def read_source_file(pipeline_id: str, path: str) -> str:
     """
     try:
         pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
-        if not pipeline.workspace_path:
+        if not pipeline or not pipeline.workspace_abs_path:
             return f"Error: Workspace root is missing for pipeline {pipeline_id}."
 
-        # Sanitize path
-        if ".." in path or path.startswith("/"):
-            return "Error: Invalid path. Path must be relative and not contain '..'."
-
-        full_path = os.path.join(pipeline.workspace_path, path)
-
-        # Double check that we are still within the workspace_path
-        if not os.path.abspath(full_path).startswith(
-            os.path.abspath(pipeline.workspace_path)
-        ):
-            return "Error: Invalid path. Access denied."
+        try:
+            full_path = safe_join(pipeline.workspace_abs_path, path)
+        except ValueError as e:
+            return f"Error: {str(e)}"
 
         with open(full_path, "r") as f:
             return f.read()
@@ -55,32 +50,30 @@ async def read_source_file(pipeline_id: str, path: str) -> str:
 
 
 @register_tool(tool_type=READ_ONLY)
-async def list_project_structure(pipeline_id: str, path: str = ".") -> List[str]:
+async def list_project_structure(
+    pipeline_id: str, path: str = ".", list_files: bool = False
+) -> List[str]:
     """
-    Lists files in the project structure for a given pipeline.
+    Lists files or directories in the project structure for a given pipeline.
 
     Args:
         pipeline_id: The ID of the pipeline whose project structure should be listed.
         path: Subdirectory to list (optional, defaults to root).
+        list_files: If True, lists all files. If False (default), lists directories and the number of files they contain.
     """
     try:
         pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
-        if not pipeline.workspace_path:
+        if not pipeline or not pipeline.workspace_abs_path:
             return [f"Error: Workspace root is missing for pipeline {pipeline_id}."]
 
-        # Sanitize path
-        if ".." in path or path.startswith("/"):
-            return ["Error: Invalid path. Path must be relative and not contain '..'."]
+        try:
+            full_search_path = safe_join(pipeline.workspace_abs_path, path)
+        except ValueError as e:
+            return [f"Error: {str(e)}"]
 
-        full_search_path = os.path.join(pipeline.workspace_path, path)
+        if not os.path.isdir(full_search_path):
+            return [f"Error: Path '{path}' is not a directory."]
 
-        # Double check that we are still within the workspace_path
-        if not os.path.abspath(full_search_path).startswith(
-            os.path.abspath(pipeline.workspace_path)
-        ):
-            return ["Error: Invalid path. Access denied."]
-
-        files = glob.glob(os.path.join(full_search_path, "**"), recursive=True)
         # Filter out __pycache__, .git, node_modules etc
         ignored = [
             "__pycache__",
@@ -91,11 +84,34 @@ async def list_project_structure(pipeline_id: str, path: str = ".") -> List[str]
             ".pytest_cache",
         ]
         result = []
-        for f in files:
-            if not any(ig in f for ig in ignored):
-                # Make path relative to workspace root for output
-                rel_path = os.path.relpath(f, pipeline.workspace_path)
-                result.append(rel_path)
-        return result[:100]  # Limit output
+        workspace_root = str(pipeline.workspace_abs_path)
+
+        for root, dirs, files in os.walk(full_search_path):
+            # Filter ignored directories in-place to prevent walking into them
+            dirs[:] = [d for d in dirs if d not in ignored]
+
+            rel_root = os.path.relpath(root, workspace_root)
+
+            if list_files:
+                # Add the directory itself (if not root of search or if it's the root but we want it)
+                # To match previous glob behavior (which was recursive but didn't necessarily list dirs explicitly as trailing slash)
+                # Actually glob.glob(..., recursive=True) lists both files and dirs.
+                if rel_root != ".":
+                    result.append(rel_root + "/")
+
+                for f in files:
+                    if f not in ignored:
+                        rel_file = os.path.relpath(os.path.join(root, f), workspace_root)
+                        result.append(rel_file)
+            else:
+                # Only show directory and count of files it directly contains
+                file_count = len([f for f in files if f not in ignored])
+                display_path = "./" if rel_root == "." else f"{rel_root}/"
+                result.append(f"{display_path} ({file_count} files)")
+
+            if len(result) >= 100:
+                break
+
+        return result[:100]
     except Exception as e:
         return [f"Error listing files: {str(e)}"]

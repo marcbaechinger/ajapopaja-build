@@ -61,13 +61,12 @@ class VibeExecutor:
             return
 
         # Determine execution directory
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../"))
+        project_root = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "../../../../")
+        )
         cwd = project_root
-        if pipeline.workspace_path:
-            if os.path.isabs(pipeline.workspace_path):
-                cwd = pipeline.workspace_path
-            else:
-                cwd = os.path.abspath(os.path.join(project_root, pipeline.workspace_path))
+        if pipeline.workspace_abs_path:
+            cwd = str(pipeline.workspace_abs_path)
 
         # Create log directory
         log_dir = os.path.join(project_root, ".logs/vibe")

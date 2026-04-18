@@ -43,6 +43,10 @@ ENV DATABASE_NAME=ajapopaja_build_prod
 ENV PORT=8081
 ENV FRONTEND_DIST_PATH=/app/frontend_dist
 ENV PYTHONPATH=/app/backend/api/src:/app/backend/core/src:/app/backend/mcp/src
+ENV WORKSPACES_ROOT=/workspaces
+
+# Create default workspaces directory
+RUN mkdir -p /workspaces
 
 # Workdir MUST be the backend directory so uv can find pyproject.toml
 WORKDIR /app/backend

@@ -25,6 +25,7 @@ MONGODB_URI=mongodb://host.docker.internal:27017/
 OLLAMA_HOST=http://host.docker.internal:11434
 DATABASE_NAME=ajapopaja_build_prod
 PORT=8081
+WORKSPACES_ROOT=/home/marc-baechinger/monolit/code
 EOT"
   echo "Created default environment file."
 else

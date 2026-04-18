@@ -18,7 +18,13 @@ from httpx import AsyncClient, ASGITransport
 from pymongo import AsyncMongoClient
 from beanie import init_beanie
 from api.main import app
+from core import config
+from pathlib import Path
 from core.models.models import Pipeline, Task, User
+
+@pytest.fixture(autouse=True)
+def mock_workspaces_root(monkeypatch):
+    monkeypatch.setattr(config, "WORKSPACES_ROOT", Path("/tmp"))
 
 @pytest.fixture
 async def init_mock_db():

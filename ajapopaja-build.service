@@ -19,6 +19,7 @@ ExecStart=/usr/bin/docker run --name ajapopaja-build \
   -e OLLAMA_HOST=${OLLAMA_HOST} \
   -e DATABASE_NAME=${DATABASE_NAME} \
   -e PORT=${PORT} \
+  -e WORKSPACES_ROOT=${WORKSPACES_ROOT} \
   ajapopaja-build:latest
 ExecStop=/usr/bin/docker stop ajapopaja-build
 
