@@ -138,14 +138,39 @@ class AssistantSession:
                 if "tool_calls" in msg and msg["tool_calls"]:
                     tool_calls.extend(msg["tool_calls"])
 
-        if full_content:
-            self.history.append(ChatMessage(role="assistant", content=full_content))
+        if full_content or tool_calls:
+            # Convert tool calls to dicts for Pydantic/Storage
+            tool_calls_dicts = []
+            for tc in tool_calls:
+                if hasattr(tc, 'model_dump'):
+                    tool_calls_dicts.append(tc.model_dump())
+                elif hasattr(tc, 'dict'):
+                    tool_calls_dicts.append(tc.dict())
+                else:
+                    # Manual fallback if not a Pydantic model
+                    tool_calls_dicts.append({
+                        "id": getattr(tc, 'id', None),
+                        "type": getattr(tc, 'type', 'function'),
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments
+                        }
+                    })
+
+            self.history.append(ChatMessage(
+                role="assistant", 
+                content=full_content,
+                tool_calls=tool_calls_dicts if tool_calls_dicts else None
+            ))
             await self._save_history()
 
         if tool_calls:
             # For simplicity, handle first tool call for now
             tool_call = tool_calls[0]
-            tool_name = tool_call["function"]["name"]
+            # Use the dict version for our own logic
+            tool_call_dict = tool_calls_dicts[0]
+            
+            tool_name = tool_call_dict["function"]["name"]
             tool_def = get_tool_definition(tool_name)
 
             if not tool_def:
@@ -153,23 +178,25 @@ class AssistantSession:
                 return
 
             if tool_def["type"] == READ_ONLY:
-                result = await self._execute_tool(tool_call)
+                result = await self._execute_tool(tool_call_dict)
                 self.history.append(
                     ChatMessage(
-                        role="tool", content=json.dumps(result), tool_calls=[tool_call]
+                        role="tool", 
+                        content=json.dumps(result), 
+                        tool_calls=[tool_call_dict]
                     )
                 )
                 await self._save_history()
                 # Recursive call to continue loop
                 await self._run_llm_loop()
             else:
-                self.pending_tool_call = tool_call
+                self.pending_tool_call = tool_call_dict
                 await self.on_update(
                     {
                         "type": "tool_request",
-                        "id": tool_call.get("id", "legacy_id"),
+                        "id": tool_call_dict.get("id", "legacy_id"),
                         "tool": tool_name,
-                        "arguments": tool_call["function"]["arguments"],
+                        "arguments": tool_call_dict["function"]["arguments"],
                     }
                 )
 
