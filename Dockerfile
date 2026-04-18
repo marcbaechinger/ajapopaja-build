@@ -9,10 +9,11 @@ RUN npm run build
 # Stage 2: Build the backend and final image
 FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim AS final
 WORKDIR /app
-
 # Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends     git     && rm -rf /var/lib/apt/lists/*
-
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    tree \
+    && rm -rf /var/lib/apt/lists/*
 # Copy backend workspace definition
 COPY backend/pyproject.toml backend/uv.lock ./backend/
 COPY backend/api/pyproject.toml ./backend/api/

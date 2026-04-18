@@ -12,6 +12,8 @@ ExecStartPre=-/usr/bin/docker rm ajapopaja-build
 ExecStartPre=/usr/bin/docker load -i /data/ajapopaja/docker/ajapopaja-build.tar
 ExecStart=/usr/bin/docker run --name ajapopaja-build \
   -p ${PORT}:${PORT} \
+  -v /home:/home \
+  -v /Users:/Users \
   --add-host=host.docker.internal:host-gateway \
   -e MONGODB_URI=${MONGODB_URI} \
   -e OLLAMA_HOST=${OLLAMA_HOST} \

@@ -105,6 +105,8 @@ A deployment script is provided to build the image, save it to `/data/ajapopaja/
 If you have MongoDB running on your host system, use the following command:
 ```bash
 docker run -p 8000:8000 \
+  -v /home:/home \
+  -v /Users:/Users \
   --add-host=host.docker.internal:host-gateway \
   -e MONGODB_URI=mongodb://host.docker.internal:27017/ \
   -e PORT=8000 \

@@ -97,7 +97,14 @@ class AssistantSession:
         # Continue LLM loop
         await self._run_llm_loop()
 
-    async def _run_llm_loop(self):
+    async def _run_llm_loop(self, retry_count: int = 0):
+        if retry_count >= 3:
+            await self.on_update({
+                "type": "error",
+                "message": "Assistant failed to produce a valid response after multiple attempts."
+            })
+            return
+
         # Convert history to Ollama format
         messages = []
         for msg in self.history:
@@ -125,125 +132,137 @@ class AssistantSession:
             f"Presenting {len(ollama_tools)} tools to Ollama model '{MODEL_NAME}': {[t.name for t in registered_tools]}"
         )
 
-        response = await asyncio.to_thread(
-            ollama.chat,
-            model=MODEL_NAME,
-            messages=messages,
-            tools=ollama_tools,
-            stream=True,
-        )
-
-        full_content = ""
-        full_thought = ""
-        tool_calls = []
-
-        for chunk in response:
-            # Handle chunk being an object or a dict
-            msg = getattr(chunk, "message", None)
-            if not msg and isinstance(chunk, dict):
-                msg = chunk.get("message")
-
-            if msg:
-                # Handle thinking streaming
-                thought = getattr(msg, "thought", "")
-                if not thought and hasattr(msg, "reasoning_content"):
-                    thought = getattr(msg, "reasoning_content", "")
-                if not thought and isinstance(msg, dict):
-                    thought = msg.get("thought", "") or msg.get("reasoning_content", "")
-                
-                if thought:
-                    full_thought += thought
-                    await self.on_update({"type": "thinking", "content": thought})
-
-                # Handle text streaming
-                content = getattr(msg, "content", "")
-                if not content and isinstance(msg, dict):
-                    content = msg.get("content", "")
-
-                if content:
-                    full_content += content
-                    await self.on_update({"type": "chunk", "content": content})
-
-                # Handle tool calls
-                tc = getattr(msg, "tool_calls", None)
-                if not tc and isinstance(msg, dict):
-                    tc = msg.get("tool_calls", [])
-
-                if tc:
-                    tool_calls.extend(tc)
-
-        if full_content or full_thought or tool_calls:
-            # Convert tool calls to dicts for Pydantic/Storage
-            tool_calls_dicts = []
-            for tc in tool_calls:
-                if hasattr(tc, "model_dump"):
-                    tool_calls_dicts.append(tc.model_dump())
-                elif hasattr(tc, "dict"):
-                    tool_calls_dicts.append(tc.dict())
-                elif isinstance(tc, dict):
-                    tool_calls_dicts.append(tc)
-                else:
-                    # Manual fallback if not a Pydantic model
-                    tool_calls_dicts.append(
-                        {
-                            "id": getattr(tc, "id", None) or "legacy_id",
-                            "type": getattr(tc, "type", "function"),
-                            "function": {
-                                "name": tc.function.name,
-                                "arguments": tc.function.arguments,
-                            },
-                        }
-                    )
-
-            self.history.append(
-                ChatMessage(
-                    role="assistant",
-                    content=full_content,
-                    thought=full_thought if full_thought else None,
-                    tool_calls=tool_calls_dicts if tool_calls_dicts else None,
-                )
+        try:
+            response = await asyncio.to_thread(
+                ollama.chat,
+                model=MODEL_NAME,
+                messages=messages,
+                tools=ollama_tools,
+                stream=True,
+                think=True,
             )
-            await self._save_history()
 
-        if tool_calls:
-            # For simplicity, handle first tool call for now
-            # Use the dict version for our own logic
-            tool_call_dict = tool_calls_dicts[0]
+            full_content = ""
+            full_thought = ""
+            tool_calls = []
 
-            tool_name = tool_call_dict.get("function", {}).get("name")
-            if not tool_name:
-                return
+            for chunk in response:
+                # Handle chunk being an object or a dict
+                msg = getattr(chunk, "message", None)
+                if not msg and isinstance(chunk, dict):
+                    msg = chunk.get("message")
 
-            tool_def = registry.get_tool(tool_name)
+                if msg:
+                    # Handle thinking streaming
+                    thought = getattr(msg, "thought", "")
+                    if not thought and hasattr(msg, "reasoning_content"):
+                        thought = getattr(msg, "reasoning_content", "")
+                    if not thought and isinstance(msg, dict):
+                        thought = msg.get("thought", "") or msg.get("reasoning_content", "")
 
-            if not tool_def:
-                # Error handling
-                return
+                    if thought:
+                        full_thought += thought
+                        await self.on_update({"type": "thinking", "content": thought})
 
-            if tool_def.type == READ_ONLY:
-                result = await self._execute_tool(tool_call_dict)
+                    # Handle text streaming
+                    content = getattr(msg, "content", "")
+                    if not content and isinstance(msg, dict):
+                        content = msg.get("content", "")
+
+                    if content:
+                        full_content += content
+                        await self.on_update({"type": "chunk", "content": content})
+
+                    # Handle tool calls
+                    tc = getattr(msg, "tool_calls", None)
+                    if not tc and isinstance(msg, dict):
+                        tc = msg.get("tool_calls", [])
+
+                    if tc:
+                        tool_calls.extend(tc)
+
+            if full_content or full_thought or tool_calls:
+                # Convert tool calls to dicts for Pydantic/Storage
+                tool_calls_dicts = []
+                for tc in tool_calls:
+                    if hasattr(tc, "model_dump"):
+                        tool_calls_dicts.append(tc.model_dump())
+                    elif hasattr(tc, "dict"):
+                        tool_calls_dicts.append(tc.dict())
+                    elif isinstance(tc, dict):
+                        tool_calls_dicts.append(tc)
+                    else:
+                        # Manual fallback if not a Pydantic model
+                        tool_calls_dicts.append(
+                            {
+                                "id": getattr(tc, "id", None) or "legacy_id",
+                                "type": getattr(tc, "type", "function"),
+                                "function": {
+                                    "name": tc.function.name,
+                                    "arguments": tc.function.arguments,
+                                },
+                            }
+                        )
+
                 self.history.append(
                     ChatMessage(
-                        role="tool",
-                        content=json.dumps(result),
-                        tool_calls=[tool_call_dict],
+                        role="assistant",
+                        content=full_content,
+                        thought=full_thought if full_thought else None,
+                        tool_calls=tool_calls_dicts if tool_calls_dicts else None,
                     )
                 )
                 await self._save_history()
-                # Recursive call to continue loop
-                await self._run_llm_loop()
-            else:
-                self.pending_tool_call = tool_call_dict
-                await self.on_update(
-                    {
-                        "type": "tool_request",
-                        "id": tool_call_dict.get("id") or "legacy_id",
-                        "tool": tool_name,
-                        "arguments": tool_call_dict.get("function", {}).get(
-                            "arguments"
-                        ),
-                    }
+
+            if tool_calls:
+                # For simplicity, handle first tool call for now
+                # Use the dict version for our own logic
+                tool_call_dict = tool_calls_dicts[0]
+
+                tool_name = tool_call_dict.get("function", {}).get("name")
+                if not tool_name:
+                    return
+
+                tool_def = registry.get_tool(tool_name)
+
+                if not tool_def:
+                    # Error handling
+                    return
+
+                if tool_def.type == READ_ONLY:
+                    result = await self._execute_tool(tool_call_dict)
+                    self.history.append(
+                        ChatMessage(
+                            role="tool",
+                            content=json.dumps(result),
+                            tool_calls=[tool_call_dict],
+                        )
+                    )
+                    await self._save_history()
+                    # Recursive call to continue loop
+                    await self._run_llm_loop()
+                else:
+                    self.pending_tool_call = tool_call_dict
+                    await self.on_update(
+                        {
+                            "type": "tool_request",
+                            "id": tool_call_dict.get("id") or "legacy_id",
+                            "tool": tool_name,
+                            "arguments": tool_call_dict.get("function", {}).get(
+                                "arguments"
+                            ),
+                        }
+                    )
+        except Exception as e:
+            logger.error(f"LLM loop error: {e}")
+            self.history.append(
+                ChatMessage(
+                    role="system",
+                    content=f"Error: Your last response resulted in a syntax or parsing error. Details: {str(e)}. Please retry with a corrected tool call or response."
                 )
+            )
+            await self._save_history()
+            await self._run_llm_loop(retry_count + 1)
 
     async def _execute_tool(self, tool_call: Dict) -> Any:
         tool_name = tool_call["function"]["name"]
