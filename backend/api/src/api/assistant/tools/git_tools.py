@@ -13,9 +13,9 @@
 # limitations under the License.
 
 import os
-import subprocess
 from pathlib import Path
 from typing import Optional, List
+import git
 from core.queries import pipeline as pipeline_queries
 from core.utils.path_utils import safe_join
 from api.assistant.decorators import register_tool
@@ -29,24 +29,6 @@ def _sanitize_path(workspace: str, rel_path: str) -> Optional[str]:
         return str(safe_join(Path(workspace), rel_path))
     except Exception:
         return None
-
-
-async def _run_git_command(workspace_path: str, args: List[str]) -> str:
-    try:
-        # Filter out empty strings if any
-        cmd_args = [arg for arg in args if arg]
-        result = subprocess.run(
-            ["git"] + cmd_args,
-            cwd=workspace_path,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if result.returncode != 0:
-            return f"Error executing git command: {result.stderr}"
-        return result.stdout
-    except Exception as e:
-        return f"Error: {str(e)}"
 
 
 @register_tool(tool_type=READ_ONLY)
@@ -71,21 +53,25 @@ async def git_log(
     if not pipeline or not pipeline.workspace_abs_path:
         return "Error: Workspace path not found."
 
-    args = [
-        "log",
-        "-n",
-        str(limit),
-        "--pretty=format:%H | %an | %ad | %s",
-        "--date=short",
-    ]
-    if author:
-        args.append(f"--author={author}")
-    if since:
-        args.append(f"--since={since}")
-    if until:
-        args.append(f"--until={until}")
-
-    return await _run_git_command(str(pipeline.workspace_abs_path), args)
+    try:
+        repo = git.Repo(pipeline.workspace_abs_path)
+        kwargs = {}
+        if author:
+            kwargs["author"] = author
+        if since:
+            kwargs["since"] = since
+        if until:
+            kwargs["until"] = until
+            
+        commits = list(repo.iter_commits(max_count=limit, **kwargs))
+        if not commits:
+            return "No commits found."
+            
+        return "\n".join([f"{c.hexsha} | {c.author.name} | {c.committed_datetime.strftime('%Y-%m-%d')} | {c.summary}" for c in commits])
+    except git.exc.GitCommandError as e:
+        return f"Error executing git command: {e}"
+    except Exception as e:
+        return f"Error: {str(e)}"
 
 
 @register_tool(tool_type=READ_ONLY)
@@ -101,9 +87,13 @@ async def git_show_commit(pipeline_id: str, commit_sha: str) -> str:
     if not pipeline or not pipeline.workspace_abs_path:
         return "Error: Workspace path not found."
 
-    return await _run_git_command(
-        str(pipeline.workspace_abs_path), ["show", "--stat", commit_sha]
-    )
+    try:
+        repo = git.Repo(pipeline.workspace_abs_path)
+        return repo.git.show("--stat", commit_sha)
+    except git.exc.GitCommandError as e:
+        return f"Error executing git command: {e}"
+    except Exception as e:
+        return f"Error: {str(e)}"
 
 
 @register_tool(tool_type=READ_ONLY)
@@ -126,12 +116,17 @@ async def git_blame(
     if not full_path:
         return "Error: Invalid file path. Must be relative and within workspace."
 
-    args = ["blame"]
-    if line_number:
-        args.extend(["-L", f"{line_number},{line_number}"])
-    args.append(full_path)
-
-    return await _run_git_command(str(pipeline.workspace_abs_path), args)
+    try:
+        repo = git.Repo(pipeline.workspace_abs_path)
+        args = []
+        if line_number:
+            args.extend(["-L", f"{line_number},{line_number}"])
+        args.append(full_path)
+        return repo.git.blame(*args)
+    except git.exc.GitCommandError as e:
+        return f"Error executing git command: {e}"
+    except Exception as e:
+        return f"Error: {str(e)}"
 
 
 @register_tool(tool_type=READ_ONLY)
@@ -146,7 +141,13 @@ async def git_status(pipeline_id: str) -> str:
     if not pipeline or not pipeline.workspace_abs_path:
         return "Error: Workspace path not found."
 
-    return await _run_git_command(str(pipeline.workspace_abs_path), ["status"])
+    try:
+        repo = git.Repo(pipeline.workspace_abs_path)
+        return repo.git.status()
+    except git.exc.GitCommandError as e:
+        return f"Error executing git command: {e}"
+    except Exception as e:
+        return f"Error: {str(e)}"
 
 
 @register_tool(tool_type=READ_ONLY)
@@ -161,7 +162,13 @@ async def git_branch_list(pipeline_id: str) -> str:
     if not pipeline or not pipeline.workspace_abs_path:
         return "Error: Workspace path not found."
 
-    return await _run_git_command(str(pipeline.workspace_abs_path), ["branch", "-a"])
+    try:
+        repo = git.Repo(pipeline.workspace_abs_path)
+        return repo.git.branch("-a")
+    except git.exc.GitCommandError as e:
+        return f"Error executing git command: {e}"
+    except Exception as e:
+        return f"Error: {str(e)}"
 
 
 @register_tool(tool_type=READ_ONLY)
@@ -184,17 +191,23 @@ async def git_diff(
     if not pipeline or not pipeline.workspace_abs_path:
         return "Error: Workspace path not found."
 
-    args = ["diff"]
-    if commit_a:
-        if commit_b:
-            args.append(f"{commit_a}..{commit_b}")
-        else:
-            args.append(commit_a)
+    try:
+        repo = git.Repo(pipeline.workspace_abs_path)
+        args = []
+        if commit_a:
+            if commit_b:
+                args.append(f"{commit_a}..{commit_b}")
+            else:
+                args.append(commit_a)
 
-    if file_path:
-        full_path = _sanitize_path(str(pipeline.workspace_abs_path), file_path)
-        if not full_path:
-            return "Error: Invalid file path. Must be relative and within workspace."
-        args.extend(["--", full_path])
+        if file_path:
+            full_path = _sanitize_path(str(pipeline.workspace_abs_path), file_path)
+            if not full_path:
+                return "Error: Invalid file path. Must be relative and within workspace."
+            args.extend(["--", full_path])
 
-    return await _run_git_command(str(pipeline.workspace_abs_path), args)
+        return repo.git.diff(*args)
+    except git.exc.GitCommandError as e:
+        return f"Error executing git command: {e}"
+    except Exception as e:
+        return f"Error: {str(e)}"
