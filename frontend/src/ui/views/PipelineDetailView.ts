@@ -34,8 +34,8 @@ export class PipelineDetailView extends View {
   private container: HTMLElement | null = null;
   private pipelineId: string;
   private pipeline: Pipeline | null = null;
-  private geminiStatus: { running: boolean, log_file: string | null } = { running: false, log_file: null };
-  private vibeStatus: { running: boolean, log_file: string | null } = { running: false, log_file: null };
+  private geminiStatus: { running: boolean, log_file: string | null, available: boolean } = { running: false, log_file: null, available: true };
+  private vibeStatus: { running: boolean, log_file: string | null, available: boolean } = { running: false, log_file: null, available: true };
   private context: AppContext;
   private unsubs: (() => void)[] = [];
   private activeEditors: Map<string, EasyMDE> = new Map();
@@ -1038,7 +1038,7 @@ export class PipelineDetailView extends View {
       'completed': 'bg-blue-600/20 text-blue-400 border-blue-600/30'
     };
 
-    const geminiStatusHtml = this.geminiStatus.running 
+    const geminiStatusHtml = !this.geminiStatus.available ? "" : (this.geminiStatus.running 
       ? `
         <div class="flex items-center gap-2 bg-app-bg px-2 py-1 rounded border border-green-500/30">
           <span class="relative flex h-2 w-2">
@@ -1055,9 +1055,9 @@ export class PipelineDetailView extends View {
           <span class="text-[10px] font-bold uppercase tracking-widest text-app-muted">Gemini Idle</span>
           <button data-action-click="open_gemini_logs" class="text-[9px] font-black uppercase tracking-tighter text-app-muted hover:text-app-text cursor-pointer ml-1">Logs</button>
         </div>
-      `;
+      `);
 
-    const vibeStatusHtml = this.vibeStatus.running 
+    const vibeStatusHtml = !this.vibeStatus.available ? "" : (this.vibeStatus.running 
       ? `
         <div class="flex items-center gap-2 bg-app-bg px-2 py-1 rounded border border-blue-500/30">
           <span class="relative flex h-2 w-2">
@@ -1074,7 +1074,7 @@ export class PipelineDetailView extends View {
           <span class="text-[10px] font-bold uppercase tracking-widest text-app-muted">Vibe Idle</span>
           <button data-action-click="open_vibe_logs" class="text-[9px] font-black uppercase tracking-tighter text-app-muted hover:text-app-text cursor-pointer ml-1">Logs</button>
         </div>
-      `;
+      `);
 
     infoContainer.innerHTML = `
       <div id="pipeline-view-info" class="flex flex-col group relative">

@@ -16,6 +16,7 @@ import os
 import subprocess
 import logging
 import asyncio
+import shutil
 from typing import Dict, Optional, Any
 from datetime import datetime
 from core.queries import pipeline as pipeline_queries
@@ -26,6 +27,11 @@ logger = logging.getLogger(__name__)
 class VibeExecutor:
     # Maps pipeline_id -> { "process": Popen, "log_file_path": str }
     _processes: Dict[str, Dict[str, Any]] = {}
+
+    @staticmethod
+    def is_available() -> bool:
+        """Returns True if the vibe CLI is available in the system path."""
+        return shutil.which("vibe") is not None
 
     @classmethod
     async def ensure_running(cls, pipeline_id: str):
@@ -125,22 +131,22 @@ class VibeExecutor:
     @classmethod
     def get_status(cls, pipeline_id: str) -> dict:
         """Returns the status of the Vibe CLI process for the given pipeline."""
+        status = {
+            "running": False,
+            "log_file": None,
+            "available": cls.is_available()
+        }
         if pipeline_id in cls._processes:
             entry = cls._processes[pipeline_id]
             process = entry["process"]
             if process.poll() is None:
-                return {
-                    "running": True,
-                    "log_file": entry["log_file_path"]
-                }
+                status["running"] = True
+                status["log_file"] = entry["log_file_path"]
             else:
                 # Clean up stale process
                 del cls._processes[pipeline_id]
         
-        return {
-            "running": False,
-            "log_file": None
-        }
+        return status
 
     @classmethod
     def stop_all(cls):

@@ -105,14 +105,26 @@ async def test_stop_running(init_mock_db):
         mock_process.terminate.assert_called_once()
 
 @pytest.mark.asyncio
+async def test_is_available():
+    with patch("shutil.which") as mock_which:
+        mock_which.return_value = "/usr/local/bin/vibe"
+        assert VibeExecutor.is_available() is True
+        mock_which.assert_called_with("vibe")
+
+        mock_which.return_value = None
+        assert VibeExecutor.is_available() is False
+
+@pytest.mark.asyncio
 async def test_get_status_running(init_mock_db):
     pipeline = Pipeline(name="Test Pipeline", workspace_path="/tmp/test_ws", manage_vibe=True)
     await pipeline.insert()
     pipeline_id = str(pipeline.id)
 
     with patch("subprocess.Popen") as mock_popen, \
-         patch("builtins.open", MagicMock()):
+         patch("builtins.open", MagicMock()), \
+         patch("shutil.which") as mock_which:
         
+        mock_which.return_value = "/usr/local/bin/vibe"
         mock_process = MagicMock()
         mock_process.poll.return_value = None
         mock_popen.return_value = mock_process
@@ -122,6 +134,7 @@ async def test_get_status_running(init_mock_db):
         
         assert status["running"] is True
         assert status["log_file"] is not None
+        assert status["available"] is True
 
 @pytest.mark.asyncio
 async def test_get_status_not_running(init_mock_db):
@@ -129,9 +142,12 @@ async def test_get_status_not_running(init_mock_db):
     await pipeline.insert()
     pipeline_id = str(pipeline.id)
 
-    status = VibeExecutor.get_status(pipeline_id)
-    assert status["running"] is False
-    assert status["log_file"] is None
+    with patch("shutil.which") as mock_which:
+        mock_which.return_value = "/usr/local/bin/vibe"
+        status = VibeExecutor.get_status(pipeline_id)
+        assert status["running"] is False
+        assert status["log_file"] is None
+        assert status["available"] is True
 
 @pytest.mark.asyncio
 async def test_stop_all(init_mock_db):
