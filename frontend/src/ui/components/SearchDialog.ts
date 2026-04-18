@@ -19,7 +19,6 @@ import { BaseDialog } from './dialog_common.ts';
 import { AppContext } from '../../core/AppContext.ts';
 import { TaskItem } from './TaskItem.ts';
 import { PaginationControl } from './PaginationControl.ts';
-import { DesignDocDialog } from './DesignDocDialog.ts';
 
 export class SearchDialog extends BaseDialog {
   private context: AppContext;
@@ -183,13 +182,7 @@ export class SearchDialog extends BaseDialog {
         this.performSearch(this.currentPage - 1);
       } else if (action === 'next_search_page') {
         this.performSearch(this.currentPage + 1);
-      } else if (action === 'view_design_doc') {
-        const taskId = actionElement.closest('[data-task-id]')?.getAttribute('data-task-id');
-        const task = this.results.find(t => t.id === taskId);
-        if (task && task.design_doc) {
-          new DesignDocDialog('Design Document', task.design_doc).show();
-        }
-      } else if (action === 'toggle_task_collapse' || action === 'edit_title' || action === 'edit_spec') {
+      } else if (action === 'toggle_task_collapse' || action === 'edit_title') {
         // Handle task item collapse toggle locally for better UX
         const taskItem = actionElement.closest('[data-view-type="task"]');
         if (taskItem) {
@@ -199,6 +192,22 @@ export class SearchDialog extends BaseDialog {
              const isHidden = body.classList.toggle('hidden');
              icon.classList.toggle('rotate-90', !isHidden);
            }
+        }
+      } else if (action === 'view_design_doc' || action === 'toggle_design_doc_expand') {
+        const container = actionElement.closest('.design-doc-container');
+        const display = container?.querySelector('.design-doc-display');
+        const btn = container?.querySelector('[data-action-click="toggle_design_doc_expand"]');
+        if (display && btn) {
+          const isExpanded = display.classList.toggle('expanded');
+          btn.textContent = isExpanded ? 'Show Less' : 'Show More';
+        }
+      } else if (action === 'toggle_spec_expand' || action === 'edit_spec') {
+        const container = actionElement.closest('.spec-container');
+        const display = container?.querySelector('.spec-display');
+        const btn = container?.querySelector('[data-action-click="toggle_spec_expand"]');
+        if (display && btn) {
+          const isExpanded = display.classList.toggle('expanded');
+          btn.textContent = isExpanded ? 'Show Less' : 'Show More';
         }
       }
     });
