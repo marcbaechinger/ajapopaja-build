@@ -18,7 +18,7 @@ import json
 import socket
 import msgpack
 from unittest.mock import patch, MagicMock, AsyncMock
-from api.assistant.tools.nvim_tools import open_file_in_nvim, nvim_set_quickfix, nvim_show_diff
+from api.assistant.tools.nvim_tools import open_file_in_nvim, nvim_set_quickfix, nvim_show_diff, nvim_open_selection
 from core.models.models import Pipeline
 from pathlib import Path
 
@@ -104,7 +104,7 @@ async def test_nvim_show_diff_success(init_mock_db):
     pipeline_id = str(pipeline.id)
 
     with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(stdout="old content\nmore content")
+        mock_run.return_value = MagicMock(stdout="old content\nmore content", returncode=0)
         
         with patch("os.path.exists", return_value=True):
             mock_socket_instance = MagicMock()
@@ -130,3 +130,28 @@ async def test_nvim_show_diff_success(init_mock_db):
                 assert passed_args[0] == "/tmp/test_ws/src/main.py" # full path
                 assert passed_args[1] == "old content\nmore content" # content
                 assert passed_args[2] == "HEAD~1" # commit_hash short
+
+@pytest.mark.asyncio
+async def test_nvim_open_selection_success(init_mock_db):
+    pipeline = Pipeline(name="Test Pipeline", workspace_path="/tmp/test_ws")
+    await pipeline.insert()
+    pipeline_id = str(pipeline.id)
+
+    with patch("os.path.exists", return_value=True):
+        mock_socket_instance = MagicMock()
+        mock_socket_instance.__enter__.return_value = mock_socket_instance
+        mock_socket_instance.recv.return_value = msgpack.packb([1, 1, None, None])
+        
+        with patch("socket.socket", return_value=mock_socket_instance):
+            result = await nvim_open_selection(pipeline_id, "src/main.py", 10, 15)
+            
+            assert result["success"] is True, f"Error: {result.get('error')}"
+            mock_socket_instance.connect.assert_called_with("/tmp/nvimsocket")
+            
+            sent_data = mock_socket_instance.sendall.call_args[0][0]
+            payload = msgpack.unpackb(sent_data)
+            assert payload[0] == 0
+            assert payload[2] == "nvim_command"
+            assert "src/main.py" in payload[3][0]
+            assert "10" in payload[3][0]
+            assert "normal! V15G" in payload[3][0]
