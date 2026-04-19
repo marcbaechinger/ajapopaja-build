@@ -127,15 +127,10 @@ body {
   @apply prose max-w-none;
 }
 
-/* Default is dark mode, so apply prose-invert */
-:root .prose-theme {
-  @apply prose-invert;
-}
-
-/* For light theme, we want standard prose (dark text) */
-/* We use !important or more specific selector to override prose-invert if needed, 
-   but since we are defining how prose-theme behaves, we can just scope it. */
-[data-theme='light'] .prose-theme {
+/* Map Tailwind Typography variables to our theme variables for both light and dark modes */
+.prose-theme,
+.editor-preview,
+.editor-preview-side {
   --tw-prose-body: var(--app-text);
   --tw-prose-headings: var(--app-text);
   --tw-prose-lead: var(--app-muted);
