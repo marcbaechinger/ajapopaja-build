@@ -15,12 +15,15 @@
 import os
 import subprocess
 import re
+import logging
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from core.queries import pipeline as pipeline_queries
 from core.utils.path_utils import safe_join
 from core.config import IGNORED_DIRECTORIES
 from api.assistant.decorators import register_tool
+
+logger = logging.getLogger(__name__)
 
 READ_ONLY = "read_only"
 
@@ -133,6 +136,7 @@ async def grep(
         if len(matches) >= 1000:
             break
             
+    logger.info(f"Grep tool found {len(matches)} matches for pattern: '{pattern}'")
     return matches
 
 
