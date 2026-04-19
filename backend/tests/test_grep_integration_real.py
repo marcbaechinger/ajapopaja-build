@@ -77,22 +77,22 @@ async def test_grep_integration_positive(real_workspace_pipeline):
     result = await grep(str(real_workspace_pipeline.id), "BaseClient", file_glob="*.ts")
     
     # Verify that we have matches from all 3 files
-    assert "PipelineClient.ts:1:import { BaseClient }" in result
-    assert "PipelineClient.ts:3:export class PipelineClient extends BaseClient" in result
-    assert "TaskClient.ts:1:import { BaseClient }" in result
-    assert "TaskClient.ts:3:export class TaskClient extends BaseClient" in result
-    assert "SystemClient.ts:1:import { BaseClient }" in result
-    assert "SystemClient.ts:3:export class SystemClient extends BaseClient" in result
+    assert {"path": "frontend/src/core/clients/PipelineClient.ts", "line": 1} in result
+    assert {"path": "frontend/src/core/clients/PipelineClient.ts", "line": 3} in result
+    assert {"path": "frontend/src/core/clients/TaskClient.ts", "line": 1} in result
+    assert {"path": "frontend/src/core/clients/TaskClient.ts", "line": 3} in result
+    assert {"path": "frontend/src/core/clients/SystemClient.ts", "line": 1} in result
+    assert {"path": "frontend/src/core/clients/SystemClient.ts", "line": 3} in result
     
     # Verify matches in large file
-    assert "large_file.ts:1:// Match BaseClient at line 1" in result
-    assert "large_file.ts:901:// Match BaseClient at line 901" in result
+    assert {"path": "large_file.ts", "line": 1} in result
+    assert {"path": "large_file.ts", "line": 901} in result
 
 @pytest.mark.asyncio
 async def test_grep_integration_negative(real_workspace_pipeline):
     # Negative test – Search for a string that does not exist.
     result = await grep(str(real_workspace_pipeline.id), "NonExistentString12345", file_glob="*.ts")
-    assert "No results found." in result
+    assert result == []
 
 @pytest.mark.asyncio
 async def test_grep_integration_case_insensitive(real_workspace_pipeline):
@@ -100,19 +100,18 @@ async def test_grep_integration_case_insensitive(real_workspace_pipeline):
     result = await grep(str(real_workspace_pipeline.id), "baseclient", file_glob="*.ts", ignore_case=True)
     
     # Should find the same matches
-    assert "PipelineClient.ts:1:import { BaseClient }" in result
-    assert "PipelineClient.ts:3:export class PipelineClient extends BaseClient" in result
+    assert {"path": "frontend/src/core/clients/PipelineClient.ts", "line": 1} in result
+    assert {"path": "frontend/src/core/clients/PipelineClient.ts", "line": 3} in result
 
 @pytest.mark.asyncio
 async def test_grep_integration_large_file(real_workspace_pipeline):
     # Verify that all 10 occurrences in the large file are returned.
     result = await grep(str(real_workspace_pipeline.id), "Match BaseClient", file_glob="large_file.ts")
     
-    lines = result.strip().split("\n")
-    assert len(lines) == 10
+    assert len(result) == 10
     for i in range(10):
         line_num = i * 100 + 1
-        assert f"large_file.ts:{line_num}:// Match BaseClient at line {line_num}" in lines[i]
+        assert result[i] == {"path": "large_file.ts", "line": line_num}
 
 @pytest.mark.asyncio
 async def test_grep_integration_very_large_file(real_workspace_pipeline):
@@ -120,8 +119,7 @@ async def test_grep_integration_very_large_file(real_workspace_pipeline):
     # We expect matches at 1000, 2000, ..., 10000.
     result = await grep(str(real_workspace_pipeline.id), "Target match", file_glob="very_large_file.ts")
     
-    lines = result.strip().split("\n")
-    assert len(lines) == 10
+    assert len(result) == 10
     for i in range(10):
         line_num = (i + 1) * 1000
-        assert f"very_large_file.ts:{line_num}:// Target match at line {line_num}" in lines[i]
+        assert result[i] == {"path": "very_large_file.ts", "line": line_num}

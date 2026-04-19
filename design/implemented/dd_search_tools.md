@@ -28,15 +28,15 @@ await grep(
 
 ### Result Format
 
-The tool returns a string containing the matching lines, prefixed by the filename and line number. If multiple matches are found across different files, they are listed sequentially.
+The tool returns an array of JSON objects, each representing a match.
 
 Example:
+```json
+[
+  {"path": "frontend/src/core/clients/PipelineClient.ts", "line": 1},
+  {"path": "frontend/src/core/clients/PipelineClient.ts", "line": 3}
+]
 ```
-frontend/src/core/clients/PipelineClient.ts:1:import { BaseClient } from './BaseClient.ts';
-frontend/src/core/clients/PipelineClient.ts:3:export class PipelineClient extends BaseClient {
-```
-
-If `context_lines` is used, matches are separated by `--` lines.
 
 ## Find Tool
 

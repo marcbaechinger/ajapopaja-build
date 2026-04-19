@@ -16,7 +16,7 @@ import os
 import subprocess
 import re
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from core.queries import pipeline as pipeline_queries
 from core.utils.path_utils import safe_join
 from core.config import IGNORED_DIRECTORIES
@@ -55,9 +55,9 @@ async def grep(
     file_glob: Optional[str] = None,
     ignore_case: bool = False,
     context_lines: Optional[int] = None,
-) -> str:
+) -> List[Dict[str, Any]]:
     """
-    Run a recursive grep; return file paths, line numbers, and snippets.
+    Run a recursive grep; return a list of matches with file paths and line numbers.
 
     Args:
         pipeline_id: The ID of the pipeline.
@@ -68,9 +68,9 @@ async def grep(
     """
     pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
     if not pipeline or not pipeline.workspace_abs_path:
-        return "Error: Workspace path not found."
+        return [{"error": "Workspace path not found."}]
 
-    args = ["grep", "-rnI"]
+    args = ["grep", "-rnIZ"]
     if ignore_case:
         args.append("-i")
     if context_lines is not None and int(context_lines) > 0:
@@ -88,7 +88,52 @@ async def grep(
     args.append(".")
 
     result = await _run_command(str(pipeline.workspace_abs_path), args)
-    return result[:10000] # Limit output size to prevent context overflow
+    
+    if result.startswith("Error:"):
+        return [{"error": result}]
+    
+    if result == "No results found.":
+        return []
+
+    matches = []
+    # Grep output for -nZ is "file\0line:text\n"
+    # Lines with context use "file\0line-text\n"
+    for line in result.splitlines():
+        if not line:
+            continue
+            
+        if "\0" in line:
+            parts_null = line.split("\0", 1)
+            path = parts_null[0]
+            after_null = parts_null[1]
+            
+            # after_null should be "line:text" or "line-text"
+            # We want matches only (using ':')
+            if ":" in after_null:
+                parts_after = after_null.split(":", 1)
+                try:
+                    line_num = int(parts_after[0])
+                    # Remove './' from start of path if present
+                    clean_path = path[2:] if path.startswith("./") else path
+                    matches.append({"path": clean_path, "line": line_num})
+                except ValueError:
+                    continue
+        else:
+            # Fallback for unexpected format
+            parts = line.split(":", 2)
+            if len(parts) >= 2:
+                try:
+                    path = parts[0]
+                    clean_path = path[2:] if path.startswith("./") else path
+                    line_num = int(parts[1])
+                    matches.append({"path": clean_path, "line": line_num})
+                except (ValueError, IndexError):
+                    continue
+
+        if len(matches) >= 1000:
+            break
+            
+    return matches
 
 
 @register_tool(tool_type=READ_ONLY)

@@ -65,19 +65,20 @@ async def test_grep_success(mock_pipeline):
         mock_get.return_value = mock_pipeline
         
         with patch("subprocess.run") as mock_run:
+            # Mocking -nZ output: "file\0line:text\n"
             mock_run.return_value = MagicMock(
                 returncode=0, 
-                stdout="src/main.py:3:    print('hello world')\n", 
+                stdout="src/main.py\0 3:    print('hello world')\n", 
                 stderr=""
             )
             
             result = await grep("pipeline_id", "hello", file_glob="*.py", ignore_case=True, context_lines=2)
             
-            assert "src/main.py:3:    print('hello world')" in result
+            assert result == [{"path": "src/main.py", "line": 3}]
             mock_run.assert_called_once()
             args = mock_run.call_args[0][0]
             assert "grep" in args
-            assert "-rnI" in args
+            assert "-rnIZ" in args
             assert "-i" in args
             assert "-C2" in args
             assert "--include=*.py" in args
@@ -93,7 +94,7 @@ async def test_grep_no_results(mock_pipeline):
             mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="")
             
             result = await grep("pipeline_id", "nonexistent")
-            assert "No results found." in result
+            assert result == []
 
 @pytest.mark.asyncio
 async def test_find_success(mock_pipeline):
@@ -250,7 +251,7 @@ async def test_pipeline_not_found():
         mock_get.return_value = None
         
         result = await grep("invalid_id", "pattern")
-        assert "Error: Workspace path not found." in result
+        assert result == [{"error": "Workspace path not found."}]
 
 @pytest.mark.asyncio
 async def test_workspace_path_missing():
@@ -261,7 +262,7 @@ async def test_workspace_path_missing():
         mock_get.return_value = pipeline
         
         result = await grep("pipeline_id", "pattern")
-        assert "Error: Workspace path not found." in result
+        assert result == [{"error": "Workspace path not found."}]
 
 def test_python_tree_direct(temp_workspace):
     # Test _python_tree function directly for depth and items
