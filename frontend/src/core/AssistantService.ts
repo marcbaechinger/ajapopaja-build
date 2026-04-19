@@ -61,6 +61,13 @@ export class AssistantService {
     });
   }
 
+  public rejectTool(toolCallId: string) {
+    this.wsClient.send('assistant_reject', {
+      tool_call_id: toolCallId,
+      token: this.authService.getAccessToken()
+    });
+  }
+
   public clearHistory() {
     this.wsClient.send('assistant_clear', {
       token: this.authService.getAccessToken()

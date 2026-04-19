@@ -97,6 +97,43 @@ class AssistantSession:
         # Continue LLM loop
         await self._run_llm_loop()
 
+
+    async def reject_tool(self, tool_call_id: str):
+        pending_id = (self.pending_tool_call or {}).get("id") or "legacy_id"
+        if not self.pending_tool_call or pending_id != tool_call_id:
+            await self.on_update(
+                {
+                    "type": "error",
+                    "message": f"No pending tool call found or ID mismatch. Expected {pending_id}, got {tool_call_id}",
+                }
+            )
+            return
+
+        tool_call = self.pending_tool_call
+        self.pending_tool_call = None
+
+        # Add a rejection message as the tool result
+        result = {"error": "Tool rejected by the user. Do not try again without asking the user for the reason of rejection."}
+
+        # Append tool result to history
+        self.history.append(
+            ChatMessage(
+                role="tool",
+                content=json.dumps(result),
+                tool_calls=[
+                    {
+                        "id": tool_call.get("id", "legacy_id"),
+                        "type": "function",
+                        "function": tool_call.get("function", {}),
+                    }
+                ],
+            )
+        )
+        await self._save_history()
+
+        # Continue LLM loop so it can react to the rejection
+        await self._run_llm_loop()
+
     async def _run_llm_loop(self, retry_count: int = 0):
         if retry_count >= 3:
             await self.on_update({
@@ -106,7 +143,13 @@ class AssistantSession:
             return
 
         # Convert history to Ollama format
-        messages = []
+        system_instruction = (
+            "You are a helpful AI assistant connected to the Ajapopaja task management system. "
+            "You can execute various tools to interact with pipelines, tasks, and the project workspace. "
+            "IMPORTANT: If a tool call is rejected by the user, you MUST NOT retry the same tool call without first asking the user for the reason of rejection or for further instructions."
+        )
+        messages = [{"role": "system", "content": system_instruction}]
+        
         for msg in self.history:
             m = {"role": msg.role, "content": msg.content}
             if msg.tool_calls:

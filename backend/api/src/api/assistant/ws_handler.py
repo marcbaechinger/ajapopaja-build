@@ -61,8 +61,21 @@ async def handle_assistant_load_history(message: WSMessage, websocket: WebSocket
     session = await assistant_manager.get_or_create_session(str(user.id), lambda data: websocket.send_text(WSMessage(type="assistant_response", payload=data).model_dump_json()))
     await session.emit_history()
 
+
+async def handle_assistant_reject(message: WSMessage, websocket: WebSocket):
+    token = message.payload.get("token")
+    user = await get_current_user_from_token(token)
+    if not user:
+        return
+
+    tool_call_id = message.payload.get("tool_call_id")
+    session = await assistant_manager.get_or_create_session(str(user.id), lambda data: websocket.send_text(WSMessage(type="assistant_response", payload=data).model_dump_json()))
+    await session.reject_tool(tool_call_id)
+
 def register_assistant_handlers():
     manager.register_handler("assistant_message", handle_assistant_message)
     manager.register_handler("assistant_confirm", handle_assistant_confirm)
+    manager.register_handler("assistant_reject", handle_assistant_reject)
+
     manager.register_handler("assistant_clear", handle_assistant_clear)
     manager.register_handler("assistant_load_history", handle_assistant_load_history)

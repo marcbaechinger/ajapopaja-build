@@ -446,6 +446,9 @@ export class AssistantPanel {
         <pre class="text-[10px] bg-app-surface p-2 mt-2 rounded border border-app-border overflow-x-auto text-app-muted">${args}</pre>
       </details>
       <div class="tool-actions flex gap-2">
+        <button class="reject-tool flex-grow bg-app-surface border border-app-border text-app-text py-1.5 rounded-lg text-xs font-bold hover:bg-app-bg transition-all cursor-pointer focus:ring-2 focus:ring-offset-2 focus:ring-app-accent-2 outline-none">
+          Reject
+        </button>
         <button class="confirm-tool flex-grow bg-app-accent-2 text-white py-1.5 rounded-lg text-xs font-bold hover:brightness-110 transition-all cursor-pointer focus:ring-2 focus:ring-offset-2 focus:ring-app-accent-2 outline-none">
           Confirm & Execute
         </button>
@@ -463,7 +466,26 @@ export class AssistantPanel {
       if (actions) actions.classList.add('hidden');
       
       const status = el.querySelector('.tool-status');
-      if (status) status.classList.remove('hidden');
+      if (status) {
+        status.textContent = 'Tool executed.';
+        status.classList.remove('hidden');
+      }
+    });
+
+    el.querySelector('.reject-tool')?.addEventListener('click', () => {
+      this.context.assistantService.rejectTool(request.id!);
+      
+      const details = el.querySelector('details.tool-payload') as HTMLDetailsElement;
+      if (details) details.open = false;
+      
+      const actions = el.querySelector('.tool-actions');
+      if (actions) actions.classList.add('hidden');
+      
+      const status = el.querySelector('.tool-status');
+      if (status) {
+        status.textContent = 'Tool rejected.';
+        status.classList.remove('hidden');
+      }
     });
 
     this.messageContainer?.appendChild(el);
