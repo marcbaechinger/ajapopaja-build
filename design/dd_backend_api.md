@@ -68,6 +68,11 @@ All messages follow a common JSON structure:
 }
 ```
 
+### Supported Protocols & Message Types
+- **Global Events**: `TASK_UPDATED`, `GEMINI_PROCESS_STARTED`, `VIBE_PROCESS_STOPPED`, etc., broadcasted by the server.
+- **AI Assistant Protocol**: Bidirectional messages for the integrated Assistant, including `assistant_message`, `assistant_response`, `assistant_error`, `assistant_load_history`, and tool negotiation messages (`assistant_confirm`, `assistant_reject`).
+- **Log Streaming**: Backend logic allows streaming logs via WebSockets or Fetch streams for background execution processes.
+
 ### Server Responsibilities
 - **Connection Management**: Track active client connections.
 - **Broadcasting**: Send updates (e.g., `TASK_STATUS_CHANGED`) to relevant clients.

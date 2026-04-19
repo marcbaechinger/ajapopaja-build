@@ -4,7 +4,7 @@
 This document defines the architecture for the "Ajapopaja Build" system—an advanced, automated task pipeline manager designed for Coding AI Agents (like Gemini CLI or Claude). The system aims to provide a robust infrastructure for defining, managing, and sequentially executing development pipelines.
 
 ## 2. Core Components
-The system is composed of four primary interconnected components:
+The system is composed of five primary interconnected components:
 
 1.  **MongoDB (Database)**
     *   **Role**: Central data store for the entire application.
@@ -23,7 +23,7 @@ The system is composed of four primary interconnected components:
         *   Expose WebSockets for real-time UI updates when the MCP server or human managers change task states.
 
 3.  **MCP Server (Model Context Protocol)**
-    *   **Role**: The direct interface for the Coding AI Agent (Gemini/Claude).
+    *   **Role**: The direct interface for external Coding AI Agents (Gemini/Claude).
     *   **Responsibilities**:
         *   Expose tools and resources to the LLM via the standard Model Context Protocol.
         *   Allow the LLM to query the *next available task* in the currently active pipeline.
@@ -36,6 +36,12 @@ The system is composed of four primary interconnected components:
         *   Provide a high-usability interface to create and manage pipelines.
         *   Allow users to define tasks, reorder them, and assign them to specific pipelines.
         *   Monitor the live progress of the AI agent as it burns down the pipeline tasks.
+
+5.  **Integrated AI Assistant & Local Executors**
+    *   **Role**: Built-in intelligence and autonomous execution processes within the backend.
+    *   **Responsibilities**:
+        *   Provide an interactive conversational AI Assistant (backed by `ollama.AsyncClient`) accessible via the SPA Frontend to answer queries and execute internal tools.
+        *   Manage autonomous background workers (e.g., `gemini` or `vibe` CLI executors) directly from the API, enabling pipelines to run without requiring external terminal invocations.
 
 ## 3. Component Interaction & Data Flow
 1.  **Human Setup**: A user accesses the **SPA Frontend**, which communicates with the **FastAPI Server** to create a new Pipeline and populate it with Tasks in the **MongoDB**. Tasks are initially set to the `created` state.

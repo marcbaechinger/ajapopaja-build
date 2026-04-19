@@ -98,18 +98,20 @@ This document defines the architecture and design principles for the Ajapopaja B
 
 - **Base Dialog**: `frontend/src/ui/components/dialog_common.ts`
 
-### Specialized Dialogs
+### Specialized Dialogs & Panels
 - **`ConfirmationDialog`**: For simple confirm/cancel flows.
 - **`SearchDialog`**: Provides global task search with keyword and status filtering, debounced input, and pagination.
 - **`LogViewerDialog`**: Real-time streaming of backend logs using the Fetch API (ReadableStream) with automatic "Follow Mode" scrolling.
 - **`StatsDialog`**: Visualizes pipeline health and velocity using the `PipelineStatsView` component.
 - **`DesignDocDialog`**: Dedicated reader for full Design Documents with Markdown rendering.
+- **`AssistantPanel`**: Integrated side panel providing a chat interface to the internal AI assistant, enabling conversational task tracking, context queries, and tool execution.
 
 - **Confirmation Dialog**: `frontend/src/ui/components/ConfirmationDialog.ts`
 - **Search Dialog**: `frontend/src/ui/components/SearchDialog.ts`
 - **Log Viewer Dialog**: `frontend/src/ui/components/LogViewerDialog.ts`
 - **Stats Dialog**: `frontend/src/ui/components/StatsDialog.ts`
 - **Design Doc Dialog**: `frontend/src/ui/components/DesignDocDialog.ts`
+- **Assistant Panel**: `frontend/src/ui/components/AssistantPanel.ts`
 
 ## 9. Advanced UI Features
 ### Markdown Rendering & Styling
@@ -158,5 +160,6 @@ The `BaseClient` automatically intercepts outbound requests to manage authorizat
 ### 12.3. Routing Security
 A high-level `requireAuth` wrapper protects specific routes within `main.ts`. It verifies the `AuthService.isAuthenticated()` state before rendering views like the `DashboardView` or `PipelineDetailView`.
 
-### 12.4. WebSocket Security
+### 12.4. WebSocket Security & Re-Authentication
 The `WebSocketClient` retrieves the latest access token from the `AuthService` and appends it to the connection URL as a query parameter during the `connect()` phase.
+If a WebSocket message fails due to an expired token (e.g., an `assistant_error` with `Unauthorized`), the `WebSocketClient` automatically intercepts the failure, requests a token refresh via the `AuthService`, and retries the last sent message upon a successful refresh (similar to the HTTP 401 interception in `BaseClient`).
