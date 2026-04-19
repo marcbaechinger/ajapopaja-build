@@ -80,7 +80,7 @@ export class HealthCheckDialog extends BaseDialog {
   }
 
   public async show(): Promise<void | null> {
-    const result = await super.show();
+    const showPromise = super.show();
     
     // Wait for render before attaching events
     setTimeout(() => {
@@ -88,6 +88,6 @@ export class HealthCheckDialog extends BaseDialog {
       this.loadHealthCheck();
     }, 0);
     
-    return result;
+    return showPromise;
   }
 }
