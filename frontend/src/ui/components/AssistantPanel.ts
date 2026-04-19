@@ -441,17 +441,29 @@ export class AssistantPanel {
         <span class="text-[10px] font-black uppercase tracking-widest">Tool Request</span>
       </div>
       <div class="text-xs font-bold text-app-text">${request.tool}</div>
-      <pre class="text-[10px] bg-app-surface p-2 rounded border border-app-border overflow-x-auto text-app-muted">${args}</pre>
-      <div class="flex gap-2">
+      <details class="tool-payload" open>
+        <summary class="text-[10px] font-bold text-app-muted cursor-pointer hover:text-app-text select-none outline-none focus:ring-2 focus:ring-app-accent-2 rounded w-max">Payload</summary>
+        <pre class="text-[10px] bg-app-surface p-2 mt-2 rounded border border-app-border overflow-x-auto text-app-muted">${args}</pre>
+      </details>
+      <div class="tool-actions flex gap-2">
         <button class="confirm-tool flex-grow bg-app-accent-2 text-white py-1.5 rounded-lg text-xs font-bold hover:brightness-110 transition-all cursor-pointer focus:ring-2 focus:ring-offset-2 focus:ring-app-accent-2 outline-none">
           Confirm & Execute
         </button>
       </div>
+      <div class="tool-status hidden text-[10px] text-app-muted italic">Tool executed.</div>
     `;
 
     el.querySelector('.confirm-tool')?.addEventListener('click', () => {
       this.context.assistantService.confirmTool(request.id!);
-      el.innerHTML = `<div class="text-[10px] text-app-muted italic">Tool executed.</div>`;
+      
+      const details = el.querySelector('details.tool-payload') as HTMLDetailsElement;
+      if (details) details.open = false;
+      
+      const actions = el.querySelector('.tool-actions');
+      if (actions) actions.classList.add('hidden');
+      
+      const status = el.querySelector('.tool-status');
+      if (status) status.classList.remove('hidden');
     });
 
     this.messageContainer?.appendChild(el);
