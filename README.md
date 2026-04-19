@@ -108,6 +108,7 @@ If you have MongoDB running on your host system, use the following command:
 docker run -p 8000:8000 \
   -v /home:/home \
   -v /Users:/Users \
+  -v /tmp/nvimsocket:/tmp/nvimsocket \
   --add-host=host.docker.internal:host-gateway \
   -e MONGODB_URI=mongodb://host.docker.internal:27017/ \
   -e PORT=8000 \
