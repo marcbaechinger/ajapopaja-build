@@ -25,12 +25,14 @@ export class HealthCheckDialog extends BaseDialog {
       </div>
     `;
 
-    this.loadHealthCheck(container);
-    
+    // loadHealthCheck is called from show() because appContext is initialized after super()
     return container;
   }
 
-  private async loadHealthCheck(container: HTMLElement) {
+  private async loadHealthCheck() {
+    const container = this.dialog.querySelector('.p-4.flex-col.gap-4') as HTMLElement;
+    if (!container || !this.appContext) return;
+
     try {
       const health = await this.appContext.systemClient.getHealth();
       
@@ -83,6 +85,7 @@ export class HealthCheckDialog extends BaseDialog {
     // Wait for render before attaching events
     setTimeout(() => {
       this.dialog.querySelector('#close-health-btn')?.addEventListener('click', () => this.close());
+      this.loadHealthCheck();
     }, 0);
     
     return result;
