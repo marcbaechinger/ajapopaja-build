@@ -14,17 +14,18 @@ async def test_llm_loop_retry_logic():
 
     # Mock ollama.chat to fail 2 times then succeed
     call_count = 0
-    def mock_chat(*args, **kwargs):
+    async def mock_chat(*args, **kwargs):
         nonlocal call_count
         call_count += 1
         if call_count <= 2:
             raise Exception(f"Mocked JSON decode error {call_count}")
         else:
-            return [{"message": {"content": "success"}}]
+            async def async_gen():
+                yield {"message": {"content": "success"}}
+            return async_gen()
 
-    with patch("api.assistant.session.asyncio.to_thread", new_callable=AsyncMock) as mock_to_thread:
-        # We need the side effect to act as a normal async function returning chunks
-        mock_to_thread.side_effect = mock_chat
+    with patch("api.assistant.session.ollama.AsyncClient.chat", new_callable=AsyncMock) as mock_chat_method:
+        mock_chat_method.side_effect = mock_chat
         
         await session._run_llm_loop()
 
@@ -46,11 +47,11 @@ async def test_llm_loop_max_retries():
     session._save_history = AsyncMock()
 
     # Mock ollama.chat to always fail
-    def mock_chat_fail(*args, **kwargs):
+    async def mock_chat_fail(*args, **kwargs):
         raise Exception("Persistent error")
 
-    with patch("api.assistant.session.asyncio.to_thread", new_callable=AsyncMock) as mock_to_thread:
-        mock_to_thread.side_effect = mock_chat_fail
+    with patch("api.assistant.session.ollama.AsyncClient.chat", new_callable=AsyncMock) as mock_chat_method:
+        mock_chat_method.side_effect = mock_chat_fail
         
         await session._run_llm_loop()
 

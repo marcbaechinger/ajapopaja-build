@@ -176,8 +176,8 @@ class AssistantSession:
         )
 
         try:
-            response = await asyncio.to_thread(
-                ollama.chat,
+            client = ollama.AsyncClient()
+            response = await client.chat(
                 model=MODEL_NAME,
                 messages=messages,
                 tools=ollama_tools,
@@ -189,7 +189,7 @@ class AssistantSession:
             full_thought = ""
             tool_calls = []
 
-            for chunk in response:
+            async for chunk in response:
                 # Handle chunk being an object or a dict
                 msg = getattr(chunk, "message", None)
                 if not msg and isinstance(chunk, dict):
