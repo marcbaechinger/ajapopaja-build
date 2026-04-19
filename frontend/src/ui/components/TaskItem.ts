@@ -167,19 +167,19 @@ export class TaskItem {
     const designDocHtml = `
         <div class="design-doc-container w-full text-xs bg-app-surface p-3 rounded-lg border border-app-border transition-all ${isProposed ? 'ring-2 ring-purple-500/50 bg-purple-500/5' : ''}"
              data-task-id="${taskId}" data-version="${task.version}">
-          <div class="design-doc-view cursor-pointer group" data-action-click="${(isImplemented || isDiscarded) ? 'view_design_doc' : 'edit_design_doc'}">
+          <div class="design-doc-view group">
             <div class="flex justify-between items-center mb-1">
               <span class="font-bold text-app-accent-2">${isProposed ? 'Proposed Design' : 'Design Document'}</span>
-              <div>
-                ${(isImplemented || isDiscarded) ? '<a class="text-[10px] text-app-accent-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2 hover:underline">Open to view</a>' : ''}
-                ${(isImplemented || isDiscarded) ? '' : '<a class="text-[10px] text-app-muted opacity-0 group-hover:opacity-100 transition-opacity hover:underline">Click to edit</a>'}
-                <button data-action-click="toggle_design_doc_expand" class="text-[10px] text-app-accent-2 hover:underline cursor-pointer ml-2">
+              <div class="flex items-center gap-2">
+                ${(isImplemented || isDiscarded) ? `<button data-action-click="view_design_doc" class="text-[10px] text-app-accent-1 opacity-0 group-hover:opacity-100 transition-opacity hover:underline cursor-pointer">Open to view</button>` : ''}
+                ${(isImplemented || isDiscarded) ? '' : `<button data-action-click="edit_design_doc" class="text-[10px] text-app-muted opacity-0 group-hover:opacity-100 transition-opacity hover:underline cursor-pointer">Click to edit</button>`}
+                <button data-action-click="toggle_design_doc_expand" class="text-[10px] text-app-accent-2 hover:underline cursor-pointer">
                   ${isProposed ? 'Show Less' : 'Show More'}
                 </button>
               </div>
             </div>
             <div class="design-doc-display prose-theme prose-sm max-w-none text-app-text/70 overflow-hidden relative transition-all duration-300 ${isProposed ? 'expanded' : ''}">
-              ${task.design_doc ? DOMPurify.sanitize(marked.parse(task.design_doc) as string) : '<span class="italic text-app-muted">Click to add design doc...</span>'}
+              ${task.design_doc ? DOMPurify.sanitize(marked.parse(task.design_doc) as string) : `<span class="italic text-app-muted cursor-pointer" data-action-click="edit_design_doc">Click to add design doc...</span>`}
               ${task.design_doc ? '<div class="expand-overlay absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-app-surface to-transparent pointer-events-none"></div>' : ''}
             </div>
           </div>

@@ -15,6 +15,8 @@
 from typing import List, Dict, Optional
 from core.models.models import Task
 from core.queries import task as task_queries
+from core.queries import pipeline as pipeline_queries
+from core.exceptions import EntityNotFoundError
 from api.assistant.decorators import register_tool
 from api.websocket_manager import manager, WSMessage
 
@@ -48,6 +50,14 @@ async def list_tasks(
         - sort_order: The sort order used.
         - tasks: The list of task objects with truncated 'spec' and 'design_doc'.
     """
+    # Validate pipeline existence
+    try:
+        await pipeline_queries.get_pipeline_by_id(pipeline_id)
+    except EntityNotFoundError:
+        return {
+            "error": f"Pipeline with ID '{pipeline_id}' not found. Please verify the pipeline_id or use list_pipelines to find the correct ID."
+        }
+
     page_size = min(page_size, 5)  # Enforce max 5
     return await task_queries.get_tasks_for_tool(pipeline_id, offset, page_size, sort_order)
 
@@ -80,6 +90,14 @@ async def create_task(
         spec: Optional Markdown specification for the task.
         want_design_doc: Whether this task requires a design document before implementation.
     """
+    # Validate pipeline existence
+    try:
+        await pipeline_queries.get_pipeline_by_id(pipeline_id)
+    except EntityNotFoundError:
+        return {
+            "error": f"Pipeline with ID '{pipeline_id}' not found. You cannot create a task for a non-existent pipeline. Please verify the pipeline_id."
+        }
+
     task = Task(
         title=title, spec=spec, want_design_doc=want_design_doc, pipeline_id=pipeline_id
     )

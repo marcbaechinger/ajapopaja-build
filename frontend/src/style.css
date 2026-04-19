@@ -57,11 +57,29 @@ body {
 .CodeMirror {
   @apply !bg-app-bg !text-app-text !border-app-border !text-base;
 }
+.CodeMirror .cm-header {
+  @apply !text-app-accent-1 !font-bold;
+}
+.CodeMirror .cm-strong {
+  @apply !text-app-accent-2 !font-bold;
+}
+.CodeMirror .cm-em {
+  @apply !italic;
+}
+.CodeMirror .cm-link {
+  @apply !text-app-accent-1 !underline;
+}
+.CodeMirror .cm-url {
+  @apply !text-app-muted;
+}
+.CodeMirror .cm-code {
+  @apply !text-app-accent-2;
+}
 .CodeMirror-cursor {
   @apply !border-l-2 !border-app-accent-1;
 }
 .editor-preview {
-  @apply !bg-app-bg !text-app-text prose-theme prose-base max-w-none;
+  @apply !bg-app-bg prose-theme prose-base max-w-none;
 }
 
 /* Markdown Code Blocks Styling */
@@ -124,18 +142,19 @@ body {
 
 /* Markdown contrast handling for light and dark modes */
 @utility prose-theme {
-  @apply prose max-w-none;
+  @apply prose prose-invert max-w-none;
 }
 
 /* Map Tailwind Typography variables to our theme variables for both light and dark modes */
 .prose-theme,
 .editor-preview,
-.editor-preview-side {
+.editor-preview-side,
+.editor-preview-active-side {
   --tw-prose-body: var(--app-text);
-  --tw-prose-headings: var(--app-text);
+  --tw-prose-headings: var(--app-accent-1);
   --tw-prose-lead: var(--app-muted);
   --tw-prose-links: var(--app-accent-1);
-  --tw-prose-bold: var(--app-text);
+  --tw-prose-bold: var(--app-accent-2);
   --tw-prose-counters: var(--app-muted);
   --tw-prose-bullets: var(--app-muted);
   --tw-prose-hr: var(--app-border);
@@ -147,6 +166,24 @@ body {
   --tw-prose-pre-bg: var(--app-surface);
   --tw-prose-th-borders: var(--app-border);
   --tw-prose-td-borders: var(--app-border);
+  
+  /* Also override inverted variables just in case prose-invert is used */
+  --tw-prose-invert-body: var(--app-text);
+  --tw-prose-invert-headings: var(--app-accent-1);
+  --tw-prose-invert-lead: var(--app-muted);
+  --tw-prose-invert-links: var(--app-accent-1);
+  --tw-prose-invert-bold: var(--app-accent-2);
+  --tw-prose-invert-counters: var(--app-muted);
+  --tw-prose-invert-bullets: var(--app-muted);
+  --tw-prose-invert-hr: var(--app-border);
+  --tw-prose-invert-quotes: var(--app-text);
+  --tw-prose-invert-quote-borders: var(--app-accent-1);
+  --tw-prose-invert-captions: var(--app-muted);
+  --tw-prose-invert-code: var(--app-accent-2);
+  --tw-prose-invert-pre-code: var(--app-text);
+  --tw-prose-invert-pre-bg: var(--app-surface);
+  --tw-prose-invert-th-borders: var(--app-border);
+  --tw-prose-invert-td-borders: var(--app-border);
 }
 
 /* Specification Expand/Collapse */
