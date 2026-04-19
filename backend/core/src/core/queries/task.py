@@ -23,6 +23,42 @@ async def get_tasks_by_pipeline(pipeline_id: str, include_deleted: bool = False)
         return await Task.find(Task.pipeline_id == pipeline_id).sort(+Task.order, +Task.scheduled_at, +Task.created_at).to_list()
     return await Task.find(Task.pipeline_id == pipeline_id, Task.deleted == False).sort(+Task.order, +Task.scheduled_at, +Task.created_at).to_list()
 
+async def get_tasks_for_tool(
+    pipeline_id: str,
+    offset: int = 0,
+    page_size: int = 5,
+    sort_order: str = "last_created_first"
+) -> dict:
+    query = Task.find(Task.pipeline_id == pipeline_id, Task.deleted == False)
+    total_tasks = await query.count()
+
+    if sort_order == "last_created_first":
+        query = query.sort(-Task.created_at)
+    elif sort_order == "last_implemented_first":
+        query = query.sort(-Task.updated_at)
+    else:
+        query = query.sort(+Task.order, +Task.scheduled_at, +Task.created_at)
+
+    tasks = await query.skip(offset).limit(page_size).to_list()
+
+    MAX_LEN = 500
+    task_dicts = []
+    for t in tasks:
+        td = t.model_dump(mode="json")
+        if td.get("spec") and len(td["spec"]) > MAX_LEN:
+            td["spec"] = td["spec"][:MAX_LEN] + "\n...[truncated]"
+        if td.get("design_doc") and len(td["design_doc"]) > MAX_LEN:
+            td["design_doc"] = td["design_doc"][:MAX_LEN] + "\n...[truncated]"
+        task_dicts.append(td)
+
+    return {
+        "total_tasks": total_tasks,
+        "offset": offset,
+        "page_size": page_size,
+        "sort_order": sort_order,
+        "tasks": task_dicts
+    }
+
 async def get_completed_tasks_by_pipeline(
     pipeline_id: str, 
     page: int = 0, 

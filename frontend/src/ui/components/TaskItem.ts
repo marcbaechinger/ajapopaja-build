@@ -67,8 +67,8 @@ export class TaskItem {
     const proposedEntry = task.history.find(t => t.to_status === TaskStatus.PROPOSED);
     if (!proposedEntry) return null;
 
-    const inProgressEntriesBeforeProposed = task.history.filter(t => 
-      t.to_status === TaskStatus.INPROGRESS && 
+    const inProgressEntriesBeforeProposed = task.history.filter(t =>
+      t.to_status === TaskStatus.INPROGRESS &&
       new Date(t.timestamp).getTime() < new Date(proposedEntry.timestamp).getTime()
     );
 
@@ -170,8 +170,13 @@ export class TaskItem {
           <div class="design-doc-view cursor-pointer group" data-action-click="${(isImplemented || isDiscarded) ? 'view_design_doc' : 'edit_design_doc'}">
             <div class="flex justify-between items-center mb-1">
               <span class="font-bold text-app-accent-2">${isProposed ? 'Proposed Design' : 'Design Document'}</span>
-              ${(isImplemented || isDiscarded) ? '<span class="text-[10px] text-app-accent-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2">Click to view</span>' : ''}
-              ${(isImplemented || isDiscarded) ? '' : '<span class="text-[10px] text-app-muted opacity-0 group-hover:opacity-100 transition-opacity">Click to edit</span>'}
+              <div>
+                ${(isImplemented || isDiscarded) ? '<a class="text-[10px] text-app-accent-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2 hover:underline">Open to view</a>' : ''}
+                ${(isImplemented || isDiscarded) ? '' : '<a class="text-[10px] text-app-muted opacity-0 group-hover:opacity-100 transition-opacity hover:underline">Click to edit</a>'}
+                <button data-action-click="toggle_design_doc_expand" class="text-[10px] text-app-accent-2 hover:underline cursor-pointer ml-2">
+                  ${isProposed ? 'Show Less' : 'Show More'}
+                </button>
+              </div>
             </div>
             <div class="design-doc-display prose-theme prose-sm max-w-none text-app-text/70 overflow-hidden relative transition-all duration-300 ${isProposed ? 'expanded' : ''}">
               ${task.design_doc ? DOMPurify.sanitize(marked.parse(task.design_doc) as string) : '<span class="italic text-app-muted">Click to add design doc...</span>'}
@@ -179,9 +184,12 @@ export class TaskItem {
             </div>
           </div>
           ${task.design_doc ? `
-            <button data-action-click="toggle_design_doc_expand" class="mt-2 text-[10px] text-app-accent-2 hover:underline cursor-pointer">
-              ${isProposed ? 'Show Less' : 'Show More'}
-            </button>
+            <div class="design-doc-actions flex items-center gap-3 mt-2">
+              <button data-action-click="copy_design_doc" class="flex items-center gap-1 text-[10px] text-app-muted hover:text-app-text transition-colors cursor-pointer" title="Copy markdown to clipboard">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                Copy
+              </button>
+            </div>
           ` : ''}
           
           <div class="design-doc-edit hidden flex flex-col gap-2">

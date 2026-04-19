@@ -83,11 +83,12 @@ def _nvim_client_call(method: str, params: list) -> Dict:
 
 
 @register_tool(tool_type=WRITE_ACCESS)
-async def open_file_in_nvim(
+async def nvim_open_file(
     pipeline_id: str, path: str, line_number: Optional[int] = None
 ) -> Dict:
     """
-    Opens a file in a running Neovim instance and jumps to a specific line.
+    Opens a file in the user's running Neovim instance and optionally jumps to a specific line.
+    Use this tool to display a file directly in the user's editor so they can view or edit it.
     Connects to a Neovim instance listening on /tmp/nvimsocket using JSON-RPC.
 
     Args:

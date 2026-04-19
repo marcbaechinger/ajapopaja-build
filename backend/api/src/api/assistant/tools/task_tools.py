@@ -24,15 +24,32 @@ WRITE_ACCESS = "write_access"
 
 
 @register_tool(tool_type=READ_ONLY)
-async def list_tasks(pipeline_id: str) -> List[Dict]:
+async def list_tasks(
+    pipeline_id: str,
+    offset: int = 0,
+    page_size: int = 5,
+    sort_order: str = "last_created_first"
+) -> Dict:
     """
-    Returns a list of all tasks belonging to a specific pipeline.
+    Returns a paginated list of tasks belonging to a specific pipeline, up to 5 tasks at a time.
+    Specs and design_doc entries are truncated to limit the output size.
 
     Args:
         pipeline_id: The ID of the pipeline whose tasks should be listed.
+        offset: The number of items to skip for pagination (default: 0).
+        page_size: The number of items to return at once (default: 5, max: 5).
+        sort_order: Order of the returned tasks. Can be 'last_created_first', 'last_implemented_first', or 'default' (default: 'last_created_first').
+    
+    Returns:
+        A JSON dictionary containing:
+        - total_tasks: The total number of non-deleted tasks in the pipeline.
+        - offset: The offset used in the query.
+        - page_size: The number of items requested.
+        - sort_order: The sort order used.
+        - tasks: The list of task objects with truncated 'spec' and 'design_doc'.
     """
-    tasks = await task_queries.get_tasks_by_pipeline(pipeline_id)
-    return [t.model_dump(mode="json") for t in tasks]
+    page_size = min(page_size, 5)  # Enforce max 5
+    return await task_queries.get_tasks_for_tool(pipeline_id, offset, page_size, sort_order)
 
 
 @register_tool(tool_type=READ_ONLY)

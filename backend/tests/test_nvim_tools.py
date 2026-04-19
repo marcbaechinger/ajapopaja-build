@@ -18,12 +18,12 @@ import json
 import socket
 import msgpack
 from unittest.mock import patch, MagicMock, AsyncMock
-from api.assistant.tools.nvim_tools import open_file_in_nvim, nvim_set_quickfix, nvim_show_diff, nvim_open_selection
+from api.assistant.tools.nvim_tools import nvim_open_file, nvim_set_quickfix, nvim_show_diff, nvim_open_selection
 from core.models.models import Pipeline
 from pathlib import Path
 
 @pytest.mark.asyncio
-async def test_open_file_in_nvim_success(init_mock_db):
+async def test_nvim_open_file_success(init_mock_db):
     pipeline = Pipeline(name="Test Pipeline", workspace_path="/tmp/test_ws")
     await pipeline.insert()
     pipeline_id = str(pipeline.id)
@@ -37,7 +37,7 @@ async def test_open_file_in_nvim_success(init_mock_db):
         mock_socket_instance.recv.return_value = msgpack.packb([1, 1, None, None])
         
         with patch("socket.socket", return_value=mock_socket_instance):
-            result = await open_file_in_nvim(pipeline_id, "src/main.py", 10)
+            result = await nvim_open_file(pipeline_id, "src/main.py", 10)
             
             assert result["success"] is True, f"Error: {result.get('error')}"
             mock_socket_instance.connect.assert_called_with("/tmp/nvimsocket")
@@ -52,13 +52,13 @@ async def test_open_file_in_nvim_success(init_mock_db):
             assert "10" in payload[3][0]
 
 @pytest.mark.asyncio
-async def test_open_file_in_nvim_no_socket(init_mock_db):
+async def test_nvim_open_file_no_socket(init_mock_db):
     pipeline = Pipeline(name="Test Pipeline", workspace_path="/tmp/test_ws")
     await pipeline.insert()
     pipeline_id = str(pipeline.id)
 
     with patch("os.path.exists", return_value=False):
-        result = await open_file_in_nvim(pipeline_id, "src/main.py")
+        result = await nvim_open_file(pipeline_id, "src/main.py")
         assert result["success"] is False
         assert "Neovim socket not found" in result["error"]
 

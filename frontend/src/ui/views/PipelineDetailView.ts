@@ -126,7 +126,7 @@ export class PipelineDetailView extends View {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || (e.target as HTMLElement).isContentEditable) {
         return;
       }
-      
+
       // 'h' key for history dialog
       if (e.key === 'h' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
@@ -156,13 +156,13 @@ export class PipelineDetailView extends View {
         const taskId = task.id;
         // Only append if it doesn't exist yet
         if (this.container?.querySelector(`[data-view-id="${taskId}"]`)) return;
-        
+
         // Update local cache
         const index = this.allLoadedTasks.findIndex(t => t.id === taskId);
         if (index === -1) {
           this.allLoadedTasks.push(task);
         }
-        
+
         this.insertTaskIntoDOM(task);
       }
     };
@@ -318,7 +318,7 @@ export class PipelineDetailView extends View {
 
       const isHidden = body.classList.toggle('hidden');
       icon.classList.toggle('rotate-90', !isHidden);
-      
+
       if (isHidden) this.collapsedTasks.add(taskId);
       else this.collapsedTasks.delete(taskId);
     });
@@ -400,7 +400,7 @@ export class PipelineDetailView extends View {
     this.context.actionRegistry.register('toggle_spec_expand', async (_e, el) => {
       const container = el.closest('.spec-container') as HTMLElement;
       if (!container) return;
-      
+
       const display = container.querySelector('.spec-display');
       if (!display) return;
 
@@ -422,13 +422,13 @@ export class PipelineDetailView extends View {
     this.context.actionRegistry.register('edit_design_doc', async (_e, el) => {
       const container = el.closest('.design-doc-container') as HTMLElement;
       if (!container) return;
-      
+
       const taskId = container.getAttribute('data-task-id');
       const textarea = container.querySelector('textarea');
       if (!taskId || !textarea) return;
 
       container.querySelector('.design-doc-view')?.classList.add('hidden');
-      container.querySelector('[data-action-click="toggle_design_doc_expand"]')?.classList.add('hidden');
+      container.querySelector('.design-doc-actions')?.classList.add('hidden');
       container.querySelector('.design-doc-edit')?.classList.remove('hidden');
 
       // Initialize EasyMDE
@@ -460,7 +460,7 @@ export class PipelineDetailView extends View {
     this.context.actionRegistry.register('toggle_edit_design_doc_expand', async (_e, el) => {
       const container = el.closest('.design-doc-container') as HTMLElement;
       if (!container) return;
-      
+
       const cm = container.querySelector('.CodeMirror');
       if (!cm) return;
 
@@ -471,7 +471,7 @@ export class PipelineDetailView extends View {
     this.context.actionRegistry.register('toggle_design_doc_expand', async (_e, el) => {
       const container = el.closest('.design-doc-container') as HTMLElement;
       if (!container) return;
-      
+
       const display = container.querySelector('.design-doc-display');
       if (!display) return;
 
@@ -479,10 +479,30 @@ export class PipelineDetailView extends View {
       el.textContent = isExpanded ? 'Show Less' : 'Show More';
     });
 
+    this.context.actionRegistry.register('copy_design_doc', async (_e, el) => {
+      const container = el.closest('.design-doc-container') as HTMLElement;
+      if (!container) return;
+      const taskId = container.getAttribute('data-task-id');
+      if (!taskId) return;
+      const task = this.allLoadedTasks.find(t => t.id === taskId);
+      if (task && task.design_doc) {
+        try {
+          await navigator.clipboard.writeText(task.design_doc);
+          const originalText = el.innerHTML;
+          el.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> Copied!';
+          setTimeout(() => {
+            el.innerHTML = originalText;
+          }, 2000);
+        } catch (err) {
+          console.error('Failed to copy text: ', err);
+        }
+      }
+    });
+
     this.context.actionRegistry.register('cancel_design_doc', async (_e, el) => {
       const container = el.closest('.design-doc-container') as HTMLElement;
       if (!container) return;
-      
+
       const taskId = container.getAttribute('data-task-id');
       if (taskId) {
         const editor = this.activeEditors.get(taskId);
@@ -493,7 +513,7 @@ export class PipelineDetailView extends View {
       }
 
       container.querySelector('.design-doc-view')?.classList.remove('hidden');
-      container.querySelector('[data-action-click="toggle_design_doc_expand"]')?.classList.remove('hidden');
+      container.querySelector('.design-doc-actions')?.classList.remove('hidden');
       const editToggle = container.querySelector('[data-action-click="toggle_edit_design_doc_expand"]');
       if (editToggle) {
         editToggle.classList.remove('hidden');
@@ -505,7 +525,7 @@ export class PipelineDetailView extends View {
     this.context.actionRegistry.register('save_design_doc', async (_e, el) => {
       const container = el.closest('.design-doc-container') as HTMLElement;
       if (!container) return;
-      
+
       const taskId = container.getAttribute('data-task-id');
       const version = parseInt(container.getAttribute('data-version') || '1');
       if (!taskId) return;
@@ -686,7 +706,7 @@ export class PipelineDetailView extends View {
     const activeContainer = this.container.querySelector('#col-active');
     const historyContainer = this.container.querySelector('#col-history');
     const completedCountEl = this.container.querySelector('#completed-count');
-    
+
     if (!prepContainer || !activeContainer || !historyContainer) return;
 
     try {
@@ -703,19 +723,19 @@ export class PipelineDetailView extends View {
         });
         this.isFirstLoad = false;
       }
-      
+
       const proposedTasks = allTasks.filter(t => !t.deleted && t.status === TaskStatus.PROPOSED);
       const createdTasks = allTasks.filter(t => !t.deleted && t.status === TaskStatus.CREATED);
-      
+
       const inProgressTasks = allTasks.filter(t => !t.deleted && t.status === TaskStatus.INPROGRESS);
       const scheduledTasks = allTasks.filter(t => !t.deleted && t.status === TaskStatus.SCHEDULED);
       const failedTasks = allTasks.filter(t => !t.deleted && t.status === TaskStatus.FAILED);
-      
+
       const completedTasks = allTasks.filter(t => !t.deleted && ([TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED] as any[]).includes(t.status));
 
       // Sort columns
       proposedTasks.sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
-      
+
       createdTasks.sort((a, b) => this.taskSortFn(a, b));
       inProgressTasks.sort((a, b) => this.taskSortFn(a, b));
       scheduledTasks.sort((a, b) => this.taskSortFn(a, b));
@@ -724,51 +744,51 @@ export class PipelineDetailView extends View {
       // 1. Render Preparation Column
       prepContainer.innerHTML = `
         ${TaskColumn.render({
-          id: 'proposed',
-          title: 'Proposed',
-          tasks: proposedTasks,
-          emptyMessage: 'No proposed designs.',
-          collapsedTasks: this.collapsedTasks,
-          badge: { text: 'Review', class: 'bg-purple-500/20 text-purple-400 border border-purple-500/30' }
-        })}
+        id: 'proposed',
+        title: 'Proposed',
+        tasks: proposedTasks,
+        emptyMessage: 'No proposed designs.',
+        collapsedTasks: this.collapsedTasks,
+        badge: { text: 'Review', class: 'bg-purple-500/20 text-purple-400 border border-purple-500/30' }
+      })}
         ${TaskColumn.render({
-          id: 'backlog',
-          title: 'Backlog',
-          tasks: createdTasks,
-          emptyMessage: 'Backlog is empty.',
-          showOrdering: this.currentSortOrder === 'execution',
-          collapsedTasks: this.collapsedTasks
-        })}
+        id: 'backlog',
+        title: 'Backlog',
+        tasks: createdTasks,
+        emptyMessage: 'Backlog is empty.',
+        showOrdering: this.currentSortOrder === 'execution',
+        collapsedTasks: this.collapsedTasks
+      })}
       `;
 
       // 2. Render Active Column
       activeContainer.innerHTML = `
         ${TaskColumn.render({
-          id: 'inprogress',
-          title: 'In Progress',
-          tasks: inProgressTasks,
-          emptyMessage: 'No active work.',
-          collapsedTasks: this.collapsedTasks,
-          badge: { text: 'Running', class: 'bg-amber-500/20 text-amber-400 border-amber-500/30' }
-        })}
+        id: 'inprogress',
+        title: 'In Progress',
+        tasks: inProgressTasks,
+        emptyMessage: 'No active work.',
+        collapsedTasks: this.collapsedTasks,
+        badge: { text: 'Running', class: 'bg-amber-500/20 text-amber-400 border-amber-500/30' }
+      })}
         ${TaskColumn.render({
-          id: 'failed',
-          title: 'Failed',
-          tasks: failedTasks,
-          emptyMessage: '',
-          collapsedTasks: this.collapsedTasks,
-          badge: { text: 'Attention', class: 'bg-red-500/20 text-red-400 border-red-500/30' }
-        })}
+        id: 'failed',
+        title: 'Failed',
+        tasks: failedTasks,
+        emptyMessage: '',
+        collapsedTasks: this.collapsedTasks,
+        badge: { text: 'Attention', class: 'bg-red-500/20 text-red-400 border-red-500/30' }
+      })}
         ${TaskColumn.render({
-          id: 'scheduled',
-          title: 'Queue',
-          tasks: scheduledTasks,
-          emptyMessage: 'Nothing scheduled.',
-          showOrdering: this.currentSortOrder === 'execution',
-          collapsedTasks: this.collapsedTasks
-        })}
+        id: 'scheduled',
+        title: 'Queue',
+        tasks: scheduledTasks,
+        emptyMessage: 'Nothing scheduled.',
+        showOrdering: this.currentSortOrder === 'execution',
+        collapsedTasks: this.collapsedTasks
+      })}
       `;
-      
+
       // Remove empty failed section if no failed tasks
       if (failedTasks.length === 0) {
         activeContainer.querySelector('#failed-section')?.remove();
@@ -784,12 +804,12 @@ export class PipelineDetailView extends View {
           ${PipelineStatsView.render(allTasks, undefined, true)}
         </div>
         ${CompletedSection.render({
-          lastCompleted: completedTasks.length > 0 ? completedTasks[0] : null,
-          totalCompletedCount: completedTasks.length,
-          collapsedTasks: this.collapsedTasks
-        })}
+        lastCompleted: completedTasks.length > 0 ? completedTasks[0] : null,
+        totalCompletedCount: completedTasks.length,
+        collapsedTasks: this.collapsedTasks
+      })}
       `;
-      
+
       if (completedTasks.length > 0) {
         this.refreshCompletedTasks();
       }
@@ -813,8 +833,8 @@ export class PipelineDetailView extends View {
 
     try {
       const { tasks, total_count } = await this.context.taskClient.listCompletedByPipeline(
-        this.pipelineId, 
-        this.completedTasksPage, 
+        this.pipelineId,
+        this.completedTasksPage,
         this.completedPageSize
       );
 
@@ -847,7 +867,7 @@ export class PipelineDetailView extends View {
       'completed': 'bg-blue-600/20 text-blue-400 border-blue-600/30'
     };
 
-    const geminiStatusHtml = !this.geminiStatus.available ? "" : (this.geminiStatus.running 
+    const geminiStatusHtml = !this.geminiStatus.available ? "" : (this.geminiStatus.running
       ? `
         <div class="flex items-center gap-2 bg-app-bg px-2 py-1 rounded border border-green-500/30">
           <span class="relative flex h-2 w-2">
@@ -866,7 +886,7 @@ export class PipelineDetailView extends View {
         </div>
       `);
 
-    const vibeStatusHtml = !this.vibeStatus.available ? "" : (this.vibeStatus.running 
+    const vibeStatusHtml = !this.vibeStatus.available ? "" : (this.vibeStatus.running
       ? `
         <div class="flex items-center gap-2 bg-app-bg px-2 py-1 rounded border border-blue-500/30">
           <span class="relative flex h-2 w-2">
@@ -959,7 +979,7 @@ export class PipelineDetailView extends View {
       [TaskStatus.FAILED]: 0,
       [TaskStatus.DISCARDED]: 0,
     };
-    
+
     let total = 0;
     this.allLoadedTasks.forEach(t => {
       if (!t.deleted && statusCounts[t.status] !== undefined) {
@@ -1019,19 +1039,26 @@ export class PipelineDetailView extends View {
               </div>
             </div>
           </div>
-          <div class="flex gap-4 items-center">
-             <button data-action-click="open_search" data-pipeline-id="${this.pipelineId}" class="flex items-center gap-2 bg-app-bg hover:bg-app-surface px-4 py-2 rounded-xl border border-app-border text-app-muted hover:text-app-accent-2 transition-all cursor-pointer group mr-4" title="Global Search (Ctrl+K)">
+          <div class="flex gap-2">
+             <button data-action-click="open_search" data-pipeline-id="${this.pipelineId}" class="flex items-center gap-2 bg-app-bg hover:bg-app-surface px-4 py-2 rounded-xl border border-app-border text-app-muted hover:text-app-accent-2 transition-all cursor-pointer group mr-1" title="Global Search (Ctrl+K)">
                <svg class="w-4 h-4 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                <span class="text-xs font-bold uppercase tracking-widest">Search</span>
-               <span class="text-[10px] bg-app-surface px-1.5 py-0.5 rounded border border-app-border text-app-muted group-hover:text-app-accent-2 group-hover:border-app-accent-2/30 transition-colors ml-1">K</span>
+               <div class="flex gap-0.5 ml-1">
+                 <span class="text-[10px] bg-app-surface px-1.5 py-0.5 rounded border border-app-border text-app-muted group-hover:text-app-accent-2 group-hover:border-app-accent-2/30 transition-colors">Ctrl</span>
+                 <span class="text-[10px] bg-app-surface px-1.5 py-0.5 rounded border border-app-border text-app-muted group-hover:text-app-accent-2 group-hover:border-app-accent-2/30 transition-colors ml-1">K</span>
+               </div>
              </button>
-             <button data-action-click="toggle_assistant" class="flex items-center gap-2 bg-app-bg hover:bg-app-surface px-4 py-2 rounded-xl border border-app-border text-app-muted hover:text-app-accent-2 transition-all cursor-pointer group mr-4" title="AI Assistant (Ctrl+Alt+A)">
+             <button data-action-click="toggle_assistant" class="flex items-center gap-2 bg-app-bg hover:bg-app-surface px-4 py-2 rounded-xl border border-app-border text-app-muted hover:text-app-accent-2 transition-all cursor-pointer group mr-11" title="AI Assistant (Ctrl+Shift+A)">
                <svg class="w-4 h-4 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                <span class="text-xs font-bold uppercase tracking-widest">Assistant</span>
                <div class="flex gap-0.5 ml-1">
-                 <span class="text-[10px] bg-app-surface px-1.5 py-0.5 rounded border border-app-border text-app-muted group-hover:text-app-accent-2 group-hover:border-app-accent-2/30 transition-colors">Alt</span>
-                 <span class="text-[10px] bg-app-surface px-1.5 py-0.5 rounded border border-app-border text-app-muted group-hover:text-app-accent-2 group-hover:border-app-accent-2/30 transition-colors">A</span>
+                 <span class="text-[10px] bg-app-surface px-1.5 py-0.5 rounded border border-app-border text-app-muted group-hover:text-app-accent-2 group-hover:border-app-accent-2/30 transition-colors">Ctrl-^</span>
+                 <span class="text-[10px] bg-app-surface px-1.5 py-0.5 rounded border border-app-border text-app-muted group-hover:text-app-accent-2 group-hover:border-app-accent-2/30 transition-colors ml-1">A</span>
                </div>
+             </button>
+             <button data-action-click="open_stats" class="text-app-accent-2 hover:brightness-110 font-bold transition-all text-sm px-3 py-2 rounded-lg border border-app-border bg-app-bg shadow-sm cursor-pointer" title="Statistics - Keyboard Shortcut: s">
+               <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+               Stats
              </button>
              <div class="flex items-center gap-3 bg-app-bg px-4 py-2 rounded-xl border border-app-border">
                <div class="flex flex-col items-end">
@@ -1043,10 +1070,6 @@ export class PipelineDetailView extends View {
                  <svg class="w-4 h-4 group-hover/logout:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
                </button>
              </div>
-             <button data-action-click="open_stats" class="text-app-accent-2 hover:brightness-110 font-bold transition-all text-sm px-3 py-1.5 rounded-lg border border-app-border bg-app-bg shadow-sm cursor-pointer" title="Keyboard Shortcut: s">
-               <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
-               Stats
-             </button>
           </div>
         </header>
 
@@ -1151,17 +1174,17 @@ export class PipelineDetailView extends View {
         }
       }
     }
-    
+
     const taskHtml = TaskItem.render(
-      task, 
-      columnId === 'backlog-list' || columnId === 'scheduled-list', 
-      columnId === 'last-completed-task', 
+      task,
+      columnId === 'backlog-list' || columnId === 'scheduled-list',
+      columnId === 'last-completed-task',
       this.collapsedTasks.has(task.id!)
     );
     const temp = document.createElement('div');
     temp.innerHTML = taskHtml;
     const taskEl = temp.firstElementChild as HTMLElement;
-    
+
     // Simple insertion (at top for now, refreshTasks will handle proper sorting later)
     list.prepend(taskEl);
     this.updateColumnHeaderCount(columnId);
@@ -1182,7 +1205,7 @@ export class PipelineDetailView extends View {
   private updateSingleTask(task: Task) {
     const taskId = task.id;
     const el = this.container?.querySelector(`[data-view-id="${taskId}"]`);
-    
+
     // Update local cache
     const index = this.allLoadedTasks.findIndex(t => t.id === taskId);
     if (index !== -1) {
@@ -1199,9 +1222,9 @@ export class PipelineDetailView extends View {
       if (currentColumnId === targetColumnId) {
         // Just update content
         const taskHtml = TaskItem.render(
-          task, 
-          targetColumnId === 'backlog-list' || targetColumnId === 'scheduled-list', 
-          targetColumnId === 'last-completed-task', 
+          task,
+          targetColumnId === 'backlog-list' || targetColumnId === 'scheduled-list',
+          targetColumnId === 'last-completed-task',
           this.collapsedTasks.has(task.id!)
         );
         const temp = document.createElement('div');
