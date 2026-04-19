@@ -42,6 +42,8 @@ export class WebSocketClient {
   }
 
 
+  private lastSentMessage: { type: string, payload: any } | null = null;
+
   public connect() {
     if (this.ws?.readyState === WebSocket.OPEN) return;
 
@@ -56,9 +58,25 @@ export class WebSocketClient {
       this.currentReconnectTimeout = this.reconnectTimeout;
     };
 
-    this.ws.onmessage = (event) => {
+    this.ws.onmessage = async (event) => {
       try {
         const message: WSMessage = JSON.parse(event.data);
+
+        // Handle WS equivalent of 401 Unauthorized
+        if (message.type === 'assistant_error' && message.payload?.message === 'Unauthorized') {
+          console.log('WebSocket received Unauthorized, attempting to refresh token...');
+          const newToken = await this.authService.refreshToken();
+          if (newToken && this.lastSentMessage) {
+            // Update token in payload if it was present
+            if (this.lastSentMessage.payload && typeof this.lastSentMessage.payload === 'object' && 'token' in this.lastSentMessage.payload) {
+              this.lastSentMessage.payload.token = newToken;
+            }
+            // Retry the last message
+            this.ws?.send(JSON.stringify(this.lastSentMessage));
+            return; // Don't notify handlers of the original Unauthorized error
+          }
+        }
+
         this.notifyHandlers(message);
       } catch (error) {
         console.error('Error parsing WS message:', error);
@@ -92,6 +110,7 @@ export class WebSocketClient {
 
   public send(type: string, payload: any) {
     if (this.ws?.readyState === WebSocket.OPEN) {
+      this.lastSentMessage = { type, payload };
       this.ws.send(JSON.stringify({ type, payload }));
     } else {
       console.warn('WebSocket not connected. Message not sent:', type);
