@@ -42,6 +42,7 @@ from core.exceptions import (
 from api.routes.pipeline import router as pipeline_router
 from api.routes.task import task_router, pipeline_task_router
 from api.routes.auth import router as auth_router
+from api.routes.system import router as system_router
 from api.websocket_manager import manager
 from api.assistant.ws_handler import register_assistant_handlers
 from api.auth import SECRET_KEY, ALGORITHM
@@ -191,6 +192,7 @@ api_router.include_router(pipeline_router)
 api_router.include_router(task_router)
 api_router.include_router(pipeline_task_router)
 api_router.include_router(auth_router)
+api_router.include_router(system_router)
 
 app.include_router(api_router)
 

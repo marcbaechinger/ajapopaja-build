@@ -24,6 +24,7 @@ import { AuthService } from './AuthService';
 import { AssistantService } from './AssistantService';
 import { SearchDialog } from '../ui/components/SearchDialog';
 import { AssistantPanel } from '../ui/components/AssistantPanel';
+import { HealthCheckDialog } from '../ui/components/HealthCheckDialog';
 
 export interface AppState {
   theme: 'light' | 'dark';
@@ -95,6 +96,12 @@ export class AppContext {
       if (this.authService.isAuthenticated()) {
         const event = new CustomEvent('toggle-assistant');
         window.dispatchEvent(event);
+      }
+    });
+
+    this.actionRegistry.register('open_health_check', () => {
+      if (this.authService.isAuthenticated()) {
+        new HealthCheckDialog(this).show();
       }
     });
   }

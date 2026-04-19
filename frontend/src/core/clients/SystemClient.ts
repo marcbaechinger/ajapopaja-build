@@ -17,9 +17,25 @@
 import { BaseClient } from './BaseClient.ts';
 import { AuthService } from '../AuthService.ts';
 
+export interface HealthCheckResponse {
+  mongodb: { status: string; details: string };
+  ollama: { status: string; details: string };
+  nvim: { status: string; details: string };
+}
+
 export class SystemClient extends BaseClient {
   constructor(authService: AuthService) {
     super(authService);
+  }
+
+  async getHealth(): Promise<HealthCheckResponse> {
+    try {
+      const response = await this.fetch('/api/system/health');
+      return await response.json();
+    } catch (e) {
+      console.error('Failed to fetch health check', e);
+      throw e;
+    }
   }
 
   async getVersion(): Promise<string> {
