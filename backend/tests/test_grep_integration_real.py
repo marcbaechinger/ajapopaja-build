@@ -74,7 +74,7 @@ async def test_grep_integration_positive(real_workspace_pipeline):
     # Large file has 10 matches (one every 100 lines).
     # Total expected matches: 3*2 + 10 = 16.
     
-    result = await grep(str(real_workspace_pipeline.id), "BaseClient", file_glob="*.ts")
+    result = await grep(str(real_workspace_pipeline.id), "BaseClient", file_extension="*.ts")
     
     # Verify that we have matches from all 3 files
     assert {"path": "frontend/src/core/clients/PipelineClient.ts", "line": 1} in result
@@ -91,13 +91,13 @@ async def test_grep_integration_positive(real_workspace_pipeline):
 @pytest.mark.asyncio
 async def test_grep_integration_negative(real_workspace_pipeline):
     # Negative test – Search for a string that does not exist.
-    result = await grep(str(real_workspace_pipeline.id), "NonExistentString12345", file_glob="*.ts")
+    result = await grep(str(real_workspace_pipeline.id), "NonExistentString12345", file_extension="*.ts")
     assert result == []
 
 @pytest.mark.asyncio
 async def test_grep_integration_case_insensitive(real_workspace_pipeline):
     # Case sensitivity test – Search for baseclient (lowercase) with ignore_case set to True.
-    result = await grep(str(real_workspace_pipeline.id), "baseclient", file_glob="*.ts", ignore_case=True)
+    result = await grep(str(real_workspace_pipeline.id), "baseclient", file_extension="*.ts", ignore_case=True)
     
     # Should find the same matches
     assert {"path": "frontend/src/core/clients/PipelineClient.ts", "line": 1} in result
@@ -106,8 +106,10 @@ async def test_grep_integration_case_insensitive(real_workspace_pipeline):
 @pytest.mark.asyncio
 async def test_grep_integration_large_file(real_workspace_pipeline):
     # Verify that all 10 occurrences in the large file are returned.
-    result = await grep(str(real_workspace_pipeline.id), "Match BaseClient", file_glob="large_file.ts")
+    result = await grep(str(real_workspace_pipeline.id), "Match BaseClient", file_extension="*.ts")
     
+    # Filtering for large_file.ts matches only
+    result = [m for m in result if m["path"] == "large_file.ts"]
     assert len(result) == 10
     for i in range(10):
         line_num = i * 100 + 1
@@ -117,8 +119,10 @@ async def test_grep_integration_large_file(real_workspace_pipeline):
 async def test_grep_integration_very_large_file(real_workspace_pipeline):
     # Verify accurate line numbering in a 10,000 line file.
     # We expect matches at 1000, 2000, ..., 10000.
-    result = await grep(str(real_workspace_pipeline.id), "Target match", file_glob="very_large_file.ts")
+    result = await grep(str(real_workspace_pipeline.id), "Target match", file_extension="*.ts")
     
+    # Filtering for very_large_file.ts matches only
+    result = [m for m in result if m["path"] == "very_large_file.ts"]
     assert len(result) == 10
     for i in range(10):
         line_num = (i + 1) * 1000

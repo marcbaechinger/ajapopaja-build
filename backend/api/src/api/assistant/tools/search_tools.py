@@ -38,11 +38,16 @@ async def _run_command(workspace_path: str, args: List[str]) -> str:
             text=True,
             check=False,
         )
-        if result.returncode not in (0, 1): # grep returns 1 if no lines were selected
-             return f"Error executing command {' '.join(cmd_args)}: {result.stderr}"
-        return result.stdout if result.stdout else (result.stderr if result.stderr else "No results found.")
+        if result.returncode not in (0, 1):  # grep returns 1 if no lines were selected
+            return f"Error executing command {' '.join(cmd_args)}: {result.stderr}"
+        return (
+            result.stdout
+            if result.stdout
+            else (result.stderr if result.stderr else "No results found.")
+        )
     except Exception as e:
         return f"Error: {str(e)}"
+
 
 def _sanitize_path(workspace_path: str, relative_path: str) -> Optional[str]:
     try:
@@ -55,7 +60,7 @@ def _sanitize_path(workspace_path: str, relative_path: str) -> Optional[str]:
 async def grep(
     pipeline_id: str,
     pattern: str,
-    file_glob: Optional[str] = None,
+    file_extension: Optional[str] = None,
     ignore_case: bool = False,
     context_lines: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
@@ -65,10 +70,13 @@ async def grep(
     Args:
         pipeline_id: The ID of the pipeline.
         pattern: The regex pattern to search for.
-        file_glob: Only search in files matching this glob (e.g., "*.py").
+        file_extension: Only search in files matching this extension (e.g., "*.ts").
         ignore_case: If True, perform case-insensitive search.
         context_lines: Number of lines of context to include before and after matches.
     """
+    if file_extension and not file_extension.startswith("*."):
+        return [{"error": "file_extension must be in the format '*.extension' (e.g., '*.ts')"}]
+
     pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
     if not pipeline or not pipeline.workspace_abs_path:
         return [{"error": "Workspace path not found."}]
@@ -78,24 +86,28 @@ async def grep(
         args.append("-i")
     if context_lines is not None and int(context_lines) > 0:
         args.append(f"-C{context_lines}")
-    
-    if file_glob:
-        args.append(f"--include={file_glob}")
-        
+
+    if file_extension:
+        args.append(f"--include={file_extension}")
+
     # Ignore common dirs like .git, node_modules, .venv, __pycache__
     for ignore_dir in IGNORED_DIRECTORIES:
         args.append(f"--exclude-dir={ignore_dir}")
 
-    args.append("-E") # Extended regex
+    args.append("-E")  # Extended regex
     args.append(pattern)
     args.append(".")
 
+    logger.info(f"grep with {args}")
+
     result = await _run_command(str(pipeline.workspace_abs_path), args)
-    
+
     if result.startswith("Error:"):
+        logger.warning(f"grep with error: {result}")
         return [{"error": result}]
-    
+
     if result == "No results found.":
+        logger.debug(f"grep with no results: {result}")
         return []
 
     matches = []
@@ -104,12 +116,12 @@ async def grep(
     for line in result.splitlines():
         if not line:
             continue
-            
+
         if "\0" in line:
             parts_null = line.split("\0", 1)
             path = parts_null[0]
             after_null = parts_null[1]
-            
+
             # after_null should be "line:text" or "line-text"
             # We want matches only (using ':')
             if ":" in after_null:
@@ -135,7 +147,7 @@ async def grep(
 
         if len(matches) >= 1000:
             break
-            
+
     logger.info(f"Grep tool found {len(matches)} matches for pattern: '{pattern}'")
     return matches
 
@@ -159,40 +171,60 @@ async def find(
         return "Error: Workspace path not found."
 
     args = ["find", "."]
-    
+
     # Prune ignored directories to speed up search
-    args.extend(["-type", "d", "\\(", "-name", ".git", "-o", "-name", "node_modules", "-o", "-name", ".venv", "-o", "-name", "__pycache__", "\\)", "-prune", "-o"])
-    
+    args.extend(
+        [
+            "-type",
+            "d",
+            "\\(",
+            "-name",
+            ".git",
+            "-o",
+            "-name",
+            "node_modules",
+            "-o",
+            "-name",
+            ".venv",
+            "-o",
+            "-name",
+            "__pycache__",
+            "\\)",
+            "-prune",
+            "-o",
+        ]
+    )
+
     if type:
         if type not in ["f", "d"]:
             return "Error: type must be 'f' or 'd'."
         args.extend(["-type", type])
-        
+
     args.extend(["-name", name_pattern, "-print"])
 
     # run_command will struggle with the parenthesis if we just pass them, let's use a cleaner python implementation or simple find
-    
+
     # Let's simplify find to avoid complex subprocess escaping issues with -prune
     args_simple = ["find", ".", "-name", name_pattern]
     if type:
-         args_simple.extend(["-type", type])
-         
+        args_simple.extend(["-type", type])
+
     try:
-         result = subprocess.run(
+        result = subprocess.run(
             args_simple,
             cwd=str(pipeline.workspace_abs_path),
             capture_output=True,
             text=True,
             check=False,
-         )
-         output = result.stdout
-         # Filter out ignored directories manually
-         lines = output.splitlines()
-         ignored = [f"{d}/" for d in IGNORED_DIRECTORIES]
-         filtered_lines = [l for l in lines if not any(ig in l for ig in ignored)]
-         return "\n".join(filtered_lines)[:10000]
+        )
+        output = result.stdout
+        # Filter out ignored directories manually
+        lines = output.splitlines()
+        ignored = [f"{d}/" for d in IGNORED_DIRECTORIES]
+        filtered_lines = [l for l in lines if not any(ig in l for ig in ignored)]
+        return "\n".join(filtered_lines)[:10000]
     except Exception as e:
-         return f"Error: {str(e)}"
+        return f"Error: {str(e)}"
 
 
 @register_tool(tool_type=READ_ONLY)
@@ -228,45 +260,48 @@ async def tree(
         args.extend(["-L", str(depth)])
     if follow_symlinks:
         args.append("-l")
-        
+
     args.append(".")
 
     try:
-         # Check if tree is available
-         subprocess.run(["tree", "--version"], capture_output=True, check=True)
-         result = await _run_command(full_path, args)
-         return result[:10000]
+        # Check if tree is available
+        subprocess.run(["tree", "--version"], capture_output=True, check=True)
+        result = await _run_command(full_path, args)
+        return result[:10000]
     except (subprocess.CalledProcessError, FileNotFoundError):
-         # Python fallback if 'tree' command is missing
-         return _python_tree(full_path, depth)
+        # Python fallback if 'tree' command is missing
+        return _python_tree(full_path, depth)
 
-def _python_tree(directory: str, max_depth: Optional[int] = None, current_depth: int = 0) -> str:
+
+def _python_tree(
+    directory: str, max_depth: Optional[int] = None, current_depth: int = 0
+) -> str:
     if max_depth is not None and current_depth > max_depth:
         return ""
-    
+
     output = []
     try:
         items = sorted(os.listdir(directory))
     except PermissionError:
         return ""
-        
+
     ignored = IGNORED_DIRECTORIES
     items = [item for item in items if item not in ignored]
-    
+
     for i, item in enumerate(items):
-        is_last = (i == len(items) - 1)
+        is_last = i == len(items) - 1
         prefix = "└── " if is_last else "├── "
         indent = "    " if is_last else "│   "
-        
+
         output.append(f"{prefix}{item}")
-        
+
         path = os.path.join(directory, item)
         if os.path.isdir(path):
             sub_tree = _python_tree(path, max_depth, current_depth + 1)
             if sub_tree:
                 sub_lines = sub_tree.splitlines()
                 output.extend([f"{indent}{line}" for line in sub_lines])
-                
+
     return "\n".join(output)
 
 
@@ -287,7 +322,7 @@ async def head(pipeline_id: str, file_path: str, lines: int = 10) -> str:
     full_path = _sanitize_path(str(pipeline.workspace_abs_path), file_path)
     if not full_path:
         return "Error: Invalid path. Path must be relative and within workspace."
-        
+
     if not os.path.isfile(full_path):
         return f"Error: File not found: {file_path}"
 
@@ -321,7 +356,7 @@ async def tail(pipeline_id: str, file_path: str, lines: int = 10) -> str:
     full_path = _sanitize_path(str(pipeline.workspace_abs_path), file_path)
     if not full_path:
         return "Error: Invalid path. Path must be relative and within workspace."
-        
+
     if not os.path.isfile(full_path):
         return f"Error: File not found: {file_path}"
 
@@ -346,7 +381,7 @@ async def search_file_content(pipeline_id: str, file_path: str, pattern: str) ->
     full_path = _sanitize_path(str(pipeline.workspace_abs_path), file_path)
     if not full_path:
         return "Error: Invalid path. Path must be relative and within workspace."
-        
+
     if not os.path.isfile(full_path):
         return f"Error: File not found: {file_path}"
 
@@ -358,10 +393,10 @@ async def search_file_content(pipeline_id: str, file_path: str, pattern: str) ->
                 if regex.search(line):
                     matches.append(f"{i}: {line.rstrip()}")
                     if len(matches) >= 1000:
-                         matches.append("... output truncated ...")
-                         break
+                        matches.append("... output truncated ...")
+                        break
         if not matches:
-             return "No results found."
+            return "No results found."
         return "\n".join(matches)
     except re.error as e:
         return f"Error: Invalid regular expression: {str(e)}"

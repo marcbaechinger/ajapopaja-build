@@ -12,7 +12,7 @@ The `grep` tool allows for recursive text searching across files in the workspac
 await grep(
     pipeline_id="pipeline_id",
     pattern="search_pattern",
-    file_glob="*.ts",
+    file_extension="*.ts",
     ignore_case=True,
     context_lines=2
 )
@@ -22,7 +22,7 @@ await grep(
 
 - `pipeline_id` (str): The unique identifier of the pipeline.
 - `pattern` (str): The regex pattern to search for (Extended Regex syntax).
-- `file_glob` (Optional[str]): A glob pattern to filter the files searched (e.g., `*.ts`, `src/**/*.py`).
+- `file_extension` (Optional[str]): Only search in files matching this extension (must be in the format `*.extension`, e.g., `*.ts`).
 - `ignore_case` (bool): If set to `True`, the search will be case-insensitive. Defaults to `False`.
 - `context_lines` (Optional[int]): The number of lines of context to include before and after each match.
 

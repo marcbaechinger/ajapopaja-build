@@ -72,7 +72,7 @@ async def test_grep_success(mock_pipeline):
                 stderr=""
             )
             
-            result = await grep("pipeline_id", "hello", file_glob="*.py", ignore_case=True, context_lines=2)
+            result = await grep("pipeline_id", "hello", file_extension="*.py", ignore_case=True, context_lines=2)
             
             assert result == [{"path": "src/main.py", "line": 3}]
             mock_run.assert_called_once()
