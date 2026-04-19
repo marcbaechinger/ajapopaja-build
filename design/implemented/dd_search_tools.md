@@ -28,14 +28,18 @@ await grep(
 
 ### Result Format
 
-The tool returns an array of JSON objects, each representing a match.
+The tool returns a summary object containing an array of matches, the total number of matches found, and a flag indicating if the results were truncated. The tool is restricted to return only the first 10 matches.
 
 Example:
 ```json
-[
-  {"path": "frontend/src/core/clients/PipelineClient.ts", "line": 1, "match": "import { BaseClient } from './BaseClient.ts';"},
-  {"path": "frontend/src/core/clients/PipelineClient.ts", "line": 3, "match": "export class PipelineClient extends BaseClient {"}
-]
+{
+  "matches": [
+    {"path": "frontend/src/core/clients/PipelineClient.ts", "line": 1, "match": "import { BaseClient } from './BaseClient.ts';"},
+    {"path": "frontend/src/core/clients/PipelineClient.ts", "line": 3, "match": "export class PipelineClient extends BaseClient {"}
+  ],
+  "total_matches": 2,
+  "truncated": false
+}
 ```
 
 ## Find Tool

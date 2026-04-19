@@ -65,20 +65,24 @@ async def test_grep_success(mock_pipeline):
         mock_get.return_value = mock_pipeline
         
         with patch("subprocess.run") as mock_run:
-            # Mocking -nZ output: "file\0line:text\n"
+            # Mocking -nI output: "file:line:text\n"
             mock_run.return_value = MagicMock(
                 returncode=0, 
-                stdout="src/main.py\0 3:    print('hello world')\n", 
+                stdout="src/main.py:3:    print('hello world')\n", 
                 stderr=""
             )
             
             result = await grep("pipeline_id", "hello", file_extension="*.py", ignore_case=True, context_lines=2)
             
-            assert result == [{"path": "src/main.py", "line": 3, "match": "print('hello world')"}]
+            assert result == {
+                "matches": [{"path": "src/main.py", "line": 3, "match": "print('hello world')"}],
+                "total_matches": 1,
+                "truncated": False
+            }
             mock_run.assert_called_once()
             args = mock_run.call_args[0][0]
             assert "grep" in args
-            assert "-rnIZ" in args
+            assert "-rnI" in args
             assert "-i" in args
             assert "-C2" in args
             assert "--include=*.py" in args
@@ -94,7 +98,7 @@ async def test_grep_no_results(mock_pipeline):
             mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="")
             
             result = await grep("pipeline_id", "nonexistent")
-            assert result == []
+            assert result == {"matches": [], "total_matches": 0, "truncated": False}
 
 @pytest.mark.asyncio
 async def test_find_success(mock_pipeline):
@@ -251,7 +255,7 @@ async def test_pipeline_not_found():
         mock_get.return_value = None
         
         result = await grep("invalid_id", "pattern")
-        assert result == [{"error": "Workspace path not found."}]
+        assert result == {"error": "Workspace path not found."}
 
 @pytest.mark.asyncio
 async def test_workspace_path_missing():
@@ -262,7 +266,7 @@ async def test_workspace_path_missing():
         mock_get.return_value = pipeline
         
         result = await grep("pipeline_id", "pattern")
-        assert result == [{"error": "Workspace path not found."}]
+        assert result == {"error": "Workspace path not found."}
 
 def test_python_tree_direct(temp_workspace):
     # Test _python_tree function directly for depth and items

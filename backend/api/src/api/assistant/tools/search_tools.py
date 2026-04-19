@@ -82,7 +82,7 @@ async def grep(
     file_extension: Optional[str] = None,
     ignore_case: bool = False,
     context_lines: Optional[int] = None,
-) -> List[Dict[str, Any]]:
+) -> Dict[str, Any]:
     """
     Run a recursive grep; return a list of matches with file paths and line numbers.
 
@@ -94,13 +94,13 @@ async def grep(
         context_lines: Number of lines of context to include before and after matches.
     """
     if file_extension and not file_extension.startswith("*."):
-        return [{"error": "file_extension must be in the format '*.extension' (e.g., '*.ts')"}]
+        return {"error": "file_extension must be in the format '*.extension' (e.g., '*.ts')"}
 
     pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
     if not pipeline or not pipeline.workspace_abs_path:
-        return [{"error": "Workspace path not found."}]
+        return {"error": "Workspace path not found."}
 
-    args = ["grep", "-rnIZ"]
+    args = ["grep", "-rnI"]
     if ignore_case:
         args.append("-i")
     if context_lines is not None and int(context_lines) > 0:
@@ -123,66 +123,51 @@ async def grep(
 
     if result.startswith("Error:"):
         logger.warning(f"grep with error: {result}")
-        return [{"error": result}]
+        return {"error": result}
 
     if result == "No results found.":
         logger.debug(f"grep with no results: {result}")
-        return []
+        return {"matches": [], "total_matches": 0, "truncated": False}
 
-    matches = []
-    # Grep output for -nZ is "file\0line:text\n"
-    # Lines with context use "file\0line-text\n"
+    all_matches = []
+    # Grep output for -rnI is "file:line:text\n"
     for line in result.splitlines():
         if not line:
             continue
 
-        if "\0" in line:
-            parts_null = line.split("\0", 1)
-            path = parts_null[0]
-            after_null = parts_null[1]
+        # Standard grep output: path:line:text
+        parts = line.split(":", 2)
+        if len(parts) >= 3:
+            try:
+                path = parts[0]
+                line_num = int(parts[1])
+                text = parts[2]
+                
+                # Remove './' from start of path if present
+                clean_path = path[2:] if path.startswith("./") else path
+                all_matches.append(
+                    {
+                        "path": clean_path,
+                        "line": line_num,
+                        "match": _get_match_context(text, pattern, ignore_case),
+                    }
+                )
+            except (ValueError, IndexError):
+                continue
 
-            # after_null should be "line:text" or "line-text"
-            # We want matches only (using ':')
-            if ":" in after_null:
-                parts_after = after_null.split(":", 1)
-                try:
-                    line_num = int(parts_after[0])
-                    text = parts_after[1] if len(parts_after) > 1 else ""
-                    # Remove './' from start of path if present
-                    clean_path = path[2:] if path.startswith("./") else path
-                    matches.append(
-                        {
-                            "path": clean_path,
-                            "line": line_num,
-                            "match": _get_match_context(text, pattern, ignore_case),
-                        }
-                    )
-                except ValueError:
-                    continue
-        else:
-            # Fallback for unexpected format
-            parts = line.split(":", 2)
-            if len(parts) >= 2:
-                try:
-                    path = parts[0]
-                    clean_path = path[2:] if path.startswith("./") else path
-                    line_num = int(parts[1])
-                    text = parts[2] if len(parts) > 2 else ""
-                    matches.append(
-                        {
-                            "path": clean_path,
-                            "line": line_num,
-                            "match": _get_match_context(text, pattern, ignore_case),
-                        }
-                    )
-                except (ValueError, IndexError):
-                    continue
-
-        if len(matches) >= 1000:
+        if len(all_matches) >= 1000:
             break
 
-    logger.info(f"Grep tool found {len(matches)} matches for pattern: '{pattern}'")
-    return matches
+    total_matches = len(all_matches)
+    matches = all_matches[:10]
+    truncated = total_matches > 10
+
+    logger.info(f"Grep tool found {total_matches} matches for pattern: '{pattern}'")
+    return {
+        "matches": matches,
+        "total_matches": total_matches,
+        "truncated": truncated,
+    }
 
 
 @register_tool(tool_type=READ_ONLY)
