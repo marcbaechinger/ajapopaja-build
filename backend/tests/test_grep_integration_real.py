@@ -1,0 +1,105 @@
+# Copyright 2026 Marc Baechinger
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import pytest
+import os
+import tempfile
+from pathlib import Path
+from core.models.models import Pipeline
+from api.assistant.tools.search_tools import grep
+
+@pytest.fixture
+async def real_workspace_pipeline(init_mock_db):
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir).resolve()
+        
+        # Create the files specified in the task data
+        clients_dir = tmp_path / "frontend" / "src" / "core" / "clients"
+        clients_dir.mkdir(parents=True)
+        
+        pipeline_client = clients_dir / "PipelineClient.ts"
+        pipeline_client.write_text("import { BaseClient } from './BaseClient.ts';\n\nexport class PipelineClient extends BaseClient {\n    constructor() {\n        super();\n    }\n}\n")
+        
+        task_client = clients_dir / "TaskClient.ts"
+        task_client.write_text("import { BaseClient } from './BaseClient.ts';\n\nexport class TaskClient extends BaseClient {\n    constructor() {\n        super();\n    }\n}\n")
+        
+        system_client = clients_dir / "SystemClient.ts"
+        system_client.write_text("import { BaseClient } from './BaseClient.ts';\n\nexport class SystemClient extends BaseClient {\n    constructor() {\n        super();\n    }\n}\n")
+        
+        # Create a large file for the large file test
+        large_file = tmp_path / "large_file.ts"
+        content = []
+        for i in range(1000):
+            if i % 100 == 0:
+                content.append(f"// Match BaseClient at line {i+1}")
+            else:
+                content.append(f"// Dummy line {i+1}")
+        large_file.write_text("\n".join(content))
+
+        pipeline = Pipeline(
+            name="Test Grep Pipeline",
+            workspace_path=str(tmp_path),
+            workspace_abs_path=tmp_path
+        )
+        await pipeline.insert()
+        
+        yield pipeline
+
+@pytest.mark.asyncio
+async def test_grep_integration_positive(real_workspace_pipeline):
+    # Positive test – Search for BaseClient across all *.ts files.
+    # Expect matches in the 3 client files and the large file.
+    # Each client file has 2 matches (import and class extension).
+    # Large file has 10 matches (one every 100 lines).
+    # Total expected matches: 3*2 + 10 = 16.
+    
+    result = await grep(str(real_workspace_pipeline.id), "BaseClient", file_glob="*.ts")
+    
+    # Verify that we have matches from all 3 files
+    assert "PipelineClient.ts:1:import { BaseClient }" in result
+    assert "PipelineClient.ts:3:export class PipelineClient extends BaseClient" in result
+    assert "TaskClient.ts:1:import { BaseClient }" in result
+    assert "TaskClient.ts:3:export class TaskClient extends BaseClient" in result
+    assert "SystemClient.ts:1:import { BaseClient }" in result
+    assert "SystemClient.ts:3:export class SystemClient extends BaseClient" in result
+    
+    # Verify matches in large file
+    assert "large_file.ts:1:// Match BaseClient at line 1" in result
+    assert "large_file.ts:901:// Match BaseClient at line 901" in result
+
+@pytest.mark.asyncio
+async def test_grep_integration_negative(real_workspace_pipeline):
+    # Negative test – Search for a string that does not exist.
+    result = await grep(str(real_workspace_pipeline.id), "NonExistentString12345", file_glob="*.ts")
+    assert "No results found." in result
+
+@pytest.mark.asyncio
+async def test_grep_integration_case_insensitive(real_workspace_pipeline):
+    # Case sensitivity test – Search for baseclient (lowercase) with ignore_case set to True.
+    result = await grep(str(real_workspace_pipeline.id), "baseclient", file_glob="*.ts", ignore_case=True)
+    
+    # Should find the same matches
+    assert "PipelineClient.ts:1:import { BaseClient }" in result
+    assert "PipelineClient.ts:3:export class PipelineClient extends BaseClient" in result
+
+@pytest.mark.asyncio
+async def test_grep_integration_large_file(real_workspace_pipeline):
+    # Verify that all 10 occurrences in the large file are returned.
+    result = await grep(str(real_workspace_pipeline.id), "Match BaseClient", file_glob="large_file.ts")
+    
+    lines = result.strip().split("\n")
+    assert len(lines) == 10
+    for i in range(10):
+        line_num = i * 100 + 1
+        assert f"large_file.ts:{line_num}:// Match BaseClient at line {line_num}" in lines[i]
