@@ -70,23 +70,20 @@ async def real_workspace_pipeline(init_mock_db):
 async def test_grep_integration_positive(real_workspace_pipeline):
     # Positive test – Search for BaseClient across all *.ts files.
     # Expect matches in the 3 client files and the large file.
-    # Each client file has 2 matches (import and class extension).
-    # Large file has 10 matches (one every 100 lines).
-    # Total expected matches: 3*2 + 10 = 16.
     
     result = await grep(str(real_workspace_pipeline.id), "BaseClient", file_extension="*.ts")
     
     # Verify that we have matches from all 3 files
-    assert {"path": "frontend/src/core/clients/PipelineClient.ts", "line": 1} in result
-    assert {"path": "frontend/src/core/clients/PipelineClient.ts", "line": 3} in result
-    assert {"path": "frontend/src/core/clients/TaskClient.ts", "line": 1} in result
-    assert {"path": "frontend/src/core/clients/TaskClient.ts", "line": 3} in result
-    assert {"path": "frontend/src/core/clients/SystemClient.ts", "line": 1} in result
-    assert {"path": "frontend/src/core/clients/SystemClient.ts", "line": 3} in result
+    assert any(m["path"] == "frontend/src/core/clients/PipelineClient.ts" and m["line"] == 1 and "import { BaseClient }" in m["match"] for m in result)
+    assert any(m["path"] == "frontend/src/core/clients/PipelineClient.ts" and m["line"] == 3 and "export class PipelineClient extends BaseClient" in m["match"] for m in result)
+    assert any(m["path"] == "frontend/src/core/clients/TaskClient.ts" and m["line"] == 1 and "import { BaseClient }" in m["match"] for m in result)
+    assert any(m["path"] == "frontend/src/core/clients/TaskClient.ts" and m["line"] == 3 and "export class TaskClient extends BaseClient" in m["match"] for m in result)
+    assert any(m["path"] == "frontend/src/core/clients/SystemClient.ts" and m["line"] == 1 and "import { BaseClient }" in m["match"] for m in result)
+    assert any(m["path"] == "frontend/src/core/clients/SystemClient.ts" and m["line"] == 3 and "export class SystemClient extends BaseClient" in m["match"] for m in result)
     
     # Verify matches in large file
-    assert {"path": "large_file.ts", "line": 1} in result
-    assert {"path": "large_file.ts", "line": 901} in result
+    assert any(m["path"] == "large_file.ts" and m["line"] == 1 and "// Match BaseClient at line 1" in m["match"] for m in result)
+    assert any(m["path"] == "large_file.ts" and m["line"] == 901 and "// Match BaseClient at line 901" in m["match"] for m in result)
 
 @pytest.mark.asyncio
 async def test_grep_integration_negative(real_workspace_pipeline):
@@ -100,8 +97,8 @@ async def test_grep_integration_case_insensitive(real_workspace_pipeline):
     result = await grep(str(real_workspace_pipeline.id), "baseclient", file_extension="*.ts", ignore_case=True)
     
     # Should find the same matches
-    assert {"path": "frontend/src/core/clients/PipelineClient.ts", "line": 1} in result
-    assert {"path": "frontend/src/core/clients/PipelineClient.ts", "line": 3} in result
+    assert any(m["path"] == "frontend/src/core/clients/PipelineClient.ts" and m["line"] == 1 and "import { BaseClient }" in m["match"] for m in result)
+    assert any(m["path"] == "frontend/src/core/clients/PipelineClient.ts" and m["line"] == 3 and "export class PipelineClient extends BaseClient" in m["match"] for m in result)
 
 @pytest.mark.asyncio
 async def test_grep_integration_large_file(real_workspace_pipeline):
@@ -113,7 +110,9 @@ async def test_grep_integration_large_file(real_workspace_pipeline):
     assert len(result) == 10
     for i in range(10):
         line_num = i * 100 + 1
-        assert result[i] == {"path": "large_file.ts", "line": line_num}
+        assert result[i]["path"] == "large_file.ts"
+        assert result[i]["line"] == line_num
+        assert f"// Match BaseClient at line {line_num}" in result[i]["match"]
 
 @pytest.mark.asyncio
 async def test_grep_integration_very_large_file(real_workspace_pipeline):
@@ -126,4 +125,6 @@ async def test_grep_integration_very_large_file(real_workspace_pipeline):
     assert len(result) == 10
     for i in range(10):
         line_num = (i + 1) * 1000
-        assert result[i] == {"path": "very_large_file.ts", "line": line_num}
+        assert result[i]["path"] == "very_large_file.ts"
+        assert result[i]["line"] == line_num
+        assert f"// Target match at line {line_num}" in result[i]["match"]

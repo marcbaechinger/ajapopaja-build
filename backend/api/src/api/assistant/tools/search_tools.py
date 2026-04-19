@@ -56,6 +56,25 @@ def _sanitize_path(workspace_path: str, relative_path: str) -> Optional[str]:
         return None
 
 
+def _get_match_context(text: str, pattern: str, ignore_case: bool, context: int = 50) -> str:
+    flags = re.IGNORECASE if ignore_case else 0
+    try:
+        match = re.search(pattern, text, flags)
+        if not match:
+            # Fallback if re.search doesn't find it
+            return (text[: context * 2] + ("..." if len(text) > context * 2 else "")).strip()
+
+        start = max(0, match.start() - context)
+        end = min(len(text), match.end() + context)
+
+        prefix = "..." if start > 0 else ""
+        suffix = "..." if end < len(text) else ""
+
+        return (prefix + text[start:end] + suffix).strip()
+    except Exception:
+        return (text[: context * 2] + ("..." if len(text) > context * 2 else "")).strip()
+
+
 @register_tool(tool_type=READ_ONLY)
 async def grep(
     pipeline_id: str,
@@ -128,9 +147,16 @@ async def grep(
                 parts_after = after_null.split(":", 1)
                 try:
                     line_num = int(parts_after[0])
+                    text = parts_after[1] if len(parts_after) > 1 else ""
                     # Remove './' from start of path if present
                     clean_path = path[2:] if path.startswith("./") else path
-                    matches.append({"path": clean_path, "line": line_num})
+                    matches.append(
+                        {
+                            "path": clean_path,
+                            "line": line_num,
+                            "match": _get_match_context(text, pattern, ignore_case),
+                        }
+                    )
                 except ValueError:
                     continue
         else:
@@ -141,7 +167,14 @@ async def grep(
                     path = parts[0]
                     clean_path = path[2:] if path.startswith("./") else path
                     line_num = int(parts[1])
-                    matches.append({"path": clean_path, "line": line_num})
+                    text = parts[2] if len(parts) > 2 else ""
+                    matches.append(
+                        {
+                            "path": clean_path,
+                            "line": line_num,
+                            "match": _get_match_context(text, pattern, ignore_case),
+                        }
+                    )
                 except (ValueError, IndexError):
                     continue
 

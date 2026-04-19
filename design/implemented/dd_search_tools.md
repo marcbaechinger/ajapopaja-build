@@ -33,8 +33,8 @@ The tool returns an array of JSON objects, each representing a match.
 Example:
 ```json
 [
-  {"path": "frontend/src/core/clients/PipelineClient.ts", "line": 1},
-  {"path": "frontend/src/core/clients/PipelineClient.ts", "line": 3}
+  {"path": "frontend/src/core/clients/PipelineClient.ts", "line": 1, "match": "import { BaseClient } from './BaseClient.ts';"},
+  {"path": "frontend/src/core/clients/PipelineClient.ts", "line": 3, "match": "export class PipelineClient extends BaseClient {"}
 ]
 ```
 
