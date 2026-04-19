@@ -86,7 +86,7 @@ export class PipelineDetailView extends View {
 
   private updateColumnHeaderCount(columnId: string) {
     if (!this.container) return;
-    const list = this.container.querySelector(`#${columnId}-list`);
+    const list = this.container.querySelector(`#${columnId}`);
     if (!list) return;
 
     const count = list.querySelectorAll('[data-view-id]').length;
@@ -100,10 +100,11 @@ export class PipelineDetailView extends View {
   }
 
   private ensureEmptyMessage(columnId: string) {
-    const list = this.container?.querySelector(`#${columnId}-list`);
+    const list = this.container?.querySelector(`#${columnId}`);
     if (!list) return;
     if (list.children.length === 0) {
-      const meta = this.columnMetadata[columnId];
+      const key = columnId.replace('-list', '');
+      const meta = this.columnMetadata[key];
       if (meta && meta.emptyMessage) {
         list.innerHTML = `<p class="text-app-muted italic text-sm py-4 text-center border-2 border-dashed border-app-border/30 rounded-xl">${meta.emptyMessage}</p>`;
       }
@@ -111,7 +112,7 @@ export class PipelineDetailView extends View {
   }
 
   private removeEmptyMessage(columnId: string) {
-    const list = this.container?.querySelector(`#${columnId}-list`);
+    const list = this.container?.querySelector(`#${columnId}`);
     if (!list) return;
     const emptyMsg = list.querySelector('p.text-app-muted.italic');
     if (emptyMsg) {
@@ -1129,8 +1130,34 @@ export class PipelineDetailView extends View {
     if (!list) return;
 
     this.removeEmptyMessage(columnId);
+
+    // If moving to last-completed-task, push the current one to history feed
+    if (columnId === 'last-completed-task') {
+      const existingLastTaskEl = list.firstElementChild as HTMLElement;
+      if (existingLastTaskEl && existingLastTaskEl.getAttribute('data-view-id')) {
+        const historyFeed = this.container.querySelector('#completed-task-list');
+        if (historyFeed) {
+          this.removeEmptyMessage('completed-task-list');
+          const oldTaskId = existingLastTaskEl.getAttribute('data-view-id');
+          const oldTask = this.allLoadedTasks.find(t => t.id === oldTaskId);
+          if (oldTask) {
+            // Re-render for history feed (without expanded history)
+            const historyHtml = TaskItem.render(oldTask, false, false, this.collapsedTasks.has(oldTask.id!));
+            const temp = document.createElement('div');
+            temp.innerHTML = historyHtml;
+            historyFeed.prepend(temp.firstElementChild as HTMLElement);
+          }
+          existingLastTaskEl.remove();
+        }
+      }
+    }
     
-    const taskHtml = TaskItem.render(task, columnId === 'backlog-list' || columnId === 'scheduled-list', false, this.collapsedTasks.has(task.id!));
+    const taskHtml = TaskItem.render(
+      task, 
+      columnId === 'backlog-list' || columnId === 'scheduled-list', 
+      columnId === 'last-completed-task', 
+      this.collapsedTasks.has(task.id!)
+    );
     const temp = document.createElement('div');
     temp.innerHTML = taskHtml;
     const taskEl = temp.firstElementChild as HTMLElement;
@@ -1143,7 +1170,7 @@ export class PipelineDetailView extends View {
   private removeTaskFromDOM(taskId: string) {
     const el = this.container?.querySelector(`[data-view-id="${taskId}"]`);
     if (el) {
-      const columnId = el.closest('[id]')?.id;
+      const columnId = el.parentElement?.id;
       el.remove();
       if (columnId) {
         this.updateColumnHeaderCount(columnId);
@@ -1171,7 +1198,12 @@ export class PipelineDetailView extends View {
 
       if (currentColumnId === targetColumnId) {
         // Just update content
-        const taskHtml = TaskItem.render(task, targetColumnId === 'backlog-list' || targetColumnId === 'scheduled-list', false, this.collapsedTasks.has(task.id!));
+        const taskHtml = TaskItem.render(
+          task, 
+          targetColumnId === 'backlog-list' || targetColumnId === 'scheduled-list', 
+          targetColumnId === 'last-completed-task', 
+          this.collapsedTasks.has(task.id!)
+        );
         const temp = document.createElement('div');
         temp.innerHTML = taskHtml;
         el.replaceWith(temp.firstElementChild as HTMLElement);

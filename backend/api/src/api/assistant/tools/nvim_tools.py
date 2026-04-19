@@ -196,6 +196,12 @@ async def nvim_set_quickfix(
             # Check if match is actually a dict
             if not isinstance(match, dict):
                 continue
+            if "filename" in match:
+                try:
+                    full_path = str(safe_join(pipeline.workspace_abs_path, match["filename"]))
+                    match["filename"] = full_path
+                except ValueError:
+                    continue
             resolved_matches.append(match)
 
         # We use Lua to call setqflist and open the window
