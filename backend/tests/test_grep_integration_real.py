@@ -47,6 +47,16 @@ async def real_workspace_pipeline(init_mock_db):
                 content.append(f"// Dummy line {i+1}")
         large_file.write_text("\n".join(content))
 
+        # Create an even larger file for the very large file test
+        very_large_file = tmp_path / "very_large_file.ts"
+        content = []
+        for i in range(10000):
+            if (i + 1) % 1000 == 0:
+                content.append(f"// Target match at line {i+1}")
+            else:
+                content.append(f"// Line {i+1}")
+        very_large_file.write_text("\n".join(content))
+
         pipeline = Pipeline(
             name="Test Grep Pipeline",
             workspace_path=str(tmp_path),
@@ -103,3 +113,15 @@ async def test_grep_integration_large_file(real_workspace_pipeline):
     for i in range(10):
         line_num = i * 100 + 1
         assert f"large_file.ts:{line_num}:// Match BaseClient at line {line_num}" in lines[i]
+
+@pytest.mark.asyncio
+async def test_grep_integration_very_large_file(real_workspace_pipeline):
+    # Verify accurate line numbering in a 10,000 line file.
+    # We expect matches at 1000, 2000, ..., 10000.
+    result = await grep(str(real_workspace_pipeline.id), "Target match", file_glob="very_large_file.ts")
+    
+    lines = result.strip().split("\n")
+    assert len(lines) == 10
+    for i in range(10):
+        line_num = (i + 1) * 1000
+        assert f"very_large_file.ts:{line_num}:// Target match at line {line_num}" in lines[i]
