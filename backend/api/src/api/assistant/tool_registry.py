@@ -49,11 +49,11 @@ class ToolRegistry:
         if parameters is None:
             parameters = self._generate_json_schema(func)
 
-        # If description is missing, use the first line of the docstring
+        # If description is missing, try to extract it from docstring
         if description is None:
-            doc = func.__doc__ or ""
-            # Take the first paragraph as description
-            description = doc.split("\n\n")[0].strip() or "No description provided."
+            doc = inspect.getdoc(func) or ""
+            # Take the first paragraph as description (split by one or more blank lines)
+            description = re.split(r"\n\s*\n", doc)[0].strip() or "No description provided."
             # Also integrate argument descriptions if they exist in the docstring
             arg_docs = self._parse_docstring_args(doc)
             for arg_name, arg_desc in arg_docs.items():
