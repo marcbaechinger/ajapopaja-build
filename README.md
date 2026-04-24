@@ -1,8 +1,8 @@
 # Ajapopaja Build
 
-[![CI](https://github.com/marc-baechinger/ajapopaja-build/actions/workflows/ci.yml/badge.svg)](https://github.com/marc-baechinger/ajapopaja-build/actions/workflows/ci.yml)
+[![CI](https://github.com/marcbaechinger/ajapopaja-build/actions/workflows/ci.yml/badge.svg)](https://github.com/marcbaechinger/ajapopaja-build/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Version](https://img.shields.io/badge/version-0.1.0-green.svg)](https://github.com/marc-baechinger/ajapopaja-build/releases)
+[![Version](https://img.shields.io/badge/version-0.1.0-green.svg)](https://github.com/marcbaechinger/ajapopaja-build/releases)
 
 Welcome to **Ajapopaja Build**, the advanced, automated task pipeline manager designed for Coding AI Agents (like Gemini CLI or Claude).
 
