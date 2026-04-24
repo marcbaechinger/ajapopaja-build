@@ -14,13 +14,14 @@
 
 import pytest
 import uuid
+import os
 from httpx import AsyncClient, ASGITransport
 from pymongo import AsyncMongoClient
 from beanie import init_beanie
 from api.main import app
 from core import config
 from pathlib import Path
-from core.models.models import Pipeline, Task, User
+from core.models.models import Pipeline, Task, User, UserChat
 
 @pytest.fixture(autouse=True)
 def mock_workspaces_root(monkeypatch):
@@ -28,12 +29,13 @@ def mock_workspaces_root(monkeypatch):
 
 @pytest.fixture
 async def init_mock_db():
+    mongodb_uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
     test_db_name = f"test_db_{uuid.uuid4().hex}"
-    client = AsyncMongoClient("mongodb://localhost:27017")
+    client = AsyncMongoClient(mongodb_uri)
     db = client[test_db_name]
     await init_beanie(
         database=db,
-        document_models=[Pipeline, Task, User]
+        document_models=[Pipeline, Task, User, UserChat]
     )
     yield test_db_name
     await client.drop_database(test_db_name)
