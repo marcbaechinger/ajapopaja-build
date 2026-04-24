@@ -197,7 +197,17 @@ npm run test
 
 ---
 
-## 8. License
+## 9. Safety Controls
+
+### Manual Push Only
+To prevent unintentional pushes by AI agents, this repository is protected by a `pre-push` git hook. All push operations are blocked by default.
+
+To push changes to GitHub manually, you must explicitly set the `ALLOW_PUSH` environment variable:
+```bash
+ALLOW_PUSH=true git push
+```
+
+## 10. License
 
 This project is licensed under the **Apache License 2.0**. See the [LICENSE](LICENSE) file for details.
 
