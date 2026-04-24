@@ -20,6 +20,8 @@ jobs:
       - name: Install dependencies
         run: cd backend && uv sync
       - name: Run tests
+        env:
+          WORKSPACES_ROOT: /tmp
         run: cd backend && uv run pytest
 
   frontend:
