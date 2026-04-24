@@ -18,7 +18,13 @@ from core.db import init_db
 from core.models.models import User
 from api.auth import get_password_hash
 
+"""
+Development utility to seed an initial administrator user.
+This script should ONLY be used in development or for first-time setup.
+"""
+
 async def seed_user():
+    """Seeds the database with a default admin user."""
     print("Initializing database...")
     await init_db()
     

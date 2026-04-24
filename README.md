@@ -1,5 +1,9 @@
 # Ajapopaja Build
 
+[![CI](https://github.com/marc-baechinger/ajapopaja-build/actions/workflows/ci.yml/badge.svg)](https://github.com/marc-baechinger/ajapopaja-build/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Version](https://img.shields.io/badge/version-0.1.0-green.svg)](https://github.com/marc-baechinger/ajapopaja-build/releases)
+
 Welcome to **Ajapopaja Build**, the advanced, automated task pipeline manager designed for Coding AI Agents (like Gemini CLI or Claude).
 
 ---
@@ -16,7 +20,20 @@ The project is structured as a monorepo with a Python backend and a TypeScript/V
 
 ---
 
-## 2. Developer Environment Setup
+## 2. Architecture
+
+Ajapopaja Build follows a decoupled, message-driven architecture to facilitate autonomous agent interaction with a human-supervised management layer.
+
+### High-Level Flow
+1.  **Task Creation**: Users or systems create tasks in a Pipeline.
+2.  **Scheduling**: Tasks are prioritized and moved to the `scheduled` state.
+3.  **Agent Interaction (MCP)**: An AI agent connects via the Model Context Protocol (MCP) server. It fetches the next task, optionally submits a design doc, and implements the change.
+4.  **Human Review**: If a design doc is submitted, the task enters a `PROPOSED` state. A human reviews it in the SPA and either accepts (scheduling it for implementation) or rejects it.
+5.  **Implementation & Validation**: The agent implements the approved design, runs tests, and marks the task as `implemented` with a commit hash.
+
+---
+
+## 3. Developer Environment Setup
 
 ### Prerequisites
 - **Python 3.11+**
@@ -71,7 +88,7 @@ You can build a production-ready Docker image that contains both the backend and
 ### Build the Image
 Use the provided build script to compile the frontend and package the backend:
 ```bash
-./docker-build.sh 1.0.0
+./docker-build.sh 0.1.0
 ```
 
 ### First-time Setup: Create Admin User
@@ -80,7 +97,7 @@ After building the image, you need to create the initial user in your database:
 docker run --rm \
   --add-host=host.docker.internal:host-gateway \
   -e MONGODB_URI=mongodb://host.docker.internal:27017/ \
-  ajapopaja-build:1.0.0 \
+  ajapopaja-build:0.1.0 \
   uv run --package api python api/src/api/seed_user.py
 ```
 This creates a user with username `admin` and password `admin`.
@@ -113,7 +130,7 @@ docker run -p 8000:8000 \
   -e MONGODB_URI=mongodb://host.docker.internal:27017/ \
   -e PORT=8000 \
   -e WORKSPACES_ROOT=/home/marc-baechinger/monolit/code \
-  ajapopaja-build:1.0.0
+  ajapopaja-build:0.1.0
 ```
 The application will be accessible at [http://localhost:8000](http://localhost:8000).
 
