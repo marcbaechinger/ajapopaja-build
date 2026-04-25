@@ -17,13 +17,13 @@ import json
 import logging
 import ollama
 from typing import List, Dict, Any, Optional, Callable, Awaitable
+from core import config
 from core.models.models import ChatMessage, UserChat
 from .tool_registry import registry
 from . import tools  # Ensure all tools in the package are imported and registered
 
 logger = logging.getLogger(__name__)
 
-MODEL_NAME = "gpt-oss:20b"  # Or any model that supports tool calling
 READ_ONLY = "read_only"
 
 
@@ -39,6 +39,7 @@ class AssistantSession:
         self.on_update = on_update
         self.is_processing = False
         self.pending_tool_call: Optional[Dict] = None
+        self.client = ollama.AsyncClient(host=config.OLLAMA_HOST)
 
     async def _save_history(self):
         chat = await UserChat.find_one(UserChat.user_id == self.user_id)
@@ -172,13 +173,12 @@ class AssistantSession:
             )
 
         logger.info(
-            f"Presenting {len(ollama_tools)} tools to Ollama model '{MODEL_NAME}': {[t.name for t in registered_tools]}"
+            f"Presenting {len(ollama_tools)} tools to Ollama model '{config.OLLAMA_MODEL}': {[t.name for t in registered_tools]}"
         )
 
         try:
-            client = ollama.AsyncClient()
-            response = await client.chat(
-                model=MODEL_NAME,
+            response = await self.client.chat(
+                model=config.OLLAMA_MODEL,
                 messages=messages,
                 tools=ollama_tools,
                 stream=True,
