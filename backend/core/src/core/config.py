@@ -38,6 +38,10 @@ IGNORED_DIRECTORIES = [
 ]
 
 # Ollama configuration for the AI Assistant
-OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gpt-oss:20b")
-
+OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY")
+OLLAMA_HOST = os.getenv(
+    "OLLAMA_HOST", "https://ollama.com" if OLLAMA_API_KEY else "http://localhost:11434"
+)
+OLLAMA_MODEL = os.getenv(
+    "OLLAMA_MODEL", "gpt-oss:120b" if OLLAMA_API_KEY else "gpt-oss:20b"
+)

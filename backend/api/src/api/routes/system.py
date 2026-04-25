@@ -21,10 +21,14 @@ async def system_health():
 
     # Ollama Check
     try:
-        client = ollama.AsyncClient()
+        from core import config
+        headers = {}
+        if config.OLLAMA_API_KEY:
+            headers["Authorization"] = f"Bearer {config.OLLAMA_API_KEY}"
+        client = ollama.AsyncClient(host=config.OLLAMA_HOST, headers=headers)
         # Ensure we can list models as a health check
         await client.list()
-        results['ollama'] = {"status": "ok", "details": "Connected"}
+        results['ollama'] = {"status": "ok", "details": f"Connected to {config.OLLAMA_HOST}"}
     except Exception as e:
         results['ollama'] = {"status": "error", "details": str(e)}
         

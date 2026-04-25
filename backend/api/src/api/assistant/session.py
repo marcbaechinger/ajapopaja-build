@@ -39,7 +39,12 @@ class AssistantSession:
         self.on_update = on_update
         self.is_processing = False
         self.pending_tool_call: Optional[Dict] = None
-        self.client = ollama.AsyncClient(host=config.OLLAMA_HOST)
+        
+        headers = {}
+        if config.OLLAMA_API_KEY:
+            headers["Authorization"] = f"Bearer {config.OLLAMA_API_KEY}"
+            
+        self.client = ollama.AsyncClient(host=config.OLLAMA_HOST, headers=headers)
 
     async def _save_history(self):
         chat = await UserChat.find_one(UserChat.user_id == self.user_id)

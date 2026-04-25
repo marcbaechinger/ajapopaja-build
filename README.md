@@ -87,6 +87,7 @@ Set the following environment variables (or use a `.env` file in the root):
 - `WORKSPACES_ROOT`: Root directory for all pipeline workspaces.
 - `OLLAMA_HOST`: The URL of your Ollama server (default: `http://localhost:11434`).
 - `OLLAMA_MODEL`: The LLM model name to use for the AI Assistant (default: `gpt-oss:20b`).
+- `OLLAMA_API_KEY`: Optional API key for cloud-hosted or proxied Ollama servers.
 
 ### Execution Commands
 
@@ -101,16 +102,26 @@ Run these commands from the project root. To stop a server, use `Ctrl+C`.
 
 ### Ollama Setup (AI Assistant)
 
-The integrated AI assistant requires **Ollama** to be running locally.
+The integrated AI assistant supports two modes of operation:
+
+#### Mode A: Local Ollama (Default)
+Requires Ollama to be running on your local machine.
 
 1. **Install Ollama**: [https://ollama.com/download](https://ollama.com/download)
 2. **Pull the required model**:
-
     ```bash
     ollama pull gpt-oss:20b
     ```
 
-    *(Note: You can use any model that supports tool calling by updating `MODEL_NAME` in `backend/api/src/api/assistant/session.py`.)*
+#### Mode B: Direct Cloud API Access
+Connects directly to `https://ollama.com`. This is automatically enabled when `OLLAMA_API_KEY` is set.
+
+1. **Get an API Key**: Create one at [ollama.com/settings/keys](https://ollama.com/settings/keys).
+2. **Configure Environment**:
+    ```bash
+    export OLLAMA_API_KEY=your_api_key_here
+    ```
+    *Note: In this mode, the application defaults to the `gpt-oss:120b` cloud model and `https://ollama.com` host.*
 
 ---
 
