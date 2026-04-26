@@ -12,15 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import socket
-import json
 import os
-import msgpack
+import socket
 from typing import Dict, Optional
+
+import msgpack
 from api.assistant.decorators import register_tool
 from core.queries import pipeline as pipeline_queries
 from core.utils.path_utils import safe_join
-from pathlib import Path
 
 # Tool Categories
 WRITE_ACCESS = "write_access"
@@ -199,7 +198,9 @@ async def nvim_set_quickfix(
                 continue
             if "filename" in match:
                 try:
-                    full_path = str(safe_join(pipeline.workspace_abs_path, match["filename"]))
+                    full_path = str(
+                        safe_join(pipeline.workspace_abs_path, match["filename"])
+                    )
                     match["filename"] = full_path
                 except ValueError:
                     continue

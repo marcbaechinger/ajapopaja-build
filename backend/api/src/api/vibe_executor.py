@@ -12,17 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-import subprocess
-import logging
 import asyncio
+import logging
+import os
 import shutil
-from typing import Dict, Optional, Any
+import subprocess
 from datetime import datetime
+from typing import Any, Dict
+
 from core.queries import pipeline as pipeline_queries
-from api.websocket_manager import manager, WSMessage
+
+from api.websocket_manager import WSMessage, manager
 
 logger = logging.getLogger(__name__)
+
 
 class VibeExecutor:
     # Maps pipeline_id -> { "process": Popen, "log_file_path": str }
@@ -43,17 +46,23 @@ class VibeExecutor:
                 # Process is still running
                 return
             else:
-                logger.info(f"Vibe process for pipeline {pipeline_id} has terminated. Restarting...")
+                logger.info(
+                    f"Vibe process for pipeline {pipeline_id} has terminated. Restarting..."
+                )
                 del cls._processes[pipeline_id]
-                await manager.broadcast(WSMessage(
-                    type="VIBE_PROCESS_STOPPED",
-                    payload={"pipeline_id": pipeline_id}
-                ))
+                await manager.broadcast(
+                    WSMessage(
+                        type="VIBE_PROCESS_STOPPED",
+                        payload={"pipeline_id": pipeline_id},
+                    )
+                )
 
         # Fetch pipeline to get workspace_path
         pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
         if not pipeline:
-            logger.error(f"Pipeline {pipeline_id} not found. Cannot start Vibe executor.")
+            logger.error(
+                f"Pipeline {pipeline_id} not found. Cannot start Vibe executor."
+            )
             return
 
         if not pipeline.manage_vibe:
@@ -74,7 +83,7 @@ class VibeExecutor:
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         log_file_path = os.path.join(log_dir, f"pipeline_{pipeline_id}_{timestamp}.log")
-        
+
         # Build command for Vibe CLI
         cmd_str = f'vibe "Use the ajapopaja mcp server to get the next task for pipeline {pipeline_id}. Implement the task, verify it, and complete it. Repeat this until there are no more tasks in the pipeline."'
 
@@ -89,18 +98,25 @@ class VibeExecutor:
                 cwd=cwd,
                 stdout=log_file,
                 stderr=log_file,
-                start_new_session=True
+                start_new_session=True,
             )
             cls._processes[pipeline_id] = {
                 "process": process,
-                "log_file_path": log_file_path
+                "log_file_path": log_file_path,
             }
-            await manager.broadcast(WSMessage(
-                type="VIBE_PROCESS_STARTED",
-                payload={"pipeline_id": pipeline_id, "log_file_path": log_file_path}
-            ))
+            await manager.broadcast(
+                WSMessage(
+                    type="VIBE_PROCESS_STARTED",
+                    payload={
+                        "pipeline_id": pipeline_id,
+                        "log_file_path": log_file_path,
+                    },
+                )
+            )
         except Exception as e:
-            logger.error(f"Failed to start Vibe executor for pipeline {pipeline_id}: {e}")
+            logger.error(
+                f"Failed to start Vibe executor for pipeline {pipeline_id}: {e}"
+            )
 
     @classmethod
     def stop_running(cls, pipeline_id: str):
@@ -120,21 +136,21 @@ class VibeExecutor:
             try:
                 loop = asyncio.get_event_loop()
                 if loop.is_running():
-                    loop.create_task(manager.broadcast(WSMessage(
-                        type="VIBE_PROCESS_STOPPED",
-                        payload={"pipeline_id": pipeline_id}
-                    )))
+                    loop.create_task(
+                        manager.broadcast(
+                            WSMessage(
+                                type="VIBE_PROCESS_STOPPED",
+                                payload={"pipeline_id": pipeline_id},
+                            )
+                        )
+                    )
             except Exception:
                 pass
 
     @classmethod
     def get_status(cls, pipeline_id: str) -> dict:
         """Returns the status of the Vibe CLI process for the given pipeline."""
-        status = {
-            "running": False,
-            "log_file": None,
-            "available": cls.is_available()
-        }
+        status = {"running": False, "log_file": None, "available": cls.is_available()}
         if pipeline_id in cls._processes:
             entry = cls._processes[pipeline_id]
             process = entry["process"]
@@ -144,7 +160,7 @@ class VibeExecutor:
             else:
                 # Clean up stale process
                 del cls._processes[pipeline_id]
-        
+
         return status
 
     @classmethod

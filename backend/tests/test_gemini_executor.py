@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-import os
-from unittest.mock import patch, MagicMock
-from core.models.models import Task, TaskStatus, Pipeline, PipelineStatus
 from api.gemini_executor import GeminiExecutor
+from core.models.models import Pipeline
+
 
 @pytest.fixture(autouse=True)
 def clear_executor():
@@ -24,15 +25,16 @@ def clear_executor():
     yield
     GeminiExecutor._processes.clear()
 
+
 @pytest.mark.asyncio
 async def test_ensure_running_starts_process(init_mock_db):
-    pipeline = Pipeline(name="Test Pipeline", workspace_path="/tmp/test_ws", manage_gemini=True)
+    pipeline = Pipeline(
+        name="Test Pipeline", workspace_path="/tmp/test_ws", manage_gemini=True
+    )
     await pipeline.insert()
     pipeline_id = str(pipeline.id)
 
-    with patch("subprocess.Popen") as mock_popen, \
-         patch("builtins.open", MagicMock()):
-        
+    with patch("subprocess.Popen") as mock_popen, patch("builtins.open", MagicMock()):
         mock_process = MagicMock()
         mock_process.poll.return_value = None
         mock_popen.return_value = mock_process
@@ -48,6 +50,7 @@ async def test_ensure_running_starts_process(init_mock_db):
         assert GeminiExecutor._processes[pipeline_id]["process"] == mock_process
         assert "log_file_path" in GeminiExecutor._processes[pipeline_id]
 
+
 @pytest.mark.asyncio
 async def test_stop_running(init_mock_db):
     pipeline_id = "test_pipeline"
@@ -55,13 +58,14 @@ async def test_stop_running(init_mock_db):
     mock_process.poll.return_value = None
     GeminiExecutor._processes[pipeline_id] = {
         "process": mock_process,
-        "log_file_path": "/tmp/test.log"
+        "log_file_path": "/tmp/test.log",
     }
 
     GeminiExecutor.stop_running(pipeline_id)
 
     assert mock_process.terminate.called
     assert pipeline_id not in GeminiExecutor._processes
+
 
 @pytest.mark.asyncio
 async def test_is_available():
@@ -73,16 +77,17 @@ async def test_is_available():
         mock_which.return_value = None
         assert GeminiExecutor.is_available() is False
 
+
 @pytest.mark.asyncio
 async def test_get_status(init_mock_db):
     pipeline_id = "test_pipeline"
     log_file = "/tmp/test.log"
     mock_process = MagicMock()
     mock_process.poll.return_value = None
-    
+
     with patch("shutil.which") as mock_which:
         mock_which.return_value = "/usr/local/bin/gemini"
-        
+
         # Not running
         status = GeminiExecutor.get_status(pipeline_id)
         assert status["running"] is False
@@ -92,24 +97,27 @@ async def test_get_status(init_mock_db):
         # Running
         GeminiExecutor._processes[pipeline_id] = {
             "process": mock_process,
-            "log_file_path": log_file
+            "log_file_path": log_file,
         }
         status = GeminiExecutor.get_status(pipeline_id)
         assert status["running"] is True
         assert status["log_file"] == log_file
         assert status["available"] is True
 
+
 @pytest.mark.asyncio
 async def test_ensure_running_skips_when_disabled(init_mock_db):
-    pipeline = Pipeline(name="Test Pipeline", workspace_path="/tmp/test_ws", manage_gemini=False)
+    pipeline = Pipeline(
+        name="Test Pipeline", workspace_path="/tmp/test_ws", manage_gemini=False
+    )
     await pipeline.insert()
     pipeline_id = str(pipeline.id)
 
-    with patch("subprocess.Popen") as mock_popen, \
-         patch("builtins.open", MagicMock()):
+    with patch("subprocess.Popen") as mock_popen, patch("builtins.open", MagicMock()):
         await GeminiExecutor.ensure_running(pipeline_id)
         assert not mock_popen.called
         assert pipeline_id not in GeminiExecutor._processes
+
 
 @pytest.mark.asyncio
 async def test_ensure_running_idempotent(init_mock_db):
@@ -118,7 +126,7 @@ async def test_ensure_running_idempotent(init_mock_db):
     mock_process.poll.return_value = None
     GeminiExecutor._processes[pipeline_id] = {
         "process": mock_process,
-        "log_file_path": "/tmp/test.log"
+        "log_file_path": "/tmp/test.log",
     }
 
     with patch("subprocess.Popen") as mock_popen:

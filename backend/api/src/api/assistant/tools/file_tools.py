@@ -13,13 +13,12 @@
 # limitations under the License.
 
 import os
-import glob
-from pathlib import Path
 from typing import List
-from core.queries import pipeline as pipeline_queries
-from core.config import IGNORED_DIRECTORIES
-from core.utils.path_utils import safe_join
+
 from api.assistant.decorators import register_tool
+from core.config import IGNORED_DIRECTORIES
+from core.queries import pipeline as pipeline_queries
+from core.utils.path_utils import safe_join
 
 # Tool Categories
 READ_ONLY = "read_only"
@@ -139,7 +138,9 @@ async def list_project_structure(
 
                 for f in files:
                     if f not in ignored:
-                        rel_file = os.path.relpath(os.path.join(root, f), workspace_root)
+                        rel_file = os.path.relpath(
+                            os.path.join(root, f), workspace_root
+                        )
                         result.append(rel_file)
             else:
                 # Only show directory and count of files it directly contains

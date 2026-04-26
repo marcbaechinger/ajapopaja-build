@@ -12,11 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
 import os
-import tempfile
 import shutil
-from api.assistant.tools.file_tools import read_source_file, read_source_file_by_range, list_project_structure
+import tempfile
+
+import pytest
+from api.assistant.tools.file_tools import (
+    list_project_structure,
+    read_source_file,
+    read_source_file_by_range,
+)
 from core.models.models import Pipeline
 
 

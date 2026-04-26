@@ -12,43 +12,43 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import logging
+import os
 import re
 from contextlib import asynccontextmanager
 from typing import Optional, Union
-from fastapi import (
-    FastAPI,
-    Request,
-    WebSocket,
-    WebSocketDisconnect,
-    APIRouter,
-    Query,
-    status,
-)
-from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from starlette.routing import Route
-from jose import JWTError, jwt
 
+from ajapopaja_mcp.server import mcp
 from core.db import init_db
 from core.exceptions import (
     AjapopajaError,
     EntityNotFoundError,
-    VersionMismatchError,
     ValidationError,
+    VersionMismatchError,
 )
-from api.routes.pipeline import router as pipeline_router
-from api.routes.task import task_router, pipeline_task_router
-from api.routes.auth import router as auth_router
-from api.routes.system import router as system_router
-from api.websocket_manager import manager
-from api.assistant.ws_handler import register_assistant_handlers
-from api.auth import SECRET_KEY, ALGORITHM
-from api.gemini_executor import GeminiExecutor
+from fastapi import (
+    APIRouter,
+    FastAPI,
+    Query,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from fastmcp.utilities.lifespan import combine_lifespans
-from ajapopaja_mcp.server import mcp
+from jose import JWTError, jwt
+
+from api.assistant.ws_handler import register_assistant_handlers
+from api.auth import ALGORITHM, SECRET_KEY
+from api.gemini_executor import GeminiExecutor
+from api.routes.auth import router as auth_router
+from api.routes.pipeline import router as pipeline_router
+from api.routes.system import router as system_router
+from api.routes.task import pipeline_task_router, task_router
+from api.websocket_manager import manager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

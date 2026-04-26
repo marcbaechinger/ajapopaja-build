@@ -13,7 +13,8 @@
 # limitations under the License.
 
 from functools import wraps
-from typing import Callable, Dict, Any, Optional
+from typing import Any, Callable, Dict, Optional
+
 from api.assistant.tool_registry import registry
 
 

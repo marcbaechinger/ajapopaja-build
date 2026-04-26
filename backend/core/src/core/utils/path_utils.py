@@ -15,6 +15,7 @@
 import os
 from pathlib import Path
 
+
 def sanitize_relative_path(raw: str) -> str:
     """Return a clean relative path.
     * Reject absolute paths
@@ -24,11 +25,11 @@ def sanitize_relative_path(raw: str) -> str:
     """
     if os.path.isabs(raw):
         raise ValueError("absolute path not allowed")
-    
+
     # Normalise path
     path = Path(raw).as_posix()
     path = path.lstrip("/")  # remove leading slashes
-    
+
     parts = []
     for part in Path(path).parts:
         if part == "..":
@@ -39,11 +40,11 @@ def sanitize_relative_path(raw: str) -> str:
             continue
         else:
             parts.append(part)
-    
+
     cleaned = "/".join(parts)
     if not cleaned:
         raise ValueError("workspace_path cannot be empty or resolve to empty")
-    
+
     return cleaned
 
 
@@ -51,13 +52,13 @@ def safe_join(base: Path, *parts: str) -> Path:
     """Join parts to base and verify containment."""
     # We resolve the base to make sure we have an absolute path to compare against
     base_resolved = base.resolve()
-    
+
     # Join and resolve the full path
     joined = base_resolved.joinpath(*parts).resolve()
-    
+
     try:
         joined.relative_to(base_resolved)
     except ValueError:
         raise ValueError(f"Path '{joined}' escapes root '{base_resolved}'")
-    
+
     return joined

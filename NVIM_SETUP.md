@@ -86,7 +86,32 @@ require('lspconfig').pyright.setup({
 
 ---
 
-## 5. Verification
+## 5. Unified Formatting with Ruff
+To perfectly unify the formatters between Neovim and Gemini CLI, use **Ruff** via **conform.nvim**. This ensures both tools use the configuration in `backend/pyproject.toml`.
+
+### Install Ruff:
+```bash
+cd backend && uv add --dev ruff
+```
+
+### Configure conform.nvim (Lazy.nvim):
+```lua
+{
+  "stevearc/conform.nvim",
+  opts = {
+    formatters_by_ft = {
+      python = { "ruff_format" },
+    },
+    format_on_save = {
+      -- This ensures nvim uses the backend/pyproject.toml rules
+      lsp_fallback = true,
+      timeout_ms = 500,
+    },
+  },
+}
+```
+
+## 6. Verification
 To verify your setup is working:
 1. Open a file in `backend/api/src/api/main.py`.
 2. Run `:LspInfo` and ensure the root directory is correctly identified.

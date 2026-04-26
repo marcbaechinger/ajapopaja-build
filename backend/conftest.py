@@ -12,20 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
-import uuid
 import os
-from httpx import AsyncClient, ASGITransport
-from pymongo import AsyncMongoClient
-from beanie import init_beanie
-from api.main import app
-from core import config
+import uuid
 from pathlib import Path
+
+import pytest
+from api.main import app
+from beanie import init_beanie
 from core.models.models import Pipeline, Task, User, UserChat
+from httpx import ASGITransport, AsyncClient
+from pymongo import AsyncMongoClient
+
+from core import config
+
 
 @pytest.fixture(autouse=True)
 def mock_workspaces_root(monkeypatch):
     monkeypatch.setattr(config, "WORKSPACES_ROOT", Path("/tmp"))
+
 
 @pytest.fixture
 async def init_mock_db():
@@ -33,15 +37,15 @@ async def init_mock_db():
     test_db_name = f"test_db_{uuid.uuid4().hex}"
     client = AsyncMongoClient(mongodb_uri)
     db = client[test_db_name]
-    await init_beanie(
-        database=db,
-        document_models=[Pipeline, Task, User, UserChat]
-    )
+    await init_beanie(database=db, document_models=[Pipeline, Task, User, UserChat])
     yield test_db_name
     await client.drop_database(test_db_name)
     await client.close()
 
+
 @pytest.fixture
 async def async_client():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
         yield client

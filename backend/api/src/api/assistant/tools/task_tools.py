@@ -12,13 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List, Dict, Optional
-from core.models.models import Task
-from core.queries import task as task_queries
-from core.queries import pipeline as pipeline_queries
-from core.exceptions import EntityNotFoundError
+from typing import Dict, Optional
+
 from api.assistant.decorators import register_tool
-from api.websocket_manager import manager, WSMessage
+from api.websocket_manager import WSMessage, manager
+from core.exceptions import EntityNotFoundError
+from core.models.models import Task
+from core.queries import pipeline as pipeline_queries
+from core.queries import task as task_queries
 
 # Tool Categories
 READ_ONLY = "read_only"
@@ -30,7 +31,7 @@ async def list_tasks(
     pipeline_id: str,
     offset: int = 0,
     page_size: int = 5,
-    sort_order: str = "last_created_first"
+    sort_order: str = "last_created_first",
 ) -> Dict:
     """
     Returns a paginated list of tasks belonging to a specific pipeline, up to 5 tasks at a time.
@@ -41,7 +42,7 @@ async def list_tasks(
         offset: The number of items to skip for pagination (default: 0).
         page_size: The number of items to return at once (default: 5, max: 5).
         sort_order: Order of the returned tasks. Can be 'last_created_first', 'last_implemented_first', or 'default' (default: 'last_created_first').
-    
+
     Returns:
         A JSON dictionary containing:
         - total_tasks: The total number of non-deleted tasks in the pipeline.
@@ -59,7 +60,9 @@ async def list_tasks(
         }
 
     page_size = min(page_size, 5)  # Enforce max 5
-    return await task_queries.get_tasks_for_tool(pipeline_id, offset, page_size, sort_order)
+    return await task_queries.get_tasks_for_tool(
+        pipeline_id, offset, page_size, sort_order
+    )
 
 
 @register_tool(tool_type=READ_ONLY)
@@ -102,7 +105,7 @@ async def create_task(
         title=title, spec=spec, want_design_doc=want_design_doc, pipeline_id=pipeline_id
     )
     new_task = await task_queries.create_task(pipeline_id, task, actor="assistant")
-    
+
     await manager.broadcast(
         WSMessage(type="TASK_CREATED", payload=new_task.model_dump(mode="json"))
     )
@@ -122,7 +125,7 @@ async def update_task_spec(task_id: str, spec: str) -> Dict:
     updated_task = await task_queries.update_task_details(
         task_id, task.version, spec=spec, actor="assistant"
     )
-    
+
     await manager.notify_task_update(task_id)
     return updated_task.model_dump(mode="json")
 
@@ -140,6 +143,6 @@ async def update_design_doc(task_id: str, design_doc: str) -> Dict:
     updated_task = await task_queries.update_task_details(
         task_id, task.version, design_doc=design_doc, actor="assistant"
     )
-    
+
     await manager.notify_task_update(task_id)
     return updated_task.model_dump(mode="json")

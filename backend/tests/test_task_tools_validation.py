@@ -15,12 +15,14 @@
 import pytest
 from api.assistant.tools.task_tools import create_task, list_tasks
 from core.models.models import Pipeline
-from core.exceptions import EntityNotFoundError
+
 
 @pytest.mark.asyncio
 async def test_create_task_pipeline_validation(init_mock_db):
     # Test with non-existent pipeline ID
-    result = await create_task(pipeline_id="69e2d04b3c5ec70ad0904437", title="Test Task")
+    result = await create_task(
+        pipeline_id="69e2d04b3c5ec70ad0904437", title="Test Task"
+    )
     assert "error" in result
     assert "Pipeline with ID '69e2d04b3c5ec70ad0904437' not found" in result["error"]
 
@@ -28,10 +30,11 @@ async def test_create_task_pipeline_validation(init_mock_db):
     pipeline = Pipeline(name="Valid Pipeline")
     await pipeline.insert()
     pipeline_id = str(pipeline.id)
-    
+
     result = await create_task(pipeline_id=pipeline_id, title="Valid Task")
     assert result["title"] == "Valid Task"
     assert result["pipeline_id"] == pipeline_id
+
 
 @pytest.mark.asyncio
 async def test_list_tasks_pipeline_validation(init_mock_db):
@@ -44,7 +47,7 @@ async def test_list_tasks_pipeline_validation(init_mock_db):
     pipeline = Pipeline(name="Valid Pipeline")
     await pipeline.insert()
     pipeline_id = str(pipeline.id)
-    
+
     result = await list_tasks(pipeline_id=pipeline_id)
     assert "tasks" in result
     assert result["total_tasks"] == 0

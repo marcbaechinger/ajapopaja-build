@@ -1,7 +1,9 @@
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
 from api.assistant.session import AssistantSession
 from core.models.models import ChatMessage
+
 
 @pytest.mark.asyncio
 async def test_llm_loop_retry_logic():
@@ -9,33 +11,53 @@ async def test_llm_loop_retry_logic():
     history = [ChatMessage(role="user", content="hello")]
     mock_on_update = AsyncMock()
 
-    session = AssistantSession(user_id="test_user", history=history, on_update=mock_on_update)
+    session = AssistantSession(
+        user_id="test_user", history=history, on_update=mock_on_update
+    )
     session._save_history = AsyncMock()
 
     # Mock ollama.chat to fail 2 times then succeed
     call_count = 0
+
     async def mock_chat(*args, **kwargs):
         nonlocal call_count
         call_count += 1
         if call_count <= 2:
             raise Exception(f"Mocked JSON decode error {call_count}")
         else:
+
             async def async_gen():
                 yield {"message": {"content": "success"}}
+
             return async_gen()
 
-    with patch("api.assistant.session.ollama.AsyncClient.chat", new_callable=AsyncMock) as mock_chat_method:
+    with patch(
+        "api.assistant.session.ollama.AsyncClient.chat", new_callable=AsyncMock
+    ) as mock_chat_method:
         mock_chat_method.side_effect = mock_chat
-        
+
         await session._run_llm_loop()
 
         # The loop should have run 3 times
         assert call_count == 3
         # System messages should have been added for the errors
-        assert any("Mocked JSON decode error 1" in msg.content for msg in session.history if msg.role == "system")
-        assert any("Mocked JSON decode error 2" in msg.content for msg in session.history if msg.role == "system")
+        assert any(
+            "Mocked JSON decode error 1" in msg.content
+            for msg in session.history
+            if msg.role == "system"
+        )
+        assert any(
+            "Mocked JSON decode error 2" in msg.content
+            for msg in session.history
+            if msg.role == "system"
+        )
         # Final success message should be in history
-        assert any("success" in msg.content for msg in session.history if msg.role == "assistant")
+        assert any(
+            "success" in msg.content
+            for msg in session.history
+            if msg.role == "assistant"
+        )
+
 
 @pytest.mark.asyncio
 async def test_llm_loop_max_retries():
@@ -43,20 +65,26 @@ async def test_llm_loop_max_retries():
     history = [ChatMessage(role="user", content="hello")]
     mock_on_update = AsyncMock()
 
-    session = AssistantSession(user_id="test_user", history=history, on_update=mock_on_update)
+    session = AssistantSession(
+        user_id="test_user", history=history, on_update=mock_on_update
+    )
     session._save_history = AsyncMock()
 
     # Mock ollama.chat to always fail
     async def mock_chat_fail(*args, **kwargs):
         raise Exception("Persistent error")
 
-    with patch("api.assistant.session.ollama.AsyncClient.chat", new_callable=AsyncMock) as mock_chat_method:
+    with patch(
+        "api.assistant.session.ollama.AsyncClient.chat", new_callable=AsyncMock
+    ) as mock_chat_method:
         mock_chat_method.side_effect = mock_chat_fail
-        
+
         await session._run_llm_loop()
 
         # Check that it eventually stopped and sent an error update
-        mock_on_update.assert_any_call({
-            "type": "error",
-            "message": "Assistant failed to produce a valid response after multiple attempts."
-        })
+        mock_on_update.assert_any_call(
+            {
+                "type": "error",
+                "message": "Assistant failed to produce a valid response after multiple attempts.",
+            }
+        )

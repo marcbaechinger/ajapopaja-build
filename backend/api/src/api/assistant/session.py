@@ -12,15 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import asyncio
 import json
 import logging
+from typing import Any, Awaitable, Callable, Dict, List, Optional
+
 import ollama
-from typing import List, Dict, Any, Optional, Callable, Awaitable
-from core import config
 from core.models.models import ChatMessage, UserChat
+
+from core import config
+
 from .tool_registry import registry
-from . import tools  # Ensure all tools in the package are imported and registered
 
 logger = logging.getLogger(__name__)
 
@@ -39,11 +40,11 @@ class AssistantSession:
         self.on_update = on_update
         self.is_processing = False
         self.pending_tool_call: Optional[Dict] = None
-        
+
         headers = {}
         if config.OLLAMA_API_KEY:
             headers["Authorization"] = f"Bearer {config.OLLAMA_API_KEY}"
-            
+
         self.client = ollama.AsyncClient(host=config.OLLAMA_HOST, headers=headers)
 
     async def _save_history(self):
@@ -103,7 +104,6 @@ class AssistantSession:
         # Continue LLM loop
         await self._run_llm_loop()
 
-
     async def reject_tool(self, tool_call_id: str):
         pending_id = (self.pending_tool_call or {}).get("id") or "legacy_id"
         if not self.pending_tool_call or pending_id != tool_call_id:
@@ -119,7 +119,9 @@ class AssistantSession:
         self.pending_tool_call = None
 
         # Add a rejection message as the tool result
-        result = {"error": "Tool rejected by the user. Do not try again without asking the user for the reason of rejection."}
+        result = {
+            "error": "Tool rejected by the user. Do not try again without asking the user for the reason of rejection."
+        }
 
         # Append tool result to history
         self.history.append(
@@ -142,10 +144,12 @@ class AssistantSession:
 
     async def _run_llm_loop(self, retry_count: int = 0):
         if retry_count >= 3:
-            await self.on_update({
-                "type": "error",
-                "message": "Assistant failed to produce a valid response after multiple attempts."
-            })
+            await self.on_update(
+                {
+                    "type": "error",
+                    "message": "Assistant failed to produce a valid response after multiple attempts.",
+                }
+            )
             return
 
         # Convert history to Ollama format
@@ -155,7 +159,7 @@ class AssistantSession:
             "IMPORTANT: If a tool call is rejected by the user, you MUST NOT retry the same tool call without first asking the user for the reason of rejection or for further instructions."
         )
         messages = [{"role": "system", "content": system_instruction}]
-        
+
         for msg in self.history:
             m = {"role": msg.role, "content": msg.content}
             if msg.tool_calls:
@@ -206,7 +210,9 @@ class AssistantSession:
                     if not thought and hasattr(msg, "reasoning_content"):
                         thought = getattr(msg, "reasoning_content", "")
                     if not thought and isinstance(msg, dict):
-                        thought = msg.get("thought", "") or msg.get("reasoning_content", "")
+                        thought = msg.get("thought", "") or msg.get(
+                            "reasoning_content", ""
+                        )
 
                     if thought:
                         full_thought += thought
@@ -306,7 +312,7 @@ class AssistantSession:
             self.history.append(
                 ChatMessage(
                     role="system",
-                    content=f"Error: Your last response resulted in a syntax or parsing error. Details: {str(e)}. Please retry with a corrected tool call or response."
+                    content=f"Error: Your last response resulted in a syntax or parsing error. Details: {str(e)}. Please retry with a corrected tool call or response.",
                 )
             )
             await self._save_history()

@@ -12,16 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-import subprocess
-import re
 import logging
+import os
+import re
+import subprocess
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
+
+from api.assistant.decorators import register_tool
+from core.config import IGNORED_DIRECTORIES
 from core.queries import pipeline as pipeline_queries
 from core.utils.path_utils import safe_join
-from core.config import IGNORED_DIRECTORIES
-from api.assistant.decorators import register_tool
 
 logger = logging.getLogger(__name__)
 
@@ -56,13 +57,17 @@ def _sanitize_path(workspace_path: str, relative_path: str) -> Optional[str]:
         return None
 
 
-def _get_match_context(text: str, pattern: str, ignore_case: bool, context: int = 50) -> str:
+def _get_match_context(
+    text: str, pattern: str, ignore_case: bool, context: int = 50
+) -> str:
     flags = re.IGNORECASE if ignore_case else 0
     try:
         match = re.search(pattern, text, flags)
         if not match:
             # Fallback if re.search doesn't find it
-            return (text[: context * 2] + ("..." if len(text) > context * 2 else "")).strip()
+            return (
+                text[: context * 2] + ("..." if len(text) > context * 2 else "")
+            ).strip()
 
         start = max(0, match.start() - context)
         end = min(len(text), match.end() + context)
@@ -72,7 +77,9 @@ def _get_match_context(text: str, pattern: str, ignore_case: bool, context: int 
 
         return (prefix + text[start:end] + suffix).strip()
     except Exception:
-        return (text[: context * 2] + ("..." if len(text) > context * 2 else "")).strip()
+        return (
+            text[: context * 2] + ("..." if len(text) > context * 2 else "")
+        ).strip()
 
 
 @register_tool(tool_type=READ_ONLY)
@@ -94,7 +101,9 @@ async def grep(
         context_lines: Number of lines of context to include before and after matches.
     """
     if file_extension and not file_extension.startswith("*."):
-        return {"error": "file_extension must be in the format '*.extension' (e.g., '*.ts')"}
+        return {
+            "error": "file_extension must be in the format '*.extension' (e.g., '*.ts')"
+        }
 
     pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
     if not pipeline or not pipeline.workspace_abs_path:
@@ -142,7 +151,7 @@ async def grep(
                 path = parts[0]
                 line_num = int(parts[1])
                 text = parts[2]
-                
+
                 # Remove './' from start of path if present
                 clean_path = path[2:] if path.startswith("./") else path
                 all_matches.append(
@@ -239,7 +248,9 @@ async def find(
         # Filter out ignored directories manually
         lines = output.splitlines()
         ignored = [f"{d}/" for d in IGNORED_DIRECTORIES]
-        filtered_lines = [l for l in lines if not any(ig in l for ig in ignored)]
+        filtered_lines = [
+            line for line in lines if not any(ig in line for ig in ignored)
+        ]
         return "\n".join(filtered_lines)[:10000]
     except Exception as e:
         return f"Error: {str(e)}"

@@ -12,21 +12,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from fastapi import WebSocket
-from typing import List, Dict, Any, Callable, Awaitable
-from pydantic import BaseModel, Field
-from core.queries import task as task_queries
 import json
 import logging
+from typing import Any, Awaitable, Callable, Dict
+
+from core.queries import task as task_queries
+from fastapi import WebSocket
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
+
 
 class WSMessage(BaseModel):
     type: str
     id: str = Field(default="")
     payload: Any = Field(default_factory=dict)
 
+
 MessageHandler = Callable[[WSMessage, WebSocket], Awaitable[None]]
+
 
 class ConnectionManager:
     def __init__(self):
@@ -36,25 +40,35 @@ class ConnectionManager:
     async def connect(self, websocket: WebSocket, client_id: str):
         await websocket.accept()
         self.active_connections[client_id] = websocket
-        logger.info(f"New WebSocket connection: {client_id}. Total: {len(self.active_connections)}")
+        logger.info(
+            f"New WebSocket connection: {client_id}. Total: {len(self.active_connections)}"
+        )
 
     async def add_connection(self, websocket: WebSocket, client_id: str):
         """Adds an already accepted connection."""
         self.active_connections[client_id] = websocket
-        logger.info(f"Accepted connection added: {client_id}. Total: {len(self.active_connections)}")
+        logger.info(
+            f"Accepted connection added: {client_id}. Total: {len(self.active_connections)}"
+        )
 
     def disconnect(self, websocket: WebSocket, client_id: str = None):
         if client_id and client_id in self.active_connections:
             if self.active_connections[client_id] == websocket:
                 del self.active_connections[client_id]
-                logger.info(f"WebSocket disconnected: {client_id}. Total: {len(self.active_connections)}")
+                logger.info(
+                    f"WebSocket disconnected: {client_id}. Total: {len(self.active_connections)}"
+                )
                 return
 
         # Fallback if client_id is not provided or doesn't match
-        to_remove = [cid for cid, ws in self.active_connections.items() if ws == websocket]
+        to_remove = [
+            cid for cid, ws in self.active_connections.items() if ws == websocket
+        ]
         for cid in to_remove:
             del self.active_connections[cid]
-            logger.info(f"WebSocket disconnected: {cid}. Total: {len(self.active_connections)}")
+            logger.info(
+                f"WebSocket disconnected: {cid}. Total: {len(self.active_connections)}"
+            )
 
     async def broadcast(self, message: WSMessage):
         """Send a message to all connected clients."""
@@ -83,10 +97,10 @@ class ConnectionManager:
     async def notify_task_update(self, task_id: str):
         """Fetch updated task and broadcast to clients."""
         task = await task_queries.get_task_by_id(task_id)
-        await self.broadcast(WSMessage(
-            type="TASK_UPDATED",
-            payload=task.model_dump(mode='json')
-        ))
+        await self.broadcast(
+            WSMessage(type="TASK_UPDATED", payload=task.model_dump(mode="json"))
+        )
+
 
 # Global instance
 # Global instance

@@ -13,15 +13,17 @@
 # limitations under the License.
 
 import os
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
-from typing import List, Optional, Dict, Any
-from datetime import datetime, UTC
-from pydantic import Field, BaseModel, field_validator
+from typing import Any, Dict, List, Optional
+
 from beanie import Document
+from core.utils.path_utils import safe_join, sanitize_relative_path
+from pydantic import BaseModel, Field, field_validator
 
 from core import config
-from core.utils.path_utils import safe_join, sanitize_relative_path
+
 
 class TaskStatus(str, Enum):
     CREATED = "created"
@@ -32,11 +34,13 @@ class TaskStatus(str, Enum):
     DISCARDED = "discarded"
     FAILED = "failed"
 
+
 class StateTransition(BaseModel):
     from_status: Optional[TaskStatus] = None
     to_status: TaskStatus
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     by: str  # "user", "mcp", "system"
+
 
 class Task(Document):
     title: str
@@ -62,10 +66,12 @@ class Task(Document):
     class Settings:
         name = "tasks"
 
+
 class PipelineStatus(str, Enum):
     ACTIVE = "active"
     PAUSED = "paused"
     COMPLETED = "completed"
+
 
 class Pipeline(Document):
     name: str
@@ -90,12 +96,18 @@ class Pipeline(Document):
                     # Check if it's actually within config.WORKSPACES_ROOT
                     if rel_path.startswith(".."):
                         import logging
-                        logging.warning(f"Absolute path {v} is outside config.WORKSPACES_ROOT {config.WORKSPACES_ROOT}. Nullifying workspace_path.")
+
+                        logging.warning(
+                            f"Absolute path {v} is outside config.WORKSPACES_ROOT {config.WORKSPACES_ROOT}. Nullifying workspace_path."
+                        )
                         return None
                     v = rel_path
                 except ValueError as e:
                     import logging
-                    logging.warning(f"Could not migrate absolute path {v} to config.WORKSPACES_ROOT {config.WORKSPACES_ROOT}: {e}. Nullifying workspace_path.")
+
+                    logging.warning(
+                        f"Could not migrate absolute path {v} to config.WORKSPACES_ROOT {config.WORKSPACES_ROOT}: {e}. Nullifying workspace_path."
+                    )
                     return None
 
             return sanitize_relative_path(v)
@@ -110,6 +122,7 @@ class Pipeline(Document):
     class Settings:
         name = "pipelines"
 
+
 class User(Document):
     username: str
     hashed_password: str
@@ -122,12 +135,14 @@ class User(Document):
     class Settings:
         name = "users"
 
+
 class ChatMessage(BaseModel):
     role: str  # "user", "assistant", "system", "tool"
     content: str
     thought: Optional[str] = None
     tool_calls: Optional[List[Dict[str, Any]]] = None
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
 
 class UserChat(Document):
     user_id: str

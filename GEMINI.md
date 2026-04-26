@@ -42,8 +42,10 @@ This document provides a condensed, high-signal context for Gemini CLI and other
 
 1. **Architecture First**: Consult `design/dd_architecture.md` before structural changes.
 2. **Model Consistency**: If task logic changes, update `backend/core/src/core/models/models.py` and ensure both API and MCP are aligned.
-3. **Validation**: After any backend change, verify with `uv run pytest`. After frontend changes, ensure `npm run build` succeeds.
-4. **Environment**: Ensure `MONGODB_URI` and `DATABASE_NAME` are set in your execution environment.
+- **Validation**: After any backend change, verify with `uv run pytest`. After frontend changes, ensure `npm run build` succeeds.
+- **Python Formatting**: Use Ruff to ensure consistent formatting. Run `uv run ruff format` and `uv run ruff check --fix` in the `backend/` directory after modifying Python files.
+- **Environment**: Ensure `MONGODB_URI` and `DATABASE_NAME` are set in your execution environment.
+
 
 ## 5. Documentation Reference
 

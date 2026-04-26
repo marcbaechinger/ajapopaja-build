@@ -13,13 +13,13 @@
 # limitations under the License.
 
 import pytest
-from core.models.models import Task, TaskStatus, Pipeline
 from ajapopaja_mcp.server import (
-    get_next_task,
-    update_task_design_doc,
     complete_task,
+    get_next_task,
     get_task_status,
+    update_task_design_doc,
 )
+from core.models.models import Pipeline, Task, TaskStatus
 
 
 @pytest.fixture(autouse=True)
@@ -57,12 +57,12 @@ async def test_mcp_get_next_task_design_doc_ready():
 
     # Task that wants design doc and has it
     task = Task(
-        title="Design Ready Task", 
-        pipeline_id=pid, 
-        status=TaskStatus.SCHEDULED, 
+        title="Design Ready Task",
+        pipeline_id=pid,
+        status=TaskStatus.SCHEDULED,
         want_design_doc=True,
         design_doc="# My Design",
-        order=10
+        order=10,
     )
     await task.insert()
 
@@ -74,12 +74,12 @@ async def test_mcp_get_next_task_design_doc_ready():
 
     # Task that wants design doc but it's empty
     task2 = Task(
-        title="Design Not Ready Task", 
-        pipeline_id=pid, 
-        status=TaskStatus.SCHEDULED, 
+        title="Design Not Ready Task",
+        pipeline_id=pid,
+        status=TaskStatus.SCHEDULED,
         want_design_doc=True,
         design_doc="",
-        order=20
+        order=20,
     )
     await task2.insert()
 
@@ -172,7 +172,7 @@ async def test_mcp_complete_task_invalid_hash():
         task_id="123", commit_hash="invalid_hash_!", completion_info="", version=1
     )
     assert "Error: Invalid commit hash" in result
-    
+
     result_empty = await complete_task(
         task_id="123", commit_hash="", completion_info="", version=1
     )

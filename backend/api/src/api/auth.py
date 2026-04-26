@@ -13,13 +13,14 @@
 # limitations under the License.
 
 import os
-import bcrypt
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from typing import Optional, Union
-from jose import JWTError, jwt
-from fastapi import Depends, HTTPException, status, Request
-from fastapi.security import OAuth2PasswordBearer
+
+import bcrypt
 from core.models.models import User
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError, jwt
 
 # Configuration
 SECRET_KEY = os.getenv("AUTH_SECRET_KEY", "your-secret-key-for-development-only")

@@ -12,15 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import json
 import re
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional
+
 import git
+from api.assistant.decorators import register_tool
 from core.queries import pipeline as pipeline_queries
 from core.utils.path_utils import safe_join
-from api.assistant.decorators import register_tool
 
 # Tool Categories
 READ_ONLY = "read_only"

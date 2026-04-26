@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List, Dict
-from core.queries import pipeline as pipeline_queries
+from typing import Dict, List
+
 from api.assistant.decorators import register_tool
+from core.queries import pipeline as pipeline_queries
 
 
 @register_tool()

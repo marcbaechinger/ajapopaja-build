@@ -13,9 +13,10 @@
 # limitations under the License.
 
 import time
-from typing import Dict, Optional, Callable, Awaitable
-from core.models.models import UserChat
+from typing import Awaitable, Callable, Dict
+
 from api.assistant.session import AssistantSession
+from core.models.models import UserChat
 
 
 class AssistantManager:

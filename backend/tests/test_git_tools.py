@@ -12,18 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
 import os
-import tempfile
 import subprocess
+import tempfile
+
+import pytest
 from api.assistant.tools.git_tools import (
+    git_blame,
+    git_branch_list,
+    git_commit_hunks,
+    git_diff,
     git_log,
     git_show_commit,
-    git_commit_hunks,
-    git_blame,
     git_status,
-    git_branch_list,
-    git_diff,
 )
 from core.models.models import Pipeline
 

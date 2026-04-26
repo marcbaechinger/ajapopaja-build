@@ -13,24 +13,29 @@
 # limitations under the License.
 
 from typing import List, Optional
-from beanie import PydanticObjectId
-from core.models.models import Pipeline, Task, PipelineStatus
+
 from core.exceptions import EntityNotFoundError, VersionMismatchError
+from core.models.models import Pipeline, PipelineStatus, Task
+
 
 async def get_all_pipelines(include_deleted: bool = False) -> List[Pipeline]:
     if include_deleted:
         return await Pipeline.find_all().to_list()
     return await Pipeline.find(Pipeline.deleted == False).to_list()
 
-async def get_pipeline_by_id(pipeline_id: str, include_deleted: bool = False) -> Pipeline:
+
+async def get_pipeline_by_id(
+    pipeline_id: str, include_deleted: bool = False
+) -> Pipeline:
     try:
         pipeline = await Pipeline.get(pipeline_id)
     except Exception:
         pipeline = None
-        
+
     if not pipeline or (not include_deleted and pipeline.deleted):
         raise EntityNotFoundError(f"Pipeline with ID {pipeline_id} not found")
     return pipeline
+
 
 async def create_pipeline(pipeline: Pipeline) -> Pipeline:
     # Ensure version is set to 1 for new pipelines
@@ -38,22 +43,23 @@ async def create_pipeline(pipeline: Pipeline) -> Pipeline:
     await pipeline.insert()
     return pipeline
 
+
 async def update_pipeline(
-    pipeline_id: str, 
+    pipeline_id: str,
     version: int,
-    name: Optional[str] = None, 
+    name: Optional[str] = None,
     status: Optional[PipelineStatus] = None,
     workspace_path: Optional[str] = None,
     manage_gemini: Optional[bool] = None,
-    manage_vibe: Optional[bool] = None
+    manage_vibe: Optional[bool] = None,
 ) -> Pipeline:
     pipeline = await get_pipeline_by_id(pipeline_id)
-    
+
     if pipeline.version != version:
         raise VersionMismatchError(
             f"Pipeline version mismatch. Client has {version}, DB has {pipeline.version}"
         )
-    
+
     if name is not None:
         pipeline.name = name
     if status is not None:
@@ -68,6 +74,7 @@ async def update_pipeline(
     pipeline.version += 1
     await pipeline.save()
     return pipeline
+
 
 async def delete_pipeline(pipeline_id: str):
     pipeline = await get_pipeline_by_id(pipeline_id)
