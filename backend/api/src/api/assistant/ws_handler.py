@@ -14,9 +14,11 @@
 
 import logging
 
+from fastapi import WebSocket
+
+import api.assistant.tools  # noqa: F401
 from api.auth import get_current_user_from_token
 from api.websocket_manager import WSMessage, manager
-from fastapi import WebSocket
 
 from .manager import manager as assistant_manager
 

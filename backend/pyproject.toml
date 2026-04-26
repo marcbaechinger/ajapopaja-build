@@ -34,6 +34,9 @@ target-version = "py311"
 select = ["E", "F", "I"] # Error, Pyflakes, Isort
 ignore = ["E712"] # Ignore equality comparison to True/False for Beanie/SQLAlchemy
 
+[tool.ruff.lint.isort]
+known-first-party = ["api", "core", "ajapopaja_mcp"]
+
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
