@@ -17,14 +17,18 @@
 import { BaseDialog } from './dialog_common.ts';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import { diffLines } from 'diff';
 import { DesignDocHistory, Task } from '../../core/domain.ts';
 import { AppContext } from '../../core/AppContext.ts';
+
+type ViewMode = 'side-by-side' | 'unified';
 
 export class DesignDocDiffDialog extends BaseDialog<void> {
   private task: Task;
   private history: DesignDocHistory[] = [];
   private selectedHistoryIndex: number = -1;
   private context: AppContext;
+  private viewMode: ViewMode = 'side-by-side';
 
   constructor(context: AppContext, task: Task) {
     super({ 
@@ -70,6 +74,14 @@ export class DesignDocDiffDialog extends BaseDialog<void> {
       });
     }
 
+    const modeToggle = this.dialog.querySelectorAll('input[name="view-mode"]');
+    modeToggle.forEach(input => {
+      input.addEventListener('change', (e) => {
+        this.viewMode = (e.target as HTMLInputElement).value as ViewMode;
+        this.refresh();
+      });
+    });
+
     const restoreBtn = this.dialog.querySelector('#restore-version-btn');
     if (restoreBtn) {
       restoreBtn.addEventListener('click', async () => {
@@ -87,6 +99,24 @@ export class DesignDocDiffDialog extends BaseDialog<void> {
     }
   }
 
+  private escapeHtml(text: string): string {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  private renderUnifiedDiff(oldText: string, newText: string): string {
+    const changes = diffLines(oldText, newText);
+    const diffHtml = changes.map(part => {
+      const tag = part.added ? 'ins' : part.removed ? 'del' : 'span';
+      // Use classes for block-level diffing if it contains newlines
+      const className = part.added ? 'bg-green-500/10 block' : part.removed ? 'bg-red-500/10 block' : '';
+      return `<${tag} class="${className}">${this.escapeHtml(part.value)}</${tag}>`;
+    }).join('');
+    
+    return `<pre class="whitespace-pre-wrap font-mono text-sm p-4 bg-black/20 rounded-xl border border-app-border/30">${diffHtml}</pre>`;
+  }
+
   protected renderBody(): string {
     if (!this.history || (this.history.length === 0 && this.selectedHistoryIndex === -1)) {
       return '<div class="p-8 text-app-muted italic">No historical versions found.</div>';
@@ -99,45 +129,72 @@ export class DesignDocDiffDialog extends BaseDialog<void> {
 
     return `
       <div class="flex flex-col h-full">
-        <div class="p-4 border-b border-app-border flex items-center justify-between bg-app-surface/30">
-          <div class="flex items-center gap-4">
-            <label for="version-selector" class="text-xs font-bold text-app-muted uppercase tracking-wider">Compare with Version:</label>
-            <select id="version-selector" class="bg-app-bg border border-app-border rounded px-2 py-1 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1">
-              ${this.history.map((h, i) => `
-                <option value="${i}" ${this.selectedHistoryIndex === i ? 'selected' : ''}>
-                  Version ${h.version} (${new Date(h.timestamp).toLocaleString()})
-                </option>
-              `).join('')}
-            </select>
+        <div class="p-4 border-b border-app-border flex flex-wrap items-center justify-between gap-4 bg-app-surface/30">
+          <div class="flex items-center gap-6">
+            <div class="flex items-center gap-3">
+              <label for="version-selector" class="text-[10px] font-black text-app-muted uppercase tracking-widest">Compare with:</label>
+              <select id="version-selector" class="bg-app-bg border border-app-border rounded-lg px-3 py-1.5 text-xs text-app-text outline-none focus:ring-2 focus:ring-app-accent-1/50 transition-all">
+                ${this.history.map((h, i) => `
+                  <option value="${i}" ${this.selectedHistoryIndex === i ? 'selected' : ''}>
+                    v${h.version} (${new Date(h.timestamp).toLocaleString()})
+                  </option>
+                `).join('')}
+              </select>
+            </div>
+
+            <div class="flex items-center bg-app-bg border border-app-border rounded-lg p-1">
+              <label class="flex items-center gap-2 px-3 py-1 rounded-md cursor-pointer transition-all ${this.viewMode === 'side-by-side' ? 'bg-app-surface text-app-accent-1 shadow-sm' : 'text-app-muted hover:text-app-text'}">
+                <input type="radio" name="view-mode" value="side-by-side" class="hidden" ${this.viewMode === 'side-by-side' ? 'checked' : ''}>
+                <span class="text-[10px] font-bold uppercase tracking-wider">Side-by-Side</span>
+              </label>
+              <label class="flex items-center gap-2 px-3 py-1 rounded-md cursor-pointer transition-all ${this.viewMode === 'unified' ? 'bg-app-surface text-app-accent-1 shadow-sm' : 'text-app-muted hover:text-app-text'}">
+                <input type="radio" name="view-mode" value="unified" class="hidden" ${this.viewMode === 'unified' ? 'checked' : ''}>
+                <span class="text-[10px] font-bold uppercase tracking-wider">Unified Diff</span>
+              </label>
+            </div>
           </div>
+
           ${this.selectedHistoryIndex !== -1 ? `
-            <button id="restore-version-btn" class="px-4 py-1.5 bg-app-accent-2 text-white rounded-lg hover:brightness-110 transition-all text-xs font-bold shadow-md cursor-pointer">
-              Restore this version
+            <button id="restore-version-btn" class="px-4 py-2 bg-app-accent-2/10 hover:bg-app-accent-2/20 text-app-accent-2 border border-app-accent-2/30 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest cursor-pointer active:scale-95">
+              Restore v${historicalVersion}
             </button>
           ` : ''}
         </div>
         
-        <div class="grid grid-cols-2 gap-0 flex-grow overflow-hidden">
-          <!-- Historical Version -->
-          <div class="flex flex-col border-r border-app-border">
-            <div class="p-2 bg-app-surface border-b border-app-border flex justify-between items-center">
-              <span class="text-[10px] font-black uppercase tracking-widest text-app-muted">Historical Version ${historicalVersion}</span>
-              <span class="text-[10px] text-app-muted">${historicalTime}</span>
+        <div class="flex-grow overflow-hidden bg-app-bg/50">
+          ${this.viewMode === 'side-by-side' ? `
+            <div class="grid grid-cols-2 gap-0 h-full">
+              <!-- Historical Version -->
+              <div class="flex flex-col border-r border-app-border h-full">
+                <div class="px-4 py-2 bg-app-surface/50 border-b border-app-border flex justify-between items-center">
+                  <span class="text-[10px] font-black uppercase tracking-widest text-app-muted">Historical v${historicalVersion}</span>
+                  <span class="text-[10px] text-app-muted/60 font-medium">${historicalTime}</span>
+                </div>
+                <div class="p-8 overflow-y-auto prose-theme prose-sm max-w-none custom-scrollbar">
+                  ${DOMPurify.sanitize(marked.parse(historicalDoc) as string)}
+                </div>
+              </div>
+              
+              <!-- Current Version -->
+              <div class="flex flex-col h-full">
+                <div class="px-4 py-2 bg-app-surface/50 border-b border-app-border flex justify-between items-center">
+                  <span class="text-[10px] font-black uppercase tracking-widest text-app-accent-1">Current v${this.task.version}</span>
+                </div>
+                <div class="p-8 overflow-y-auto prose-theme prose-sm max-w-none custom-scrollbar">
+                  ${DOMPurify.sanitize(marked.parse(currentDoc) as string)}
+                </div>
+              </div>
             </div>
-            <div class="p-6 overflow-y-auto prose-theme prose-sm max-w-none">
-              ${DOMPurify.sanitize(marked.parse(historicalDoc) as string)}
+          ` : `
+            <div class="h-full flex flex-col">
+              <div class="px-4 py-2 bg-app-surface/50 border-b border-app-border">
+                <span class="text-[10px] font-black uppercase tracking-widest text-app-accent-1">Unified Diff: v${historicalVersion} → v${this.task.version}</span>
+              </div>
+              <div class="p-8 overflow-y-auto custom-scrollbar">
+                ${this.renderUnifiedDiff(historicalDoc, currentDoc)}
+              </div>
             </div>
-          </div>
-          
-          <!-- Current Version -->
-          <div class="flex flex-col">
-            <div class="p-2 bg-app-surface border-b border-app-border flex justify-between items-center">
-              <span class="text-[10px] font-black uppercase tracking-widest text-app-accent-1">Current Version ${this.task.version}</span>
-            </div>
-            <div class="p-6 overflow-y-auto prose-theme prose-sm max-w-none">
-              ${DOMPurify.sanitize(marked.parse(currentDoc) as string)}
-            </div>
-          </div>
+          `}
         </div>
       </div>
     `;
@@ -146,7 +203,7 @@ export class DesignDocDiffDialog extends BaseDialog<void> {
   protected renderFooter(): string {
     return `
       <div class="p-4 border-t border-app-border flex justify-end bg-app-surface/30">
-        <button id="dialog-close-action" class="px-6 py-2 bg-app-surface border border-app-border hover:border-app-accent-1 text-app-text rounded-xl transition-all font-bold cursor-pointer">
+        <button id="dialog-close-action" class="px-8 py-2.5 bg-app-surface border border-app-border hover:border-app-accent-1 text-app-text rounded-xl transition-all font-bold text-sm cursor-pointer active:scale-95 shadow-lg">
           Close
         </button>
       </div>

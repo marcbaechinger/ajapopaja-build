@@ -264,3 +264,18 @@ body {
 .dialog-open .dialog-content {
   @apply scale-100 opacity-100;
 }
+
+/* Diff Highlighting */
+ins {
+  @apply !bg-green-500/20 !text-green-300 !no-underline px-0.5 rounded-sm;
+}
+del {
+  @apply !bg-red-500/20 !text-red-300 !line-through px-0.5 rounded-sm;
+}
+
+[data-theme='light'] ins {
+  @apply !bg-green-100 !text-green-800;
+}
+[data-theme='light'] del {
+  @apply !bg-red-100 !text-red-800;
+}
