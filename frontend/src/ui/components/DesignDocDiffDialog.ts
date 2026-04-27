@@ -110,11 +110,15 @@ export class DesignDocDiffDialog extends BaseDialog<void> {
     const diffHtml = changes.map(part => {
       const tag = part.added ? 'ins' : part.removed ? 'del' : 'span';
       // Use classes for block-level diffing if it contains newlines
-      const className = part.added ? 'bg-green-500/10 block' : part.removed ? 'bg-red-500/10 block' : '';
+      const className = part.added 
+        ? 'bg-green-500/10 block w-full' 
+        : part.removed 
+          ? 'bg-red-500/10 block w-full' 
+          : 'text-app-text/80 block w-full';
       return `<${tag} class="${className}">${this.escapeHtml(part.value)}</${tag}>`;
     }).join('');
     
-    return `<pre class="whitespace-pre-wrap font-mono text-sm p-4 bg-black/20 rounded-xl border border-app-border/30">${diffHtml}</pre>`;
+    return `<pre class="text-app-text whitespace-pre-wrap font-mono text-sm p-4 bg-app-bg/60 rounded-xl border border-app-border/30 shadow-inner">${diffHtml}</pre>`;
   }
 
   protected renderBody(): string {
