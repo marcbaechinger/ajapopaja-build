@@ -88,11 +88,11 @@ export class DesignDocDiffDialog extends BaseDialog<void> {
   }
 
   protected renderBody(): string {
-    if (this.history.length === 0 && this.selectedHistoryIndex === -1) {
+    if (!this.history || (this.history.length === 0 && this.selectedHistoryIndex === -1)) {
       return '<div class="p-8 text-app-muted italic">No historical versions found.</div>';
     }
 
-    const currentDoc = this.task.design_doc || '';
+    const currentDoc = (this.task && this.task.design_doc) || '';
     const historicalDoc = this.selectedHistoryIndex !== -1 ? this.history[this.selectedHistoryIndex].design_doc : '';
     const historicalVersion = this.selectedHistoryIndex !== -1 ? this.history[this.selectedHistoryIndex].version : 'N/A';
     const historicalTime = this.selectedHistoryIndex !== -1 ? new Date(this.history[this.selectedHistoryIndex].timestamp).toLocaleString() : '';
