@@ -19,10 +19,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from beanie import Document
-from core.utils.path_utils import safe_join, sanitize_relative_path
 from pydantic import BaseModel, Field, field_validator
 
 from core import config
+from core.utils.path_utils import safe_join, sanitize_relative_path
 
 
 class TaskStatus(str, Enum):
@@ -65,6 +65,16 @@ class Task(Document):
 
     class Settings:
         name = "tasks"
+
+
+class DesignDocHistory(Document):
+    task_id: str
+    version: int
+    design_doc: str
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    class Settings:
+        name = "design_doc_history"
 
 
 class PipelineStatus(str, Enum):

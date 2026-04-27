@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import pytest
+
 from core.models.models import Pipeline, Task, TaskStatus
 from core.queries import task as task_queries
 

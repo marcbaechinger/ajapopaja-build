@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock, patch
 
 import pytest
+
 from api.assistant.session import AssistantSession
 from core.models.models import ChatMessage
 

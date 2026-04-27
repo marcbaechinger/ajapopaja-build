@@ -16,9 +16,10 @@ import json
 import logging
 from typing import Any, Awaitable, Callable, Dict
 
-from core.queries import task as task_queries
 from fastapi import WebSocket
 from pydantic import BaseModel, Field
+
+from core.queries import task as task_queries
 
 logger = logging.getLogger(__name__)
 

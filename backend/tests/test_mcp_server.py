@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import pytest
+
 from ajapopaja_mcp.server import (
     complete_task,
     get_next_task,

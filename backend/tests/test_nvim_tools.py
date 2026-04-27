@@ -16,6 +16,7 @@ from unittest.mock import MagicMock, patch
 
 import msgpack
 import pytest
+
 from api.assistant.tools.nvim_tools import (
     nvim_open_file,
     nvim_open_selection,

@@ -17,6 +17,7 @@ import subprocess
 import tempfile
 
 import pytest
+
 from api.assistant.tools.git_tools import (
     git_blame,
     git_branch_list,

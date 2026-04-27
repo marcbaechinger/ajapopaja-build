@@ -17,7 +17,7 @@ import os
 from beanie import init_beanie
 from pymongo import AsyncMongoClient
 
-from core.models.models import Pipeline, Task, User, UserChat
+from core.models.models import DesignDocHistory, Pipeline, Task, User, UserChat
 
 
 async def init_db():
@@ -26,6 +26,7 @@ async def init_db():
 
     client = AsyncMongoClient(mongodb_uri)
     await init_beanie(
-        database=client[database_name], document_models=[Pipeline, Task, User, UserChat]
+        database=client[database_name],
+        document_models=[Pipeline, Task, DesignDocHistory, User, UserChat],
     )
     print(f"Database initialized: {database_name}")

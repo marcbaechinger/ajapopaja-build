@@ -15,6 +15,7 @@
 from datetime import datetime, timedelta
 
 import pytest
+
 from core.models.models import StateTransition, Task, TaskStatus
 from core.queries.task import get_daily_stats
 

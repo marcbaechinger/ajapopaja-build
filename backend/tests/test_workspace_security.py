@@ -13,10 +13,10 @@
 # limitations under the License.
 
 import pytest
-from core.models.models import Pipeline
-from core.utils.path_utils import safe_join, sanitize_relative_path
 
 from core import config
+from core.models.models import Pipeline
+from core.utils.path_utils import safe_join, sanitize_relative_path
 
 
 def test_sanitize_relative_path():

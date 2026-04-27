@@ -101,6 +101,16 @@ describe('TaskItem', () => {
     expect(html).toContain('title-edit');
   });
 
+  it('should render History button when design doc is present', () => {
+    const taskWithDesign = { 
+      ...mockTask, 
+      design_doc: '# Some Design'
+    };
+    const html = TaskItem.render(taskWithDesign as any);
+    expect(html).toContain('History');
+    expect(html).toContain('data-action-click="view_design_doc_history"');
+  });
+
   it('should render static title for SCHEDULED tasks', () => {
     const scheduledTask = { ...mockTask, status: TaskStatus.SCHEDULED };
     const html = TaskItem.render(scheduledTask as any);

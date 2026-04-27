@@ -15,6 +15,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from api.vibe_executor import VibeExecutor
 from core.models.models import Pipeline
 

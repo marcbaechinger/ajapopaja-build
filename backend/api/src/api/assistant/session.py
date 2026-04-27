@@ -17,9 +17,9 @@ import logging
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 import ollama
-from core.models.models import ChatMessage, UserChat
 
 from core import config
+from core.models.models import ChatMessage, UserChat
 
 from .tool_registry import registry
 

@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Optional
 
 import git
+
 from api.assistant.decorators import register_tool
 from core.queries import pipeline as pipeline_queries
 from core.utils.path_utils import safe_join

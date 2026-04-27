@@ -15,6 +15,9 @@
 import os
 from typing import List, Optional
 
+from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi.responses import StreamingResponse
+
 from api.auth import get_current_user
 from api.gemini_executor import GeminiExecutor
 from api.vibe_executor import VibeExecutor
@@ -22,8 +25,6 @@ from api.websocket_manager import WSMessage, manager
 from core.models.models import Pipeline, PipelineStatus, User
 from core.queries import pipeline as pipeline_queries
 from core.queries import task as task_queries
-from fastapi import APIRouter, Body, Depends, HTTPException
-from fastapi.responses import StreamingResponse
 
 router = APIRouter(prefix="/pipelines", tags=["pipelines"])
 

@@ -14,13 +14,14 @@
 
 from typing import List, Optional
 
+from fastapi import APIRouter, Body, Depends, Query
+from pydantic import BaseModel
+
 from api.auth import get_current_user
 from api.gemini_executor import GeminiExecutor
 from api.websocket_manager import WSMessage, manager
-from core.models.models import Task, TaskStatus, User
+from core.models.models import DesignDocHistory, Task, TaskStatus, User
 from core.queries import task as task_queries
-from fastapi import APIRouter, Body, Depends, Query
-from pydantic import BaseModel
 
 # Root router for task-specific top-level endpoints
 task_router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -34,6 +35,13 @@ class CompletedTasksResponse(BaseModel):
 class SearchTasksResponse(BaseModel):
     tasks: List[Task]
     total_count: int
+
+
+@task_router.get("/{task_id}/history", response_model=List[DesignDocHistory])
+async def get_task_design_doc_history(
+    task_id: str, current_user: User = Depends(get_current_user)
+):
+    return await task_queries.get_design_doc_history(task_id)
 
 
 @task_router.get("/search", response_model=SearchTasksResponse)

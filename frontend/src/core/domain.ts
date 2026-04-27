@@ -94,6 +94,24 @@ export class Task {
   }
 }
 
+export class DesignDocHistory {
+  id?: string;
+  task_id: string = '';
+  version: number = 0;
+  design_doc: string = '';
+  timestamp: string = '';
+
+  constructor(json: any) {
+    if (!json) return;
+    if (json._id) this.id = json._id;
+    if (json.id) this.id = json.id;
+    if (json.task_id !== undefined) this.task_id = String(json.task_id);
+    if (json.version !== undefined) this.version = Number(json.version);
+    if (json.design_doc !== undefined) this.design_doc = String(json.design_doc);
+    if (json.timestamp !== undefined) this.timestamp = String(json.timestamp);
+  }
+}
+
 export const PipelineStatus = {
   ACTIVE: "active",
   PAUSED: "paused",

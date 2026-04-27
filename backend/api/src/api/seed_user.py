@@ -14,10 +14,9 @@
 
 import asyncio
 
+from api.auth import get_password_hash
 from core.db import init_db
 from core.models.models import User
-
-from api.auth import get_password_hash
 
 """
 Development utility to seed an initial administrator user.

@@ -15,6 +15,11 @@
 from datetime import timedelta
 from typing import Optional
 
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.security import OAuth2PasswordRequestForm
+from jose import JWTError, jwt
+from pydantic import BaseModel
+
 from api.auth import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     ALGORITHM,
@@ -26,10 +31,6 @@ from api.auth import (
     get_password_hash,
 )
 from core.models.models import User
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from fastapi.security import OAuth2PasswordRequestForm
-from jose import JWTError, jwt
-from pydantic import BaseModel
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 

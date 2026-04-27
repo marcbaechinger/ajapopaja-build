@@ -18,6 +18,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from api.assistant.tools.search_tools import (
     _python_tree,
     find,

@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional
 
 from core.exceptions import EntityNotFoundError, VersionMismatchError
-from core.models.models import StateTransition, Task, TaskStatus
+from core.models.models import DesignDocHistory, StateTransition, Task, TaskStatus
 
 
 async def get_tasks_by_pipeline(
@@ -110,6 +110,14 @@ async def get_task_by_id(task_id: str, include_deleted: bool = False) -> Task:
     return task
 
 
+async def get_design_doc_history(task_id: str) -> List[DesignDocHistory]:
+    return (
+        await DesignDocHistory.find(DesignDocHistory.task_id == task_id)
+        .sort(-DesignDocHistory.version)
+        .to_list()
+    )
+
+
 async def create_task(pipeline_id: str, task: Task, actor: str = "user") -> Task:
     task.pipeline_id = pipeline_id
     task.version = 1
@@ -176,6 +184,13 @@ async def update_task_details(
         task.want_design_doc = want_design_doc
 
     if design_doc is not None:
+        # Save history if design_doc changes and old one exists
+        if task.design_doc and task.design_doc != design_doc:
+            history_entry = DesignDocHistory(
+                task_id=str(task.id), version=task.version, design_doc=task.design_doc
+            )
+            await history_entry.insert()
+
         task.design_doc = design_doc
         if task.want_design_doc and task.status == TaskStatus.INPROGRESS:
             # Parse top-level header from design doc to use as task title

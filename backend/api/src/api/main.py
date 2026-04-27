@@ -18,14 +18,6 @@ import re
 from contextlib import asynccontextmanager
 from typing import Optional, Union
 
-from ajapopaja_mcp.server import mcp
-from core.db import init_db
-from core.exceptions import (
-    AjapopajaError,
-    EntityNotFoundError,
-    ValidationError,
-    VersionMismatchError,
-)
 from fastapi import (
     APIRouter,
     FastAPI,
@@ -41,6 +33,7 @@ from fastapi.staticfiles import StaticFiles
 from fastmcp.utilities.lifespan import combine_lifespans
 from jose import JWTError, jwt
 
+from ajapopaja_mcp.server import mcp
 from api.assistant.ws_handler import register_assistant_handlers
 from api.auth import ALGORITHM, SECRET_KEY
 from api.gemini_executor import GeminiExecutor
@@ -49,6 +42,13 @@ from api.routes.pipeline import router as pipeline_router
 from api.routes.system import router as system_router
 from api.routes.task import pipeline_task_router, task_router
 from api.websocket_manager import manager
+from core.db import init_db
+from core.exceptions import (
+    AjapopajaError,
+    EntityNotFoundError,
+    ValidationError,
+    VersionMismatchError,
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

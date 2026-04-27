@@ -20,9 +20,8 @@ import subprocess
 from datetime import datetime
 from typing import Any, Dict
 
-from core.queries import pipeline as pipeline_queries
-
 from api.websocket_manager import WSMessage, manager
+from core.queries import pipeline as pipeline_queries
 
 logger = logging.getLogger(__name__)
 

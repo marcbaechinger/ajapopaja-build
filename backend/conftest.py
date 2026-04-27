@@ -17,13 +17,13 @@ import uuid
 from pathlib import Path
 
 import pytest
-from api.main import app
 from beanie import init_beanie
-from core.models.models import Pipeline, Task, User, UserChat
 from httpx import ASGITransport, AsyncClient
 from pymongo import AsyncMongoClient
 
+from api.main import app
 from core import config
+from core.models.models import DesignDocHistory, Pipeline, Task, User, UserChat
 
 
 @pytest.fixture(autouse=True)
@@ -37,7 +37,9 @@ async def init_mock_db():
     test_db_name = f"test_db_{uuid.uuid4().hex}"
     client = AsyncMongoClient(mongodb_uri)
     db = client[test_db_name]
-    await init_beanie(database=db, document_models=[Pipeline, Task, User, UserChat])
+    await init_beanie(
+        database=db, document_models=[Pipeline, Task, DesignDocHistory, User, UserChat]
+    )
     yield test_db_name
     await client.drop_database(test_db_name)
     await client.close()

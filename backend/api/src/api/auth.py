@@ -17,10 +17,11 @@ from datetime import UTC, datetime, timedelta
 from typing import Optional, Union
 
 import bcrypt
-from core.models.models import User
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
+
+from core.models.models import User
 
 # Configuration
 SECRET_KEY = os.getenv("AUTH_SECRET_KEY", "your-secret-key-for-development-only")

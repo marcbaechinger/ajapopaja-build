@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { Task, TaskStatus } from '../domain.ts';
+import { DesignDocHistory, Task, TaskStatus } from '../domain.ts';
 import { BaseClient } from './BaseClient.ts';
 import { AuthService } from '../AuthService.ts';
 
@@ -24,6 +24,12 @@ export class TaskClient extends BaseClient {
   constructor(baseUrl: string, authService: AuthService) {
     super(authService);
     this.baseUrl = baseUrl;
+  }
+
+  async getHistory(taskId: string): Promise<DesignDocHistory[]> {
+    const response = await this.fetch(`${this.baseUrl}/tasks/${taskId}/history`);
+    const data = await response.json();
+    return data.map((h: any) => new DesignDocHistory(h));
   }
 
   async listByPipeline(pipelineId: string, includeDeleted: boolean = false): Promise<Task[]> {

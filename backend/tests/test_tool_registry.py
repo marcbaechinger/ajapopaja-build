@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import pytest
+
 from api.assistant.decorators import register_tool
 from api.assistant.tool_registry import ToolRegistry
 
