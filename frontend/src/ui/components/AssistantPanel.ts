@@ -19,6 +19,43 @@ import type { AssistantResponse } from '../../core/AssistantService.ts';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 
+// Configure marked to wrap tables in a scrollable div
+marked.use({
+  renderer: {
+    table(token: any) {
+      let header = '';
+      // header
+      let cell = '';
+      for (let i = 0; i < token.header.length; i++) {
+        cell += this.tablecell(token.header[i]);
+      }
+      header += this.tablerow({ text: cell });
+
+      let body = '';
+      for (let i = 0; i < token.rows.length; i++) {
+        const row = token.rows[i];
+        cell = '';
+        for (let j = 0; j < row.length; j++) {
+          cell += this.tablecell(row[j]);
+        }
+        body += this.tablerow({ text: cell });
+      }
+      if (body) body = `<tbody>${body}</tbody>`;
+
+      return `
+        <div class="overflow-x-auto my-4 border border-app-border rounded-b-lg shadow-sm bg-app-bg">
+          <table class="w-full text-sm text-left">
+            <thead class="bg-app-surface text-app-muted uppercase text-[10px] tracking-widest font-bold">
+              ${header}
+            </thead>
+            ${body}
+          </table>
+        </div>
+      `;
+    }
+  }
+});
+
 type PanelPosition = 'tl' | 'tc' | 'tr' | 'bl' | 'bc' | 'br' | 'center' | 'full';
 type PanelSize = 'normal' | 'expanded';
 
@@ -54,7 +91,7 @@ export class AssistantPanel {
       try {
         const parsed = JSON.parse(saved);
         this.settings = { ...this.settings, ...parsed };
-      } catch (e) {}
+      } catch (e) { }
     }
   }
 
@@ -66,7 +103,7 @@ export class AssistantPanel {
   private applySettings() {
     // Base classes
     this.container.className = 'fixed bg-app-surface border border-app-border rounded-2xl shadow-2xl transition-all duration-300 z-50 flex flex-col overflow-hidden';
-    
+
     if (this.isOpen) {
       this.container.classList.add('opacity-100', 'scale-100', 'pointer-events-auto');
     } else {
@@ -119,10 +156,10 @@ export class AssistantPanel {
         b.classList.add('border-app-border', 'text-app-text');
       }
     });
-    
+
     // Auto-scroll when expanding height
     if (this.isOpen) {
-        setTimeout(() => this.scrollToBottom(), 300);
+      setTimeout(() => this.scrollToBottom(), 300);
     }
   }
 
@@ -130,7 +167,7 @@ export class AssistantPanel {
     const el = document.createElement('div');
     el.id = 'assistant-panel';
     // classes are managed by applySettings()
-    
+
     el.innerHTML = `
       <div class="bg-app-bg p-4 border-b border-app-border flex justify-between items-center shrink-0">
         <div class="flex items-center gap-2">
@@ -201,7 +238,7 @@ export class AssistantPanel {
 
   private setupEventListeners() {
     window.addEventListener('toggle-assistant', () => this.toggle());
-    
+
     this.container.querySelector('#assistant-close')?.addEventListener('click', () => this.close());
     this.container.querySelector('#assistant-clear')?.addEventListener('click', () => {
       this.context.assistantService.clearHistory();
@@ -241,7 +278,7 @@ export class AssistantPanel {
       e.preventDefault();
       const text = input.value.trim();
       if (!text) return;
-      
+
       this.addMessage('user', text);
       this.context.assistantService.sendMessage(text);
       input.value = '';
@@ -275,7 +312,7 @@ export class AssistantPanel {
     this.scrollToBottom();
 
     if (!this.hasLoadedHistory) {
-        this.context.assistantService.requestHistory();
+      this.context.assistantService.requestHistory();
     }
   }
 
@@ -289,33 +326,33 @@ export class AssistantPanel {
       if (!this.currentAssistantMessage) {
         this.currentAssistantMessage = this.addMessage('assistant', '');
       }
-      
+
       if (response.type === 'thinking') {
         const details = this.currentAssistantMessage.querySelector('.thinking-container') as HTMLDetailsElement;
         const thinkingContent = this.currentAssistantMessage.querySelector('.thinking-content') as HTMLElement;
         if (details) {
-            details.classList.remove('hidden');
-            if (!details.hasAttribute('data-user-closed')) {
-              details.open = true;
-            }
-            thinkingContent.dataset.rawContent = (thinkingContent.dataset.rawContent || '') + (response.content || '');
-            thinkingContent.textContent = thinkingContent.dataset.rawContent;
-            thinkingContent.scrollTop = thinkingContent.scrollHeight;
+          details.classList.remove('hidden');
+          if (!details.hasAttribute('data-user-closed')) {
+            details.open = true;
+          }
+          thinkingContent.dataset.rawContent = (thinkingContent.dataset.rawContent || '') + (response.content || '');
+          thinkingContent.textContent = thinkingContent.dataset.rawContent;
+          thinkingContent.scrollTop = thinkingContent.scrollHeight;
         }
       } else if (response.type === 'chunk') {
         const bubble = this.currentAssistantMessage.querySelector('.bubble-content') as HTMLElement;
         // Check if there's only the pulse span inside
         const pulseSpan = bubble.querySelector('.animate-pulse');
         if (pulseSpan) {
-            pulseSpan.remove();
+          pulseSpan.remove();
         }
-        
+
         bubble.dataset.rawContent = (bubble.dataset.rawContent || '') + (response.content || '');
         bubble.innerHTML = DOMPurify.sanitize(marked.parse(bubble.dataset.rawContent) as string);
 
         const details = this.currentAssistantMessage.querySelector('.thinking-container') as HTMLDetailsElement;
         if (details && !details.classList.contains('hidden') && !details.hasAttribute('data-user-interacted')) {
-           details.open = false;
+          details.open = false;
         }
       }
       this.scrollToBottom();
@@ -337,9 +374,9 @@ export class AssistantPanel {
         `;
       }
     } else if (response.type === 'assistant_history') {
-        this.handleHistory(response.messages || []);
+      this.handleHistory(response.messages || []);
     }
-    
+
     // If not a chunk or thinking, reset current message
     if (response.type !== 'chunk' && response.type !== 'thinking') {
       this.currentAssistantMessage = null;
@@ -354,7 +391,7 @@ export class AssistantPanel {
         <svg class="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
       `;
       btn.classList.add('text-green-500');
-      
+
       setTimeout(() => {
         btn.innerHTML = originalIcon;
         btn.classList.remove('text-green-500');
@@ -367,11 +404,11 @@ export class AssistantPanel {
   private addMessage(role: 'user' | 'assistant' | 'error', text: string, thought?: string): HTMLElement {
     const msgEl = document.createElement('div');
     msgEl.className = 'flex flex-col gap-1 group relative';
-    
+
     const isUser = role === 'user';
     const isError = role === 'error';
     const isAssistant = role === 'assistant';
-    
+
     const thinkingHtml = isAssistant ? `
       <details class="thinking-container mb-2 group/thinking ${thought ? '' : 'hidden'}" ${thought ? '' : 'open'}>
         <summary class="text-[10px] uppercase font-bold tracking-widest text-app-muted cursor-pointer hover:text-app-text select-none flex items-center gap-1">
@@ -381,7 +418,7 @@ export class AssistantPanel {
         <div class="thinking-content mt-1 p-2 bg-app-surface/50 border-l-2 border-app-accent-2/50 text-[11px] text-app-muted italic font-mono whitespace-pre-wrap max-h-48 overflow-y-auto custom-scrollbar">${thought || ''}</div>
       </details>
     ` : '';
-    
+
     msgEl.innerHTML = `
       <div class="relative max-w-[90%] ${isUser ? 'ml-auto' : ''}">
         <div class="${isUser ? 'bg-app-accent-2 text-white rounded-tr-none' : (isError ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-app-bg border-app-border text-app-text rounded-tl-none')} 
@@ -400,21 +437,21 @@ export class AssistantPanel {
     if (!isUser) {
       const bubble = msgEl.querySelector('.bubble-content') as HTMLElement;
       bubble.dataset.rawContent = text;
-      
+
       const details = msgEl.querySelector('.thinking-container') as HTMLDetailsElement;
       if (details) {
-          details.addEventListener('toggle', (e) => {
-              if (e.isTrusted) { // Only record manual toggles
-                 details.setAttribute('data-user-interacted', 'true');
-                 if (!details.open) {
-                     details.setAttribute('data-user-closed', 'true');
-                 } else {
-                     details.removeAttribute('data-user-closed');
-                 }
-              }
-          });
+        details.addEventListener('toggle', (e) => {
+          if (e.isTrusted) { // Only record manual toggles
+            details.setAttribute('data-user-interacted', 'true');
+            if (!details.open) {
+              details.setAttribute('data-user-closed', 'true');
+            } else {
+              details.removeAttribute('data-user-closed');
+            }
+          }
+        });
       }
-      
+
       if (isAssistant) {
         msgEl.querySelector('.copy-btn')?.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -432,9 +469,9 @@ export class AssistantPanel {
   private addToolRequest(request: AssistantResponse) {
     const el = document.createElement('div');
     el.className = 'bg-app-bg border border-app-accent-2/30 rounded-xl p-4 space-y-3 shadow-lg';
-    
+
     const args = JSON.stringify(request.arguments, null, 2);
-    
+
     el.innerHTML = `
       <div class="flex items-center gap-2 text-app-accent-2">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
@@ -458,13 +495,13 @@ export class AssistantPanel {
 
     el.querySelector('.confirm-tool')?.addEventListener('click', () => {
       this.context.assistantService.confirmTool(request.id!);
-      
+
       const details = el.querySelector('details.tool-payload') as HTMLDetailsElement;
       if (details) details.open = false;
-      
+
       const actions = el.querySelector('.tool-actions');
       if (actions) actions.classList.add('hidden');
-      
+
       const status = el.querySelector('.tool-status');
       if (status) {
         status.textContent = 'Tool executed.';
@@ -474,13 +511,13 @@ export class AssistantPanel {
 
     el.querySelector('.reject-tool')?.addEventListener('click', () => {
       this.context.assistantService.rejectTool(request.id!);
-      
+
       const details = el.querySelector('details.tool-payload') as HTMLDetailsElement;
       if (details) details.open = false;
-      
+
       const actions = el.querySelector('.tool-actions');
       if (actions) actions.classList.add('hidden');
-      
+
       const status = el.querySelector('.tool-status');
       if (status) {
         status.textContent = 'Tool rejected.';
@@ -510,12 +547,12 @@ export class AssistantPanel {
       } else if (msg.role === 'assistant') {
         const msgEl = this.addMessage('assistant', msg.content, msg.thought);
         if (msg.tool_calls && msg.tool_calls.length > 0) {
-            const footer = document.createElement('div');
-            footer.className = 'mt-2 flex flex-wrap gap-1';
-            msg.tool_calls.forEach((tc: any) => {
-                footer.innerHTML += `<span class="text-[9px] bg-app-surface border border-app-border px-1.5 py-0.5 rounded text-app-muted italic">Used tool: ${tc.function?.name || 'unknown'}</span>`;
-            });
-            msgEl.querySelector('.bubble-content')?.appendChild(footer);
+          const footer = document.createElement('div');
+          footer.className = 'mt-2 flex flex-wrap gap-1';
+          msg.tool_calls.forEach((tc: any) => {
+            footer.innerHTML += `<span class="text-[9px] bg-app-surface border border-app-border px-1.5 py-0.5 rounded text-app-muted italic">Used tool: ${tc.function?.name || 'unknown'}</span>`;
+          });
+          msgEl.querySelector('.bubble-content')?.appendChild(footer);
         }
       } else if (msg.role === 'tool') {
         const el = document.createElement('div');
@@ -526,7 +563,7 @@ export class AssistantPanel {
     });
 
     if (messages.length === 0) {
-        this.messageContainer!.innerHTML = `
+      this.messageContainer!.innerHTML = `
           <div class="flex flex-col gap-1">
              <div class="bg-app-bg p-3 rounded-2xl rounded-tl-none border border-app-border text-sm text-app-text max-w-[90%] shadow-sm">
                Hello! I'm your AI assistant. How can I help you with your tasks or pipelines today?

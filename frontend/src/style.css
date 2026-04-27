@@ -186,6 +186,22 @@ body {
   --tw-prose-invert-td-borders: var(--app-border);
 }
 
+.prose-theme table {
+  @apply border-collapse w-full my-0 text-sm;
+}
+
+.prose-theme th {
+  @apply bg-app-surface/50 text-app-muted uppercase text-[10px] tracking-widest font-bold p-2 text-left border-b border-app-border;
+}
+
+.prose-theme td {
+  @apply p-2 border-b border-app-border/50 text-app-text/90;
+}
+
+.prose-theme tr:last-child td {
+  @apply border-b-0;
+}
+
 /* Specification Expand/Collapse */
 .spec-display:not(.expanded) {
   max-height: 5.5rem; /* Approximately 5-6 lines at text-xs */
