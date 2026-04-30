@@ -88,6 +88,7 @@ class DocBotSession:
             self.history.append(msg)
 
             if not msg.tool_calls:
+                logger.info(f"DocBot iteration {i + 1}: No tool calls, agent responded with text.")
                 # If no tool call, push the agent to finish
                 self.history.append(
                     {
@@ -107,8 +108,11 @@ class DocBotSession:
                 tool_name = tool_call.function.name
                 args = tool_call.function.arguments
 
+                logger.info(f"DocBot iteration {i + 1}: Agent calling tool '{tool_name}' with args: {args}")
+
                 if tool_name in ["update_ref_doc", "no_doc_update_needed"]:
                     terminal_call = True
+                    logger.info(f"DocBot reached terminal decision: {tool_name}")
 
                 result = await self._execute_tool(tool_name, args)
                 self.history.append(
