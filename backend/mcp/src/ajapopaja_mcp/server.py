@@ -12,12 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import asyncio
 import logging
 import re
 from typing import Any, Dict
 
 from fastmcp import FastMCP
 
+from api.docbot.manager import DocBotManager
 from api.websocket_manager import manager
 from core.db import init_db
 from core.exceptions import EntityNotFoundError, VersionMismatchError
@@ -135,6 +137,10 @@ async def complete_task(
         )
 
         await notify_api(task_id)
+
+        # Trigger DocBot in the background
+        asyncio.create_task(DocBotManager.process_completed_task(task))
+
         status_msg = f"Task {task_id} completed successfully."
         if task.verification and not task.verification.get("success"):
             status_msg += f" WARNING: Verification failed. Errors: {', '.join(task.verification.get('errors', []))}. A follow-up system task has been created."
