@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import inspect
 import json
 import logging
 from typing import Any, Dict, List
@@ -49,7 +50,8 @@ Do not ask for permission or wait for user input. Act autonomously.
 
 
 class DocBotSession:
-    def __init__(self):
+    def __init__(self, pipeline_id: str):
+        self.pipeline_id = pipeline_id
         headers = {}
         if config.OLLAMA_API_KEY:
             headers["Authorization"] = f"Bearer {config.OLLAMA_API_KEY}"
@@ -67,13 +69,28 @@ class DocBotSession:
             # Prepare tools
             ollama_tools = []
             for t in docbot_registry.list_tools():
+                # Extract parameters, but remove 'pipeline_id' if present
+                # as we will inject it automatically
+                parameters = t.parameters.copy()
+                if "pipeline_id" in parameters.get("properties", {}):
+                    # Create a deep copy of properties to not modify the registry
+                    properties = parameters["properties"].copy()
+                    del properties["pipeline_id"]
+                    parameters["properties"] = properties
+
+                    if "required" in parameters:
+                        required = [
+                            r for r in parameters["required"] if r != "pipeline_id"
+                        ]
+                        parameters["required"] = required
+
                 ollama_tools.append(
                     {
                         "type": "function",
                         "function": {
                             "name": t.name,
                             "description": t.description,
-                            "parameters": t.parameters,
+                            "parameters": parameters,
                         },
                     }
                 )
@@ -88,7 +105,9 @@ class DocBotSession:
             self.history.append(msg)
 
             if not msg.tool_calls:
-                logger.info(f"DocBot iteration {i + 1}: No tool calls, agent responded with text.")
+                logger.info(
+                    f"DocBot iteration {i + 1}: No tool calls, agent responded with text."
+                )
                 # If no tool call, push the agent to finish
                 self.history.append(
                     {
@@ -108,7 +127,9 @@ class DocBotSession:
                 tool_name = tool_call.function.name
                 args = tool_call.function.arguments
 
-                logger.info(f"DocBot iteration {i + 1}: Agent calling tool '{tool_name}' with args: {args}")
+                logger.info(
+                    f"DocBot iteration {i + 1}: Agent calling tool '{tool_name}' with args: {args}"
+                )
 
                 if tool_name in ["update_ref_doc", "no_doc_update_needed"]:
                     terminal_call = True
@@ -137,6 +158,12 @@ class DocBotSession:
         try:
             if isinstance(args, str):
                 args = json.loads(args)
+
+            # Inject pipeline_id if the tool expects it
+            sig = inspect.signature(tool.func)
+            if "pipeline_id" in sig.parameters:
+                args["pipeline_id"] = self.pipeline_id
+
             return await tool.func(**args)
         except Exception as e:
             logger.error(f"DocBot tool error ({name}): {e}")

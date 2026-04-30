@@ -22,7 +22,7 @@ from api.docbot.session import DocBotSession
 
 @pytest.mark.asyncio
 async def test_docbot_session_run_terminal_call():
-    session = DocBotSession()
+    session = DocBotSession(pipeline_id="test_pipeline")
 
     # Mock tool result
     async def mock_tool_func(**kwargs):
@@ -67,7 +67,7 @@ async def test_docbot_session_run_terminal_call():
 
 @pytest.mark.asyncio
 async def test_docbot_session_max_iterations():
-    session = DocBotSession()
+    session = DocBotSession(pipeline_id="test_pipeline")
 
     # Mock Ollama response with no tool call
     mock_response = MagicMock()
