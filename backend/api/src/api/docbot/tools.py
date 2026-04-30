@@ -14,7 +14,7 @@
 
 import logging
 import os
-from typing import List
+from typing import List, Optional
 
 from api.assistant.tools.file_tools import list_project_structure, read_source_file
 from api.assistant.tools.git_tools import git_show_commit
@@ -57,17 +57,30 @@ async def list_ref_docs(pipeline_id: str) -> List[str]:
 
 
 @register_doc_tool()
-async def read_ref_doc(pipeline_id: str, filename: str) -> str:
+async def read_ref_doc(
+    pipeline_id: str, filename: Optional[str] = None, path: Optional[str] = None
+) -> str:
     """
     Reads the content of a reference documentation file.
+
+    Args:
+        pipeline_id: The ID of the pipeline.
+        filename: The name of the file to read (e.g. 'dd_architecture.md').
     """
+    fname = filename or path
+    if not fname:
+        return "Error: filename is required."
+
+    # Strip directory prefix if the agent provided one
+    fname = os.path.basename(fname)
+
     pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
     if not pipeline or not pipeline.workspace_abs_path:
         return "Error: Workspace root missing."
 
-    file_path = safe_join(pipeline.workspace_abs_path, DOC_DIR, filename)
+    file_path = safe_join(pipeline.workspace_abs_path, DOC_DIR, fname)
     if not os.path.isfile(file_path):
-        return f"Error: Document '{filename}' not found."
+        return f"Error: Document '{fname}' not found in '{DOC_DIR}/'."
 
     with open(file_path, "r") as f:
         return f.read()
@@ -75,11 +88,28 @@ async def read_ref_doc(pipeline_id: str, filename: str) -> str:
 
 @register_doc_tool(tool_type="write_access")
 async def update_ref_doc(
-    pipeline_id: str, filename: str, content: str, reason: str
+    pipeline_id: str,
+    content: str,
+    reason: str,
+    filename: Optional[str] = None,
+    path: Optional[str] = None,
 ) -> str:
     """
-    Updates or creates a reference documentation file.
+    Updates or creates a reference documentation file in the 'design/' directory.
+
+    Args:
+        pipeline_id: The ID of the pipeline.
+        filename: The name of the file to create or update (e.g. 'user_profile.md').
+        content: The full Markdown content of the document.
+        reason: Why this update is needed.
     """
+    fname = filename or path
+    if not fname:
+        return "Error: filename is required."
+
+    # Strip directory prefix if the agent provided one (we always force DOC_DIR)
+    fname = os.path.basename(fname)
+
     pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
     if not pipeline or not pipeline.workspace_abs_path:
         return "Error: Workspace root missing."
@@ -87,20 +117,21 @@ async def update_ref_doc(
     doc_path = safe_join(pipeline.workspace_abs_path, DOC_DIR)
     os.makedirs(doc_path, exist_ok=True)
 
-    file_path = safe_join(doc_path, filename)
+    file_path = safe_join(doc_path, fname)
     with open(file_path, "w") as f:
         f.write(content)
 
-    logger.info(
-        f"DocBot updated {filename} for pipeline {pipeline_id}. Reason: {reason}"
-    )
-    return f"Successfully updated {filename}."
+    logger.info(f"DocBot successfully updated {fname}. Reason: {reason}")
+    return f"Successfully updated {DOC_DIR}/{fname}."
 
 
 @register_doc_tool()
 async def no_doc_update_needed(reason: str) -> str:
     """
     Signals that no documentation update is required for the recent change.
+
+    Args:
+        reason: Why no documentation update is required.
     """
     logger.info(f"DocBot decided no update needed. Reason: {reason}")
     return "No documentation update performed."
