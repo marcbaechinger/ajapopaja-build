@@ -66,7 +66,8 @@ GIT DIFF:
 {diff}
 ```
 
-Please analyze if this change requires an update to the reference documentation in the 'design/' directory.
+Please analyze if this change requires an update to the reference
+documentation in the 'design/' directory.
 """
 
         logger.info(f"Starting DocBot session for task {task.id}")

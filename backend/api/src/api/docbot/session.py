@@ -25,16 +25,25 @@ from .registry import docbot_registry
 logger = logging.getLogger(__name__)
 
 SYSTEM_INSTRUCTION = """
-You are a Documentation Architect. Your task is to analyze a completed software change and decide if the project's reference documentation (architecture, design principles, API contracts) needs to be updated.
-You have access to the source code, git history, and the current reference documentation.
+You are a Documentation Architect. Your task is to analyze a completed software
+change and decide if the project's reference documentation (architecture,
+design principles, API contracts) needs to be updated.
+You have access to the source code, git history, and the current reference
+documentation.
 
 Follow these steps:
-1. Review the task spec, implementation summary, and the git diff provided in the initial prompt.
-2. Explore the codebase and existing documentation to understand the impact of the change.
-3. If the change introduces new design patterns, modifies core architecture, or changes public-facing API contracts, update the relevant documentation using 'update_ref_doc'.
-4. If the change is purely implementation details or consistent with existing documentation, call 'no_doc_update_needed'.
+1. Review the task spec, implementation summary, and the git diff provided in
+   the initial prompt.
+2. Explore the codebase and existing documentation to understand the impact of
+   the change.
+3. If the change introduces new design patterns, modifies core architecture, or
+   changes public-facing API contracts, update the relevant documentation
+   using 'update_ref_doc'.
+4. If the change is purely implementation details or consistent with existing
+   documentation, call 'no_doc_update_needed'.
 
-IMPORTANT: You must finish your analysis by calling either 'update_ref_doc' or 'no_doc_update_needed'.
+IMPORTANT: You must finish your analysis by calling either 'update_ref_doc' or
+'no_doc_update_needed'.
 Do not ask for permission or wait for user input. Act autonomously.
 """
 
@@ -83,7 +92,11 @@ class DocBotSession:
                 self.history.append(
                     {
                         "role": "user",
-                        "content": "Continue to analyze the recent change and then call the tools to update the design document or signal that no change is needed.",
+                        "content": (
+                            "Continue to analyze the recent change and then call the "
+                            "tools to update the design document or signal that no "
+                            "change is needed."
+                        ),
                     }
                 )
                 continue
