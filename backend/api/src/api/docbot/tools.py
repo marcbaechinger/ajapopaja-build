@@ -14,7 +14,7 @@
 
 import logging
 import os
-from typing import List
+from typing import List, Optional
 
 import git
 
@@ -160,7 +160,7 @@ async def update_ref_doc(
     filename: str,
     content: str,
     reason: str,
-    task_id: str = None,
+    task_id: Optional[str] = None,
     **kwargs,
 ) -> str:
     """
@@ -184,15 +184,17 @@ async def update_ref_doc(
     resn = reason or kwargs.get("summary") or kwargs.get("reasoning")
     tid = task_id or kwargs.get("task_id")
 
+    reason_len = len(resn) if resn else 0
     logger.info(
-        f"update_ref_doc: Request received. filename={fname}, reason_len={len(resn) if resn else 0}, content_len={len(content) if content else 0}, task_id={tid}"
+        f"update_ref_doc: Request received. filename={fname}, reason_len={reason_len}, "
+        f"content_len={len(content) if content else 0}, task_id={tid}"
     )
 
     if not fname:
         logger.error(f"update_ref_doc: Missing filename. kwargs={kwargs}")
         return "Error: filename is required."
 
-    if content is None:
+    if not content:
         logger.error(f"update_ref_doc: Missing content for {fname}")
         return "Error: content is required."
 
@@ -231,7 +233,11 @@ async def update_ref_doc(
         if tid:
             try:
                 repo = git.Repo(pipeline.workspace_abs_path)
-                # Capture unstaged diff for this specific file
+
+                # Intent-to-add so untracked files show up in diff
+                repo.git.add(file_path, N=True)
+
+                # Capture diff for this specific file
                 # Use --unified=3 for standard context
                 diff = repo.git.diff("--unified=3", file_path)
 

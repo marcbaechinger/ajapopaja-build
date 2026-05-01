@@ -74,7 +74,21 @@ async def revert_docbot_change(pipeline_id: str, task_id: str):
 
     try:
         repo = git.Repo(pipeline.workspace_abs_path)
-        repo.git.checkout("--", preview.file_path)
+
+        try:
+            repo.git.reset("HEAD", preview.file_path)
+        except Exception:
+            pass  # Reset might fail if no initial commit or file not in HEAD
+
+        try:
+            repo.git.checkout("--", preview.file_path)
+        except Exception:
+            # If checkout fails, it was likely an untracked file, so delete it
+            import os
+
+            if os.path.exists(preview.file_path):
+                os.remove(preview.file_path)
+
         clear_preview(task_id)
         return {
             "status": "success",
