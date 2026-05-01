@@ -1,64 +1,62 @@
+# Copyright 2026 Marc Baechinger
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import os
-import stat
+from typing import Dict
 
 from fastapi import APIRouter
-from pymongo import AsyncMongoClient
 
+from ..assistant.tools.nvim_tools import NVIM_SOCKET, is_nvim_available
 from ..ollama_utils import is_ollama_available
 
-router = APIRouter(prefix="/system", tags=["System"])
+router = APIRouter(prefix="/system", tags=["system"])
 
 
 @router.get("/health")
-async def system_health():
+async def health_check() -> Dict:
+    """
+    Returns the health status of various system components.
+    """
     results = {}
 
-    # MongoDB Check
-    try:
-        mongodb_uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
-        client = AsyncMongoClient(mongodb_uri, serverSelectionTimeoutMS=2000)
-        await client.admin.command("ping")
-        results["mongodb"] = {"status": "ok", "details": "Connected"}
-    except Exception as e:
-        results["mongodb"] = {"status": "error", "details": str(e)}
-
     # Ollama Check
-    try:
-        from core import config
-
-        if await is_ollama_available():
-            results["ollama"] = {
-                "status": "ok",
-                "details": f"Connected to {config.OLLAMA_HOST}",
-            }
-        else:
-            results["ollama"] = {
-                "status": "error",
-                "details": f"Could not connect to Ollama at {config.OLLAMA_HOST}",
-            }
-    except Exception as e:
-        results["ollama"] = {"status": "error", "details": str(e)}
+    if await is_ollama_available():
+        results["ollama"] = {"status": "ok", "details": "Ollama is reachable"}
+    else:
+        results["ollama"] = {
+            "status": "error",
+            "details": "Ollama is not responding or not configured correctly",
+        }
 
     # Nvim Socket Check
-    nvim_socket_path = "/tmp/nvimsocket"
     try:
-        if os.path.exists(nvim_socket_path):
-            mode = os.stat(nvim_socket_path).st_mode
-            if stat.S_ISSOCK(mode):
+        if is_nvim_available():
+            results["nvim"] = {
+                "status": "ok",
+                "details": f"Socket found and verified at {NVIM_SOCKET}",
+            }
+        else:
+            if not os.path.exists(NVIM_SOCKET):
                 results["nvim"] = {
-                    "status": "ok",
-                    "details": f"Socket found at {nvim_socket_path}",
+                    "status": "error",
+                    "details": f"Socket not found at {NVIM_SOCKET}",
                 }
             else:
                 results["nvim"] = {
                     "status": "error",
-                    "details": f"File at {nvim_socket_path} is not a socket",
+                    "details": f"File at {NVIM_SOCKET} is not a socket",
                 }
-        else:
-            results["nvim"] = {
-                "status": "error",
-                "details": f"Socket not found at {nvim_socket_path}",
-            }
     except Exception as e:
         results["nvim"] = {"status": "error", "details": str(e)}
 

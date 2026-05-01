@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 import os
 import socket
+import stat
 from typing import Dict, Optional
 
 import msgpack
@@ -22,18 +24,52 @@ from api.assistant.decorators import register_tool
 from core.queries import pipeline as pipeline_queries
 from core.utils.path_utils import safe_join
 
+logger = logging.getLogger(__name__)
+
 # Tool Categories
 WRITE_ACCESS = "write_access"
 
 NVIM_SOCKET = "/tmp/nvimsocket"
 
+# Cache for Neovim availability
+_nvim_available: bool | None = None
+
+
+def is_nvim_available() -> bool:
+    """
+    Checks if Neovim is running and listening on the expected Unix socket.
+    The result is cached to avoid repeated file system checks.
+    """
+    global _nvim_available
+    if _nvim_available is not None:
+        return _nvim_available
+
+    try:
+        if os.path.exists(NVIM_SOCKET):
+            mode = os.stat(NVIM_SOCKET).st_mode
+            if stat.S_ISSOCK(mode):
+                _nvim_available = True
+                return True
+            else:
+                logger.warning(f"File at {NVIM_SOCKET} exists but is not a socket.")
+        else:
+            logger.info(f"Neovim socket not found at {NVIM_SOCKET}.")
+    except Exception as e:
+        logger.error(f"Error checking Neovim availability: {e}")
+
+    _nvim_available = False
+    return False
+
 
 def _nvim_client_call(method: str, params: list) -> Dict:
     """Helper to send MessagePack-RPC requests to the Neovim socket."""
-    if not os.path.exists(NVIM_SOCKET):
+    if not is_nvim_available():
         return {
             "success": False,
-            "error": f"Neovim socket not found at {NVIM_SOCKET}. Ensure Neovim is running with '--listen {NVIM_SOCKET}'.",
+            "error": (
+                f"Neovim socket not found at {NVIM_SOCKET}. "
+                f"Ensure Neovim is running with '--listen {NVIM_SOCKET}'."
+            ),
         }
 
     # MessagePack-RPC Request format: [type, msgid, method, params]
@@ -82,13 +118,14 @@ def _nvim_client_call(method: str, params: list) -> Dict:
         return {"success": False, "error": str(e)}
 
 
-@register_tool(tool_type=WRITE_ACCESS)
+@register_tool(tool_type=WRITE_ACCESS, is_available=is_nvim_available)
 async def nvim_open_file(
     pipeline_id: str, path: str, line_number: Optional[int] = None
 ) -> Dict:
     """
-    Opens a file in the user's running Neovim instance and optionally jumps to a specific line.
-    Use this tool to display a file directly in the user's editor so they can view or edit it.
+    Opens a file in the user's running Neovim instance.
+    Optionally jumps to a specific line. Use this tool to display
+    a file directly in the user's editor so they can view or edit it.
     Connects to a Neovim instance listening on /tmp/nvimsocket using JSON-RPC.
 
     Args:
@@ -118,12 +155,12 @@ async def nvim_open_file(
         return {"success": False, "error": str(e)}
 
 
-@register_tool(tool_type=WRITE_ACCESS)
+@register_tool(tool_type=WRITE_ACCESS, is_available=is_nvim_available)
 async def nvim_open_selection(
     pipeline_id: str, path: str, start_line: int, end_line: int
 ) -> Dict:
     """
-    Opens a file in a running Neovim instance and selects a range of lines in visual mode.
+    Opens a file in a running Neovim instance and selects a range of lines.
     Connects to a Neovim instance listening on /tmp/nvimsocket using JSON-RPC.
 
     Args:
@@ -152,17 +189,19 @@ async def nvim_open_selection(
         return {"success": False, "error": str(e)}
 
 
-@register_tool(tool_type=WRITE_ACCESS)
+@register_tool(tool_type=WRITE_ACCESS, is_available=is_nvim_available)
 async def nvim_set_quickfix(
     pipeline_id: str, matches: list[dict], title: str = "Assistant Search Results"
 ) -> Dict:
     """
-    Sets the quickfix list in Neovim to a list of file locations and opens the quickfix window.
-    This provides the user with a list of file locations to jump to in their Neovim editor.
+    Sets the quickfix list in Neovim to a list of file locations.
+    This provides the user with a list of file locations to jump to
+    in their Neovim editor.
 
     Args:
         pipeline_id: The ID of the pipeline (used to resolve absolute path).
-        matches: A array of dicts. Each dict MUST contain: [{"filename": "<str: Path to the file relative to the project root>","lnum": <int: Line number (1-based)>,"text": "<str: Text or description for the quickfix entry>"},...]
+        matches: A array of dicts. Each dict MUST contain:
+            [{"filename": "path/to/file", "lnum": 10, "text": "desc"},...]
         title: The title for the quickfix list (optional).
     """
     try:
@@ -174,7 +213,7 @@ async def nvim_set_quickfix(
         print(f"raw matches {matches}")
         # Ensure matches is a list
         if isinstance(matches, str):
-            # If the LLM sent a raw string, try to parse it into the expected dict format
+            # If the LLM sent a raw string, try to parse it
             parsed_matches = []
             for line in matches.strip().split("\n"):
                 # Assuming format "path:line" or "path:line:text"
@@ -225,17 +264,17 @@ async def nvim_set_quickfix(
         return {"success": False, "error": str(e)}
 
 
-@register_tool(tool_type=WRITE_ACCESS)
+@register_tool(tool_type=WRITE_ACCESS, is_available=is_nvim_available)
 async def nvim_show_diff(
     pipeline_id: str, path: str, commit_hash: str = "HEAD~1"
 ) -> Dict:
     """
-    Shows a side-by-side diff between the current file and a previous version in Neovim.
+    Shows a side-by-side diff between the current file and a version in Neovim.
 
     Args:
         pipeline_id: The ID of the pipeline (used to resolve absolute path).
         path: Path to the file relative to the project root.
-        commit_hash: The commit hash or reference to compare against (defaults to HEAD~1).
+        commit_hash: The commit hash or reference to compare against.
     """
     try:
         pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
@@ -263,7 +302,9 @@ async def nvim_show_diff(
                 print(f"GIT ERROR: {result.stderr}")
                 return {
                     "success": False,
-                    "error": f"Git could not find that file at that commit: {result.stderr}",
+                    "error": (
+                        f"Git could not find that file at that commit: {result.stderr}"
+                    ),
                 }
 
             old_content = result.stdout
@@ -299,7 +340,9 @@ async def nvim_show_diff(
             vim.bo[buf].filetype = original_ft
             vim.bo[buf].buftype = "nofile"
             vim.bo[buf].bufhidden = "wipe"
-            pcall(vim.api.nvim_buf_set_name, buf, "git://" .. commit_short .. "/" .. vim.fn.fnamemodify(file_path, ":t"))
+            local name = "git://" .. commit_short .. "/"
+            name = name .. vim.fn.fnamemodify(file_path, ":t")
+            pcall(vim.api.nvim_buf_set_name, buf, name)
 
             -- 6. Turn on diff for the new window
             vim.cmd("diffthis")

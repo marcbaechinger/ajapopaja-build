@@ -28,6 +28,7 @@ class ToolDefinition:
     type: str  # "read_only" or "write_access"
     parameters: Dict[str, Any]
     func: Callable
+    is_available: Callable[[], bool] = lambda: True
 
 
 class ToolRegistry:
@@ -41,9 +42,11 @@ class ToolRegistry:
         description: Optional[str] = None,
         tool_type: str = "read_only",
         parameters: Optional[Dict[str, Any]] = None,
+        is_available: Optional[Callable[[], bool]] = None,
     ) -> None:
         """
-        Registers a tool, optionally automatically extracting metadata from docstrings and type hints.
+        Registers a tool, optionally automatically extracting metadata
+        from docstrings and type hints.
         """
         tool_name = name or func.__name__
 
@@ -55,7 +58,9 @@ class ToolRegistry:
         if description is None:
             doc = inspect.getdoc(func) or ""
             # Take the first paragraph as description (split by one or more blank lines)
-            raw_desc = re.split(r"\n\s*\n", doc)[0].strip() or "No description provided."
+            raw_desc = (
+                re.split(r"\n\s*\n", doc)[0].strip() or "No description provided."
+            )
             # Collapse multiline description into single line
             description = " ".join(raw_desc.split())
             # Also integrate argument descriptions if they exist in the docstring
@@ -70,6 +75,7 @@ class ToolRegistry:
             type=tool_type,
             parameters=parameters,
             func=func,
+            is_available=is_available or (lambda: True),
         )
         logger.info(f"Registered tool: '{tool_name}' (type: {tool_type})")
 
@@ -77,7 +83,8 @@ class ToolRegistry:
         return self._tools.get(name)
 
     def list_tools(self) -> List[ToolDefinition]:
-        return list(self._tools.values())
+        """Returns a list of tools that are currently available."""
+        return [t for t in self._tools.values() if t.is_available()]
 
     def unregister_tool(self, name: str) -> bool:
         if name in self._tools:
@@ -150,7 +157,7 @@ class ToolRegistry:
             if stripped.lower() in ("args:", "arguments:"):
                 in_args_section = True
                 continue
-            
+
             # Detect next section start (capitalized word followed by colon)
             if in_args_section and re.match(r"^[A-Z][a-z]+:", stripped):
                 break
@@ -162,7 +169,7 @@ class ToolRegistry:
                     # Save previous argument if any
                     if current_arg:
                         arg_docs[current_arg] = " ".join(" ".join(current_desc).split())
-                    
+
                     current_arg = match.group(1)
                     current_desc = [match.group(2).strip()]
                 elif current_arg and line.startswith(" "):

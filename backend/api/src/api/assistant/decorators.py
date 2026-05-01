@@ -23,6 +23,7 @@ def register_tool(
     description: Optional[str] = None,
     tool_type: str = "read_only",
     parameters: Optional[Dict[str, Any]] = None,
+    is_available: Optional[Callable[[], bool]] = None,
 ):
     def decorator(func: Callable):
         registry.register_tool(
@@ -31,6 +32,7 @@ def register_tool(
             description=description,
             tool_type=tool_type,
             parameters=parameters,
+            is_available=is_available,
         )
 
         @wraps(func)
