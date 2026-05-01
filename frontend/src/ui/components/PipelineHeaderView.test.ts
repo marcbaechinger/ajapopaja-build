@@ -15,7 +15,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { PipelineHeaderView, PipelineHeaderViewProps } from './PipelineHeaderView';
+import { PipelineHeaderView } from './PipelineHeaderView';
+import type { PipelineHeaderViewProps } from './PipelineHeaderView';
 import { Pipeline, Task, TaskStatus, PipelineStatus } from '../../core/domain';
 
 describe('PipelineHeaderView', () => {
@@ -55,8 +56,8 @@ describe('PipelineHeaderView', () => {
   it('renders DocBot banner when ready', () => {
     const props = { ...mockProps, docbotState: { status: 'ready', taskId: 't1' } as any };
     const html = PipelineHeaderView.render(props);
-    expect(html).toContain('DocBot has prepared a documentation update');
-    expect(html).toContain('Review Changes');
+    expect(html).toContain('Doc update prepared.');
+    expect(html).toContain('Review');
   });
 
   it('renders header stats based on tasks', () => {
@@ -66,7 +67,7 @@ describe('PipelineHeaderView', () => {
       { id: '3', status: TaskStatus.IMPLEMENTED, deleted: false } as Task,
     ];
     const props = { ...mockProps, allTasks: tasks };
-    const html = PipelineHeaderView.render(props);
+    PipelineHeaderView.render(props);
     
     // Check for some expected status badges (the actual badges are rendered via renderHeaderStats)
     // We expect 3 badges since we have 3 tasks with different statuses

@@ -32,15 +32,8 @@ import { LogViewerDialog } from '../components/LogViewerDialog.ts';
 import { DocBotDialog } from '../components/DocBotDialog.ts';
 import type { DocBotDialogProps } from '../components/DocBotDialog.ts';
 import { PipelineHeaderView } from '../components/PipelineHeaderView.ts';
+import type { DocbotState } from '../components/PipelineHeaderView.ts';
 import EasyMDE from 'easymde';
-
-interface DocbotState {
-  status: 'none' | 'ready' | 'inProgress';
-  taskId: string | null;
-  diff: string;
-  commitMsg: string;
-  filename: string;
-}
 
 export class PipelineDetailView extends View {
   private container: HTMLElement | null = null;
@@ -62,10 +55,8 @@ export class PipelineDetailView extends View {
   private docbotState: DocbotState = {
     status: 'none',
     taskId: null,
-    diff: '',
-    commitMsg: '',
-    filename: ''
   };
+
 
   private columnMetadata: Record<string, { title: string, emptyMessage: string }> = {
     'proposed': { title: 'Proposed', emptyMessage: 'No proposed designs.' },
@@ -229,12 +220,35 @@ export class PipelineDetailView extends View {
         this.updateHeader();
       }
     }));
+    this.unsubs.push(this.context.wsClient.on('DOCBOT_STARTED', (message: any) => {
+       if (message.payload?.pipeline_id === this.pipelineId) {
+          this.docbotState = { status: 'inProgress', taskId: message.payload.task_id };
+          this.updateHeader();
+       }
+    }));
+    this.unsubs.push(this.context.wsClient.on('DOCBOT_COMPLETED', (message: any) => {
+       if (message.payload?.pipeline_id === this.pipelineId) {
+          const result = message.payload.result;
+          if (result && result.status === 'no_update_needed') {
+            this.docbotState = { status: 'noUpdate', taskId: message.payload.task_id, reason: result.reason };
+            this.updateHeader();
+          } else if (result && result.status === 'update_needed') {
+            // We rely on DOCBOT_PREVIEW_READY to fetch the diff, so do nothing here for success yet
+          } else {
+             // Fallback or error
+             this.docbotState = { status: 'none', taskId: null };
+             this.updateHeader();
+          }
+       }
+    }));
     this.unsubs.push(this.context.wsClient.on('DOCBOT_PREVIEW_READY', (message: any) => {
        if (message.payload?.task_id) {
           this.fetchDocBotPreview(message.payload.task_id);
        }
     }));
   }
+
+  private docbotPreviewData: any = null;
 
   private async fetchDocBotPreview(taskId: string) {
      try {
@@ -246,12 +260,10 @@ export class PipelineDetailView extends View {
         
         if (response.ok) {
            const data = await response.json();
+           this.docbotPreviewData = data;
            this.docbotState = {
              status: 'ready',
              taskId: data.task_id,
-             diff: data.diff,
-             commitMsg: data.commit_msg,
-             filename: data.filename
            };
            this.updateHeader();
         }
@@ -262,14 +274,14 @@ export class PipelineDetailView extends View {
 
   private openDocBotDialog() {
      const dialogContainer = this.container?.querySelector('#docbot-dialog-container') as HTMLElement;
-     if (!dialogContainer || !this.docbotState.taskId) return;
+     if (!dialogContainer || !this.docbotState.taskId || !this.docbotPreviewData) return;
      
      const props: DocBotDialogProps = {
         taskId: this.docbotState.taskId,
         pipelineId: this.pipelineId,
-        diff: this.docbotState.diff,
-        commitMsg: this.docbotState.commitMsg,
-        filename: this.docbotState.filename,
+        diff: this.docbotPreviewData.diff,
+        commitMsg: this.docbotPreviewData.commit_msg,
+        filename: this.docbotPreviewData.filename,
         context: this.context,
         onClose: () => {
           dialogContainer.innerHTML = '';
@@ -278,10 +290,8 @@ export class PipelineDetailView extends View {
           this.docbotState = {
             status: 'none',
             taskId: null,
-            diff: '',
-            commitMsg: '',
-            filename: ''
           };
+          this.docbotPreviewData = null;
           this.updateHeader();
         }
      };
@@ -813,6 +823,12 @@ export class PipelineDetailView extends View {
 
     this.context.actionRegistry.register('open_docbot_dialog', () => {
       this.openDocBotDialog();
+    });
+
+    this.context.actionRegistry.register('dismiss_docbot_banner', () => {
+      this.docbotState = { status: 'none', taskId: null };
+      this.docbotPreviewData = null;
+      this.updateHeader();
     });
   }
 

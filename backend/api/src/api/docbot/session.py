@@ -13,12 +13,13 @@
 # limitations under the License.
 
 import logging
-from typing import List
+from typing import Any, Dict, List, Optional
 
 import git
 
 from api.assistant.tool_registry import ToolDefinition
 from api.bot.base_session import BaseBotSession
+from api.websocket_manager import WSMessage, manager
 from core.queries import pipeline as pipeline_queries
 from core.queries import task as task_queries
 
@@ -69,6 +70,10 @@ class DocBotSession(BaseBotSession):
     Specialized assistant agent for maintaining project documentation.
     """
 
+    def __init__(self, pipeline_id: str, task_id: str):
+        super().__init__(pipeline_id, task_id)
+        self.session_result: Optional[Dict[str, Any]] = None
+
     def get_system_instruction(self) -> str:
         return SYSTEM_INSTRUCTION
 
@@ -77,6 +82,26 @@ class DocBotSession(BaseBotSession):
 
     def is_terminal_tool(self, tool_name: str) -> bool:
         return tool_name in ["update_ref_doc", "no_doc_update_needed"]
+
+    async def on_event(self, event_name: str, payload: Optional[Dict[str, Any]] = None):
+        if event_name == "bot_started":
+            await manager.broadcast(
+                WSMessage(
+                    type="DOCBOT_STARTED",
+                    payload={"pipeline_id": self.pipeline_id, "task_id": self.task_id},
+                )
+            )
+        elif event_name == "bot_completed":
+            await manager.broadcast(
+                WSMessage(
+                    type="DOCBOT_COMPLETED",
+                    payload={
+                        "pipeline_id": self.pipeline_id,
+                        "task_id": self.task_id,
+                        "result": self.session_result,
+                    },
+                )
+            )
 
     async def get_initial_prompt(self) -> str:
         task = await task_queries.get_task_by_id(self.task_id)

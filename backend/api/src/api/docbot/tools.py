@@ -14,7 +14,7 @@
 
 import logging
 import os
-from typing import List, Optional
+from typing import Any, List, Optional
 
 import git
 
@@ -173,6 +173,7 @@ async def update_ref_doc(
     content: str,
     reason: str,
     task_id: Optional[str] = None,
+    session: Optional[Any] = None,
     **kwargs,
 ) -> str:
     """
@@ -275,6 +276,13 @@ async def update_ref_doc(
                     ),
                 )
 
+                if session and hasattr(session, "session_result"):
+                    session.session_result = {
+                        "status": "update_needed",
+                        "filename": fname,
+                        "reason": resn,
+                    }
+
                 # WebSocket notification
                 await manager.broadcast(
                     WSMessage(type="DOCBOT_PREVIEW_READY", payload={"task_id": tid})
@@ -290,7 +298,9 @@ async def update_ref_doc(
 
 
 @register_doc_tool()
-async def no_doc_update_needed(reason: str = "No reason provided") -> str:
+async def no_doc_update_needed(
+    reason: str = "No reason provided", session: Optional[Any] = None
+) -> str:
     """
     Signals that the analysis is complete and no documentation updates are required.
 
@@ -303,4 +313,6 @@ async def no_doc_update_needed(reason: str = "No reason provided") -> str:
                 change.
     """
     logger.info(f"DocBot decided no update needed. Reason: {reason}")
+    if session and hasattr(session, "session_result"):
+        session.session_result = {"status": "no_update_needed", "reason": reason}
     return "No documentation update performed."

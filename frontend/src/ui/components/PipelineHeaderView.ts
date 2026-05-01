@@ -16,12 +16,18 @@
 
 import { Pipeline, Task, TaskStatus } from '../../core/domain.ts';
 
+export interface DocbotState {
+  status: 'none' | 'ready' | 'inProgress' | 'noUpdate';
+  taskId: string | null;
+  reason?: string;
+}
+
 export interface PipelineHeaderViewProps {
   pipeline: Pipeline;
   pipelineId: string;
   geminiStatus: { running: boolean; log_file: string | null; available: boolean };
   vibeStatus: { running: boolean; log_file: string | null; available: boolean };
-  docbotState: { status: 'none' | 'ready' | 'inProgress'; taskId: string | null };
+  docbotState: DocbotState;
   user: any;
   allTasks: Task[];
 }
@@ -74,17 +80,43 @@ export class PipelineHeaderView {
         </div>
       `);
 
-    const docbotBannerHtml = docbotState.status === 'ready'
-      ? `
-        <div class="inline-block bg-yellow-100 border border-yellow-300 text-yellow-800 rounded px-3 py-2 text-sm shadow-sm flex items-center gap-2">
-          <svg class="w-4 h-4 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    let docbotBannerHtml = '';
+    if (docbotState.status === 'inProgress') {
+      docbotBannerHtml = `
+        <div class="inline-flex bg-blue-500/10 border border-blue-500/30 text-blue-400 rounded-lg px-3 py-1.5 text-xs shadow-sm items-center gap-2">
+          <span class="relative flex h-2.5 w-2.5">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500"></span>
+          </span>
+          <span class="font-bold tracking-wide">DocBot is analyzing...</span>
+        </div>
+      `;
+    } else if (docbotState.status === 'noUpdate') {
+      docbotBannerHtml = `
+        <div class="inline-flex bg-slate-800/50 border border-slate-700 text-slate-300 rounded-lg px-3 py-1.5 text-xs shadow-sm items-center gap-2">
+          <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          <span class="font-medium">No doc update needed: <span class="opacity-80 font-normal truncate max-w-xs inline-block align-bottom" title="${docbotState.reason || ''}">${docbotState.reason || 'No reason provided'}</span></span>
+          <button data-action-click="dismiss_docbot_banner" class="ml-2 text-slate-500 hover:text-slate-300 transition-colors cursor-pointer">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+          </button>
+        </div>
+      `;
+    } else if (docbotState.status === 'ready') {
+      docbotBannerHtml = `
+        <div class="inline-flex bg-yellow-500/10 border border-yellow-500/30 text-yellow-500 rounded-lg px-3 py-1.5 text-xs shadow-sm items-center gap-2">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
           </svg>
-          <span class="font-medium">DocBot has prepared a documentation update.</span>
-          <button data-action-click="open_docbot_dialog" class="font-bold underline ml-2 hover:text-yellow-900 transition-colors cursor-pointer">Review Changes</button>
+          <span class="font-medium">Doc update prepared.</span>
+          <button data-action-click="open_docbot_dialog" class="font-bold underline hover:text-yellow-400 transition-colors cursor-pointer ml-1">Review</button>
+          <button data-action-click="dismiss_docbot_banner" class="ml-2 text-yellow-700 hover:text-yellow-500 transition-colors cursor-pointer">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+          </button>
         </div>
-      `
-      : '';
+      `;
+    }
 
     return `
       <header class="flex justify-between items-center bg-app-surface p-6 rounded-2xl shadow-lg border border-app-border shrink-0">
