@@ -29,7 +29,14 @@ logger = logging.getLogger(__name__)
 # Tool Categories
 WRITE_ACCESS = "write_access"
 
-NVIM_SOCKET = "/tmp/nvimsocket"
+
+def get_nvim_socket_path() -> str:
+    """
+    Returns the Neovim Unix socket path.
+    Defaults to '/tmp/nvimsocket' but can be overridden via NVIM_SOCKET env var.
+    """
+    return os.getenv("NVIM_SOCKET", "/tmp/nvimsocket")
+
 
 # Cache for Neovim availability
 _nvim_available: bool | None = None
@@ -44,16 +51,17 @@ def is_nvim_available() -> bool:
     if _nvim_available is not None:
         return _nvim_available
 
+    socket_path = get_nvim_socket_path()
     try:
-        if os.path.exists(NVIM_SOCKET):
-            mode = os.stat(NVIM_SOCKET).st_mode
+        if os.path.exists(socket_path):
+            mode = os.stat(socket_path).st_mode
             if stat.S_ISSOCK(mode):
                 _nvim_available = True
                 return True
             else:
-                logger.warning(f"File at {NVIM_SOCKET} exists but is not a socket.")
+                logger.warning(f"File at {socket_path} exists but is not a socket.")
         else:
-            logger.info(f"Neovim socket not found at {NVIM_SOCKET}.")
+            logger.info(f"Neovim socket not found at {socket_path}.")
     except Exception as e:
         logger.error(f"Error checking Neovim availability: {e}")
 
@@ -63,12 +71,13 @@ def is_nvim_available() -> bool:
 
 def _nvim_client_call(method: str, params: list) -> Dict:
     """Helper to send MessagePack-RPC requests to the Neovim socket."""
+    socket_path = get_nvim_socket_path()
     if not is_nvim_available():
         return {
             "success": False,
             "error": (
-                f"Neovim socket not found at {NVIM_SOCKET}. "
-                f"Ensure Neovim is running with '--listen {NVIM_SOCKET}'."
+                f"Neovim socket not found at {socket_path}. "
+                f"Ensure Neovim is running with '--listen {socket_path}'."
             ),
         }
 
@@ -80,7 +89,7 @@ def _nvim_client_call(method: str, params: list) -> Dict:
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
             s.settimeout(2.0)
-            s.connect(NVIM_SOCKET)
+            s.connect(socket_path)
 
             # Use msgpack to pack the list into binary
             s.sendall(msgpack.packb(payload))

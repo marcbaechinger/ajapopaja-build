@@ -17,7 +17,7 @@ from typing import Dict
 
 from fastapi import APIRouter
 
-from ..assistant.tools.nvim_tools import NVIM_SOCKET, is_nvim_available
+from ..assistant.tools.nvim_tools import get_nvim_socket_path, is_nvim_available
 from ..ollama_utils import is_ollama_available
 
 router = APIRouter(prefix="/system", tags=["system"])
@@ -41,21 +41,22 @@ async def health_check() -> Dict:
 
     # Nvim Socket Check
     try:
+        socket_path = get_nvim_socket_path()
         if is_nvim_available():
             results["nvim"] = {
                 "status": "ok",
-                "details": f"Socket found and verified at {NVIM_SOCKET}",
+                "details": f"Socket found and verified at {socket_path}",
             }
         else:
-            if not os.path.exists(NVIM_SOCKET):
+            if not os.path.exists(socket_path):
                 results["nvim"] = {
                     "status": "error",
-                    "details": f"Socket not found at {NVIM_SOCKET}",
+                    "details": f"Socket not found at {socket_path}",
                 }
             else:
                 results["nvim"] = {
                     "status": "error",
-                    "details": f"File at {NVIM_SOCKET} is not a socket",
+                    "details": f"File at {socket_path} is not a socket",
                 }
     except Exception as e:
         results["nvim"] = {"status": "error", "details": str(e)}
