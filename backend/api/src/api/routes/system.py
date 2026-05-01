@@ -16,6 +16,7 @@ import os
 from typing import Dict
 
 from fastapi import APIRouter
+from pymongo import AsyncMongoClient
 
 from ..assistant.tools.nvim_tools import get_nvim_socket_path, is_nvim_available
 from ..ollama_utils import is_ollama_available
@@ -24,13 +25,27 @@ router = APIRouter(prefix="/system", tags=["system"])
 
 
 @router.get("/health")
-async def health_check() -> Dict:
+async def health_check() -> Dict[str, dict]:
     """
-    Returns the health status of various system components.
-    """
-    results = {}
+    Return a JSON dictionary describing the health of the system
+    components that this service is aware of.
 
-    # Ollama Check
+    Components reported:
+      * mongodb  – requires a connection to the configured MongoDB instance.
+      * ollama   – a simple ping to the Ollama HTTP endpoint.
+      * nvim     – whether the Neovim socket defined by NVIM_SOCKET is
+                    present and is a Unix domain socket.
+    """
+    results: Dict[str, dict] = {}
+
+    try:
+        mongodb_uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
+        client = AsyncMongoClient(mongodb_uri, serverSelectionTimeoutMS=2000)
+        await client.admin.command("ping")
+        results["mongodb"] = {"status": "ok", "details": "Connected"}
+    except Exception as e:
+        results["mongodb"] = {"status": "error", "details": str(e)}
+
     if await is_ollama_available():
         results["ollama"] = {"status": "ok", "details": "Ollama is reachable"}
     else:
@@ -39,24 +54,23 @@ async def health_check() -> Dict:
             "details": "Ollama is not responding or not configured correctly",
         }
 
-    # Nvim Socket Check
     try:
-        socket_path = get_nvim_socket_path()
+        nvim_socket = get_nvim_socket_path()
         if is_nvim_available():
             results["nvim"] = {
                 "status": "ok",
-                "details": f"Socket found and verified at {socket_path}",
+                "details": f"Socket found and verified at {nvim_socket}",
             }
         else:
-            if not os.path.exists(socket_path):
+            if not os.path.exists(nvim_socket):
                 results["nvim"] = {
                     "status": "error",
-                    "details": f"Socket not found at {socket_path}",
+                    "details": f"Socket not found at {nvim_socket}",
                 }
             else:
                 results["nvim"] = {
                     "status": "error",
-                    "details": f"File at {socket_path} is not a socket",
+                    "details": f"File at {nvim_socket} is not a socket",
                 }
     except Exception as e:
         results["nvim"] = {"status": "error", "details": str(e)}
