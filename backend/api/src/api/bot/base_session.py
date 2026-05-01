@@ -51,6 +51,11 @@ class BaseBotSession(ABC):
         pass
 
     @abstractmethod
+    async def get_initial_prompt(self) -> str:
+        """Generates the initial prompt for the session."""
+        pass
+
+    @abstractmethod
     def get_tools(self) -> List[ToolDefinition]:
         """Returns the list of tools available to this agent."""
         pass
@@ -60,11 +65,12 @@ class BaseBotSession(ABC):
         """Determines if a tool call should terminate the autonomous loop."""
         pass
 
-    async def run(self, initial_prompt: str, max_iterations: int = 50):
+    async def run(self, max_iterations: int = 50):
         """
         Runs the autonomous loop until a terminal tool is called or
         max_iterations is reached.
         """
+        initial_prompt = await self.get_initial_prompt()
         self.history.append({"role": "user", "content": initial_prompt})
 
         for i in range(max_iterations):

@@ -60,7 +60,13 @@ async def test_docbot_session_run_terminal_call():
             # chat returns an async generator when stream=True
             mock_chat.return_value = make_async_iter([mock_chunk])
 
-            await session.run("Initial prompt")
+            with patch.object(
+                session,
+                "get_initial_prompt",
+                new_callable=AsyncMock,
+                return_value="Initial prompt",
+            ):
+                await session.run()
 
             assert mock_chat.called
             # Check terminal call was detected (loop finished)
@@ -88,7 +94,13 @@ async def test_docbot_session_max_iterations():
     ) as mock_chat:
         mock_chat.return_value = make_async_iter([mock_chunk])
 
-        await session.run("Initial prompt", max_iterations=2)
+        with patch.object(
+            session,
+            "get_initial_prompt",
+            new_callable=AsyncMock,
+            return_value="Initial prompt",
+        ):
+            await session.run(max_iterations=2)
 
         # Should be called 2 times (the max_iterations)
         assert mock_chat.call_count == 2
@@ -151,7 +163,13 @@ async def test_docbot_session_multiple_tool_calls():
         ) as mock_chat:
             mock_chat.return_value = make_async_iter([mock_chunk])
 
-            await session.run("Initial prompt")
+            with patch.object(
+                session,
+                "get_initial_prompt",
+                new_callable=AsyncMock,
+                return_value="Initial prompt",
+            ):
+                await session.run()
 
             # Verify both tools were called and results added to history
             tool_results = [
@@ -211,7 +229,13 @@ async def test_docbot_session_terminal_retry_on_error():
             ]
 
             # First call uses failing func
-            await session.run("Initial prompt", max_iterations=2)
+            with patch.object(
+                session,
+                "get_initial_prompt",
+                new_callable=AsyncMock,
+                return_value="Initial prompt",
+            ):
+                await session.run(max_iterations=2)
 
             # It should have called chat twice because the first terminal call failed
             assert mock_chat.call_count == 2

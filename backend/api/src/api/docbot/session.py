@@ -15,8 +15,12 @@
 import logging
 from typing import List
 
+import git
+
 from api.assistant.tool_registry import ToolDefinition
 from api.bot.base_session import BaseBotSession
+from core.queries import pipeline as pipeline_queries
+from core.queries import task as task_queries
 
 from .registry import docbot_registry
 
@@ -73,3 +77,45 @@ class DocBotSession(BaseBotSession):
 
     def is_terminal_tool(self, tool_name: str) -> bool:
         return tool_name in ["update_ref_doc", "no_doc_update_needed"]
+
+    async def get_initial_prompt(self) -> str:
+        task = await task_queries.get_task_by_id(self.task_id)
+        if not task:
+            raise ValueError(f"Task {self.task_id} not found.")
+
+        if not task.commit_hash:
+            raise ValueError(f"Task {self.task_id} completed without a commit hash.")
+
+        pipeline = await pipeline_queries.get_pipeline_by_id(self.pipeline_id)
+        if not pipeline or not pipeline.workspace_abs_path:
+            raise ValueError(
+                f"Pipeline {self.pipeline_id} not found or has no workspace path."
+            )
+
+        try:
+            repo = git.Repo(pipeline.workspace_abs_path)
+            diff = repo.git.show(task.commit_hash)
+        except Exception as e:
+            raise ValueError(
+                f"Failed to get git diff for commit {task.commit_hash}: {e}"
+            )
+
+        return f"""
+I have completed a task in the pipeline '{pipeline.name}' (ID: {pipeline.id}).
+
+TASK DETAILS:
+- Title: {task.title}
+- Description: {task.description or "N/A"}
+- Spec: {task.spec or "N/A"}
+- Design Doc: {task.design_doc or "N/A"}
+- Completion Summary: {task.completion_info or "N/A"}
+- Commit Hash: {task.commit_hash}
+
+GIT DIFF:
+```diff
+{diff}
+```
+
+Please analyze if this change requires an update to the reference
+documentation in the 'design/' directory.
+"""
