@@ -43,7 +43,7 @@ from api.routes.pipeline import router as pipeline_router
 from api.routes.system import router as system_router
 from api.routes.task import pipeline_task_router, task_router
 from api.websocket_manager import manager
-from core import config
+from core import __version__, config
 from core.db import init_db
 from core.exceptions import (
     AjapopajaError,
@@ -249,7 +249,7 @@ async def health():
 
 @api_router.get("/version")
 async def version():
-    return {"version": os.environ.get("APP_VERSION", "dev")}
+    return {"version": os.environ.get("APP_VERSION", __version__)}
 
 
 api_router.include_router(pipeline_router)
