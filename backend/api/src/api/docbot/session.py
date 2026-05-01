@@ -12,14 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import inspect
-import json
 import logging
-from typing import Any, Dict, List
+from typing import List
 
-import ollama
-
-from core import config
+from api.assistant.base_session import BaseBotSession
+from api.assistant.tool_registry import ToolDefinition
 
 from .registry import docbot_registry
 
@@ -61,163 +58,16 @@ conceptual design.
 """
 
 
-class DocBotSession:
-    def __init__(self, pipeline_id: str, task_id: str):
-        self.pipeline_id = pipeline_id
-        self.task_id = task_id
-        headers = {}
-        if config.OLLAMA_API_KEY:
-            headers["Authorization"] = f"Bearer {config.OLLAMA_API_KEY}"
-        self.client = ollama.AsyncClient(host=config.OLLAMA_HOST, headers=headers)
-        self.history: List[Dict[str, Any]] = [
-            {"role": "system", "content": SYSTEM_INSTRUCTION}
-        ]
+class DocBotSession(BaseBotSession):
+    """
+    Specialized assistant agent for maintaining project documentation.
+    """
 
-    async def run(self, initial_prompt: str, max_iterations: int = 50):
-        self.history.append({"role": "user", "content": initial_prompt})
+    def get_system_instruction(self) -> str:
+        return SYSTEM_INSTRUCTION
 
-        for i in range(max_iterations):
-            logger.info(f"DocBot iteration {i + 1}/{max_iterations}")
+    def get_tools(self) -> List[ToolDefinition]:
+        return docbot_registry.list_tools()
 
-            # Prepare tools
-            ollama_tools = []
-            for t in docbot_registry.list_tools():
-                # Extract parameters, but remove 'pipeline_id' and 'task_id' if present
-                # as we will inject them automatically
-                parameters = t.parameters.copy()
-                properties = parameters.get("properties", {}).copy()
-
-                injected_params = ["pipeline_id", "task_id"]
-                for p in injected_params:
-                    if p in properties:
-                        del properties[p]
-
-                parameters["properties"] = properties
-
-                if "required" in parameters:
-                    required = [
-                        r for r in parameters["required"] if r not in injected_params
-                    ]
-                    parameters["required"] = required
-
-                ollama_tools.append(
-                    {
-                        "type": "function",
-                        "function": {
-                            "name": t.name,
-                            "description": t.description,
-                            "parameters": parameters,
-                        },
-                    }
-                )
-
-            response = await self.client.chat(
-                model=config.OLLAMA_MODEL,
-                messages=self.history,
-                tools=ollama_tools,
-            )
-            # ... (rest of the method remains the same until _execute_tool call)
-
-            msg = response.message
-
-            # Store as dictionary for next turn
-            assistant_msg = {"role": "assistant", "content": msg.content or ""}
-            if msg.tool_calls:
-                assistant_msg["tool_calls"] = [
-                    {
-                        "type": "function",
-                        "function": {
-                            "name": tc.function.name,
-                            "arguments": tc.function.arguments,
-                        },
-                    }
-                    for tc in msg.tool_calls
-                ]
-            self.history.append(assistant_msg)
-
-            if not msg.tool_calls:
-                logger.info(
-                    f"DocBot iteration {i + 1}: No tool calls, agent responded with "
-                    f"text: {msg.content}"
-                )
-                # If no tool call, push the agent to finish
-                feedback = (
-                    "Continue to analyze the recent change and then call the "
-                    "tools to update the design document or signal that no "
-                    "change is needed. Remember to use the formal tool calling "
-                    "mechanism."
-                )
-                self.history.append(
-                    {
-                        "role": "user",
-                        "content": feedback,
-                    }
-                )
-                continue
-
-            # Process tool calls
-            terminal_call = False
-            for tool_call in msg.tool_calls:
-                tool_name = tool_call.function.name
-                args = tool_call.function.arguments
-
-                logger.info(
-                    f"DocBot iteration {i + 1}: Agent calling tool '{tool_name}' "
-                    f"with args: {args}"
-                )
-
-                if tool_name in ["update_ref_doc", "no_doc_update_needed"]:
-                    terminal_call = True
-                    logger.info(f"DocBot reached terminal decision: {tool_name}")
-
-                result = await self._execute_tool(tool_name, args)
-
-                # Append tool result to history
-                self.history.append(
-                    {
-                        "role": "tool",
-                        "content": json.dumps(result),
-                        "name": tool_name,
-                    }
-                )
-
-                if terminal_call:
-                    is_error = False
-                    if isinstance(result, str) and result.startswith("Error"):
-                        is_error = True
-                    elif isinstance(result, dict) and "error" in result:
-                        is_error = True
-
-                    if is_error:
-                        logger.warning(
-                            f"DocBot terminal tool '{tool_name}' failed with "
-                            f"{result}. Forcing retry."
-                        )
-                        terminal_call = False
-
-            if terminal_call:
-                logger.info("DocBot finished analysis with terminal tool call.")
-                return
-
-        logger.warning("DocBot reached maximum iterations without terminal call.")
-
-    async def _execute_tool(self, name: str, args: Dict[str, Any]) -> Any:
-        tool = docbot_registry.get_tool(name)
-        if not tool:
-            return f"Error: Tool {name} not found."
-
-        try:
-            if isinstance(args, str):
-                args = json.loads(args)
-
-            # Inject pipeline_id and task_id if the tool expects them
-            sig = inspect.signature(tool.func)
-            if "pipeline_id" in sig.parameters:
-                args["pipeline_id"] = self.pipeline_id
-            if "task_id" in sig.parameters:
-                args["task_id"] = self.task_id
-
-            return await tool.func(**args)
-        except Exception as e:
-            logger.error(f"DocBot tool error ({name}): {e}")
-            return f"Error: {type(e).__name__} - {str(e)}"
+    def is_terminal_tool(self, tool_name: str) -> bool:
+        return tool_name in ["update_ref_doc", "no_doc_update_needed"]

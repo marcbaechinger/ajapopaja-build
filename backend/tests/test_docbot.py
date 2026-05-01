@@ -51,7 +51,7 @@ async def test_docbot_session_run_terminal_call():
         mock_response.message = mock_msg
 
         with patch(
-            "api.docbot.session.ollama.AsyncClient.chat", new_callable=AsyncMock
+            "api.assistant.base_session.ollama.AsyncClient.chat", new_callable=AsyncMock
         ) as mock_chat:
             mock_chat.return_value = mock_response
 
@@ -78,7 +78,7 @@ async def test_docbot_session_max_iterations():
     mock_response.message = mock_msg
 
     with patch(
-        "api.docbot.session.ollama.AsyncClient.chat", new_callable=AsyncMock
+        "api.assistant.base_session.ollama.AsyncClient.chat", new_callable=AsyncMock
     ) as mock_chat:
         mock_chat.return_value = mock_response
 
@@ -140,7 +140,7 @@ async def test_docbot_session_multiple_tool_calls():
         mock_response.message = mock_msg
 
         with patch(
-            "api.docbot.session.ollama.AsyncClient.chat", new_callable=AsyncMock
+            "api.assistant.base_session.ollama.AsyncClient.chat", new_callable=AsyncMock
         ) as mock_chat:
             mock_chat.return_value = mock_response
 
@@ -196,7 +196,7 @@ async def test_docbot_session_terminal_retry_on_error():
         mock_resp2.message = mock_msg2
 
         with patch(
-            "api.docbot.session.ollama.AsyncClient.chat", new_callable=AsyncMock
+            "api.assistant.base_session.ollama.AsyncClient.chat", new_callable=AsyncMock
         ) as mock_chat:
             mock_chat.side_effect = [mock_resp1, mock_resp2]
 
