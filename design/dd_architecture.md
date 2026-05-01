@@ -42,6 +42,7 @@ The system is composed of five primary interconnected components:
     *   **Responsibilities**:
         *   Provide an interactive conversational AI Assistant (backed by `ollama.AsyncClient`) accessible via the SPA Frontend to answer queries and execute internal tools.
         *   Manage autonomous background workers (e.g., `gemini` or `vibe` CLI executors) directly from the API, enabling pipelines to run without requiring external terminal invocations.
+        *   The assistant interface is conditionally rendered based on Ollama availability; if the Ollama service is unreachable, the system degrades gracefully by hiding assistant controls and skipping DocBot background sessions. Health checks are performed on the `/system/health` endpoint and used by both the backend and frontend to determine availability.
 
 ## 3. Component Interaction & Data Flow
 1.  **Human Setup**: A user accesses the **SPA Frontend**, which communicates with the **FastAPI Server** to create a new Pipeline and populate it with Tasks in the **MongoDB**. Tasks are initially set to the `created` state.
@@ -75,3 +76,4 @@ The system implements a centralized security model to protect management operati
 *   **User Management**: Password-based login using **bcrypt** for hashing and storage in MongoDB.
 *   **WebSocket Security**: The `/ws` endpoint requires a valid JWT passed as a `token` query parameter during the initial handshake.
 *   **Environment Configuration**: Secrets like `AUTH_SECRET_KEY` are managed via environment variables.
+

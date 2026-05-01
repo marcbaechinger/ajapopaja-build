@@ -38,6 +38,15 @@ export class SystemClient extends BaseClient {
     }
   }
 
+  async isOllamaAvailable(): Promise<boolean> {
+    try {
+      const health = await this.getHealth();
+      return health.ollama?.status === 'ok';
+    } catch (e) {
+      return false;
+    }
+  }
+
   async getVersion(): Promise<string> {
     try {
       const response = await this.fetch('/api/version');

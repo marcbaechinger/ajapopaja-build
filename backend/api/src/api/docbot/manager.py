@@ -19,6 +19,7 @@ import git
 from core.models.models import Task
 from core.queries import pipeline as pipeline_queries
 
+from ..ollama_utils import is_ollama_available
 from . import tools  # noqa: F401
 from .session import DocBotSession
 
@@ -31,6 +32,10 @@ class DocBotManager:
         """
         Gathers context for a completed task and triggers an autonomous DocBot session.
         """
+        if not await is_ollama_available():
+            logger.info("Ollama is not available. Skipping DocBot session.")
+            return
+
         if not task.commit_hash:
             logger.warning(
                 f"Task {task.id} completed without a commit hash. Skipping DocBot."

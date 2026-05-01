@@ -1,9 +1,10 @@
 import os
 import stat
 
-import ollama
 from fastapi import APIRouter
 from pymongo import AsyncMongoClient
+
+from ..ollama_utils import is_ollama_available
 
 router = APIRouter(prefix="/system", tags=["System"])
 
@@ -25,16 +26,16 @@ async def system_health():
     try:
         from core import config
 
-        headers = {}
-        if config.OLLAMA_API_KEY:
-            headers["Authorization"] = f"Bearer {config.OLLAMA_API_KEY}"
-        client = ollama.AsyncClient(host=config.OLLAMA_HOST, headers=headers)
-        # Ensure we can list models as a health check
-        await client.list()
-        results["ollama"] = {
-            "status": "ok",
-            "details": f"Connected to {config.OLLAMA_HOST}",
-        }
+        if await is_ollama_available():
+            results["ollama"] = {
+                "status": "ok",
+                "details": f"Connected to {config.OLLAMA_HOST}",
+            }
+        else:
+            results["ollama"] = {
+                "status": "error",
+                "details": f"Could not connect to Ollama at {config.OLLAMA_HOST}",
+            }
     except Exception as e:
         results["ollama"] = {"status": "error", "details": str(e)}
 

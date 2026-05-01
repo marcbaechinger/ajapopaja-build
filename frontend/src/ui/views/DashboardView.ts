@@ -251,6 +251,15 @@ export class DashboardView extends View {
     this.container = container;
     this.refreshList();
     this.updateVersion();
+    this.checkOllama();
+  }
+
+  private async checkOllama() {
+    if (!this.container) return;
+    const isAvailable = await this.context.systemClient.isOllamaAvailable();
+    if (!isAvailable) {
+      this.container.querySelector('[data-action-click="toggle_assistant"]')?.classList.add('hidden');
+    }
   }
 
   private async updateVersion() {

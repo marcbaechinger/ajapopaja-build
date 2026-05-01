@@ -1153,6 +1153,15 @@ export class PipelineDetailView extends View {
     this.container = container;
     this.loadPipeline();
     this.refreshTasks();
+    this.checkOllama();
+  }
+
+  private async checkOllama() {
+    if (!this.container) return;
+    const isAvailable = await this.context.systemClient.isOllamaAvailable();
+    if (!isAvailable) {
+      this.container.querySelector('[data-action-click="toggle_assistant"]')?.classList.add('hidden');
+    }
   }
 
   unmount() {
