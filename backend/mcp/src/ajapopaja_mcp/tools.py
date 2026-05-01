@@ -12,12 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import asyncio
 import logging
 import re
 from typing import Any, Dict, List, Optional
 
-from api.docbot.manager import DocBotManager
 from api.websocket_manager import manager
 from core.db import init_db
 from core.exceptions import EntityNotFoundError, VersionMismatchError
@@ -157,20 +155,6 @@ async def complete_task(
         )
 
         await notify_api(task_id)
-
-        # Trigger DocBot in the background if Ollama is available
-        try:
-            from api.ollama_utils import is_ollama_available
-
-            if await is_ollama_available():
-                asyncio.create_task(DocBotManager.process_completed_task(task))
-            else:
-                logging.info(
-                    "Ollama is not available. Skipping DocBot session for "
-                    f"task {task_id}."
-                )
-        except ImportError:
-            logging.warning("api.ollama_utils not found. Skipping DocBot.")
 
         status_msg = f"Task {task_id} completed successfully."
         if task.verification and not task.verification.get("success"):

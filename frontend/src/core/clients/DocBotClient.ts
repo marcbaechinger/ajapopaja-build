@@ -26,6 +26,15 @@ export class DocBotClient extends BaseClient {
   }
 
   /**
+   * Triggers the DocBot to run for a completed task.
+   */
+  public async triggerDocBot(pipelineId: string, taskId: string): Promise<void> {
+    await this.fetch(`${this.apiBaseUrl}/pipelines/${pipelineId}/docbot/trigger/${taskId}`, {
+      method: 'POST',
+    });
+  }
+
+  /**
    * Commits the reviewed changes proposed by DocBot.
    */
   public async commitChanges(pipelineId: string, taskId: string, commitMsg: string): Promise<void> {

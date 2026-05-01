@@ -20,8 +20,10 @@ from pydantic import BaseModel
 
 from api.auth import get_current_user
 from core.queries import pipeline as pipeline_queries
+from core.queries import task as task_queries
 
 from ..docbot.cache import clear_preview, get_preview
+from ..docbot.manager import DocBotManager
 
 router = APIRouter(
     prefix="/pipelines/{pipeline_id}/docbot",
@@ -29,6 +31,38 @@ router = APIRouter(
     dependencies=[Depends(get_current_user)],
 )
 logger = logging.getLogger(__name__)
+
+
+@router.post("/trigger/{task_id}")
+async def trigger_docbot(pipeline_id: str, task_id: str):
+    """
+    Manually triggers a DocBot review session for a completed task.
+    """
+    pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
+    if not pipeline:
+        raise HTTPException(status_code=404, detail="Pipeline not found")
+
+    task = await task_queries.get_task_by_id(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    if task.pipeline_id != pipeline_id:
+        raise HTTPException(
+            status_code=400, detail="Task does not belong to this pipeline"
+        )
+
+    if not task.commit_hash:
+        raise HTTPException(
+            status_code=400, detail="Task must have a commit hash to run DocBot"
+        )
+
+    # Queue the bot session
+    try:
+        await DocBotManager.process_completed_task(task)
+        return {"status": "success", "message": "DocBot triggered successfully."}
+    except Exception as e:
+        logger.error(f"Failed to trigger DocBot: {e}")
+        raise HTTPException(status_code=500, detail="Failed to trigger DocBot.")
 
 
 class CommitRequest(BaseModel):

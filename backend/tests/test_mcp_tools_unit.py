@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -240,15 +239,6 @@ async def test_complete_task_unit():
         patch(
             "ajapopaja_mcp.tools.manager.notify_task_update", new_callable=AsyncMock
         ) as mock_notify,
-        patch(
-            "ajapopaja_mcp.tools.DocBotManager.process_completed_task",
-            new_callable=AsyncMock,
-        ) as mock_docbot,
-        patch(
-            "api.ollama_utils.is_ollama_available",
-            new_callable=AsyncMock,
-            return_value=True,
-        ),
     ):
         mock_complete.return_value = mock_task
 
@@ -263,12 +253,6 @@ async def test_complete_task_unit():
             actor="mcp",
         )
         mock_notify.assert_awaited_once_with(task_id)
-
-        # DocBot is triggered via asyncio.create_task, so it might not be awaited yet.
-        # But since we patched it as AsyncMock, we can check if it was called.
-        # We might need to give the event loop a chance to run.
-        await asyncio.sleep(0)
-        mock_docbot.assert_called_once_with(mock_task)
 
         assert "completed successfully" in result
 
