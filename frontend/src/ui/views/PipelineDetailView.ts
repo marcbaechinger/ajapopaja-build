@@ -261,6 +261,21 @@ export class PipelineDetailView extends View {
       }
     });
 
+    this.context.actionRegistry.register('copy_task_id', async (_e, el) => {
+      const taskId = el.closest('[data-task-id]')?.getAttribute('data-task-id');
+      if (!taskId) return;
+      try {
+        await navigator.clipboard.writeText(taskId);
+        const originalHtml = el.innerHTML;
+        el.innerHTML = `<svg class="w-3 h-3 text-green-500 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`;
+        setTimeout(() => {
+          el.innerHTML = originalHtml;
+        }, 2000);
+      } catch (err) {
+        console.error('Failed to copy task ID:', err);
+      }
+    });
+
     this.context.actionRegistry.register('open_gemini_logs', (e) => {
       e.preventDefault();
       const url = this.context.pipelineClient.getGeminiLogsStreamUrl(this.pipelineId);

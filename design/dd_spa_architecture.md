@@ -85,6 +85,9 @@ This document defines the architecture and design principles for the Ajapopaja B
 - **Traversal**: Child elements find context using `el.closest("[data-view-container]")`.
 
 - **Task Item**: `frontend/src/ui/components/TaskItem.ts`
+  - Displays a concise view of a single task.
+  - Renders the task ID in a highlighted badge and provides a copy button (`data-action-click="copy_task_id"`).
+  - The copy action is handled by the global `ActionRegistry` and provides visual feedback.
 - **Task Column**: `frontend/src/ui/components/TaskColumn.ts`
 - **Task Form**: `frontend/src/ui/components/TaskForm.ts`
 - **Pipeline Stats**: `frontend/src/ui/components/PipelineStatsView.ts`
