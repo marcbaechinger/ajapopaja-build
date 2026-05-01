@@ -92,3 +92,116 @@ async def test_docbot_session_max_iterations():
             for msg in session.history
             if msg["role"] == "user"
         )
+
+
+@pytest.mark.asyncio
+async def test_docbot_session_multiple_tool_calls():
+    session = DocBotSession(pipeline_id="test_pipeline", task_id="test_task")
+
+    async def mock_tool_1(**kwargs):
+        return "Tool 1 success"
+
+    async def mock_tool_2(**kwargs):
+        return "Tool 2 success"
+
+    t1 = MagicMock()
+    t1.name = "tool1"
+    t1.parameters = {"type": "object", "properties": {}}
+    t1.func = mock_tool_1
+    t1.is_available.return_value = True
+
+    t2 = MagicMock()
+    t2.name = "no_doc_update_needed"
+    t2.parameters = {"type": "object", "properties": {}}
+    t2.func = mock_tool_2
+    t2.is_available.return_value = True
+
+    with (
+        patch.object(
+            docbot_registry,
+            "get_tool",
+            side_effect=lambda n: t1 if n == "tool1" else t2,
+        ),
+        patch.object(docbot_registry, "list_tools", return_value=[t1, t2]),
+    ):
+        mock_response = MagicMock()
+        mock_msg = MagicMock()
+
+        tc1 = MagicMock()
+        tc1.function.name = "tool1"
+        tc1.function.arguments = {}
+
+        tc2 = MagicMock()
+        tc2.function.name = "no_doc_update_needed"
+        tc2.function.arguments = {"reason": "done"}
+
+        mock_msg.tool_calls = [tc1, tc2]
+        mock_msg.content = ""
+        mock_response.message = mock_msg
+
+        with patch(
+            "api.docbot.session.ollama.AsyncClient.chat", new_callable=AsyncMock
+        ) as mock_chat:
+            mock_chat.return_value = mock_response
+
+            await session.run("Initial prompt")
+
+            # Verify both tools were called and results added to history
+            tool_results = [
+                msg["content"] for msg in session.history if msg.get("role") == "tool"
+            ]
+            assert '"Tool 1 success"' in tool_results
+            assert '"Tool 2 success"' in tool_results
+            assert mock_chat.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_docbot_session_terminal_retry_on_error():
+    session = DocBotSession(pipeline_id="test_pipeline", task_id="test_task")
+
+    async def mock_fail_func(**kwargs):
+        return "Error: Something went wrong"
+
+    async def mock_success_func(**kwargs):
+        return "Success"
+
+    t = MagicMock()
+    t.name = "no_doc_update_needed"
+    t.parameters = {"type": "object", "properties": {}}
+    t.func = mock_fail_func
+    t.is_available.return_value = True
+
+    with (
+        patch.object(docbot_registry, "get_tool", return_value=t),
+        patch.object(docbot_registry, "list_tools", return_value=[t]),
+    ):
+        # 1st response: fail
+        mock_resp1 = MagicMock()
+        mock_msg1 = MagicMock()
+        tc1 = MagicMock()
+        tc1.function.name = "no_doc_update_needed"
+        tc1.function.arguments = {"reason": "try 1"}
+        mock_msg1.tool_calls = [tc1]
+        mock_msg1.content = ""
+        mock_resp1.message = mock_msg1
+
+        # 2nd response: success (we'll swap the mock function)
+        mock_resp2 = MagicMock()
+        mock_msg2 = MagicMock()
+        tc2 = MagicMock()
+        tc2.function.name = "no_doc_update_needed"
+        tc2.function.arguments = {"reason": "try 2"}
+        mock_msg2.tool_calls = [tc2]
+        mock_msg2.content = ""
+        mock_resp2.message = mock_msg2
+
+        with patch(
+            "api.docbot.session.ollama.AsyncClient.chat", new_callable=AsyncMock
+        ) as mock_chat:
+            mock_chat.side_effect = [mock_resp1, mock_resp2]
+
+            # First call uses failing func
+            await session.run("Initial prompt", max_iterations=2)
+
+            # It should have called chat twice because the first terminal call failed
+            assert mock_chat.call_count == 2
