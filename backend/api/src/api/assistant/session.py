@@ -161,7 +161,7 @@ class AssistantSession:
         messages = [{"role": "system", "content": system_instruction}]
 
         for msg in self.history:
-            m = {"role": msg.role, "content": msg.content}
+            m: Dict[str, Any] = {"role": msg.role, "content": msg.content}
             if msg.tool_calls:
                 m["tool_calls"] = msg.tool_calls
             messages.append(m)
@@ -235,9 +235,9 @@ class AssistantSession:
                     if tc:
                         tool_calls.extend(tc)
 
+            tool_calls_dicts = []
             if full_content or full_thought or tool_calls:
                 # Convert tool calls to dicts for Pydantic/Storage
-                tool_calls_dicts = []
                 for tc in tool_calls:
                     if hasattr(tc, "model_dump"):
                         tool_calls_dicts.append(tc.model_dump())
