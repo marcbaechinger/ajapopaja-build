@@ -8,7 +8,7 @@ The `DocBot` is an autonomous AI agent designed to maintain the project's archit
 
 ### 2.1 Component Overview
 
-The feature will be implemented in a new module `backend/api/src/api/docbot/`.
+The feature is implemented in the `backend/api/src/api/docbot/` module.
 
 - **`DocBotManager`**: Orchestrates the documentation process. It is triggered after a task is marked as completed.
 - **`DocBotSession`**: Manages the autonomous interaction loop with Ollama. Unlike the human‑facing `AssistantSession`, it does not require user approval for tool calls and operates on a "finish‑on‑completion" basis.
@@ -39,7 +39,7 @@ The feature will be implemented in a new module `backend/api/src/api/docbot/`.
 
 ### 3.1 `DocBotSession`
 
-This class will wrap `ollama.AsyncClient`. It will maintain its own history and handle tool execution.
+This class wraps `ollama.AsyncClient`. It maintains its own history and handles tool execution.
 
 ```python
 class DocBotSession:
@@ -61,11 +61,33 @@ class DocBotSession:
 
 Documentation will be stored in a configurable directory, defaulting to `design/` (to leverage existing architectural docs).
 
-## 4. User‑Facing Inline Diff Preview
+## 4. Manual Trigger Endpoint
+
+While the DocBot automatically processes completed tasks, the API also exposes an explicit endpoint to manually trigger a DocBot session for any completed task. This is particularly useful for tasks that have been finished but were not automatically processed due to the absence of an Ollama instance at the time of completion.
+
+- **Endpoint**: `POST /pipelines/{pipeline_id}/docbot/trigger/{task_id}`
+- **Parameters**:
+  - `pipeline_id` – Identifier of the pipeline to which the task belongs.
+  - `task_id` – Identifier of the completed task.
+- **Preconditions**:
+  - The task must belong to the specified pipeline.
+  - The task must have a `commit_hash` to provide context for the DocBot.
+- **Behavior**:
+  1. Validates the pipeline and task existence.
+  2. Confirms the task belongs to the pipeline and contains a commit hash.
+  3. Enqueues the task for DocBot processing via `DocBotManager.process_completed_task`.
+  4. Returns a JSON payload `{"status": "success", "message": "DocBot triggered successfully."}`.
+- **Security**: Requires authentication and appropriate permissions.
+
+### 4.1 Front‑End Integration
+
+The SPA adds a small button next to the task ID in the `TaskItem` component for tasks in the `IMPLEMENTED` state. Clicking the button triggers the above endpoint via `DocBotClient.triggerDocBot(pipelineId, taskId)`. The UI shows a loading indicator while the request is in flight and displays a success or error toast once completed.
+
+## 5. User‑Facing Inline Diff Preview
 
 The DocBot workflow now exposes a preview of the changes it proposes, allowing users to review, commit, or revert the documentation update before it reaches the repository.
 
-### 4.1 Backend Changes
+### 5.1 Backend Changes
 
 - **In‑memory cache**: The `update_ref_doc` tool writes the file to disk and immediately captures a `git diff --unified=3` of that file. The diff, a derived commit message, and metadata are stored in a per‑task cache.
 - **API Endpoints**:
@@ -75,13 +97,13 @@ The DocBot workflow now exposes a preview of the changes it proposes, allowing u
   - `POST /api/pipelines/<pid>/docbot/review/cancel/<task_id>` – Keeps the cache for future review.
 - **WebSocket push**: When a preview becomes available, the server broadcasts a `DOCBOT_PREVIEW_READY` message with the `task_id`. Clients subscribe to this channel to trigger a UI update.
 
-### 4.2 Front‑End Integration
+### 5.2 Front‑End Integration
 
 - **`DocBotDialog` component**: Provides a modal that displays the side‑by‑side diff (using `react‑diff‑view` logic), a textarea pre‑filled with the suggested commit message, and actions for Commit, Revert, or Cancel.
 - **Banner**: A yellow banner appears in the `PipelineDetailView` header when a preview is ready. Clicking it opens the dialog.
 - **State Management**: The view listens to `DOCBOT_PREVIEW_READY`, fetches the preview data, and manages dialog visibility.
 
-### 4.3 Summary of Flow
+### 5.3 Summary of Flow
 
 1. DocBot writes a new or updated documentation file.
 2. `update_ref_doc` caches the unstaged diff and emits a WebSocket event.
@@ -91,9 +113,8 @@ The DocBot workflow now exposes a preview of the changes it proposes, allowing u
 
 This addition ensures the repository remains clean while giving the task owner a transparent review step.
 
-## 5. Testing Strategy
+## 6. Testing Strategy
 
 - **Mock Ollama**: Use a mock client to simulate various LLM responses (tool calls, text, terminal calls).
 - **Tool Validation**: Ensure `update_ref_doc` correctly writes to the filesystem and `read_ref_doc` retrieves the latest content.
 - **Workflow Test**: A full integration test that feeds a dummy task and diff and verifies the final state (file update or no‑op).
-
