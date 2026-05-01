@@ -93,8 +93,9 @@ async def lifespan(app: FastAPI):
 
 
 # Create MCP ASGI app
-# We use path="" because it's mounted at /mcp in the main app
-mcp_app = mcp.http_app()
+# We use path="/" because it's mounted at /mcp in the main app
+# FastMCP by default uses /mcp, which would lead to /mcp/mcp
+mcp_app = mcp.http_app(path="/")
 
 
 async def mcp_auth_middleware(scope, receive, send):
