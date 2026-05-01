@@ -32,18 +32,11 @@ export class DocBotDialog {
     commitBtn.textContent = 'Committing...';
 
     try {
-      const response = await fetch(`/api/pipelines/${this.props.pipelineId}/docbot/review/commit/${this.props.taskId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.props.context.authService.getAccessToken()}`,
-        },
-        body: JSON.stringify({ commit_msg: msg }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to commit changes');
-      }
+      await this.props.context.docBotClient.commitChanges(
+        this.props.pipelineId,
+        this.props.taskId,
+        msg
+      );
 
       this.props.onSuccess();
       this.props.onClose();
@@ -65,16 +58,10 @@ export class DocBotDialog {
     revertBtn.textContent = 'Reverting...';
 
     try {
-      const response = await fetch(`/api/pipelines/${this.props.pipelineId}/docbot/review/revert/${this.props.taskId}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.props.context.authService.getAccessToken()}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to revert changes');
-      }
+      await this.props.context.docBotClient.revertChanges(
+        this.props.pipelineId,
+        this.props.taskId
+      );
 
       this.props.onSuccess();
       this.props.onClose();
@@ -88,13 +75,11 @@ export class DocBotDialog {
 
   private async handleCancel() {
      try {
-      // Notify backend we are cancelling, but keep cache
-      await fetch(`/api/pipelines/${this.props.pipelineId}/docbot/review/cancel/${this.props.taskId}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.props.context.authService.getAccessToken()}`,
-        },
-      });
+      // Notify backend we are cancelling
+      await this.props.context.docBotClient.cancelReview(
+        this.props.pipelineId,
+        this.props.taskId
+      );
       this.props.onClose();
     } catch (error) {
        console.error('Error cancelling DocBot review:', error);
@@ -104,7 +89,7 @@ export class DocBotDialog {
 
   public render() {
     this.container.innerHTML = `
-      <div class="fixed inset-0 bg-black/50 bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div class="fixed inset-0 bg-black/50 bg-opacity-50 flex items-center justify-center z-50 p-4 text-gray-900">
         <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
           <div class="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-lg">
             <h2 class="text-xl font-bold text-gray-800">DocBot Review: ${this.props.filename}</h2>
