@@ -11,15 +11,15 @@ The `DocBot` is an autonomous AI agent designed to maintain the project's archit
 The feature will be implemented in a new module `backend/api/src/api/docbot/`.
 
 - **`DocBotManager`**: Orchestrates the documentation process. It is triggered after a task is marked as completed.
-- **`DocBotSession`**: Manages the autonomous interaction loop with Ollama. Unlike the human-facing `AssistantSession`, it does not require user approval for tool calls and operates on a "finish-on-completion" basis.
+- **`DocBotSession`**: Manages the autonomous interaction loop with Ollama. Unlike the human‑facing `AssistantSession`, it does not require user approval for tool calls and operates on a "finish‑on‑completion" basis.
 - **`DocBotRegistry`**: A specialized registry containing tools relevant for documentation.
 - **Tools**:
   - Standard read‑only tools: `read_source_file`, `list_project_structure`, `git_show_commit`, `grep_search` from `backend/api/src/api/assistant/tools/`.
   - Keep specific Doc Bot tools separated in `backend/api/src/api/docbot/tools.py`.
   - Documentation‑specific tools:
-    - `list_ref_docs()`: Lists files in the documentation directory (e.g., `ref_doc/` or `design/`).
-    - `read_ref_doc(path)`: Reads a specific documentation file.
-    - `update_ref_doc(path, content, reason)`: Updates or creates a documentation file.
+    - `list_ref_docs()`: Lists all reference documentation files available in the `design/` directory, including sub‑directories.
+    - `read_ref_doc(path)`: Reads a specific documentation file. Paths are relative to `design/` and may include sub‑directories. A leading `design/` prefix is automatically stripped.
+    - `update_ref_doc(path, content, reason)`: Creates or updates a documentation file. Paths are relative to `design/`, may include sub‑directories, and a leading `design/` prefix is automatically stripped.
     - `no_doc_update_needed(reason)`: Signals that the change does not require documentation updates.
 
 ### 2.2 Data Flow
@@ -50,14 +50,12 @@ class DocBotSession:
 
 ### 3.2 System Instruction
 
-> "You are a Documentation Architect. Your task is to analyze a completed software change and decide if the project's reference documentation (architecture, design principles, API contracts) needs to be updated.
-> You have access to the source code, git history, and the current reference documentation.
-> Follow these steps:
+> "You are a Documentation Architect. Your task is to analyze a completed software change and decide if the project's reference documentation (architecture, design principles, API contracts) needs to be updated. You have access to the source code, git history, and the current reference documentation. Follow these steps:
 >
 > 1. Review the task spec, implementation summary, and the git diff.
 > 2. Explore the codebase and existing documentation to understand the impact.
 > 3. If the change introduces new design patterns, modifies core architecture, or changes public‑facing API contracts, update the relevant documentation.
-> 4. If the change is purely implementation details or consistent with existing documentation, call `no_doc_update_needed`.  Do not ask for permission. Act autonomously."
+> 4. If the change is purely implementation details or consistent with existing documentation, call `no_doc_update_needed`. Do not ask for permission. Act autonomously."
 
 ### 3.3 Documentation Storage
 
