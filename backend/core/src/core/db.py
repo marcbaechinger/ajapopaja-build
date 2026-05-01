@@ -19,14 +19,25 @@ from pymongo import AsyncMongoClient
 
 from core.models.models import DesignDocHistory, Pipeline, Task, User, UserChat
 
+_client = None
+_is_initialized = False
 
-async def init_db():
+
+async def init_db(force: bool = False):
+    global _client, _is_initialized
+
+    if not force and _is_initialized:
+        return
+
     mongodb_uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
     database_name = os.getenv("DATABASE_NAME", "ajapopaja_build")
 
-    client = AsyncMongoClient(mongodb_uri)
+    if force or _client is None:
+        _client = AsyncMongoClient(mongodb_uri)
+
     await init_beanie(
-        database=client[database_name],
+        database=_client[database_name],
         document_models=[Pipeline, Task, DesignDocHistory, User, UserChat],
     )
+    _is_initialized = True
     print(f"Database initialized: {database_name}")
