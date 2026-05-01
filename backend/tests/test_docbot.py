@@ -55,7 +55,7 @@ async def test_docbot_session_run_terminal_call():
         mock_chunk.message = mock_msg
 
         with patch(
-            "api.assistant.base_session.ollama.AsyncClient.chat", new_callable=AsyncMock
+            "api.bot.base_session.ollama.AsyncClient.chat", new_callable=AsyncMock
         ) as mock_chat:
             # chat returns an async generator when stream=True
             mock_chat.return_value = make_async_iter([mock_chunk])
@@ -84,7 +84,7 @@ async def test_docbot_session_max_iterations():
     mock_chunk.message = mock_msg
 
     with patch(
-        "api.assistant.base_session.ollama.AsyncClient.chat", new_callable=AsyncMock
+        "api.bot.base_session.ollama.AsyncClient.chat", new_callable=AsyncMock
     ) as mock_chat:
         mock_chat.return_value = make_async_iter([mock_chunk])
 
@@ -147,7 +147,7 @@ async def test_docbot_session_multiple_tool_calls():
         mock_chunk.message = mock_msg
 
         with patch(
-            "api.assistant.base_session.ollama.AsyncClient.chat", new_callable=AsyncMock
+            "api.bot.base_session.ollama.AsyncClient.chat", new_callable=AsyncMock
         ) as mock_chat:
             mock_chat.return_value = make_async_iter([mock_chunk])
 
@@ -203,7 +203,7 @@ async def test_docbot_session_terminal_retry_on_error():
         mock_chunk2.message = mock_msg2
 
         with patch(
-            "api.assistant.base_session.ollama.AsyncClient.chat", new_callable=AsyncMock
+            "api.bot.base_session.ollama.AsyncClient.chat", new_callable=AsyncMock
         ) as mock_chat:
             mock_chat.side_effect = [
                 make_async_iter([mock_chunk1]),

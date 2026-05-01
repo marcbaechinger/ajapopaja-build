@@ -15,8 +15,8 @@
 import logging
 from typing import List
 
-from api.assistant.base_session import BaseBotSession
 from api.assistant.tool_registry import ToolDefinition
+from api.bot.base_session import BaseBotSession
 
 from .registry import docbot_registry
 
