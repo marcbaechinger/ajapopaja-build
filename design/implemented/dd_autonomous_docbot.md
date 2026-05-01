@@ -35,6 +35,22 @@ The feature is implemented in the `backend/api/src/api/docbot/` module.
     - If Ollama responds with text instead of a tool, the session automatically follows up with a "Continue" prompt.
 5. **Finalization**: The session ends when either `update_ref_doc` or `no_doc_update_needed` is called.
 
+## 2.3 Lifecycle Events and UI Feedback
+
+DocBot now emits two key lifecycle events that the front‑end consumes to provide real‑time user feedback:
+
+- **`DOCBOT_STARTED`** – Broadcast when the `DocBotSession` begins processing a task. The WebSocket payload includes the `pipeline_id` and `task_id`.
+- **`DOCBOT_COMPLETED`** – Broadcast after the session finishes. The payload contains the `pipeline_id`, `task_id`, and a `result` object that indicates whether a documentation change was produced or no update was needed.
+
+The UI reacts as follows:
+
+1. **Banner Appearance** – Upon receiving `DOCBOT_STARTED`, a compact banner appears in the `PipelineDetailView` header stating "DocBot is analyzing…". The banner includes a subtle pulse animation to signal activity.
+2. **Completion States**
+   - If `result.status === 'no_update_needed'`, the banner updates to a light‑gray tone displaying the reason provided by the bot, and a dismiss button allows the user to hide it.
+   - If `result.status === 'update_needed'`, the banner becomes yellow, displaying "Doc update prepared." and offers a "Review" button. Clicking this opens the `DocBotDialog` which shows the side‑by‑side diff preview and commit options.
+
+The banner's compact design conserves vertical space and integrates smoothly with the existing header layout.
+
 ## 3. Implementation Details
 
 ### 3.1 `DocBotSession`
