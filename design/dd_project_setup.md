@@ -81,3 +81,49 @@ ajapopaja-build/
 1. The system assumes a running MongoDB instance (local or Atlas).
 2. Connection strings will be managed via environment variables (e.g., `MONGODB_URI`).
 3. Beanie initialization will occur on application startup in both the FastAPI and MCP servers.
+
+## 5. Source code formatting
+
+### Format all files
+
+   To format every Python file in the backend:
+
+   ```bash
+   cd backend
+   uv run ruff format .
+   ```
+
+### Format a specific file or directory
+
+   To format a specific file or a sub-folder:
+
+   ```bash
+   uv run ruff format src/api/main.py
+   uv run ruff format mcp/src/scripts/
+   ```
+
+### Linting and Auto-fixing
+
+   Ruff also acts as a linter (replacing Flake8/Isort). You can check for lint errors and automatically fix common ones (like unused imports):
+
+   ```bash
+   # Check only
+   uv run ruff check .
+   
+   # Check and apply safe fixes
+   uv run ruff check --fix .
+   ```
+
+### Integration with uv
+
+   If you are outside the backend directory, you can also specify the package context:
+
+   ```bash
+   uv run --package api ruff format .
+   ```
+
+   Pro Tip: If you want to see what would change without actually modifying the files, you can add the --diff flag:
+
+   ```bash
+   uv run ruff format --diff .
+   ```
