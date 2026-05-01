@@ -30,6 +30,11 @@ from core.queries import task as task_queries
 mcp = FastMCP("Ajapopaja Build MCP")
 
 
+def _is_valid_id(id_str: str) -> bool:
+    """Checks if a string is a valid 24-character hexadecimal ID."""
+    return bool(re.match(r"^[0-9a-fA-F]{24}$", id_str))
+
+
 async def notify_api(task_id: str):
     """Notifies the API that a task has changed via WebSocket manager directly."""
     try:
@@ -56,6 +61,13 @@ async def get_next_task(pipeline_id: str) -> Dict[str, Any]:
     Returns:
         A dictionary containing task details (id, title, description, design_doc, spec, want_design_doc, design_doc_ready, version).
     """
+    if not _is_valid_id(pipeline_id):
+        return {
+            "error": (
+                f"Invalid pipeline_id '{pipeline_id}'. Must be a 24-char hex string."
+            )
+        }
+
     await init_db()
     task = await task_queries.get_next_task(pipeline_id, actor="mcp")
 
@@ -91,6 +103,12 @@ async def update_task_design_doc(task_id: str, design_doc: str, version: int) ->
         design_doc: The Markdown-formatted design document.
         version: Current version for optimistic concurrency control (OCC).
     """
+    if not _is_valid_id(task_id):
+        return f"Error: Invalid task_id '{task_id}'. Must be a 24-char hex string."
+
+    if not design_doc or not design_doc.strip():
+        return "Error: design_doc cannot be empty."
+
     await init_db()
     try:
         await task_queries.update_task_details(
@@ -124,8 +142,17 @@ async def complete_task(
         completion_info: A brief summary of what was accomplished.
         version: Current version for OCC.
     """
+    if not _is_valid_id(task_id):
+        return f"Error: Invalid task_id '{task_id}'. Must be a 24-char hex string."
+
     if not commit_hash or not re.match(r"^[0-9a-fA-F]{7,40}$", commit_hash):
-        return f"Error: Invalid commit hash '{commit_hash}'. Must be a valid 7-40 character hexadecimal string."
+        return (
+            f"Error: Invalid commit hash '{commit_hash}'. "
+            "Must be a valid 7-40 character hexadecimal string."
+        )
+
+    if not completion_info or not completion_info.strip():
+        return "Error: completion_info cannot be empty."
 
     await init_db()
     try:
@@ -144,7 +171,11 @@ async def complete_task(
 
         status_msg = f"Task {task_id} completed successfully."
         if task.verification and not task.verification.get("success"):
-            status_msg += f" WARNING: Verification failed. Errors: {', '.join(task.verification.get('errors', []))}. A follow-up system task has been created."
+            status_msg += (
+                " WARNING: Verification failed. "
+                f"Errors: {', '.join(task.verification.get('errors', []))}. "
+                "A follow-up system task has been created."
+            )
 
         return status_msg
     except EntityNotFoundError as e:
@@ -155,38 +186,6 @@ async def complete_task(
         )
     except Exception as e:
         return f"An unexpected error occurred: {str(e)}"
-
-
-@mcp.tool
-async def get_task_details(task_id: str) -> Dict[str, Any]:
-    """
-    Retrieves full details for a task, including spec, design, and history.
-
-    Args:
-        task_id: The target task ID.
-    """
-    await init_db()
-    try:
-        task = await task_queries.get_task_by_id(task_id)
-        return {
-            "id": str(task.id),
-            "title": task.title,
-            "description": task.description or "",
-            "status": task.status,
-            "type": task.type,
-            "spec": task.spec or "",
-            "design_doc": task.design_doc or "",
-            "want_design_doc": task.want_design_doc,
-            "version": task.version,
-            "commit_hash": task.commit_hash or "",
-            "completion_info": task.completion_info or "",
-            "verification": task.verification,
-            "history": [h.model_dump() for h in task.history],
-            "created_at": task.created_at.isoformat(),
-            "updated_at": task.updated_at.isoformat(),
-        }
-    except EntityNotFoundError as e:
-        return {"error": str(e)}
 
 
 @mcp.tool
@@ -207,12 +206,33 @@ async def search_tasks(
         page: Page number for pagination (0-based).
         limit: Maximum number of tasks to return (default: 10).
     """
+    if pipeline_id and not _is_valid_id(pipeline_id):
+        return {
+            "error": (
+                f"Invalid pipeline_id '{pipeline_id}'. Must be a 24-char hex string."
+            )
+        }
+
+    if page < 0:
+        return {"error": "page must be greater than or equal to 0."}
+    if limit <= 0:
+        return {"error": "limit must be greater than 0."}
+
     await init_db()
     try:
         # Convert string statuses to TaskStatus enum if provided
         status_enums = None
         if statuses:
-            status_enums = [TaskStatus(s) for s in statuses]
+            try:
+                status_enums = [TaskStatus(s) for s in statuses]
+            except ValueError:
+                valid_statuses = [s.value for s in TaskStatus]
+                return {
+                    "error": (
+                        "Invalid status provided. Valid statuses are: "
+                        f"{', '.join(valid_statuses)}"
+                    )
+                }
 
         tasks, total_count = await task_queries.search_tasks(
             keywords=keywords,
@@ -250,6 +270,42 @@ async def search_tasks(
 
 
 @mcp.tool
+async def get_task_details(task_id: str) -> Dict[str, Any]:
+    """
+    Retrieves full details for a task, including spec, design, and history.
+
+    Args:
+        task_id: The target task ID.
+    """
+    if not _is_valid_id(task_id):
+        return {"error": f"Invalid task_id '{task_id}'. Must be a 24-char hex string."}
+
+    await init_db()
+    try:
+        task = await task_queries.get_task_by_id(task_id)
+        return {
+            "id": str(task.id),
+            "pipeline_id": task.pipeline_id,
+            "title": task.title,
+            "description": task.description or "",
+            "status": task.status,
+            "type": task.type,
+            "spec": task.spec or "",
+            "design_doc": task.design_doc or "",
+            "want_design_doc": task.want_design_doc,
+            "version": task.version,
+            "commit_hash": task.commit_hash or "",
+            "completion_info": task.completion_info or "",
+            "verification": task.verification,
+            "history": [h.model_dump() for h in task.history],
+            "created_at": task.created_at.isoformat(),
+            "updated_at": task.updated_at.isoformat(),
+        }
+    except EntityNotFoundError as e:
+        return {"error": str(e)}
+
+
+@mcp.tool
 async def get_task_status(task_id: str) -> Dict[str, Any]:
     """
     Retrieves current status and verification results for a task.
@@ -257,6 +313,9 @@ async def get_task_status(task_id: str) -> Dict[str, Any]:
     Args:
         task_id: The target task ID.
     """
+    if not _is_valid_id(task_id):
+        return {"error": f"Invalid task_id '{task_id}'. Must be a 24-char hex string."}
+
     await init_db()
     try:
         task = await task_queries.get_task_by_id(task_id)

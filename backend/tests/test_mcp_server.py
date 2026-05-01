@@ -24,6 +24,8 @@ from ajapopaja_mcp.server import (
 )
 from core.models.models import Pipeline, Task, TaskStatus
 
+VALID_PID = "123456789012345678901234"
+
 
 @pytest.fixture(autouse=True)
 def setup_mcp_env(monkeypatch, init_mock_db):
@@ -94,14 +96,14 @@ async def test_mcp_get_next_task_design_doc_ready():
 
 @pytest.mark.asyncio
 async def test_mcp_get_next_task_empty():
-    result = await get_next_task("nonexistent_pipeline")
+    result = await get_next_task(VALID_PID)
     assert "error" in result
     assert "No scheduled tasks found" in result["error"]
 
 
 @pytest.mark.asyncio
 async def test_mcp_update_design_doc_success():
-    task = Task(title="Task 1", pipeline_id="123", version=1)
+    task = Task(title="Task 1", pipeline_id=VALID_PID, version=1)
     await task.insert()
 
     result = await update_task_design_doc(str(task.id), "New Design Plan", 1)
@@ -115,7 +117,7 @@ async def test_mcp_update_design_doc_success():
 
 @pytest.mark.asyncio
 async def test_mcp_update_design_doc_occ_failure():
-    task = Task(title="Task 1", pipeline_id="123", version=1)
+    task = Task(title="Task 1", pipeline_id=VALID_PID, version=1)
     await task.insert()
 
     # Try to update with wrong version
@@ -127,13 +129,13 @@ async def test_mcp_update_design_doc_occ_failure():
 @pytest.mark.asyncio
 async def test_mcp_complete_task_success():
     task = Task(
-        title="Task 1", pipeline_id="123", version=1, status=TaskStatus.INPROGRESS
+        title="Task 1", pipeline_id=VALID_PID, version=1, status=TaskStatus.INPROGRESS
     )
     await task.insert()
 
     result = await complete_task(
         task_id=str(task.id),
-        commit_hash="abc1234",
+        commit_hash="abc12345678",
         completion_info="Implemented feature X",
         version=1,
     )
@@ -143,7 +145,7 @@ async def test_mcp_complete_task_success():
     updated_task = await Task.get(task.id)
     assert updated_task is not None
     assert updated_task.status == TaskStatus.IMPLEMENTED
-    assert updated_task.commit_hash == "abc1234"
+    assert updated_task.commit_hash == "abc12345678"
     assert updated_task.verification is not None
     assert updated_task.version == 2
     assert updated_task.verification["success"] is True
@@ -152,13 +154,21 @@ async def test_mcp_complete_task_success():
 @pytest.mark.asyncio
 async def test_mcp_complete_task_verification_warning():
     task = Task(
-        title="Task 1", pipeline_id="123", version=1, status=TaskStatus.INPROGRESS
+        title="Task 1",
+        pipeline_id=VALID_PID,
+        version=1,
+        status=TaskStatus.INPROGRESS,
+        want_design_doc=True,
     )
+    # want_design_doc=True but no design_doc should trigger warning
     await task.insert()
 
     # Complete with a valid hash but no verification success recorded in db
     result = await complete_task(
-        task_id=str(task.id), commit_hash="1234567", completion_info="", version=1
+        task_id=str(task.id),
+        commit_hash="1234567890",
+        completion_info="Some info",
+        version=1,
     )
 
     assert "WARNING: Verification failed" in result
@@ -171,20 +181,22 @@ async def test_mcp_complete_task_verification_warning():
 
 @pytest.mark.asyncio
 async def test_mcp_complete_task_invalid_hash():
+    # Use valid task_id to get to the hash check
+    task_id = "0123456789abcdef01234567"
     result = await complete_task(
-        task_id="123", commit_hash="invalid_hash_!", completion_info="", version=1
+        task_id=task_id, commit_hash="invalid_hash_!", completion_info="info", version=1
     )
     assert "Error: Invalid commit hash" in result
 
     result_empty = await complete_task(
-        task_id="123", commit_hash="", completion_info="", version=1
+        task_id=task_id, commit_hash="", completion_info="info", version=1
     )
     assert "Error: Invalid commit hash" in result_empty
 
 
 @pytest.mark.asyncio
 async def test_mcp_get_task_status():
-    task = Task(title="Task 1", pipeline_id="123", status=TaskStatus.FAILED)
+    task = Task(title="Task 1", pipeline_id=VALID_PID, status=TaskStatus.FAILED)
     await task.insert()
 
     result = await get_task_status(str(task.id))
@@ -196,21 +208,22 @@ async def test_mcp_get_task_status():
 async def test_mcp_get_task_details():
     task = Task(
         title="Detail Task",
-        pipeline_id="123",
+        pipeline_id=VALID_PID,
         status=TaskStatus.INPROGRESS,
         spec="Detailed spec",
         design_doc="# Design",
-        commit_hash="f00ba4",
+        commit_hash="f00ba4abcde",
     )
     await task.insert()
 
     result = await get_task_details(str(task.id))
     assert result["id"] == str(task.id)
+    assert result["pipeline_id"] == VALID_PID
     assert result["title"] == "Detail Task"
     assert result["status"] == TaskStatus.INPROGRESS
     assert result["spec"] == "Detailed spec"
     assert result["design_doc"] == "# Design"
-    assert result["commit_hash"] == "f00ba4"
+    assert result["commit_hash"] == "f00ba4abcde"
     assert "history" in result
     assert "created_at" in result
     assert "updated_at" in result
@@ -221,13 +234,13 @@ async def test_mcp_search_tasks():
     # Insert a few tasks
     t1 = Task(
         title="Searchable Alpha",
-        pipeline_id="123",
+        pipeline_id=VALID_PID,
         status=TaskStatus.CREATED,
         spec="First spec",
     )
     t2 = Task(
         title="Searchable Beta",
-        pipeline_id="123",
+        pipeline_id=VALID_PID,
         status=TaskStatus.INPROGRESS,
         spec="Second spec",
     )

@@ -26,11 +26,14 @@ from ajapopaja_mcp.server import (
     update_task_design_doc,
 )
 
+VALID_TASK_ID = "0123456789abcdef01234567"
+VALID_PIPELINE_ID = "fedcba9876543210fedcba98"
+
 
 @pytest.mark.asyncio
 async def test_search_tasks_unit():
     mock_task = MagicMock()
-    mock_task.id = "task-id"
+    mock_task.id = VALID_TASK_ID
     mock_task.title = "Search Result"
     mock_task.status = "scheduled"
     mock_task.spec = "Some spec"
@@ -56,10 +59,32 @@ async def test_search_tasks_unit():
 
 
 @pytest.mark.asyncio
+async def test_search_tasks_invalid_pipeline_id():
+    result = await search_tasks(pipeline_id="invalid-id")
+    assert "error" in result
+    assert "Invalid pipeline_id" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_search_tasks_invalid_status():
+    result = await search_tasks(statuses=["invalid-status"])
+    assert "error" in result
+    assert "Invalid status provided" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_get_task_details_invalid_id():
+    result = await get_task_details(task_id="invalid-id")
+    assert "error" in result
+    assert "Invalid task_id" in result["error"]
+
+
+@pytest.mark.asyncio
 async def test_get_task_details_unit():
-    task_id = "task-id"
+    task_id = VALID_TASK_ID
     mock_task = MagicMock()
     mock_task.id = task_id
+    mock_task.pipeline_id = VALID_PIPELINE_ID
     mock_task.title = "Task Title"
     mock_task.description = "Task Description"
     mock_task.status = "inprogress"
@@ -88,6 +113,7 @@ async def test_get_task_details_unit():
         mock_init_db.assert_awaited_once()
         mock_get_task.assert_awaited_once_with(task_id)
         assert result["id"] == task_id
+        assert result["pipeline_id"] == VALID_PIPELINE_ID
         assert result["title"] == "Task Title"
         assert result["status"] == "inprogress"
         assert result["spec"] == "Task Spec"
@@ -99,9 +125,9 @@ async def test_get_task_details_unit():
 
 @pytest.mark.asyncio
 async def test_get_next_task_unit():
-    pipeline_id = "test-pipeline-id"
+    pipeline_id = VALID_PIPELINE_ID
     mock_task = MagicMock()
-    mock_task.id = "task-id"
+    mock_task.id = VALID_TASK_ID
     mock_task.title = "Task Title"
     mock_task.description = "Task Description"
     mock_task.design_doc = "Design Doc"
@@ -124,16 +150,16 @@ async def test_get_next_task_unit():
 
         mock_init_db.assert_awaited_once()
         mock_get_next.assert_awaited_once_with(pipeline_id, actor="mcp")
-        mock_notify.assert_awaited_once_with("task-id")
+        mock_notify.assert_awaited_once_with(VALID_TASK_ID)
 
-        assert result["id"] == "task-id"
+        assert result["id"] == VALID_TASK_ID
         assert result["title"] == "Task Title"
         assert result["design_doc_ready"] is True
 
 
 @pytest.mark.asyncio
 async def test_get_next_task_empty_unit():
-    pipeline_id = "empty-pipeline"
+    pipeline_id = VALID_PIPELINE_ID
 
     with (
         patch("ajapopaja_mcp.server.init_db", new_callable=AsyncMock) as mock_init_db,
@@ -152,7 +178,7 @@ async def test_get_next_task_empty_unit():
 
 @pytest.mark.asyncio
 async def test_update_task_design_doc_unit():
-    task_id = "task-id"
+    task_id = VALID_TASK_ID
     design_doc = "New Design"
     version = 1
 
@@ -178,8 +204,8 @@ async def test_update_task_design_doc_unit():
 
 @pytest.mark.asyncio
 async def test_complete_task_unit():
-    task_id = "task-id"
-    commit_hash = "abcdef123456"
+    task_id = VALID_TASK_ID
+    commit_hash = "abcdef1234567890"
     completion_info = "Done"
     version = 1
 
@@ -225,7 +251,7 @@ async def test_complete_task_unit():
 
 @pytest.mark.asyncio
 async def test_get_task_status_unit():
-    task_id = "task-id"
+    task_id = VALID_TASK_ID
     mock_task = MagicMock()
     mock_task.id = task_id
     mock_task.status = "inprogress"
