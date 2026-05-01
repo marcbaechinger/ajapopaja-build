@@ -284,6 +284,16 @@ class AssistantSession:
                     return
 
                 if tool_def.type == READ_ONLY:
+                    await self.on_update(
+                        {
+                            "type": "tool_use",
+                            "id": tool_call_dict.get("id") or "legacy_id",
+                            "tool": tool_name,
+                            "arguments": tool_call_dict.get("function", {}).get(
+                                "arguments"
+                            ),
+                        }
+                    )
                     result = await self._execute_tool(tool_call_dict)
                     self.history.append(
                         ChatMessage(

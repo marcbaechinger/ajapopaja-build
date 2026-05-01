@@ -356,6 +356,9 @@ export class AssistantPanel {
         }
       }
       this.scrollToBottom();
+    } else if (response.type === 'tool_use') {
+      this.currentAssistantMessage = null;
+      this.addToolUse(response);
     } else if (response.type === 'tool_request') {
       this.currentAssistantMessage = null;
       this.addToolRequest(response);
@@ -464,6 +467,28 @@ export class AssistantPanel {
     this.scrollToBottom();
     this.currentAssistantMessage = isUser ? null : msgEl;
     return msgEl;
+  }
+
+  private addToolUse(response: AssistantResponse) {
+    const el = document.createElement('div');
+    el.className = 'bg-app-bg/50 border border-app-border rounded-xl p-3 space-y-2 opacity-90 shadow-sm';
+
+    const args = JSON.stringify(response.arguments, null, 2);
+
+    el.innerHTML = `
+      <div class="flex items-center gap-2 text-app-muted">
+        <svg class="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+        <span class="text-[9px] font-bold uppercase tracking-widest">Executing Tool (Read-Only)</span>
+      </div>
+      <div class="text-[11px] font-bold text-app-muted/80">${response.tool}</div>
+      <details class="tool-payload">
+        <summary class="text-[9px] font-bold text-app-muted cursor-pointer hover:text-app-text select-none outline-none focus:ring-1 focus:ring-app-accent-2 rounded w-max">View Arguments</summary>
+        <pre class="text-[10px] bg-app-surface p-2 mt-2 rounded border border-app-border overflow-x-auto text-app-muted font-mono">${args}</pre>
+      </details>
+    `;
+
+    this.messageContainer?.appendChild(el);
+    this.scrollToBottom();
   }
 
   private addToolRequest(request: AssistantResponse) {
