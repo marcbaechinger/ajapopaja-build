@@ -27,30 +27,44 @@ logger = logging.getLogger(__name__)
 
 SYSTEM_INSTRUCTION = """
 ### Role & Persona
-You are a Documentation Architect. Your mission is to maintain the structural integrity and factual accuracy of a project's reference documentation (Architecture, Design Principles, API Contracts). You act as the bridge between code implementation and conceptual design.
+You are a Documentation Architect. Your mission is to maintain the structural integrity 
+and factual accuracy of a project's reference documentation (Architecture, Design
+Principles, API Contracts). You act as the bridge between code implementation and
+conceptual design.
 
 ### Context
-- **Knowledge Base:** You have access to source code, git history, and existing documentation.
-- **Documentation Root:** All reference materials are stored in the `design/` directory (e.g., `dd_backend.md`, `dd_frontend.md`).
-- **Cold Start:** If the `design/` directory is missing and the current change is architecturally significant, you are responsible for initializing it.
+- **Knowledge Base:** You have access to source code, git history, and existing
+  documentation.
+- **Documentation Root:** All reference materials are stored in the `design/`
+  directory (e.g., `dd_backend.md`, `dd_frontend.md`).
+- **Cold Start:** If the `design/` directory is missing and the current change
+  is architecturally significant, you are responsible for initializing it.
 
 ### Evaluation Workflow
-1. **Analyze:** Critically review the task specification, implementation summary, and git diff. 
-2. **Audit:** Explore the codebase and existing docs to identify drift between the new implementation and current design definitions.
+1. **Analyze:** Critically review the task specification, implementation summary, and
+   git diff. 
+2. **Audit:** Explore the codebase and existing docs to identify drift between the new
+   implementation and current design definitions.
 3. **Execute:** 
-    - **If updates are required:** Call `update_ref_doc`. You MUST provide: `filename`, `content`, and `reason`.
+    - **If updates are required:** Call `update_ref_doc`. You MUST provide: `filename`,
+      `content`, and `reason`.
     - **If the design remains intact:** Call `no_doc_update_needed`.
 
 ### Composition Rules (The "Evergreen" Mandate)
-- **Seamless Integration:** Never use temporal language like "now," "newly added," "recently implemented," or "updated." Write in the present tense as if the feature or pattern has been a fundamental part of the system since its inception.
-- **Technical Precision:** Focus on the *how* and *why* of the architecture rather than a play-by-play of the code changes.
-- **Autonomy:** Do not seek confirmation, ask for permission, or wait for user feedback. Execute the necessary tool calls immediately.
+- **Seamless Integration:** Never use temporal language like "now," "newly added,"
+  "recently implemented," or "updated." Write in the present tense as if the feature or
+  pattern has been a fundamental part of the system since its inception.
+- **Technical Precision:** Focus on the *how* and *why* of the architecture rather than
+  a play-by-play of the code changes.
+- **Autonomy:** Do not seek confirmation, ask for permission, or wait for user feedback.
+  Execute the necessary tool calls immediately.
 """
 
 
 class DocBotSession:
-    def __init__(self, pipeline_id: str):
+    def __init__(self, pipeline_id: str, task_id: str):
         self.pipeline_id = pipeline_id
+        self.task_id = task_id
         headers = {}
         if config.OLLAMA_API_KEY:
             headers["Authorization"] = f"Bearer {config.OLLAMA_API_KEY}"
@@ -68,20 +82,23 @@ class DocBotSession:
             # Prepare tools
             ollama_tools = []
             for t in docbot_registry.list_tools():
-                # Extract parameters, but remove 'pipeline_id' if present
-                # as we will inject it automatically
+                # Extract parameters, but remove 'pipeline_id' and 'task_id' if present
+                # as we will inject them automatically
                 parameters = t.parameters.copy()
-                if "pipeline_id" in parameters.get("properties", {}):
-                    # Create a deep copy of properties to not modify the registry
-                    properties = parameters["properties"].copy()
-                    del properties["pipeline_id"]
-                    parameters["properties"] = properties
+                properties = parameters.get("properties", {}).copy()
 
-                    if "required" in parameters:
-                        required = [
-                            r for r in parameters["required"] if r != "pipeline_id"
-                        ]
-                        parameters["required"] = required
+                injected_params = ["pipeline_id", "task_id"]
+                for p in injected_params:
+                    if p in properties:
+                        del properties[p]
+
+                parameters["properties"] = properties
+
+                if "required" in parameters:
+                    required = [
+                        r for r in parameters["required"] if r not in injected_params
+                    ]
+                    parameters["required"] = required
 
                 ollama_tools.append(
                     {
@@ -99,6 +116,7 @@ class DocBotSession:
                 messages=self.history,
                 tools=ollama_tools,
             )
+            # ... (rest of the method remains the same until _execute_tool call)
 
             msg = response.message
 
@@ -119,30 +137,16 @@ class DocBotSession:
 
             if not msg.tool_calls:
                 logger.info(
-                    f"DocBot iteration {i + 1}: No tool calls, agent responded with text: {msg.content}"
+                    f"DocBot iteration {i + 1}: No tool calls, agent responded with "
+                    f"text: {msg.content}"
                 )
-
-                # Check if it looks like a manual tool call attempt in text
-                if (
-                    any(t.name in msg.content for t in docbot_registry.list_tools())
-                    and "(" in msg.content
-                ):
-                    feedback = (
-                        "It looks like you tried to call a tool by writing it in text. "
-                        "You MUST use the formal tool calling mechanism instead of "
-                        "writing the function name in your response. "
-                        "Please retry using a proper tool call for 'update_ref_doc', "
-                        "'no_doc_update_needed', or other available tools."
-                    )
-                else:
-                    feedback = (
-                        "Continue to analyze the recent change and then call the "
-                        "tools to update the design document or signal that no "
-                        "change is needed. Remember to use the formal tool calling "
-                        "mechanism."
-                    )
-
                 # If no tool call, push the agent to finish
+                feedback = (
+                    "Continue to analyze the recent change and then call the "
+                    "tools to update the design document or signal that no "
+                    "change is needed. Remember to use the formal tool calling "
+                    "mechanism."
+                )
                 self.history.append(
                     {
                         "role": "user",
@@ -158,7 +162,8 @@ class DocBotSession:
                 args = tool_call.function.arguments
 
                 logger.info(
-                    f"DocBot iteration {i + 1}: Agent calling tool '{tool_name}' with args: {args}"
+                    f"DocBot iteration {i + 1}: Agent calling tool '{tool_name}' "
+                    f"with args: {args}"
                 )
 
                 if tool_name in ["update_ref_doc", "no_doc_update_needed"]:
@@ -185,7 +190,8 @@ class DocBotSession:
 
                     if is_error:
                         logger.warning(
-                            f"DocBot terminal tool '{tool_name}' failed with: {result}. Forcing retry."
+                            f"DocBot terminal tool '{tool_name}' failed with "
+                            f"{result}. Forcing retry."
                         )
                         terminal_call = False
 
@@ -204,10 +210,12 @@ class DocBotSession:
             if isinstance(args, str):
                 args = json.loads(args)
 
-            # Inject pipeline_id if the tool expects it
+            # Inject pipeline_id and task_id if the tool expects them
             sig = inspect.signature(tool.func)
             if "pipeline_id" in sig.parameters:
                 args["pipeline_id"] = self.pipeline_id
+            if "task_id" in sig.parameters:
+                args["task_id"] = self.task_id
 
             return await tool.func(**args)
         except Exception as e:

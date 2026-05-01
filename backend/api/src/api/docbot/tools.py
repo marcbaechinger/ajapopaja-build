@@ -16,12 +16,16 @@ import logging
 import os
 from typing import List
 
+import git
+
 from api.assistant.tools.file_tools import list_project_structure, read_source_file
 from api.assistant.tools.git_tools import git_show_commit
 from api.assistant.tools.search_tools import grep
+from api.websocket_manager import WSMessage, manager
 from core.queries import pipeline as pipeline_queries
 from core.utils.path_utils import safe_join
 
+from .cache import DocBotPreview, set_preview
 from .decorators import register_doc_tool
 from .registry import docbot_registry
 
@@ -156,6 +160,7 @@ async def update_ref_doc(
     filename: str,
     content: str,
     reason: str,
+    task_id: str = None,
     **kwargs,
 ) -> str:
     """
@@ -177,9 +182,10 @@ async def update_ref_doc(
     # Robust argument extraction to handle common model hallucinations (path, summary)
     fname = filename or kwargs.get("path")
     resn = reason or kwargs.get("summary") or kwargs.get("reasoning")
+    tid = task_id or kwargs.get("task_id")
 
     logger.info(
-        f"update_ref_doc: Request received. filename={fname}, reason_len={len(resn) if resn else 0}, content_len={len(content) if content else 0}"
+        f"update_ref_doc: Request received. filename={fname}, reason_len={len(resn) if resn else 0}, content_len={len(content) if content else 0}, task_id={tid}"
     )
 
     if not fname:
@@ -220,6 +226,38 @@ async def update_ref_doc(
             f.write(content)
 
         logger.info(f"update_ref_doc: Successfully updated {fname}. Reason: {resn}")
+
+        # Capture diff and cache preview if task_id is available
+        if tid:
+            try:
+                repo = git.Repo(pipeline.workspace_abs_path)
+                # Capture unstaged diff for this specific file
+                # Use --unified=3 for standard context
+                diff = repo.git.diff("--unified=3", file_path)
+
+                # Derived commit message
+                commit_msg = f"[doc] Update {fname}\n\n{resn}"
+
+                set_preview(
+                    tid,
+                    DocBotPreview(
+                        task_id=tid,
+                        pipeline_id=pipeline_id,
+                        diff=diff,
+                        commit_msg=commit_msg,
+                        file_path=str(file_path),
+                        filename=fname,
+                    ),
+                )
+
+                # WebSocket notification
+                await manager.broadcast(
+                    WSMessage(type="DOCBOT_PREVIEW_READY", payload={"task_id": tid})
+                )
+                logger.info(f"update_ref_doc: Preview cached and notified for {tid}")
+            except Exception as e:
+                logger.error(f"update_ref_doc: Failed to capture diff/notify: {e}")
+
         return f"Successfully updated {DOC_DIR}/{fname}."
     except Exception as e:
         logger.error(f"update_ref_doc: Failed to write {file_path}: {e}")

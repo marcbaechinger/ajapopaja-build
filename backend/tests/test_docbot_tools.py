@@ -47,9 +47,22 @@ async def test_docbot_tools_flow():
             filename = "test_doc.md"
             content = "# Test Doc\nContent here."
             reason = "Initial documentation"
-            result = await update_ref_doc(pipeline_id, filename, content, reason)
-            assert "Successfully updated" in result
-            assert os.path.isfile(os.path.join(tmp_dir, "design", filename))
+            with (
+                patch("api.docbot.tools.set_preview") as mock_set_preview,
+                patch("api.docbot.tools.git.Repo") as mock_repo,
+                patch("api.docbot.tools.manager.broadcast") as mock_broadcast,
+            ):
+                # Setup mock repo to return a dummy diff
+                mock_repo_instance = mock_repo.return_value
+                mock_repo_instance.git.diff.return_value = "dummy diff"
+
+                result = await update_ref_doc(
+                    pipeline_id, filename, content, reason, task_id="test_task_id"
+                )
+                assert "Successfully updated" in result
+                assert os.path.isfile(os.path.join(tmp_dir, "design", filename))
+                assert mock_set_preview.called
+                assert mock_broadcast.called
 
             # 3. Test list_ref_docs (with file)
             result = await list_ref_docs(pipeline_id)
@@ -61,10 +74,24 @@ async def test_docbot_tools_flow():
 
             # 5. Test update_ref_doc (update)
             new_content = "# Updated Doc\nNew content."
-            result = await update_ref_doc(
-                pipeline_id, filename, new_content, "Updated info"
-            )
-            assert "Successfully updated" in result
+            with (
+                patch("api.docbot.tools.set_preview") as mock_set_preview,
+                patch("api.docbot.tools.git.Repo") as mock_repo,
+                patch("api.docbot.tools.manager.broadcast") as mock_broadcast,
+            ):
+                mock_repo_instance = mock_repo.return_value
+                mock_repo_instance.git.diff.return_value = "dummy diff"
+
+                result = await update_ref_doc(
+                    pipeline_id,
+                    filename,
+                    new_content,
+                    "Updated info",
+                    task_id="test_task_id",
+                )
+                assert "Successfully updated" in result
+                assert mock_set_preview.called
+                assert mock_broadcast.called
 
             # 6. Test read_ref_doc (verify update)
             result = await read_ref_doc(pipeline_id, filename)

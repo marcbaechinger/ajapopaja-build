@@ -29,7 +29,17 @@ import { CompletedSection } from '../components/CompletedSection.ts';
 import { PipelineStatsView } from '../components/PipelineStatsView.ts';
 import { PaginationControl } from '../components/PaginationControl.ts';
 import { LogViewerDialog } from '../components/LogViewerDialog.ts';
+import { DocBotDialog } from '../components/DocBotDialog.ts';
+import type { DocBotDialogProps } from '../components/DocBotDialog.ts';
 import EasyMDE from 'easymde';
+
+interface DocbotState {
+  status: 'none' | 'ready' | 'inProgress';
+  taskId: string | null;
+  diff: string;
+  commitMsg: string;
+  filename: string;
+}
 
 export class PipelineDetailView extends View {
   private container: HTMLElement | null = null;
@@ -47,6 +57,14 @@ export class PipelineDetailView extends View {
   private completedTasksPage: number = 0;
   private completedPageSize: number = 5;
   private keydownHandler: ((e: KeyboardEvent) => void) | null = null;
+  
+  private docbotState: DocbotState = {
+    status: 'none',
+    taskId: null,
+    diff: '',
+    commitMsg: '',
+    filename: ''
+  };
 
   private columnMetadata: Record<string, { title: string, emptyMessage: string }> = {
     'proposed': { title: 'Proposed', emptyMessage: 'No proposed designs.' },
@@ -210,6 +228,83 @@ export class PipelineDetailView extends View {
         this.updateHeader();
       }
     }));
+    this.unsubs.push(this.context.wsClient.on('DOCBOT_PREVIEW_READY', (message: any) => {
+       if (message.payload?.task_id) {
+          this.fetchDocBotPreview(message.payload.task_id);
+       }
+    }));
+  }
+
+  private renderDocBotBanner() {
+    const container = this.container?.querySelector('#docbot-banner-container');
+    if (!container) return;
+    
+    if (this.docbotState.status === 'ready') {
+       container.innerHTML = `
+        <div class="inline-block bg-yellow-100 border border-yellow-300 text-yellow-800 rounded px-3 py-2 text-sm shadow-sm mt-4 flex items-center gap-2">
+          <svg class="w-4 h-4 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+          </svg>
+          <span class="font-medium">DocBot has prepared a documentation update.</span>
+          <button data-action-click="open_docbot_dialog" class="font-bold underline ml-2 hover:text-yellow-900 transition-colors cursor-pointer">Review Changes</button>
+        </div>
+       `;
+    } else {
+       container.innerHTML = '';
+    }
+  }
+  
+  private async fetchDocBotPreview(taskId: string) {
+     try {
+        const response = await fetch(`/api/pipelines/${this.pipelineId}/docbot/preview/${taskId}`, {
+          headers: {
+            'Authorization': `Bearer ${this.context.authService.getAccessToken()}`
+          }
+        });
+        
+        if (response.ok) {
+           const data = await response.json();
+           this.docbotState = {
+             status: 'ready',
+             taskId: data.task_id,
+             diff: data.diff,
+             commitMsg: data.commit_msg,
+             filename: data.filename
+           };
+           this.renderDocBotBanner();
+        }
+     } catch (error) {
+        console.error('Failed to fetch DocBot preview:', error);
+     }
+  }
+
+  private openDocBotDialog() {
+     const dialogContainer = this.container?.querySelector('#docbot-dialog-container') as HTMLElement;
+     if (!dialogContainer || !this.docbotState.taskId) return;
+     
+     const props: DocBotDialogProps = {
+        taskId: this.docbotState.taskId,
+        pipelineId: this.pipelineId,
+        diff: this.docbotState.diff,
+        commitMsg: this.docbotState.commitMsg,
+        filename: this.docbotState.filename,
+        context: this.context,
+        onClose: () => {
+          dialogContainer.innerHTML = '';
+        },
+        onSuccess: () => {
+          this.docbotState = {
+            status: 'none',
+            taskId: null,
+            diff: '',
+            commitMsg: '',
+            filename: ''
+          };
+          this.renderDocBotBanner();
+        }
+     };
+     
+     new DocBotDialog(dialogContainer, props);
   }
 
   private registerActions() {
@@ -714,6 +809,10 @@ export class PipelineDetailView extends View {
         alert('Failed to delete task');
       }
     });
+
+    this.context.actionRegistry.register('open_docbot_dialog', () => {
+      this.openDocBotDialog();
+    });
   }
 
   async loadPipeline() {
@@ -1065,23 +1164,16 @@ export class PipelineDetailView extends View {
                 </div>
               </div>
             </div>
+            <div id="docbot-banner-container"></div>
           </div>
           <div class="flex gap-2">
              <button data-action-click="open_search" data-pipeline-id="${this.pipelineId}" class="flex items-center gap-2 bg-app-bg hover:bg-app-surface px-4 py-2 rounded-xl border border-app-border text-app-muted hover:text-app-accent-2 transition-all cursor-pointer group mr-1" title="Global Search (Ctrl+K)">
                <svg class="w-4 h-4 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                <span class="text-xs font-bold uppercase tracking-widest">Search</span>
-               <div class="flex gap-0.5 ml-1">
-                 <span class="text-[10px] bg-app-surface px-1.5 py-0.5 rounded border border-app-border text-app-muted group-hover:text-app-accent-2 group-hover:border-app-accent-2/30 transition-colors">Ctrl</span>
-                 <span class="text-[10px] bg-app-surface px-1.5 py-0.5 rounded border border-app-border text-app-muted group-hover:text-app-accent-2 group-hover:border-app-accent-2/30 transition-colors ml-1">K</span>
-               </div>
              </button>
              <button data-action-click="toggle_assistant" class="flex items-center gap-2 bg-app-bg hover:bg-app-surface px-4 py-2 rounded-xl border border-app-border text-app-muted hover:text-app-accent-2 transition-all cursor-pointer group mr-11" title="AI Assistant (Ctrl+Shift+A)">
                <svg class="w-4 h-4 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                <span class="text-xs font-bold uppercase tracking-widest">Assistant</span>
-               <div class="flex gap-0.5 ml-1">
-                 <span class="text-[10px] bg-app-surface px-1.5 py-0.5 rounded border border-app-border text-app-muted group-hover:text-app-accent-2 group-hover:border-app-accent-2/30 transition-colors">Ctrl-^</span>
-                 <span class="text-[10px] bg-app-surface px-1.5 py-0.5 rounded border border-app-border text-app-muted group-hover:text-app-accent-2 group-hover:border-app-accent-2/30 transition-colors ml-1">A</span>
-               </div>
              </button>
              <button data-action-click="open_stats" class="text-app-accent-2 hover:brightness-110 font-bold transition-all text-sm px-3 py-2 rounded-lg border border-app-border bg-app-bg shadow-sm cursor-pointer" title="Statistics - Keyboard Shortcut: s">
                <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
@@ -1146,6 +1238,7 @@ export class PipelineDetailView extends View {
           </div>
         </div>
       </div>
+      <div id="docbot-dialog-container"></div>
     `;
   }
 

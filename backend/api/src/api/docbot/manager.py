@@ -77,7 +77,7 @@ documentation in the 'design/' directory.
 """
 
         logger.info(f"Starting DocBot session for task {task.id}")
-        session = DocBotSession(pipeline_id=str(pipeline.id))
+        session = DocBotSession(pipeline_id=str(pipeline.id), task_id=str(task.id))
         try:
             await session.run(initial_prompt)
         except Exception as e:
