@@ -122,16 +122,63 @@ async def test_docbot_tools_errors():
             with open(os.path.join(tmp_dir, "secret.md"), "w") as f:
                 f.write("top secret")
 
-            # update_ref_doc uses os.path.basename, so it should only write to design/
-            await update_ref_doc(
+            # update_ref_doc should now fail with error instead of stripping path
+            result = await update_ref_doc(
                 pipeline_id, "../escaped.md", "escaped content", "hacking"
             )
-            assert os.path.isfile(os.path.join(tmp_dir, "design", "escaped.md"))
-            assert not os.path.isfile(os.path.join(tmp_dir, "escaped.md"))
+            assert "Error: Invalid filename" in result
+            assert not os.path.isfile(os.path.join(tmp_dir, "design", "escaped.md"))
 
-            # read_ref_doc uses os.path.basename, so it should only read from design/
+            # read_ref_doc should also fail with error
             result = await read_ref_doc(pipeline_id, "../secret.md")
-            assert "Error: Document 'secret.md' not found" in result
+            assert "Error: Invalid filename" in result
+
+
+@pytest.mark.asyncio
+async def test_docbot_tools_recursive():
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        mock_pipeline = AsyncMock()
+        mock_pipeline.workspace_abs_path = Path(tmp_dir)
+        pipeline_id = "test_pipeline"
+
+        with patch(
+            "api.docbot.tools.pipeline_queries.get_pipeline_by_id",
+            return_value=mock_pipeline,
+        ):
+            # 1. Test update_ref_doc in subdirectory
+            filename = "implemented/new_feature.md"
+            content = "# New Feature\nDetails."
+            reason = "Documentation for sub-feature"
+
+            with (
+                patch("api.docbot.tools.set_preview"),
+                patch("api.docbot.tools.git.Repo"),
+                patch("api.docbot.tools.manager.broadcast"),
+            ):
+                result = await update_ref_doc(pipeline_id, filename, content, reason)
+                assert "Successfully updated" in result
+                assert os.path.isfile(
+                    os.path.join(tmp_dir, "design", "implemented", "new_feature.md")
+                )
+
+            # 2. Test list_ref_docs (recursive)
+            # Create another file in root
+            with open(os.path.join(tmp_dir, "design", "root.md"), "w") as f:
+                f.write("root")
+
+            result = await list_ref_docs(pipeline_id)
+            assert "implemented/new_feature.md" in result
+            assert "root.md" in result
+
+            # 3. Test read_ref_doc in subdirectory
+            result = await read_ref_doc(pipeline_id, "implemented/new_feature.md")
+            assert result == content
+
+            # 4. Test read_ref_doc with design/ prefix
+            result = await read_ref_doc(
+                pipeline_id, "design/implemented/new_feature.md"
+            )
+            assert result == content
 
 
 @pytest.mark.asyncio

@@ -43,10 +43,11 @@ DOC_DIR = "design"
 @register_doc_tool()
 async def list_ref_docs(pipeline_id: str, **kwargs) -> List[str]:
     """
-    Lists all reference documentation files available in the 'design/' directory.
+    Lists all reference documentation files available in the 'design/' directory,
+    including subdirectories.
 
     This tool helps discover existing design documents, architectural diagrams,
-    and specification files to understand the current state of the project'self
+    and specification files to understand the current state of the project's
     documentation.
     """
     if kwargs:
@@ -79,9 +80,11 @@ async def list_ref_docs(pipeline_id: str, **kwargs) -> List[str]:
         return [msg]
 
     files = []
-    for f in os.listdir(doc_path):
-        if f.endswith(".md"):
-            files.append(f)
+    for root, _, filenames in os.walk(doc_path):
+        for f in filenames:
+            if f.endswith(".md"):
+                rel_path = os.path.relpath(os.path.join(root, f), doc_path)
+                files.append(rel_path)
 
     logger.info(f"list_ref_docs: Found {len(files)} documents: {files}")
     return files
@@ -97,8 +100,9 @@ async def read_ref_doc(pipeline_id: str, filename: str, **kwargs) -> str:
     needed or to gather context for modifying a document.
 
     Args:
-        filename: The name of the file to read (e.g., 'dd_architecture.md'). Only the
-                  filename is needed.
+        filename: The name of the file to read (e.g., 'dd_architecture.md' or
+                  'implemented/dd_nvim_socket_config.md'). Paths relative to 'design/'
+                  are supported.
     """
     # Handle cases where the model might use 'path' instead of 'filename'
     fname = filename or kwargs.get("path")
@@ -113,8 +117,11 @@ async def read_ref_doc(pipeline_id: str, filename: str, **kwargs) -> str:
         )
         return "Error: filename is required."
 
-    # Strip directory prefix if the agent provided one
-    fname = os.path.basename(fname)
+    # Strip 'design/' prefix if the agent provided one
+    if fname.startswith(f"{DOC_DIR}/"):
+        fname = fname[len(DOC_DIR) + 1 :]
+    elif fname.startswith(DOC_DIR) and len(fname) == len(DOC_DIR):
+        return f"Error: '{DOC_DIR}' is a directory, please specify a file."
 
     logger.info(
         f"read_ref_doc: Attempting to read '{fname}' for pipeline {pipeline_id}"
@@ -130,8 +137,13 @@ async def read_ref_doc(pipeline_id: str, filename: str, **kwargs) -> str:
         logger.error(f"read_ref_doc: Workspace root missing for pipeline {pipeline_id}")
         return "Error: Workspace root missing."
 
-    file_path = safe_join(pipeline.workspace_abs_path, DOC_DIR, fname)
-    logger.info(f"read_ref_doc: Full file path: {file_path}")
+    try:
+        doc_path = safe_join(pipeline.workspace_abs_path, DOC_DIR)
+        file_path = safe_join(doc_path, fname)
+        logger.info(f"read_ref_doc: Full file path: {file_path}")
+    except ValueError as e:
+        logger.error(f"read_ref_doc: Invalid path '{fname}': {e}")
+        return f"Error: Invalid filename '{fname}'."
 
     if not os.path.isfile(file_path):
         logger.warning(f"read_ref_doc: Document '{fname}' not found at {file_path}")
@@ -172,8 +184,9 @@ async def update_ref_doc(
     permanent reference documentation.
 
     Args:
-        filename: The name of the file (e.g., 'dd_user_profile.md'). If the file doesn't
-                  exist, it will be created.
+        filename: The name of the file (e.g., 'dd_user_profile.md' or
+                  'implemented/dd_nvim_socket_config.md'). If the file doesn't
+                  exist, it will be created. Paths relative to 'design/' are supported.
         content: The complete, updated Markdown content of the document. Do not provide
                   snippets; provide the full file content.
         reason: A concise technical explanation of why this documentation update is
@@ -202,8 +215,9 @@ async def update_ref_doc(
         logger.warning(f"update_ref_doc: Missing reason for {fname}. Using default.")
         resn = "No reason provided."
 
-    # Strip directory prefix if the agent provided one (we always force DOC_DIR)
-    fname = os.path.basename(fname)
+    # Strip 'design/' prefix if the agent provided one
+    if fname.startswith(f"{DOC_DIR}/"):
+        fname = fname[len(DOC_DIR) + 1 :]
 
     try:
         pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
@@ -217,11 +231,16 @@ async def update_ref_doc(
         )
         return "Error: Workspace root missing."
 
-    doc_path = safe_join(pipeline.workspace_abs_path, DOC_DIR)
-    os.makedirs(doc_path, exist_ok=True)
+    try:
+        doc_path = safe_join(pipeline.workspace_abs_path, DOC_DIR)
+        file_path = safe_join(doc_path, fname)
+        logger.info(f"update_ref_doc: Writing to {file_path}")
 
-    file_path = safe_join(doc_path, fname)
-    logger.info(f"update_ref_doc: Writing to {file_path}")
+        # Ensure parent directory exists
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    except ValueError as e:
+        logger.error(f"update_ref_doc: Invalid path '{fname}': {e}")
+        return f"Error: Invalid filename '{fname}'."
 
     try:
         with open(file_path, "w") as f:
