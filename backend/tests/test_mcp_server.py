@@ -19,6 +19,7 @@ from ajapopaja_mcp.server import (
     get_next_task,
     get_task_details,
     get_task_status,
+    search_tasks,
     update_task_design_doc,
 )
 from core.models.models import Pipeline, Task, TaskStatus
@@ -213,6 +214,45 @@ async def test_mcp_get_task_details():
     assert "history" in result
     assert "created_at" in result
     assert "updated_at" in result
+
+
+@pytest.mark.asyncio
+async def test_mcp_search_tasks():
+    # Insert a few tasks
+    t1 = Task(
+        title="Searchable Alpha",
+        pipeline_id="123",
+        status=TaskStatus.CREATED,
+        spec="First spec",
+    )
+    t2 = Task(
+        title="Searchable Beta",
+        pipeline_id="123",
+        status=TaskStatus.INPROGRESS,
+        spec="Second spec",
+    )
+    await t1.insert()
+    await t2.insert()
+
+    # Search by keyword
+    result = await search_tasks(keywords="Alpha")
+    assert result["total_count"] == 1
+    assert result["tasks"][0]["title"] == "Searchable Alpha"
+
+    # Search by status
+    result = await search_tasks(statuses=["inprogress"])
+    assert result["total_count"] == 1
+    assert result["tasks"][0]["title"] == "Searchable Beta"
+
+    # Search by keyword and status
+    result = await search_tasks(keywords="Searchable", statuses=["created"])
+    assert result["total_count"] == 1
+    assert result["tasks"][0]["title"] == "Searchable Alpha"
+
+    # Search with no results
+    result = await search_tasks(keywords="Gamma")
+    assert result["total_count"] == 0
+    assert len(result["tasks"]) == 0
 
 
 @pytest.mark.asyncio

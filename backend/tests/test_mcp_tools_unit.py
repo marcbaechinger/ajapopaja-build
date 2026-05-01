@@ -22,8 +22,37 @@ from ajapopaja_mcp.server import (
     get_next_task,
     get_task_details,
     get_task_status,
+    search_tasks,
     update_task_design_doc,
 )
+
+
+@pytest.mark.asyncio
+async def test_search_tasks_unit():
+    mock_task = MagicMock()
+    mock_task.id = "task-id"
+    mock_task.title = "Search Result"
+    mock_task.status = "scheduled"
+    mock_task.spec = "Some spec"
+    mock_task.version = 1
+
+    with (
+        patch("ajapopaja_mcp.server.init_db", new_callable=AsyncMock) as mock_init_db,
+        patch(
+            "ajapopaja_mcp.server.task_queries.search_tasks", new_callable=AsyncMock
+        ) as mock_search,
+    ):
+        mock_search.return_value = ([mock_task], 1)
+
+        result = await search_tasks(keywords="Search", statuses=["scheduled"])
+
+        mock_init_db.assert_awaited_once()
+        # Actual enum conversion is tested in integration tests.
+        mock_search.assert_awaited_once()
+
+        assert result["total_count"] == 1
+        assert result["tasks"][0]["title"] == "Search Result"
+        assert result["tasks"][0]["spec"] == "Some spec"
 
 
 @pytest.mark.asyncio

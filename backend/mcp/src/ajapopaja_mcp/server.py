@@ -15,7 +15,7 @@
 import asyncio
 import logging
 import re
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 from fastmcp import FastMCP
 
@@ -23,6 +23,7 @@ from api.docbot.manager import DocBotManager
 from api.websocket_manager import manager
 from core.db import init_db
 from core.exceptions import EntityNotFoundError, VersionMismatchError
+from core.models.models import TaskStatus
 from core.queries import task as task_queries
 
 # Create an MCP server
@@ -185,6 +186,66 @@ async def get_task_details(task_id: str) -> Dict[str, Any]:
             "updated_at": task.updated_at.isoformat(),
         }
     except EntityNotFoundError as e:
+        return {"error": str(e)}
+
+
+@mcp.tool
+async def search_tasks(
+    keywords: Optional[str] = None,
+    statuses: Optional[List[str]] = None,
+    pipeline_id: Optional[str] = None,
+    page: int = 0,
+    limit: int = 10,
+) -> Dict[str, Any]:
+    """
+    Search for tasks based on keywords, statuses, or pipeline.
+
+    Args:
+        keywords: Optional search keywords (matches title, spec, design_doc).
+        statuses: Optional list of statuses to filter by.
+        pipeline_id: Optional pipeline ID to filter by.
+        page: Page number for pagination (0-based).
+        limit: Maximum number of tasks to return (default: 10).
+    """
+    await init_db()
+    try:
+        # Convert string statuses to TaskStatus enum if provided
+        status_enums = None
+        if statuses:
+            status_enums = [TaskStatus(s) for s in statuses]
+
+        tasks, total_count = await task_queries.search_tasks(
+            keywords=keywords,
+            statuses=status_enums,
+            pipeline_id=pipeline_id,
+            page=page,
+            limit=limit,
+        )
+
+        MAX_LEN = 300
+        summaries = []
+        for t in tasks:
+            spec = t.spec or ""
+            if len(spec) > MAX_LEN:
+                spec = spec[:MAX_LEN] + "...[truncated]"
+
+            summaries.append(
+                {
+                    "id": str(t.id),
+                    "title": t.title,
+                    "status": t.status,
+                    "spec": spec,
+                    "version": t.version,
+                }
+            )
+
+        return {
+            "tasks": summaries,
+            "total_count": total_count,
+            "page": page,
+            "limit": limit,
+        }
+    except Exception as e:
         return {"error": str(e)}
 
 
