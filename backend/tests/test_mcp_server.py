@@ -17,6 +17,7 @@ import pytest
 from ajapopaja_mcp.server import (
     complete_task,
     get_next_task,
+    get_task_details,
     get_task_status,
     update_task_design_doc,
 )
@@ -188,6 +189,30 @@ async def test_mcp_get_task_status():
     result = await get_task_status(str(task.id))
     assert result["id"] == str(task.id)
     assert result["status"] == TaskStatus.FAILED
+
+
+@pytest.mark.asyncio
+async def test_mcp_get_task_details():
+    task = Task(
+        title="Detail Task",
+        pipeline_id="123",
+        status=TaskStatus.INPROGRESS,
+        spec="Detailed spec",
+        design_doc="# Design",
+        commit_hash="f00ba4",
+    )
+    await task.insert()
+
+    result = await get_task_details(str(task.id))
+    assert result["id"] == str(task.id)
+    assert result["title"] == "Detail Task"
+    assert result["status"] == TaskStatus.INPROGRESS
+    assert result["spec"] == "Detailed spec"
+    assert result["design_doc"] == "# Design"
+    assert result["commit_hash"] == "f00ba4"
+    assert "history" in result
+    assert "created_at" in result
+    assert "updated_at" in result
 
 
 @pytest.mark.asyncio

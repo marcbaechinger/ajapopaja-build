@@ -157,6 +157,38 @@ async def complete_task(
 
 
 @mcp.tool
+async def get_task_details(task_id: str) -> Dict[str, Any]:
+    """
+    Retrieves full details for a task, including spec, design, and history.
+
+    Args:
+        task_id: The target task ID.
+    """
+    await init_db()
+    try:
+        task = await task_queries.get_task_by_id(task_id)
+        return {
+            "id": str(task.id),
+            "title": task.title,
+            "description": task.description or "",
+            "status": task.status,
+            "type": task.type,
+            "spec": task.spec or "",
+            "design_doc": task.design_doc or "",
+            "want_design_doc": task.want_design_doc,
+            "version": task.version,
+            "commit_hash": task.commit_hash or "",
+            "completion_info": task.completion_info or "",
+            "verification": task.verification,
+            "history": [h.model_dump() for h in task.history],
+            "created_at": task.created_at.isoformat(),
+            "updated_at": task.updated_at.isoformat(),
+        }
+    except EntityNotFoundError as e:
+        return {"error": str(e)}
+
+
+@mcp.tool
 async def get_task_status(task_id: str) -> Dict[str, Any]:
     """
     Retrieves current status and verification results for a task.

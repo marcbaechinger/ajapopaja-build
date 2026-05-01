@@ -20,9 +20,52 @@ import pytest
 from ajapopaja_mcp.server import (
     complete_task,
     get_next_task,
+    get_task_details,
     get_task_status,
     update_task_design_doc,
 )
+
+
+@pytest.mark.asyncio
+async def test_get_task_details_unit():
+    task_id = "task-id"
+    mock_task = MagicMock()
+    mock_task.id = task_id
+    mock_task.title = "Task Title"
+    mock_task.description = "Task Description"
+    mock_task.status = "inprogress"
+    mock_task.type = "manual"
+    mock_task.spec = "Task Spec"
+    mock_task.design_doc = "Design Doc"
+    mock_task.want_design_doc = True
+    mock_task.version = 2
+    mock_task.commit_hash = "abc1234"
+    mock_task.completion_info = "Completed info"
+    mock_task.verification = {"success": True}
+    mock_task.history = []
+    mock_task.created_at.isoformat.return_value = "2024-01-01T00:00:00Z"
+    mock_task.updated_at.isoformat.return_value = "2024-01-01T01:00:00Z"
+
+    with (
+        patch("ajapopaja_mcp.server.init_db", new_callable=AsyncMock) as mock_init_db,
+        patch(
+            "ajapopaja_mcp.server.task_queries.get_task_by_id", new_callable=AsyncMock
+        ) as mock_get_task,
+    ):
+        mock_get_task.return_value = mock_task
+
+        result = await get_task_details(task_id)
+
+        mock_init_db.assert_awaited_once()
+        mock_get_task.assert_awaited_once_with(task_id)
+        assert result["id"] == task_id
+        assert result["title"] == "Task Title"
+        assert result["status"] == "inprogress"
+        assert result["spec"] == "Task Spec"
+        assert result["design_doc"] == "Design Doc"
+        assert result["commit_hash"] == "abc1234"
+        assert result["created_at"] == "2024-01-01T00:00:00Z"
+        assert result["updated_at"] == "2024-01-01T01:00:00Z"
 
 
 @pytest.mark.asyncio
