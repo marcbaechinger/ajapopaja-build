@@ -31,6 +31,7 @@ import { PaginationControl } from '../components/PaginationControl.ts';
 import { LogViewerDialog } from '../components/LogViewerDialog.ts';
 import { DocBotDialog } from '../components/DocBotDialog.ts';
 import type { DocBotDialogProps } from '../components/DocBotDialog.ts';
+import { PipelineHeaderView } from '../components/PipelineHeaderView.ts';
 import EasyMDE from 'easymde';
 
 interface DocbotState {
@@ -235,25 +236,6 @@ export class PipelineDetailView extends View {
     }));
   }
 
-  private renderDocBotBanner() {
-    const container = this.container?.querySelector('#docbot-banner-container');
-    if (!container) return;
-    
-    if (this.docbotState.status === 'ready') {
-       container.innerHTML = `
-        <div class="inline-block bg-yellow-100 border border-yellow-300 text-yellow-800 rounded px-3 py-2 text-sm shadow-sm mt-4 flex items-center gap-2">
-          <svg class="w-4 h-4 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-          </svg>
-          <span class="font-medium">DocBot has prepared a documentation update.</span>
-          <button data-action-click="open_docbot_dialog" class="font-bold underline ml-2 hover:text-yellow-900 transition-colors cursor-pointer">Review Changes</button>
-        </div>
-       `;
-    } else {
-       container.innerHTML = '';
-    }
-  }
-  
   private async fetchDocBotPreview(taskId: string) {
      try {
         const response = await fetch(`/api/pipelines/${this.pipelineId}/docbot/preview/${taskId}`, {
@@ -271,7 +253,7 @@ export class PipelineDetailView extends View {
              commitMsg: data.commit_msg,
              filename: data.filename
            };
-           this.renderDocBotBanner();
+           this.updateHeader();
         }
      } catch (error) {
         console.error('Failed to fetch DocBot preview:', error);
@@ -300,7 +282,7 @@ export class PipelineDetailView extends View {
             commitMsg: '',
             filename: ''
           };
-          this.renderDocBotBanner();
+          this.updateHeader();
         }
      };
      
@@ -856,7 +838,7 @@ export class PipelineDetailView extends View {
 
     try {
       this.allLoadedTasks = await this.context.taskClient.listByPipeline(this.pipelineId, true);
-      this.updateHeaderStats();
+      this.updateHeader();
       const allTasks = this.allLoadedTasks;
 
       // Handle default task collapsing on first load
@@ -1002,166 +984,16 @@ export class PipelineDetailView extends View {
   }
 
   private updateHeader() {
-    if (!this.container || !this.pipeline) return;
-    const infoContainer = this.container.querySelector('#pipeline-info-container');
-    if (!infoContainer) return;
-
-    const statusColors: Record<string, string> = {
-      'active': 'bg-green-600/20 text-green-400 border-green-600/30',
-      'paused': 'bg-amber-600/20 text-amber-400 border-amber-600/30',
-      'completed': 'bg-blue-600/20 text-blue-400 border-blue-600/30'
-    };
-
-    const geminiStatusHtml = !this.geminiStatus.available ? "" : (this.geminiStatus.running
-      ? `
-        <div class="flex items-center gap-2 bg-app-bg px-2 py-1 rounded border border-green-500/30">
-          <span class="relative flex h-2 w-2">
-            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-            <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-          </span>
-          <span class="text-[10px] font-bold uppercase tracking-widest text-green-400">Gemini Running</span>
-          <button data-action-click="open_gemini_logs" class="text-[9px] font-black uppercase tracking-tighter text-app-accent-2 hover:underline cursor-pointer ml-1">View Logs</button>
-        </div>
-      `
-      : `
-        <div class="flex items-center gap-2 bg-app-bg px-2 py-1 rounded border border-app-border opacity-60 hover:opacity-100 transition-opacity">
-          <span class="h-2 w-2 rounded-full bg-app-muted"></span>
-          <span class="text-[10px] font-bold uppercase tracking-widest text-app-muted">Gemini Idle</span>
-          <button data-action-click="open_gemini_logs" class="text-[9px] font-black uppercase tracking-tighter text-app-muted hover:text-app-text cursor-pointer ml-1">Logs</button>
-        </div>
-      `);
-
-    const vibeStatusHtml = !this.vibeStatus.available ? "" : (this.vibeStatus.running
-      ? `
-        <div class="flex items-center gap-2 bg-app-bg px-2 py-1 rounded border border-blue-500/30">
-          <span class="relative flex h-2 w-2">
-            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-            <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-          </span>
-          <span class="text-[10px] font-bold uppercase tracking-widest text-blue-400">Vibe Running</span>
-          <button data-action-click="open_vibe_logs" class="text-[9px] font-black uppercase tracking-tighter text-app-accent-2 hover:underline cursor-pointer ml-1">View Logs</button>
-        </div>
-      `
-      : `
-        <div class="flex items-center gap-2 bg-app-bg px-2 py-1 rounded border border-app-border opacity-60 hover:opacity-100 transition-opacity">
-          <span class="h-2 w-2 rounded-full bg-app-muted"></span>
-          <span class="text-[10px] font-bold uppercase tracking-widest text-app-muted">Vibe Idle</span>
-          <button data-action-click="open_vibe_logs" class="text-[9px] font-black uppercase tracking-tighter text-app-muted hover:text-app-text cursor-pointer ml-1">Logs</button>
-        </div>
-      `);
-
-    infoContainer.innerHTML = `
-      <div id="pipeline-view-info" class="flex flex-col group relative">
-        <div class="flex items-center gap-3">
-          <h2 id="pipeline-title" class="text-3xl font-black text-app-accent-1 tracking-tight">${this.pipeline.name}</h2>
-          <span class="text-[10px] px-2 py-0.5 rounded border font-bold uppercase ${statusColors[this.pipeline.status] || 'bg-slate-600/20 text-slate-400 border-slate-600/30'}">
-            ${this.pipeline.status}
-          </span>
-          ${geminiStatusHtml}
-          ${vibeStatusHtml}
-          <button data-action-click="edit_pipeline" class="opacity-0 group-hover:opacity-100 p-1 hover:bg-app-bg text-app-muted hover:text-app-accent-1 rounded transition-all cursor-pointer" title="Edit Pipeline">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
-          </button>
-        </div>
-        <div class="flex flex-wrap items-center gap-3 mt-2">
-          <div class="flex items-center bg-app-bg rounded border border-app-border overflow-hidden">
-            <p class="text-app-muted text-[10px] uppercase font-bold tracking-widest px-2 py-1">ID: ${this.pipelineId}</p>
-            <button data-action-click="copy_pipeline_id" class="px-2 py-1 bg-app-surface border-l border-app-border text-app-muted hover:text-app-accent-2 transition-colors cursor-pointer group/copy" title="Copy ID">
-               <svg class="w-3 h-3 group-hover/copy:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
-            </button>
-          </div>
-          <p class="text-app-muted text-[10px] uppercase font-bold tracking-widest bg-app-bg px-2 py-1 rounded border border-app-border">Workspace: ${this.pipeline.workspace_path || 'Default'}</p>
-          <div id="header-stats" class="flex flex-wrap gap-2 text-[10px] uppercase font-bold tracking-wider"></div>
-        </div>
-      </div>
-      <div id="pipeline-edit-info" class="hidden flex flex-col gap-3 bg-app-bg/50 p-4 rounded-xl border border-app-accent-1/30">
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Pipeline Name</label>
-            <input type="text" name="pipeline_name" value="${this.pipeline.name}" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1">
-          </div>
-          <div>
-            <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Status</label>
-            <select name="pipeline_status" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1 cursor-pointer">
-              <option value="active" ${this.pipeline.status === 'active' ? 'selected' : ''}>Active</option>
-              <option value="paused" ${this.pipeline.status === 'paused' ? 'selected' : ''}>Paused</option>
-              <option value="completed" ${this.pipeline.status === 'completed' ? 'selected' : ''}>Completed</option>
-            </select>
-          </div>
-        </div>
-        <div>
-          <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Workspace Path (Optional)</label>
-          <input type="text" name="workspace_path" value="${this.pipeline.workspace_path || ''}" placeholder="Default Project Root" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1">
-        </div>
-        <div class="flex items-center gap-2 mt-1 px-1">
-          <input type="checkbox" name="manage_gemini" id="manage_gemini" ${this.pipeline.manage_gemini ? 'checked' : ''} class="w-4 h-4 rounded border-app-border bg-app-bg text-app-accent-1 focus:ring-app-accent-1 cursor-pointer">
-          <label for="manage_gemini" class="text-[10px] font-bold uppercase tracking-wider text-app-text cursor-pointer">Manage Gemini CLI process</label>
-        </div>
-        <div class="flex items-center gap-2 mt-1 px-1">
-          <input type="checkbox" name="manage_vibe" id="manage_vibe" ${this.pipeline.manage_vibe ? 'checked' : ''} class="w-4 h-4 rounded border-app-border bg-app-bg text-app-accent-1 focus:ring-app-accent-1 cursor-pointer">
-          <label for="manage_vibe" class="text-[10px] font-bold uppercase tracking-wider text-app-text cursor-pointer">Manage Vibe CLI process</label>
-        </div>
-        <div class="flex gap-2 justify-end mt-1">
-          <button data-action-click="cancel_edit_pipeline" class="px-3 py-1 rounded text-[10px] font-bold uppercase tracking-widest text-app-muted hover:bg-app-bg transition-all cursor-pointer">Cancel</button>
-          <button data-action-click="save_pipeline" class="px-4 py-1 rounded bg-app-accent-1 text-white text-[10px] font-bold uppercase tracking-widest hover:brightness-110 transition-all shadow-md cursor-pointer">Save Changes</button>
-        </div>
-      </div>
-    `;
-    this.updateHeaderStats();
-  }
-
-  private updateHeaderStats() {
     if (!this.container) return;
-    const statsContainer = this.container.querySelector('#header-stats');
-    if (!statsContainer) return;
-
-    const statusCounts: Record<string, number> = {
-      [TaskStatus.CREATED]: 0,
-      [TaskStatus.SCHEDULED]: 0,
-      [TaskStatus.PROPOSED]: 0,
-      [TaskStatus.INPROGRESS]: 0,
-      [TaskStatus.IMPLEMENTED]: 0,
-      [TaskStatus.FAILED]: 0,
-      [TaskStatus.DISCARDED]: 0,
-    };
-
-    let total = 0;
-    this.allLoadedTasks.forEach(t => {
-      if (!t.deleted && statusCounts[t.status] !== undefined) {
-        statusCounts[t.status]++;
-        total++;
-      }
-    });
-
-    if (total === 0) {
-      statsContainer.innerHTML = '';
-      return;
+    const headerContainer = this.container.querySelector('#pipeline-header-container');
+    if (headerContainer) {
+      headerContainer.innerHTML = this.renderHeader();
     }
-
-    const colors: Record<string, string> = {
-      [TaskStatus.CREATED]: 'bg-slate-500',
-      [TaskStatus.SCHEDULED]: 'bg-blue-500',
-      [TaskStatus.PROPOSED]: 'bg-purple-500',
-      [TaskStatus.INPROGRESS]: 'bg-amber-500',
-      [TaskStatus.IMPLEMENTED]: 'bg-green-500',
-      [TaskStatus.FAILED]: 'bg-red-500',
-      [TaskStatus.DISCARDED]: 'bg-slate-700',
-    };
-
-    statsContainer.innerHTML = Object.entries(statusCounts)
-      .filter(([_, count]) => count > 0)
-      .map(([status, count]) => `
-        <span class="flex items-center text-app-muted border border-app-border rounded px-1.5 py-0.5 bg-app-bg" title="${status}">
-          <span class="w-1.5 h-1.5 rounded-full ${colors[status]} mr-1.5"></span>
-          ${count}
-        </span>
-      `).join('');
   }
 
-  render() {
-    const user = this.context.authService.getUser();
-    return `
-      <div class="max-w-[1800px] mx-auto px-6 py-8 flex flex-col gap-8 min-h-screen">
+  private renderHeader(): string {
+    if (!this.pipeline) {
+      return `
         <header class="flex justify-between items-center bg-app-surface p-6 rounded-2xl shadow-lg border border-app-border shrink-0">
           <div class="flex gap-6 items-center">
             <button onclick="window.location.hash = '#'" class="p-3 hover:bg-app-bg rounded-xl transition-all text-app-muted hover:text-app-accent-1 border border-transparent hover:border-app-border group cursor-pointer" title="Back to Dashboard">
@@ -1169,50 +1001,30 @@ export class PipelineDetailView extends View {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
               </svg>
             </button>
-            <div id="pipeline-info-container" class="min-w-[400px]">
-              <div class="flex flex-col">
-                <h2 id="pipeline-title" class="text-3xl font-black text-app-accent-1 tracking-tight">Loading...</h2>
-                <div class="flex flex-wrap items-center gap-3 mt-2">
-                  <div class="flex items-center bg-app-bg rounded border border-app-border overflow-hidden">
-                    <p class="text-app-muted text-[10px] uppercase font-bold tracking-widest px-2 py-1">ID: ${this.pipelineId}</p>
-                    <button data-action-click="copy_pipeline_id" class="px-2 py-1 bg-app-surface border-l border-app-border text-app-muted hover:text-app-accent-2 transition-colors cursor-pointer group/copy" title="Copy ID">
-                       <svg class="w-3 h-3 group-hover/copy:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
-                    </button>
-                  </div>
-                  <div id="header-stats" class="flex flex-wrap gap-2 text-[10px] uppercase font-bold tracking-wider"></div>
-                </div>
-              </div>
+            <div class="min-w-[400px]">
+              <h2 class="text-3xl font-black text-app-accent-1 tracking-tight">Loading...</h2>
             </div>
-            <div id="docbot-banner-container"></div>
-          </div>
-          <div class="flex gap-2">
-             <button data-action-click="open_search" data-pipeline-id="${this.pipelineId}" class="flex items-center gap-2 bg-app-bg hover:bg-app-surface px-4 py-2 rounded-xl border border-app-border text-app-muted hover:text-app-accent-2 transition-all cursor-pointer group mr-1" title="Global Search (Ctrl+K)">
-               <svg class="w-4 h-4 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-               <span class="text-xs font-bold uppercase tracking-widest">Search</span>
-             </button>
-             <button data-action-click="toggle_assistant" class="flex items-center gap-2 bg-app-bg hover:bg-app-surface px-4 py-2 rounded-xl border border-app-border text-app-muted hover:text-app-accent-2 transition-all cursor-pointer group mr-11" title="AI Assistant (Ctrl+Shift+A)">
-               <svg class="w-4 h-4 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-               <span class="text-xs font-bold uppercase tracking-widest">Assistant</span>
-             </button>
-             <button data-action-click="open_stats" class="text-app-accent-2 hover:brightness-110 font-bold transition-all text-sm px-3 py-2 rounded-lg border border-app-border bg-app-bg shadow-sm cursor-pointer" title="Statistics - Keyboard Shortcut: s">
-               <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
-               Stats
-             </button>
-             <div class="flex items-center gap-3 bg-app-bg px-4 py-2 rounded-xl border border-app-border">
-               <div class="flex flex-col items-end">
-                 <span class="text-xs font-bold text-app-text">${user?.username || 'User'}</span>
-                 <span class="text-[9px] text-app-muted uppercase font-black tracking-widest">Logged In</span>
-               </div>
-               <div class="w-px h-6 bg-app-border mx-1"></div>
-               <button data-action-click="perform_logout" class="p-1.5 hover:bg-red-500/10 text-app-muted hover:text-red-400 rounded-lg transition-all cursor-pointer group/logout" title="Logout">
-                 <svg class="w-4 h-4 group-hover/logout:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
-               </button>
-             </div>
-             <button data-action-click="open_health_check" class="p-2 hover:bg-app-bg rounded-lg transition-colors cursor-pointer text-app-muted hover:text-green-500" title="System Health">
-               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-             </button>
           </div>
         </header>
+      `;
+    }
+    return PipelineHeaderView.render({
+      pipeline: this.pipeline,
+      pipelineId: this.pipelineId,
+      geminiStatus: this.geminiStatus,
+      vibeStatus: this.vibeStatus,
+      docbotState: this.docbotState,
+      user: this.context.authService.getUser(),
+      allTasks: this.allLoadedTasks
+    });
+  }
+
+  render() {
+    return `
+      <div class="max-w-[1800px] mx-auto px-6 py-8 flex flex-col gap-8 min-h-screen">
+        <div id="pipeline-header-container">
+          ${this.renderHeader()}
+        </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start flex-grow w-full">
           <!-- Column 1: Preparation & Review -->
@@ -1364,7 +1176,7 @@ export class PipelineDetailView extends View {
     } else {
       this.allLoadedTasks.push(task);
     }
-    this.updateHeaderStats();
+    this.updateHeader();
 
     if (el) {
       const currentColumnId = el.parentElement?.id;
