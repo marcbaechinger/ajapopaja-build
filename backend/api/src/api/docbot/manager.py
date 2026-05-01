@@ -19,6 +19,7 @@ import git
 from core.models.models import Task
 from core.queries import pipeline as pipeline_queries
 
+from . import tools  # noqa: F401
 from .session import DocBotSession
 
 logger = logging.getLogger(__name__)
