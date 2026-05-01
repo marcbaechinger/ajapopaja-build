@@ -42,6 +42,7 @@ from api.routes.pipeline import router as pipeline_router
 from api.routes.system import router as system_router
 from api.routes.task import pipeline_task_router, task_router
 from api.websocket_manager import manager
+from core import config
 from core.db import init_db
 from core.exceptions import (
     AjapopajaError,
@@ -101,6 +102,11 @@ mcp_app = mcp.http_app(path="/")
 async def mcp_auth_middleware(scope, receive, send):
     """ASGI middleware to authenticate MCP requests."""
     if scope["type"] != "http":
+        await mcp_app(scope, receive, send)
+        return
+
+    # Check if authentication is enabled
+    if not config.MCP_AUTHENTICATION_ENABLED:
         await mcp_app(scope, receive, send)
         return
 

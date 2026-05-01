@@ -1,75 +1,90 @@
 # MCP Security Design Document
 
 ## 1. Purpose
-The MCP (Model Context Protocol) server exposes endpoints under `/mcp` that previously accepted requests without authentication. This document records the architectural decisions that secure these endpoints using the existing JWT infrastructure.
+The MCP (Model Context Protocol) server exposes endpoints under `/mcp`. Historically these endpoints required JWT authentication for all non‑`OPTIONS` requests. To improve developer ergonomics and local testing, authentication has become opt‑in: by default the server accepts requests without a token, and the feature can be enabled via configuration.
 
 ## 2. Security Requirements
-- **Authentication**: All non‑`OPTIONS` requests to `/mcp` must be authenticated with a JWT that is valid for the Management API.
-- **Token Flexibility**: Clients may provide the token either in the `Authorization: Bearer <token>` header or as a `token` query parameter. This dual‑mechanism accommodates SSE clients that cannot set custom headers.
-- **Error Handling**: Unauthorized requests return `401 Unauthorized` with a JSON payload explaining the error.
+- **Optional Authentication**: Clients may send a JWT in the `Authorization: Bearer <token>` header or a `token` query parameter. If the configuration property `MCP_AUTHENTICATION_ENABLED` is `False`, the server accepts the request regardless of the presence of a token.
+- **Configuration Flag**: `MCP_AUTHENTICATION_ENABLED` defaults to `False`. Setting it to `True` restores the original mandatory authentication behaviour.
+- **Token Flexibility**: When authentication is enabled, the same dual‑mechanism (header or query) as before is supported to accommodate SSE clients.
+- **Error Handling**: Unauthorized requests return `401 Unauthorized` with a JSON payload explaining the error, but only when authentication is enabled.
 - **CORS**: `OPTIONS` pre‑flight requests are exempt from authentication to preserve normal CORS behaviour.
-- **Log Redaction**: The `TokenRedactionFilter` configured in `main.py` must also redact the `token` query parameter for all `/mcp` logs.
+- **Log Redaction**: The `TokenRedactionFilter` configured in `main.py` continues to redact the `token` query parameter for all `/mcp` logs.
 
-## 3. Implementation Overview
-### 3.1. ASGI Middleware
-Because the MCP server is mounted as a raw ASGI application within FastAPI, standard FastAPI dependencies cannot be applied directly. An ASGI middleware is used to intercept requests and perform token validation.
+## 3. Configuration
+```python
+# backend/core/src/core/config.py
+MCP_AUTHENTICATION_ENABLED = (
+    os.getenv("MCP_AUTHENTICATION_ENABLED", "false").lower() == "true"
+)
+```
+When set to `True`, the middleware will enforce token validation.
+
+## 4. Implementation Overview
+### 4.1. ASGI Middleware
+The MCP FastAPI application is mounted as a raw ASGI app within the main FastAPI instance. An ASGI middleware intercepts requests to `/mcp` and applies the following logic:
 
 ```python
 async def mcp_auth_middleware(scope, receive, send):
+    # Bypass for non‑HTTP or non‑/mcp paths
     if scope["type"] != "http" or not scope["path"].startswith("/mcp"):
-        await app(scope, receive, send)
+        await mcp_app(scope, receive, send)
         return
+
+    # Allow CORS pre‑flight
     if scope["method"] == "OPTIONS":
-        await app(scope, receive, send)
+        await mcp_app(scope, receive, send)
         return
+
+    # If authentication is disabled, skip validation
+    if not config.MCP_AUTHENTICATION_ENABLED:
+        await mcp_app(scope, receive, send)
+        return
+
+    # Extract token from header or query
     token = extract_token(scope)
     if not token:
         await send_unauthorized(send)
         return
+
     try:
         user = get_current_user_from_token(token)
     except Exception:
         await send_unauthorized(send)
         return
-    await app(scope, receive, send)
+
+    # Token valid; forward to the MCP app
+    await mcp_app(scope, receive, send)
 ```
 
-#### 3.1.1. Path & Method Filtering
-- Only requests where `scope["path"].startswith("/mcp")` are examined.
-- `OPTIONS` requests bypass authentication to support CORS pre‑flight.
+#### 4.1.1. Path & Method Filtering
+Only requests where `scope["path"].startswith("/mcp")` are inspected. `OPTIONS` requests bypass authentication.
 
-#### 3.1.2. Token Extraction
-1. Look for `Authorization: Bearer <token>` in headers.
-2. If absent, look for a `token` query parameter.
+#### 4.1.2. Token Extraction
+The helper `extract_token(scope)` looks first for an `Authorization: Bearer <token>` header, then for a `token` query parameter.
 
-#### 3.1.3. Validation
-`get_current_user_from_token(token)` from `backend/api/src/api/auth.py` is reused. The same token validation logic applies as for the Management API.
+#### 4.1.3. Validation
+`get_current_user_from_token(token)` from `backend/api/src/api/auth.py` is reused. A failed validation results in a `401 Unauthorized` response.
 
-#### 3.1.4. Response
-- On success: call the wrapped ASGI app (`mcp_app`).
-- On failure: return a `401` response with JSON `{"detail": "Unauthorized"}`.
-
-### 3.2. Mounting the MCP App
-The MCP FastAPI application is instantiated with `path="/"` so that its internal routes resolve to `/mcp/<subpath>` without duplicating the `/mcp` prefix.
-
+### 4.2. Mounting the MCP App
 ```python
 mcp_app = mcp.http_app(path="/")
 app.mount("/mcp", mcp_app, name="mcp")
 ```
+This mounts the MCP FastAPI instance so that its internal routes resolve to `/mcp/<subpath>` without duplicating the `/mcp` prefix.
 
-### 3.3. Log Redaction
-The existing `TokenRedactionFilter` is configured globally. The middleware must not interfere; the filter continues to redact the `token` query parameter from all access logs.
+### 4.3. Log Redaction
+The existing `TokenRedactionFilter` remains in place, ensuring that the `token` query parameter is masked in all access logs.
 
-## 4. Testing Strategy
-- **Integration tests** in `tests/test_mcp_server.py` cover:
-  - No token → 401
-  - Invalid token → 401
-  - Valid token (header or query) → 200/400 (depending on request payload)
-  - OPTIONS requests → 200
-- Manual testing with an SSE client (Gemini CLI / Claude Desktop) using a valid JWT.
+## 5. Testing Strategy
+Integration tests in `tests/test_mcp_server.py` cover both authentication states:
+- **Disabled (default)**: Requests without a token are accepted (status code ≠ 401). The test may hit a `RuntimeError` from the test‑environment lifespan.
+- **Enabled**: Using `monkeypatch`, set `MCP_AUTHENTICATION_ENABLED` to `True`. Requests without a token now return `401 Unauthorized`.
 
-## 5. Client Configuration
-Clients that cannot send headers (e.g., SSE clients) must include the JWT as a query parameter:
+Manual verification steps are identical to the original design, with the addition that the server now runs with authentication turned off unless the environment variable is set.
+
+## 6. Client Configuration
+Clients that cannot set custom headers (e.g., SSE clients) include the JWT as a query parameter:
 
 ```json
 { "mcpServers": { "ajapopaja": { "command": "npx", "args": ["-y", "@modelcontextprotocol/client-sse", "--url", "http://localhost:8000/mcp/sse?token=YOUR_JWT_TOKEN"] } } }
@@ -77,12 +92,12 @@ Clients that cannot send headers (e.g., SSE clients) must include the JWT as a q
 
 Header‑based configuration is also supported when available.
 
-## 6. Token Strategy
-- The same JWTs used by the Management API are valid for MCP.
-- For long‑lived CLI usage, tokens can be generated with extended expiration (e.g., 365 days). No refresh flow is required.
+## 7. Token Strategy
+- The same JWTs used by the Management API are valid for MCP when authentication is enabled.
+- Tokens can be generated with extended expiration for long‑lived CLI usage.
 - Revocation can be implemented via a token revocation list if needed.
 
 ---
 
-### 7. Summary
-The MCP security design leverages existing JWT authentication, adds a lightweight ASGI middleware to protect `/mcp` routes, and accommodates both header‑based and query‑parameter‑based token delivery. This preserves the current architecture while enhancing security for MCP clients.
+### 8. Summary
+MCP security now defaults to unauthenticated access, making local development and testing easier. When required, authentication can be enabled with a single configuration flag, preserving the robust JWT validation and flexible token delivery mechanisms that existed before.

@@ -23,12 +23,29 @@ from ajapopaja_mcp.tools import (
     update_task_design_doc,
 )
 from api.auth import create_access_token
+from core import config
 from core.models.models import Pipeline, Task, TaskStatus, User
 
 
 @pytest.mark.asyncio
-async def test_mcp_security(async_client, init_mock_db):
-    """Verifies that MCP endpoints are secured."""
+async def test_mcp_security_disabled(async_client, init_mock_db, monkeypatch):
+    """Verifies that MCP endpoints are open when authentication is disabled (default)."""
+    monkeypatch.setattr(config, "MCP_AUTHENTICATION_ENABLED", False)
+
+    # Should NOT be 401 even without token
+    try:
+        response = await async_client.post("/mcp/")
+        assert response.status_code != 401
+    except RuntimeError as e:
+        # Confirms it passed middleware and hit test-env lifespan limit
+        assert "Task group is not initialized" in str(e) or "lifespan" in str(e)
+
+
+@pytest.mark.asyncio
+async def test_mcp_security_enabled(async_client, init_mock_db, monkeypatch):
+    """Verifies that MCP endpoints are secured when authentication is enabled."""
+    monkeypatch.setattr(config, "MCP_AUTHENTICATION_ENABLED", True)
+
     # 1. Test without token - Should be 401
     response = await async_client.post("/mcp/")
     assert response.status_code == 401
@@ -42,8 +59,6 @@ async def test_mcp_security(async_client, init_mock_db):
     token = create_access_token(data={"sub": user.username})
 
     # 2. Test with valid token in header - Should pass auth
-    # Confirmation of passing auth is hitting the RuntimeError (Task group not initialized)
-    # or getting a 200/400 from the inner app.
     try:
         response = await async_client.post(
             "/mcp/", headers={"Authorization": f"Bearer {token}"}
@@ -59,7 +74,7 @@ async def test_mcp_security(async_client, init_mock_db):
     except RuntimeError as e:
         assert "Task group is not initialized" in str(e) or "lifespan" in str(e)
 
-    # 4. Test with invalid token - Should be 401 (blocked by middleware)
+    # 4. Test with invalid token - Should be 401
     response = await async_client.post(
         "/mcp/", headers={"Authorization": "Bearer invalid"}
     )

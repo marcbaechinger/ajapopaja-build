@@ -45,3 +45,8 @@ OLLAMA_HOST = os.getenv(
 OLLAMA_MODEL = os.getenv(
     "OLLAMA_MODEL", "gpt-oss:120b" if OLLAMA_API_KEY else "gpt-oss:20b"
 )
+
+# MCP Security Configuration
+MCP_AUTHENTICATION_ENABLED = (
+    os.getenv("MCP_AUTHENTICATION_ENABLED", "false").lower() == "true"
+)
