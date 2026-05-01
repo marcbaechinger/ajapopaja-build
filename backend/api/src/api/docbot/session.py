@@ -55,6 +55,8 @@ conceptual design.
   a play-by-play of the code changes.
 - **Autonomy:** Do not seek confirmation, ask for permission, or wait for user feedback.
   Execute the necessary tool calls immediately.
+- **No Narration:** When you decide to call a tool, do NOT provide any preamble, 
+  explanation, or narration in the text response. Output ONLY the tool call.
 """
 
 

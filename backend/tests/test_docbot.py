@@ -20,6 +20,11 @@ from api.docbot.registry import docbot_registry
 from api.docbot.session import DocBotSession
 
 
+async def make_async_iter(items):
+    for item in items:
+        yield item
+
+
 @pytest.mark.asyncio
 async def test_docbot_session_run_terminal_call():
     session = DocBotSession(pipeline_id="test_pipeline", task_id="test_task")
@@ -39,21 +44,21 @@ async def test_docbot_session_run_terminal_call():
         patch.object(docbot_registry, "list_tools", return_value=[mock_tool]),
     ):
         # Mock Ollama response with a tool call
-        mock_response = MagicMock()
         mock_msg = MagicMock()
-
         mock_tool_call = MagicMock()
         mock_tool_call.function.name = "no_doc_update_needed"
         mock_tool_call.function.arguments = {"reason": "nothing to do"}
-
         mock_msg.tool_calls = [mock_tool_call]
         mock_msg.content = ""
-        mock_response.message = mock_msg
+
+        mock_chunk = MagicMock()
+        mock_chunk.message = mock_msg
 
         with patch(
             "api.assistant.base_session.ollama.AsyncClient.chat", new_callable=AsyncMock
         ) as mock_chat:
-            mock_chat.return_value = mock_response
+            # chat returns an async generator when stream=True
+            mock_chat.return_value = make_async_iter([mock_chunk])
 
             await session.run("Initial prompt")
 
@@ -71,16 +76,17 @@ async def test_docbot_session_max_iterations():
     session = DocBotSession(pipeline_id="test_pipeline", task_id="test_task")
 
     # Mock Ollama response with no tool call
-    mock_response = MagicMock()
     mock_msg = MagicMock()
     mock_msg.tool_calls = []
     mock_msg.content = "Just talking..."
-    mock_response.message = mock_msg
+
+    mock_chunk = MagicMock()
+    mock_chunk.message = mock_msg
 
     with patch(
         "api.assistant.base_session.ollama.AsyncClient.chat", new_callable=AsyncMock
     ) as mock_chat:
-        mock_chat.return_value = mock_response
+        mock_chat.return_value = make_async_iter([mock_chunk])
 
         await session.run("Initial prompt", max_iterations=2)
 
@@ -124,7 +130,6 @@ async def test_docbot_session_multiple_tool_calls():
         ),
         patch.object(docbot_registry, "list_tools", return_value=[t1, t2]),
     ):
-        mock_response = MagicMock()
         mock_msg = MagicMock()
 
         tc1 = MagicMock()
@@ -137,12 +142,14 @@ async def test_docbot_session_multiple_tool_calls():
 
         mock_msg.tool_calls = [tc1, tc2]
         mock_msg.content = ""
-        mock_response.message = mock_msg
+
+        mock_chunk = MagicMock()
+        mock_chunk.message = mock_msg
 
         with patch(
             "api.assistant.base_session.ollama.AsyncClient.chat", new_callable=AsyncMock
         ) as mock_chat:
-            mock_chat.return_value = mock_response
+            mock_chat.return_value = make_async_iter([mock_chunk])
 
             await session.run("Initial prompt")
 
@@ -176,29 +183,32 @@ async def test_docbot_session_terminal_retry_on_error():
         patch.object(docbot_registry, "list_tools", return_value=[t]),
     ):
         # 1st response: fail
-        mock_resp1 = MagicMock()
         mock_msg1 = MagicMock()
         tc1 = MagicMock()
         tc1.function.name = "no_doc_update_needed"
         tc1.function.arguments = {"reason": "try 1"}
         mock_msg1.tool_calls = [tc1]
         mock_msg1.content = ""
-        mock_resp1.message = mock_msg1
+        mock_chunk1 = MagicMock()
+        mock_chunk1.message = mock_msg1
 
         # 2nd response: success (we'll swap the mock function)
-        mock_resp2 = MagicMock()
         mock_msg2 = MagicMock()
         tc2 = MagicMock()
         tc2.function.name = "no_doc_update_needed"
         tc2.function.arguments = {"reason": "try 2"}
         mock_msg2.tool_calls = [tc2]
         mock_msg2.content = ""
-        mock_resp2.message = mock_msg2
+        mock_chunk2 = MagicMock()
+        mock_chunk2.message = mock_msg2
 
         with patch(
             "api.assistant.base_session.ollama.AsyncClient.chat", new_callable=AsyncMock
         ) as mock_chat:
-            mock_chat.side_effect = [mock_resp1, mock_resp2]
+            mock_chat.side_effect = [
+                make_async_iter([mock_chunk1]),
+                make_async_iter([mock_chunk2]),
+            ]
 
             # First call uses failing func
             await session.run("Initial prompt", max_iterations=2)
