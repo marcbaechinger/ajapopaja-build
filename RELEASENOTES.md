@@ -13,7 +13,7 @@ Below is the list of all commits that make up this release.
 
 ### Commits
 
-Last commit: 640cc7b
+Last commit: 3976395
 
 #### bugfix
 
