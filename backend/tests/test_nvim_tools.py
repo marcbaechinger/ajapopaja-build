@@ -12,11 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import stat
 from unittest.mock import MagicMock, patch
 
 import msgpack
 import pytest
 
+from api.assistant.tools import nvim_tools
 from api.assistant.tools.nvim_tools import (
     nvim_open_file,
     nvim_open_selection,
@@ -26,14 +28,23 @@ from api.assistant.tools.nvim_tools import (
 from core.models.models import Pipeline
 
 
+@pytest.fixture(autouse=True)
+def reset_nvim_cache():
+    """Reset the module-level cache before and after each test."""
+    nvim_tools._nvim_available = None
+    yield
+    nvim_tools._nvim_available = None
+
+
 @pytest.mark.asyncio
 async def test_nvim_open_file_success(init_mock_db):
     pipeline = Pipeline(name="Test Pipeline", workspace_path="/tmp/test_ws")
     await pipeline.insert()
     pipeline_id = str(pipeline.id)
 
-    # Mock os.path.exists for the socket
-    with patch("os.path.exists", return_value=True):
+    # Mock os.path.exists and os.stat for the socket
+    with patch("os.path.exists", return_value=True), patch("os.stat") as mock_stat:
+        mock_stat.return_value.st_mode = stat.S_IFSOCK
         # Mock socket.socket
         mock_socket_instance = MagicMock()
         mock_socket_instance.__enter__.return_value = mock_socket_instance
@@ -79,7 +90,8 @@ async def test_nvim_set_quickfix_success(init_mock_db):
         {"filename": "src/utils.py", "lnum": 5, "text": "error 2"},
     ]
 
-    with patch("os.path.exists", return_value=True):
+    with patch("os.path.exists", return_value=True), patch("os.stat") as mock_stat:
+        mock_stat.return_value.st_mode = stat.S_IFSOCK
         mock_socket_instance = MagicMock()
         mock_socket_instance.__enter__.return_value = mock_socket_instance
         mock_socket_instance.recv.return_value = msgpack.packb([1, 1, None, None])
@@ -115,7 +127,8 @@ async def test_nvim_show_diff_success(init_mock_db):
             stdout="old content\nmore content", returncode=0
         )
 
-        with patch("os.path.exists", return_value=True):
+        with patch("os.path.exists", return_value=True), patch("os.stat") as mock_stat:
+            mock_stat.return_value.st_mode = stat.S_IFSOCK
             mock_socket_instance = MagicMock()
             mock_socket_instance.__enter__.return_value = mock_socket_instance
             mock_socket_instance.recv.return_value = msgpack.packb([1, 1, None, None])
@@ -147,7 +160,8 @@ async def test_nvim_open_selection_success(init_mock_db):
     await pipeline.insert()
     pipeline_id = str(pipeline.id)
 
-    with patch("os.path.exists", return_value=True):
+    with patch("os.path.exists", return_value=True), patch("os.stat") as mock_stat:
+        mock_stat.return_value.st_mode = stat.S_IFSOCK
         mock_socket_instance = MagicMock()
         mock_socket_instance.__enter__.return_value = mock_socket_instance
         mock_socket_instance.recv.return_value = msgpack.packb([1, 1, None, None])

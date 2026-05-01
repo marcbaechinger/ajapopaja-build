@@ -20,7 +20,7 @@ The system is composed of five primary interconnected components:
         *   Provide a RESTful HTTP API to manage Pipelines and Tasks (CRUD operations).
         *   Enforce business logic regarding state transitions (e.g., a task cannot move from `created` directly to `implemented` without being `scheduled` and `inprogress`).
         *   Serve as the backend for the human-facing management UI.
-        *   Expose WebSockets for real-time UI updates when the MCP server or human managers change task states.
+        *   Expose WebSockets for real‑time UI updates when the MCP server or human managers change task states.
 
 3.  **MCP Server (Model Context Protocol)**
     *   **Role**: The direct interface for external Coding AI Agents (Gemini/Claude).
@@ -31,14 +31,14 @@ The system is composed of five primary interconnected components:
         *   Provide necessary context (requirements, attached design docs, or related code snippets) attached to the task directly to the LLM.
 
 4.  **SPA Frontend (Management UI)**
-    *   **Role**: The human-facing web interface.
+    *   **Role**: The human‑facing web interface.
     *   **Responsibilities**:
-        *   Provide a high-usability interface to create and manage pipelines.
+        *   Provide a high‑usability interface to create and manage pipelines.
         *   Allow users to define tasks, reorder them, and assign them to specific pipelines.
         *   Monitor the live progress of the AI agent as it burns down the pipeline tasks.
 
 5.  **Integrated AI Assistant & Local Executors**
-    *   **Role**: Built-in intelligence and autonomous execution processes within the backend.
+    *   **Role**: Built‑in intelligence and autonomous execution processes within the backend.
     *   **Responsibilities**:
         *   Provide an interactive conversational AI Assistant (backed by `ollama.AsyncClient`) accessible via the SPA Frontend to answer queries and execute internal tools.
         *   Manage autonomous background workers (e.g., `gemini` or `vibe` CLI executors) directly from the API, enabling pipelines to run without requiring external terminal invocations.
@@ -55,25 +55,22 @@ The system is composed of five primary interconnected components:
     *   The agent performs the required coding work.
     *   Upon completion, the agent calls an MCP tool (e.g., `mark_task_implemented(task_id)`).
     *   The MCP Server updates the task state in **MongoDB** to `implemented` (or `failed` if an error occurred).
-5.  **Monitoring**: The user observes these state changes in real-time via the **SPA Frontend**, which receives events from the **FastAPI Server** over a WebSocket connection.
+5.  **Monitoring**: The user observes these state changes in real‑time via the **SPA Frontend**, which receives events from the **FastAPI Server** over a WebSocket connection.
 
 ## 4. Shared Core Logic
-To maintain consistency and avoid code duplication, the **FastAPI Server** and the **MCP Server** will share a common Python core library. This core library will encapsulate:
+To maintain consistency and avoid code duplication, the **FastAPI Server** and the **MCP Server** share a common Python core library. This core library will encapsulate:
 *   Database connection logic.
 *   Data models (schemas) representing Pipelines and Tasks.
 *   The business logic governing state transitions (Lifecycle Management).
 
-## 5. Technology Constraints & Decisions
-*   **Database**: MongoDB (via Beanie ODM)
-*   **Backend Languages**: Python (FastAPI, MCP SDK, websockets)
-*   **Frontend Technologies**: TypeScript (Vanilla), Tailwind CSS v4.
-*   *Note: Further specific library and tooling choices are detailed in the `dd_project_setup.md` document.*
+## 5. Tool Registry Availability
+The backend incorporates a dynamic **Tool Registry** that conditionally exposes tools to the model based on runtime environment capabilities. Each registered tool can specify an `is_available` callable. During the health check, the registry evaluates these predicates, ensuring that only tools whose prerequisites are satisfied (e.g., Neovim socket listening, Ollama service reachable) appear in the tool list. The Neovim socket path is configurable via the NVIM_SOCKET environment variable (defaulting to `/tmp/nvimsocket`). The socket availability check uses this configurable path. This design prevents the model from attempting to invoke unavailable tools, reducing token waste and improving user experience. See `dd_nvim_socket_config.md` for implementation details.
 
-## 6. Security & Authentication
+## 5. Security & Authentication
 The system implements a centralized security model to protect management operations and data integrity.
 
 *   **JWT-Based Authentication**: All communication between the **SPA Frontend** and **FastAPI Server** is secured using JSON Web Tokens (JWT).
-*   **User Management**: Password-based login using **bcrypt** for hashing and storage in MongoDB.
+*   **User Management**: Password‑based login using **bcrypt** for hashing and storage in MongoDB.
 *   **WebSocket Security**: The `/ws` endpoint requires a valid JWT passed as a `token` query parameter during the initial handshake.
 *   **Environment Configuration**: Secrets like `AUTH_SECRET_KEY` are managed via environment variables.
 
