@@ -33,6 +33,8 @@ This document defines the architecture and design principles for the Ajapopaja B
 - **Base Client**: `frontend/src/core/clients/BaseClient.ts`
 - **Pipeline Client**: `frontend/src/core/clients/PipelineClient.ts`
 - **Task Client**: `frontend/src/core/clients/TaskClient.ts`
+- **DocBot Client**: `frontend/src/core/clients/DocBotClient.ts`
+  - Handles DocBot review actions such as commit, revert, and cancel review.
 
 ### Optimistic Concurrency Control (OCC)
 - **Versioning**: Every entity (Pipeline, Task) includes a `version` (integer) field.
