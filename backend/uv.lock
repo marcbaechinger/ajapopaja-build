@@ -24,7 +24,7 @@ wheels = [
 
 [[package]]
 name = "ajapopaja-backend"
-version = "0.1.0"
+version = "0.2.0"
 source = { virtual = "." }
 dependencies = [
     { name = "ajapopaja-mcp" },
@@ -59,7 +59,7 @@ dev = [
 
 [[package]]
 name = "ajapopaja-mcp"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "mcp" }
 dependencies = [
     { name = "core" },
@@ -109,7 +109,7 @@ wheels = [
 
 [[package]]
 name = "api"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "api" }
 dependencies = [
     { name = "core" },
@@ -399,7 +399,7 @@ wheels = [
 
 [[package]]
 name = "core"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "core" }
 dependencies = [
     { name = "beanie" },
