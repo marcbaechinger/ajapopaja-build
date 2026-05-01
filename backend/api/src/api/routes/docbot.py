@@ -15,14 +15,19 @@
 import logging
 
 import git
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from api.auth import get_current_user
 from core.queries import pipeline as pipeline_queries
 
 from ..docbot.cache import clear_preview, get_preview
 
-router = APIRouter(prefix="/pipelines/{pipeline_id}/docbot", tags=["docbot"])
+router = APIRouter(
+    prefix="/pipelines/{pipeline_id}/docbot",
+    tags=["docbot"],
+    dependencies=[Depends(get_current_user)],
+)
 logger = logging.getLogger(__name__)
 
 
