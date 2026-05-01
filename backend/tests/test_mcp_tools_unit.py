@@ -17,7 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from ajapopaja_mcp.server import (
+from ajapopaja_mcp.tools import (
     complete_task,
     get_next_task,
     get_task_details,
@@ -40,9 +40,9 @@ async def test_search_tasks_unit():
     mock_task.version = 1
 
     with (
-        patch("ajapopaja_mcp.server.init_db", new_callable=AsyncMock) as mock_init_db,
+        patch("ajapopaja_mcp.tools.init_db", new_callable=AsyncMock) as mock_init_db,
         patch(
-            "ajapopaja_mcp.server.task_queries.search_tasks", new_callable=AsyncMock
+            "ajapopaja_mcp.tools.task_queries.search_tasks", new_callable=AsyncMock
         ) as mock_search,
     ):
         mock_search.return_value = ([mock_task], 1)
@@ -75,9 +75,9 @@ async def test_search_tasks_invalid_status():
 @pytest.mark.asyncio
 async def test_search_tasks_excludes_deleted_unit():
     with (
-        patch("ajapopaja_mcp.server.init_db", new_callable=AsyncMock) as mock_init_db,
+        patch("ajapopaja_mcp.tools.init_db", new_callable=AsyncMock) as mock_init_db,
         patch(
-            "ajapopaja_mcp.server.task_queries.search_tasks", new_callable=AsyncMock
+            "ajapopaja_mcp.tools.task_queries.search_tasks", new_callable=AsyncMock
         ) as mock_search,
     ):
         mock_search.return_value = ([], 0)
@@ -120,9 +120,9 @@ async def test_get_task_details_unit():
     mock_task.updated_at.isoformat.return_value = "2024-01-01T01:00:00Z"
 
     with (
-        patch("ajapopaja_mcp.server.init_db", new_callable=AsyncMock) as mock_init_db,
+        patch("ajapopaja_mcp.tools.init_db", new_callable=AsyncMock) as mock_init_db,
         patch(
-            "ajapopaja_mcp.server.task_queries.get_task_by_id", new_callable=AsyncMock
+            "ajapopaja_mcp.tools.task_queries.get_task_by_id", new_callable=AsyncMock
         ) as mock_get_task,
     ):
         mock_get_task.return_value = mock_task
@@ -155,12 +155,12 @@ async def test_get_next_task_unit():
     mock_task.version = 1
 
     with (
-        patch("ajapopaja_mcp.server.init_db", new_callable=AsyncMock) as mock_init_db,
+        patch("ajapopaja_mcp.tools.init_db", new_callable=AsyncMock) as mock_init_db,
         patch(
-            "ajapopaja_mcp.server.task_queries.get_next_task", new_callable=AsyncMock
+            "ajapopaja_mcp.tools.task_queries.get_next_task", new_callable=AsyncMock
         ) as mock_get_next,
         patch(
-            "ajapopaja_mcp.server.manager.notify_task_update", new_callable=AsyncMock
+            "ajapopaja_mcp.tools.manager.notify_task_update", new_callable=AsyncMock
         ) as mock_notify,
     ):
         mock_get_next.return_value = mock_task
@@ -181,9 +181,9 @@ async def test_get_next_task_empty_unit():
     pipeline_id = VALID_PIPELINE_ID
 
     with (
-        patch("ajapopaja_mcp.server.init_db", new_callable=AsyncMock) as mock_init_db,
+        patch("ajapopaja_mcp.tools.init_db", new_callable=AsyncMock) as mock_init_db,
         patch(
-            "ajapopaja_mcp.server.task_queries.get_next_task", new_callable=AsyncMock
+            "ajapopaja_mcp.tools.task_queries.get_next_task", new_callable=AsyncMock
         ) as mock_get_next,
     ):
         mock_get_next.return_value = None
@@ -202,13 +202,13 @@ async def test_update_task_design_doc_unit():
     version = 1
 
     with (
-        patch("ajapopaja_mcp.server.init_db", new_callable=AsyncMock) as mock_init_db,
+        patch("ajapopaja_mcp.tools.init_db", new_callable=AsyncMock) as mock_init_db,
         patch(
-            "ajapopaja_mcp.server.task_queries.update_task_details",
+            "ajapopaja_mcp.tools.task_queries.update_task_details",
             new_callable=AsyncMock,
         ) as mock_update,
         patch(
-            "ajapopaja_mcp.server.manager.notify_task_update", new_callable=AsyncMock
+            "ajapopaja_mcp.tools.manager.notify_task_update", new_callable=AsyncMock
         ) as mock_notify,
     ):
         result = await update_task_design_doc(task_id, design_doc, version)
@@ -233,15 +233,15 @@ async def test_complete_task_unit():
     mock_task.verification = {"success": True}
 
     with (
-        patch("ajapopaja_mcp.server.init_db", new_callable=AsyncMock) as mock_init_db,
+        patch("ajapopaja_mcp.tools.init_db", new_callable=AsyncMock) as mock_init_db,
         patch(
-            "ajapopaja_mcp.server.task_queries.complete_task", new_callable=AsyncMock
+            "ajapopaja_mcp.tools.task_queries.complete_task", new_callable=AsyncMock
         ) as mock_complete,
         patch(
-            "ajapopaja_mcp.server.manager.notify_task_update", new_callable=AsyncMock
+            "ajapopaja_mcp.tools.manager.notify_task_update", new_callable=AsyncMock
         ) as mock_notify,
         patch(
-            "ajapopaja_mcp.server.DocBotManager.process_completed_task",
+            "ajapopaja_mcp.tools.DocBotManager.process_completed_task",
             new_callable=AsyncMock,
         ) as mock_docbot,
     ):
@@ -278,9 +278,9 @@ async def test_get_task_status_unit():
     mock_task.verification = None
 
     with (
-        patch("ajapopaja_mcp.server.init_db", new_callable=AsyncMock) as mock_init_db,
+        patch("ajapopaja_mcp.tools.init_db", new_callable=AsyncMock) as mock_init_db,
         patch(
-            "ajapopaja_mcp.server.task_queries.get_task_by_id", new_callable=AsyncMock
+            "ajapopaja_mcp.tools.task_queries.get_task_by_id", new_callable=AsyncMock
         ) as mock_get_task,
     ):
         mock_get_task.return_value = mock_task

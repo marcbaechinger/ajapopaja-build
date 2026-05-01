@@ -14,7 +14,7 @@
 
 import pytest
 
-from ajapopaja_mcp.server import (
+from ajapopaja_mcp.tools import (
     complete_task,
     get_next_task,
     get_task_details,
