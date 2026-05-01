@@ -8,12 +8,12 @@
 
 ```text
  ┌───────────────────────────────┐
- │      BaseBotSession          │  (abstract base class)
+ │      BaseBotSession           │  (abstract base class)
  ├───────────────────────────────┤
- │ - pipeline_id      │  (identifier for the surrounding task pipeline)
- │ - task_id          │  (identifier for the specific task the bot is addressing)
- │ - client           │  (ollama.AsyncClient instance)
- │ - history          │  (list of chat messages)
+ │ - pipeline_id                 │  (identifier for the surrounding task pipeline)
+ │ - task_id                     │  (identifier for the specific task the bot is addressing)
+ │ - client                      │  (ollama.AsyncClient instance)
+ │ - history                     │  (list of chat messages)
  ├───────────────────────────────┤
  │ + run(initial_prompt, max_iterations=50)
  │ + _prepare_ollama_tools()
@@ -26,23 +26,40 @@
 
 ### 2.1 Responsibilities
 
-| Responsibility | Implementation |
-|----------------|----------------|
-| **State Management** | Maintains `pipeline_id`, `task_id`, and conversation history. |
-| **Ollama Integration** | Configures `AsyncClient` with host and API key; performs `chat()` calls. |
-| **Tool Mapping** | Transforms `ToolDefinition` objects into the JSON schema expected by Ollama. Injects `pipeline_id` and `task_id` parameters automatically. |
-| **Autonomous Loop** | `run()` iteratively:
-|  * Sends user prompt and conversation history.
-|  * Receives assistant messages, optionally containing tool calls.
-|  * If no tool calls are returned, pushes a predefined feedback message prompting further action.
-|  * Executes each tool call via `_execute_tool`.
-|  * Detects terminal tool calls (`is_terminal_tool`) to terminate the loop.
-| **Error Handling** | Errors from tool execution are captured and marked as error strings. If a terminal tool fails, the loop retries. |
-| **Extensibility Hooks** | Subclass implements:
-|  * `get_system_instruction()` – system prompt.
-|  * `get_tools()` – list of available tools.
-|  * `is_terminal_tool(tool_name)` – whether a tool call ends the session.
-|  * `on_event(event_name, payload)` – optional hook for lifecycle events. Default implementation does nothing. |
+#### **State Management**
+
+Maintains `pipeline_id`, `task_id`, and conversation history.
+
+#### **Ollama Integration**
+
+Configures `AsyncClient` with host and API key; performs `chat()` calls.
+
+#### **Tool Mapping**
+
+Transforms `ToolDefinition` objects into the JSON schema expected by Ollama. Injects `pipeline_id` and `task_id` parameters automatically.
+
+#### **Autonomous Loop**
+
+`run()` iteratively:
+
+* Sends user prompt and conversation history.
+* Receives assistant messages, optionally containing tool calls.
+* If no tool calls are returned, pushes a predefined feedback message prompting further action.
+* Executes each tool call via `_execute_tool`.
+* Detects terminal tool calls (`is_terminal_tool`) to terminate the loop.
+
+#### **Error Handling**
+
+Errors from tool execution are captured and marked as error strings. If a terminal tool fails, the loop retries.
+
+#### **Extensibility Hooks**
+
+Subclass implements:
+
+* `get_system_instruction()` – system prompt.
+* `get_tools()` – list of available tools.
+* `is_terminal_tool(tool_name)` – whether a tool call ends the session.
+* `on_event(event_name, payload)` – optional hook for lifecycle events. Default implementation does nothing.
 
 ### 2.2 Lifecycle Events
 
