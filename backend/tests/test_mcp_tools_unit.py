@@ -244,6 +244,11 @@ async def test_complete_task_unit():
             "ajapopaja_mcp.tools.DocBotManager.process_completed_task",
             new_callable=AsyncMock,
         ) as mock_docbot,
+        patch(
+            "api.ollama_utils.is_ollama_available",
+            new_callable=AsyncMock,
+            return_value=True,
+        ),
     ):
         mock_complete.return_value = mock_task
 
