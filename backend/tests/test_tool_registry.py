@@ -138,3 +138,49 @@ async def test_automatic_metadata_extraction():
     )
     assert "pipeline_id" in tool.parameters["required"]
     assert "count" not in tool.parameters["required"]
+
+
+@pytest.mark.asyncio
+async def test_multiline_docstring_parsing():
+    from api.assistant.tool_registry import ToolRegistry
+
+    registry = ToolRegistry()
+
+    @register_tool()
+    async def multiline_tool(arg1: str, arg2: int):
+        """
+        Description that has a new line
+        and continues on the second line and so forth
+        this needs to be concatenated.
+
+        Args:
+            arg1: Description of arg1 that has multiple
+                  lines and continues of the next lines.
+            arg2: Description of arg2 that has multiple
+                  lines and continues of the next lines.
+        """
+        return f"{arg1}: {arg2}"
+
+    registry.register_tool(multiline_tool)
+
+    tool = registry.get_tool("multiline_tool")
+    assert tool is not None
+
+    # Verify main description concatenation
+    expected_desc = (
+        "Description that has a new line and continues on the second line "
+        "and so forth this needs to be concatenated."
+    )
+    assert tool.description == expected_desc
+
+    # Verify arg1 description concatenation
+    expected_arg1 = (
+        "Description of arg1 that has multiple lines and continues of the next lines."
+    )
+    assert tool.parameters["properties"]["arg1"]["description"] == expected_arg1
+
+    # Verify arg2 description concatenation
+    expected_arg2 = (
+        "Description of arg2 that has multiple lines and continues of the next lines."
+    )
+    assert tool.parameters["properties"]["arg2"]["description"] == expected_arg2

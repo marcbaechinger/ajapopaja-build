@@ -30,6 +30,8 @@ async def test_docbot_session_run_terminal_call():
 
     mock_tool = MagicMock()
     mock_tool.name = "no_doc_update_needed"
+    mock_tool.description = "A mock tool description"
+    mock_tool.parameters = {"type": "object", "properties": {}}
     mock_tool.func = mock_tool_func
 
     with (
@@ -58,8 +60,7 @@ async def test_docbot_session_run_terminal_call():
             assert mock_chat.called
             # Check terminal call was detected (loop finished)
             assert any(
-                msg.get("role") == "tool"
-                and msg.get("tool_calls")[0].function.name == "no_doc_update_needed"
+                msg.get("role") == "tool" and '"Tool success"' in msg.get("content", "")
                 for msg in session.history
                 if isinstance(msg, dict)
             )

@@ -26,26 +26,25 @@ from .registry import docbot_registry
 logger = logging.getLogger(__name__)
 
 SYSTEM_INSTRUCTION = """
-You are a Documentation Architect. Your task is to analyze a completed software
-change and decide if the project's reference documentation (architecture,
-design principles, API contracts) needs to be updated.
-You have access to the source code, git history, and the current reference
-documentation.
+### Role & Persona
+You are a Documentation Architect. Your mission is to maintain the structural integrity and factual accuracy of a project's reference documentation (Architecture, Design Principles, API Contracts). You act as the bridge between code implementation and conceptual design.
 
-Follow these steps:
-1. Review the task spec, implementation summary, and the git diff provided in
-   the initial prompt.
-2. Explore the codebase and existing documentation to understand the impact of
-   the change.
-3. If the change introduces new design patterns, modifies core architecture, or
-   changes public-facing API contracts, update the relevant documentation
-   using 'update_ref_doc'.
-4. If the change is purely implementation details or consistent with existing
-   documentation, call 'no_doc_update_needed'.
+### Context
+- **Knowledge Base:** You have access to source code, git history, and existing documentation.
+- **Documentation Root:** All reference materials are stored in the `design/` directory (e.g., `dd_backend.md`, `dd_frontend.md`).
+- **Cold Start:** If the `design/` directory is missing and the current change is architecturally significant, you are responsible for initializing it.
 
-IMPORTANT: You must finish your analysis by calling either 'update_ref_doc' or
-'no_doc_update_needed'.
-Do not ask for permission or wait for user input. Act autonomously.
+### Evaluation Workflow
+1. **Analyze:** Critically review the task specification, implementation summary, and git diff. 
+2. **Audit:** Explore the codebase and existing docs to identify drift between the new implementation and current design definitions.
+3. **Execute:** 
+    - **If updates are required:** Call `update_ref_doc`. You MUST provide: `filename`, `content`, and `reason`.
+    - **If the design remains intact:** Call `no_doc_update_needed`.
+
+### Composition Rules (The "Evergreen" Mandate)
+- **Seamless Integration:** Never use temporal language like "now," "newly added," "recently implemented," or "updated." Write in the present tense as if the feature or pattern has been a fundamental part of the system since its inception.
+- **Technical Precision:** Focus on the *how* and *why* of the architecture rather than a play-by-play of the code changes.
+- **Autonomy:** Do not seek confirmation, ask for permission, or wait for user feedback. Execute the necessary tool calls immediately.
 """
 
 
@@ -60,7 +59,7 @@ class DocBotSession:
             {"role": "system", "content": SYSTEM_INSTRUCTION}
         ]
 
-    async def run(self, initial_prompt: str, max_iterations: int = 10):
+    async def run(self, initial_prompt: str, max_iterations: int = 50):
         self.history.append({"role": "user", "content": initial_prompt})
 
         for i in range(max_iterations):
@@ -102,21 +101,52 @@ class DocBotSession:
             )
 
             msg = response.message
-            self.history.append(msg)
+
+            # Store as dictionary for next turn
+            assistant_msg = {"role": "assistant", "content": msg.content or ""}
+            if msg.tool_calls:
+                assistant_msg["tool_calls"] = [
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments,
+                        },
+                    }
+                    for tc in msg.tool_calls
+                ]
+            self.history.append(assistant_msg)
 
             if not msg.tool_calls:
                 logger.info(
-                    f"DocBot iteration {i + 1}: No tool calls, agent responded with text."
+                    f"DocBot iteration {i + 1}: No tool calls, agent responded with text: {msg.content}"
                 )
+
+                # Check if it looks like a manual tool call attempt in text
+                if (
+                    any(t.name in msg.content for t in docbot_registry.list_tools())
+                    and "(" in msg.content
+                ):
+                    feedback = (
+                        "It looks like you tried to call a tool by writing it in text. "
+                        "You MUST use the formal tool calling mechanism instead of "
+                        "writing the function name in your response. "
+                        "Please retry using a proper tool call for 'update_ref_doc', "
+                        "'no_doc_update_needed', or other available tools."
+                    )
+                else:
+                    feedback = (
+                        "Continue to analyze the recent change and then call the "
+                        "tools to update the design document or signal that no "
+                        "change is needed. Remember to use the formal tool calling "
+                        "mechanism."
+                    )
+
                 # If no tool call, push the agent to finish
                 self.history.append(
                     {
                         "role": "user",
-                        "content": (
-                            "Continue to analyze the recent change and then call the "
-                            "tools to update the design document or signal that no "
-                            "change is needed."
-                        ),
+                        "content": feedback,
                     }
                 )
                 continue
@@ -136,13 +166,28 @@ class DocBotSession:
                     logger.info(f"DocBot reached terminal decision: {tool_name}")
 
                 result = await self._execute_tool(tool_name, args)
+
+                # Append tool result to history
                 self.history.append(
                     {
                         "role": "tool",
                         "content": json.dumps(result),
-                        "tool_calls": [tool_call],
+                        "name": tool_name,
                     }
                 )
+
+                if terminal_call:
+                    is_error = False
+                    if isinstance(result, str) and result.startswith("Error"):
+                        is_error = True
+                    elif isinstance(result, dict) and "error" in result:
+                        is_error = True
+
+                    if is_error:
+                        logger.warning(
+                            f"DocBot terminal tool '{tool_name}' failed with: {result}. Forcing retry."
+                        )
+                        terminal_call = False
 
             if terminal_call:
                 logger.info("DocBot finished analysis with terminal tool call.")
@@ -153,7 +198,7 @@ class DocBotSession:
     async def _execute_tool(self, name: str, args: Dict[str, Any]) -> Any:
         tool = docbot_registry.get_tool(name)
         if not tool:
-            return {"error": f"Tool {name} not found."}
+            return f"Error: Tool {name} not found."
 
         try:
             if isinstance(args, str):
@@ -167,4 +212,4 @@ class DocBotSession:
             return await tool.func(**args)
         except Exception as e:
             logger.error(f"DocBot tool error ({name}): {e}")
-            return {"error": str(e)}
+            return f"Error: {type(e).__name__} - {str(e)}"

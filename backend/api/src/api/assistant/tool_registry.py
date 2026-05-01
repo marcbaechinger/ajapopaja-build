@@ -55,9 +55,9 @@ class ToolRegistry:
         if description is None:
             doc = inspect.getdoc(func) or ""
             # Take the first paragraph as description (split by one or more blank lines)
-            description = (
-                re.split(r"\n\s*\n", doc)[0].strip() or "No description provided."
-            )
+            raw_desc = re.split(r"\n\s*\n", doc)[0].strip() or "No description provided."
+            # Collapse multiline description into single line
+            description = " ".join(raw_desc.split())
             # Also integrate argument descriptions if they exist in the docstring
             arg_docs = self._parse_docstring_args(doc)
             for arg_name, arg_desc in arg_docs.items():
@@ -94,7 +94,10 @@ class ToolRegistry:
         required = []
 
         for param_name, param in sig.parameters.items():
-            if param_name == "self" or param_name == "cls":
+            if (
+                param_name in ("self", "cls")
+                or param.kind == inspect.Parameter.VAR_KEYWORD
+            ):
                 continue
 
             hint = type_hints.get(param_name, Any)
@@ -136,19 +139,45 @@ class ToolRegistry:
         if not doc:
             return arg_docs
 
-        # Look for "Args:" or "Arguments:" section
-        match = re.search(r"(?:Args|Arguments):\s*(.*)", doc, re.DOTALL | re.IGNORECASE)
-        if match:
-            # Prepend a newline to ensure the first argument line is matched by ^ in MULTILINE mode
-            args_section = "\n" + match.group(1)
-            # Find each argument line (indented name: description)
-            arg_matches = re.finditer(
-                r"^\s+([a-zA-Z_0-9]+):\s*(.*)", args_section, re.MULTILINE
-            )
-            for am in arg_matches:
-                arg_name = am.group(1)
-                arg_desc = am.group(2).strip()
-                arg_docs[arg_name] = arg_desc
+        lines = doc.splitlines()
+        in_args_section = False
+        current_arg = None
+        current_desc = []
+
+        for line in lines:
+            stripped = line.strip()
+            # Detect section start
+            if stripped.lower() in ("args:", "arguments:"):
+                in_args_section = True
+                continue
+            
+            # Detect next section start (capitalized word followed by colon)
+            if in_args_section and re.match(r"^[A-Z][a-z]+:", stripped):
+                break
+
+            if in_args_section:
+                # Detect new argument line: "  name: description"
+                match = re.match(r"^\s+([a-zA-Z_0-9]+):\s*(.*)", line)
+                if match:
+                    # Save previous argument if any
+                    if current_arg:
+                        arg_docs[current_arg] = " ".join(" ".join(current_desc).split())
+                    
+                    current_arg = match.group(1)
+                    current_desc = [match.group(2).strip()]
+                elif current_arg and line.startswith(" "):
+                    # Continue description for current argument
+                    current_desc.append(line.strip())
+                elif stripped == "":
+                    # Empty line inside Args usually ends the section or current arg
+                    if current_arg:
+                        arg_docs[current_arg] = " ".join(" ".join(current_desc).split())
+                        current_arg = None
+                        current_desc = []
+
+        # Save last argument
+        if current_arg:
+            arg_docs[current_arg] = " ".join(" ".join(current_desc).split())
 
         return arg_docs
 
