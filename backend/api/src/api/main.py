@@ -93,7 +93,8 @@ async def lifespan(app: FastAPI):
 
 
 # Create MCP ASGI app
-mcp_app = mcp.http_app(path="/mcp")
+# We use path="" because it's mounted at /mcp in the main app
+mcp_app = mcp.http_app()
 
 
 async def mcp_auth_middleware(scope, receive, send):
@@ -125,6 +126,10 @@ async def mcp_auth_middleware(scope, receive, send):
 
     user = await get_current_user_from_token(token)
     if not user:
+        logger.warning(
+            f"MCP auth failed for {scope['method']} {scope['path']}. "
+            f"Token present: {bool(token)}"
+        )
         # Return 401 Unauthorized
         await send(
             {
@@ -265,4 +270,3 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=8000)
-port=8000)
