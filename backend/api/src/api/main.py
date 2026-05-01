@@ -35,7 +35,7 @@ from jose import JWTError, jwt
 
 from ajapopaja_mcp.server import mcp
 from api.assistant.ws_handler import register_assistant_handlers
-from api.auth import ALGORITHM, SECRET_KEY
+from api.auth import ALGORITHM, SECRET_KEY, get_current_user_from_token
 from api.gemini_executor import GeminiExecutor
 from api.routes.auth import router as auth_router
 from api.routes.pipeline import router as pipeline_router
@@ -95,13 +95,64 @@ async def lifespan(app: FastAPI):
 # Create MCP ASGI app
 mcp_app = mcp.http_app(path="/mcp")
 
+
+async def mcp_auth_middleware(scope, receive, send):
+    """ASGI middleware to authenticate MCP requests."""
+    if scope["type"] != "http":
+        await mcp_app(scope, receive, send)
+        return
+
+    # Allow OPTIONS for CORS
+    if scope["method"] == "OPTIONS":
+        await mcp_app(scope, receive, send)
+        return
+
+    # Extract token
+    token = None
+    # 1. Check Authorization header
+    for name, value in scope.get("headers", []):
+        if name == b"authorization":
+            auth_val = value.decode("utf-8")
+            if auth_val.startswith("Bearer "):
+                token = auth_val[7:]
+            break
+
+    # 2. Check query parameter if header not found
+    if not token:
+        query_string = scope.get("query_string", b"").decode("utf-8")
+        params = dict(re.findall(r"([^=&]+)=([^&]*)", query_string))
+        token = params.get("token")
+
+    user = await get_current_user_from_token(token)
+    if not user:
+        # Return 401 Unauthorized
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 401,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                ],
+            }
+        )
+        await send(
+            {
+                "type": "http.response.body",
+                "body": b'{"detail": "Unauthorized: Valid token required for MCP"}',
+            }
+        )
+        return
+
+    await mcp_app(scope, receive, send)
+
+
 app = FastAPI(
     title="Ajapopaja Build API", lifespan=combine_lifespans(lifespan, mcp_app.lifespan)
 )
 
-# Map MCP endpoints explicitly to avoid routing/method ambiguity
-app.add_route("/mcp", mcp_app, methods=["GET", "POST", "OPTIONS"])
-app.add_route("/mcp/{path:path}", mcp_app, methods=["GET", "POST", "OPTIONS"])
+# Map MCP endpoints explicitly using mount to handle everything under /mcp
+# Use mcp_auth_middleware as the ASGI app (receives scope, receive, send)
+app.mount("/mcp", mcp_auth_middleware)
 
 # CORS Configuration
 app.add_middleware(
@@ -214,3 +265,4 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=8000)
+port=8000)

@@ -22,7 +22,46 @@ from ajapopaja_mcp.tools import (
     search_tasks,
     update_task_design_doc,
 )
-from core.models.models import Pipeline, Task, TaskStatus
+from api.auth import create_access_token
+from core.models.models import Pipeline, Task, TaskStatus, User
+
+
+@pytest.mark.asyncio
+async def test_mcp_security(async_client, init_mock_db):
+    """Verifies that MCP endpoints are secured."""
+    # 1. Test without token - Should be 401
+    response = await async_client.post("/mcp/")
+    assert response.status_code == 401
+    assert "Unauthorized" in response.json()["detail"]
+
+    # Create a test user
+    user = User(username="testuser", hashed_password="hashed_password")
+    await user.insert()
+
+    # Generate a valid token
+    token = create_access_token(data={"sub": user.username})
+
+    # 2. Test with valid token in header - Should NOT be 401
+    # Note: It might return 400 or other if the MCP payload is missing, but not 401
+    response = await async_client.post(
+        "/mcp/", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code != 401
+
+    # 3. Test with valid token in query param - Should NOT be 401
+    response = await async_client.post(f"/mcp/?token={token}")
+    assert response.status_code != 401
+
+    # 4. Test with invalid token - Should be 401
+    response = await async_client.post(
+        "/mcp/", headers={"Authorization": "Bearer invalid"}
+    )
+    assert response.status_code == 401
+
+    # 5. Test OPTIONS request - Should be 200 (or at least not 401)
+    response = await async_client.options("/mcp/")
+    assert response.status_code != 401
+
 
 VALID_PID = "123456789012345678901234"
 
@@ -298,7 +337,7 @@ async def test_mcp_mounting_and_precedence(async_client, init_mock_db):
     # In this test environment, we might get a RuntimeError if the lifespan is not fully triggered,
     # but receiving that error actually CONFIRMS that the request was routed to the mcp_app.
     try:
-        response = await async_client.post("/mcp")
+        response = await async_client.post("/mcp/")
         # If it doesn't raise, we check it's not a 404/405 from the parent app
         assert response.status_code != 405
         assert response.status_code != 404
