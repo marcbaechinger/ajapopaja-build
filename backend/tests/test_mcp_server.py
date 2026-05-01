@@ -269,6 +269,23 @@ async def test_mcp_search_tasks():
 
 
 @pytest.mark.asyncio
+async def test_mcp_search_tasks_excludes_deleted():
+    # Insert a deleted task
+    t_deleted = Task(
+        title="Deleted Task",
+        pipeline_id=VALID_PID,
+        status=TaskStatus.CREATED,
+        deleted=True,
+    )
+    await t_deleted.insert()
+
+    # Search for it
+    result = await search_tasks(keywords="Deleted")
+    assert result["total_count"] == 0
+    assert len(result["tasks"]) == 0
+
+
+@pytest.mark.asyncio
 async def test_mcp_mounting_and_precedence(async_client, init_mock_db):
     """Verifies that MCP is mounted correctly and does not interfere with /api routes."""
     # Test /api/health (Standard FastAPI route)

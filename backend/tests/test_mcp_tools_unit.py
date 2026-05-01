@@ -73,6 +73,25 @@ async def test_search_tasks_invalid_status():
 
 
 @pytest.mark.asyncio
+async def test_search_tasks_excludes_deleted_unit():
+    with (
+        patch("ajapopaja_mcp.server.init_db", new_callable=AsyncMock) as mock_init_db,
+        patch(
+            "ajapopaja_mcp.server.task_queries.search_tasks", new_callable=AsyncMock
+        ) as mock_search,
+    ):
+        mock_search.return_value = ([], 0)
+
+        result = await search_tasks(keywords="Deleted")
+
+        mock_init_db.assert_awaited_once()
+        mock_search.assert_awaited_once()
+
+        assert result["total_count"] == 0
+        assert len(result["tasks"]) == 0
+
+
+@pytest.mark.asyncio
 async def test_get_task_details_invalid_id():
     result = await get_task_details(task_id="invalid-id")
     assert "error" in result
