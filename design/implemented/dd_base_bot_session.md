@@ -2,25 +2,26 @@
 
 ## 1. Purpose
 
-`BaseBotSession` is a reusable foundation for autonomous agents that interact with an LLM via Ollama.  It encapsulates the common lifecycle of such agents – managing conversation history, translating registered tools into Ollama‑compatible function calls, executing those calls, and detecting termination.  By extracting this logic from `DocBotSession`, new agents (e.g., `CodeBot`, `TestBot`) can be added with minimal duplication.
+`BaseBotSession` is a reusable foundation for autonomous agents that interact with an LLM via Ollama. It encapsulates the common lifecycle of such agents – managing conversation history, translating registered tools into Ollama‑compatible function calls, executing those calls, and detecting termination. By extracting this logic from `DocBotSession`, new agents (e.g., `CodeBot`, `TestBot`) can be added with minimal duplication.
 
 ## 2. Architecture
 
 ```text
- ┌─────────────────────┐
- │  BaseBotSession     │  (abstract base class)
- ├─────────────────────┤
- │  - pipeline_id      │  (identifier for the surrounding task pipeline)
- │  - task_id          │  (identifier for the specific task the bot is addressing)
- │  - client           │  (ollama.AsyncClient instance)
- │  - history          │  (list of chat messages)
- ├─────────────────────┤
- │  + run(initial_prompt, max_iterations=50)
- │  + _prepare_ollama_tools()
- │  + _execute_tool(name, args)
- │  + _find_tool_definition(name)
- │  + _is_tool_error(result)
- └─────────────────────┘
+ ┌───────────────────────────────┐
+ │      BaseBotSession          │  (abstract base class)
+ ├───────────────────────────────┤
+ │ - pipeline_id      │  (identifier for the surrounding task pipeline)
+ │ - task_id          │  (identifier for the specific task the bot is addressing)
+ │ - client           │  (ollama.AsyncClient instance)
+ │ - history          │  (list of chat messages)
+ ├───────────────────────────────┤
+ │ + run(initial_prompt, max_iterations=50)
+ │ + _prepare_ollama_tools()
+ │ + _execute_tool(name, args)
+ │ + _find_tool_definition(name)
+ │ + _is_tool_error(result)
+ │ + on_event(event_name, payload)   (optional hook)
+ └───────────────────────────────┘
 ```
 
 ### 2.1 Responsibilities
@@ -29,22 +30,34 @@
 |----------------|----------------|
 | **State Management** | Maintains `pipeline_id`, `task_id`, and conversation history. |
 | **Ollama Integration** | Configures `AsyncClient` with host and API key; performs `chat()` calls. |
-| **Tool Mapping** | Transforms `ToolDefinition` objects into the JSON schema expected by Ollama.  Injects `pipeline_id` and `task_id` parameters automatically. |
+| **Tool Mapping** | Transforms `ToolDefinition` objects into the JSON schema expected by Ollama. Injects `pipeline_id` and `task_id` parameters automatically. |
 | **Autonomous Loop** | `run()` iteratively:
 |  * Sends user prompt and conversation history.
 |  * Receives assistant messages, optionally containing tool calls.
 |  * If no tool calls are returned, pushes a predefined feedback message prompting further action.
 |  * Executes each tool call via `_execute_tool`.
 |  * Detects terminal tool calls (`is_terminal_tool`) to terminate the loop.
-| **Error Handling** | Errors from tool execution are captured and marked as error strings.  If a terminal tool fails, the loop retries. |
+| **Error Handling** | Errors from tool execution are captured and marked as error strings. If a terminal tool fails, the loop retries. |
 | **Extensibility Hooks** | Subclass implements:
 |  * `get_system_instruction()` – system prompt.
 |  * `get_tools()` – list of available tools.
-|  * `is_terminal_tool(tool_name)` – whether a tool call ends the session. |
+|  * `is_terminal_tool(tool_name)` – whether a tool call ends the session.
+|  * `on_event(event_name, payload)` – optional hook for lifecycle events. Default implementation does nothing. |
 
-## 3. Integration with DocBotSession
+### 2.2 Lifecycle Events
 
-`DocBotSession` now subclasses `BaseBotSession`:
+`BaseBotSession` emits two core lifecycle events that can be observed by subclasses or external systems:
+
+| Event | Trigger | Typical Payload |
+|-------|---------|-----------------|
+| `bot_started` | Before the autonomous loop begins | `{}` |
+| `bot_completed` | After the loop terminates or reaches maximum iterations | `{}` |
+
+These events are raised via the `on_event` method, allowing concrete bot sessions to broadcast status updates (e.g., WebSocket messages) without coupling the base class to specific communication mechanisms.
+
+### 2.3 Integration with DocBotSession
+
+`DocBotSession` now subclasses `BaseBotSession` and implements the `on_event` hook to broadcast `DOCBOT_STARTED` and `DOCBOT_COMPLETED` messages over the websocket manager. The subclass focuses solely on providing the domain‑specific system instruction, tool list, and terminal tool detection. All loop control, tool execution, and history management remain in the base class.
 
 ```python
 class DocBotSession(BaseBotSession):
@@ -56,18 +69,36 @@ class DocBotSession(BaseBotSession):
 
     def is_terminal_tool(self, tool_name: str) -> bool:
         return tool_name in ["update_ref_doc", "no_doc_update_needed"]
+
+    async def on_event(self, event_name: str, payload: Optional[Dict[str, Any]] = None):
+        if event_name == "bot_started":
+            await manager.broadcast(
+                WSMessage(
+                    type="DOCBOT_STARTED",
+                    payload={"pipeline_id": self.pipeline_id, "task_id": self.task_id},
+                )
+            )
+        elif event_name == "bot_completed":
+            await manager.broadcast(
+                WSMessage(
+                    type="DOCBOT_COMPLETED",
+                    payload={
+                        "pipeline_id": self.pipeline_id,
+                        "task_id": self.task_id,
+                        "result": self.session_result,
+                    },
+                )
+            )
 ```
 
-The subclass focuses solely on providing the domain‑specific system instruction, tool list, and terminal tool detection.  All loop control, tool execution, and history management remain in the base class.
-
-## 4. Benefits
+### 2.4 Benefits
 
 * **DRY** – eliminates duplicated chat‑loop logic across multiple agents.
 * **Clear Separation** – domain logic lives in the subclass; core LLM orchestration lives in the base.
 * **Easier Testing** – unit tests target `BaseBotSession` once and can be reused for new agents.
-* **Future‑Proof** – adding a new autonomous bot only requires implementing the three abstract methods.
+* **Future‑Proof** – adding a new autonomous bot only requires implementing the three abstract methods and optionally the event hook.
 
-## 5. Usage Example
+## 3. Usage Example
 
 ```python
 # In a new agent, e.g., CodeBot
