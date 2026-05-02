@@ -13,16 +13,24 @@
 # limitations under the License.
 
 import json
+from typing import List
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from api.assistant.tool_registry import ToolDefinition
 from api.bot.base_session import BaseBotSession
+from api.bot.tool_registry import ToolDefinition, ToolRegistry
 
 
 class ConcreteBotSession(BaseBotSession):
     """A concrete implementation of BaseBotSession for testing."""
+
+    def __init__(
+        self, pipeline_id: str, task_id: str, use_custom_feedback: bool = False
+    ):
+        super().__init__(pipeline_id, task_id)
+        self.pipeline_and_task_id_args = []
+        self.use_custom_feedback = use_custom_feedback
 
     def get_system_instruction(self) -> str:
         return "Test instruction"
@@ -30,36 +38,56 @@ class ConcreteBotSession(BaseBotSession):
     async def get_initial_prompt(self) -> str:
         return "Test prompt"
 
-    def get_tools(self):
-        async def test_tool(param1: str, pipeline_id: str = None):
+    def get_tools(self) -> List[ToolDefinition]:
+        async def test_tool(pipeline_id: str, task_id: str, param1: str):
+            """
+            Tests code.
+
+            Args:
+                param1: A string parameter
+            """
+            self.pipeline_and_task_id_args.append([pipeline_id, task_id])
             return {"result": f"processed {param1}"}
 
-        async def terminal_tool():
+        async def terminal_tool(pipeline_id: str, task_id: str):
+            self.pipeline_and_task_id_args.append([pipeline_id, task_id])
             return {"status": "finished"}
 
-        return [
-            ToolDefinition(
-                name="test_tool",
-                description="A test tool",
-                type="read_only",
-                parameters={
-                    "type": "object",
-                    "properties": {"param1": {"type": "string"}},
-                    "required": ["param1"],
-                },
-                func=test_tool,
-            ),
-            ToolDefinition(
-                name="terminal_tool",
-                description="Finishes the task",
-                type="read_only",
-                parameters={"type": "object", "properties": {}},
-                func=terminal_tool,
-            ),
-        ]
+        registry = ToolRegistry()
+        registry.register_tool(test_tool)
+        registry.register_tool(terminal_tool)
+        return registry.list_tools()
 
     def is_terminal_tool(self, tool_name: str) -> bool:
+        """
+        Call the terminal action.
+
+        Args:
+            tool_name: The name of the terminal tool.
+        """
         return tool_name == "terminal_tool"
+
+    def get_default_feedback(
+        self, pipeline_id: str, task_id: str, assistant_message: str
+    ) -> str:
+        return (
+            "Custom feedback"
+            if self.use_custom_feedback
+            else super().get_default_feedback(pipeline_id, task_id, assistant_message)
+        )
+
+
+class AsyncIter:
+    def __init__(self, items):
+        self.items = items
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if not self.items:
+            raise StopAsyncIteration
+        return self.items.pop(0)
 
 
 @pytest.mark.asyncio
@@ -81,28 +109,6 @@ async def test_base_session_run_loop():
     mock_tool_call_2.function.name = "terminal_tool"
     mock_tool_call_2.function.arguments = "{}"
     mock_response_2.message.tool_calls = [mock_tool_call_2]
-
-    # Mocking the async iterator for session.client.chat
-    async def mock_chat_stream(*args, **kwargs):
-        if "test_tool" in kwargs.get("tools", [])[0]["function"]["name"]:
-            # First call
-            yield mock_response_1
-        else:
-            # Second call (after tool result)
-            yield mock_response_2
-
-    # Correct way to mock the async stream returned by client.chat
-    class AsyncIter:
-        def __init__(self, items):
-            self.items = items
-
-        def __aiter__(self):
-            return self
-
-        async def __anext__(self):
-            if not self.items:
-                raise StopAsyncIteration
-            return self.items.pop(0)
 
     with patch.object(session.client, "chat") as mock_chat:
         # First call returns test_tool call, second call returns terminal_tool call
@@ -128,24 +134,63 @@ async def test_base_session_run_loop():
 
 
 @pytest.mark.asyncio
+async def test_base_session_default_text_reponse():
+    session = ConcreteBotSession("p1", "t1")
+    mock_response = MagicMock()
+    mock_response.message.content = "What should I do?"
+    mock_response.message.tool_calls = None
+
+    with patch.object(session.client, "chat") as mock_chat:
+        mock_chat.return_value = AsyncIter([mock_response])
+
+        await session.run(max_iterations=4)
+
+        assert mock_chat.call_count == 4
+        first_call = mock_chat.call_args_list[-1]
+        messages_sent_to_chat = first_call.kwargs["messages"]
+        turns = 0
+        for msg in messages_sent_to_chat:
+            if msg["role"] == "user":
+                if turns == 0:
+                    assert msg["content"] == "Test prompt"
+                else:
+                    assert "task ID: t1" in msg["content"]
+                    assert "pipeline ID: p1" in msg["content"]
+                turns += 1
+
+
+@pytest.mark.asyncio
+async def test_base_session_custom_text_reponse():
+    session = ConcreteBotSession("p1", "t1", use_custom_feedback=True)
+    mock_response = MagicMock()
+    mock_response.message.content = "What should I do?"
+    mock_response.message.tool_calls = None
+
+    with patch.object(session.client, "chat") as mock_chat:
+        mock_chat.return_value = AsyncIter([mock_response])
+
+        await session.run(max_iterations=4)
+
+        assert mock_chat.call_count == 4
+        first_call = mock_chat.call_args_list[-1]
+        messages_sent_to_chat = first_call.kwargs["messages"]
+        turns = 0
+        for msg in messages_sent_to_chat:
+            if msg["role"] == "user":
+                if turns == 0:
+                    assert msg["content"] == "Test prompt"
+                else:
+                    assert msg["content"] == "Custom feedback"
+                turns += 1
+
+
+@pytest.mark.asyncio
 async def test_base_session_iteration_limit():
     session = ConcreteBotSession("p1", "t1")
 
     mock_response = MagicMock()
     mock_response.message.content = "Thinking..."
     mock_response.message.tool_calls = None
-
-    class AsyncIter:
-        def __init__(self, items):
-            self.items = items
-
-        def __aiter__(self):
-            return self
-
-        async def __anext__(self):
-            if not self.items:
-                raise StopAsyncIteration
-            return self.items.pop(0)
 
     with patch.object(session.client, "chat") as mock_chat:
         mock_chat.return_value = AsyncIter([mock_response])
@@ -174,10 +219,13 @@ async def test_base_session_execute_tool():
     # Test successful execution with injection
     result = await session._execute_tool("test_tool", {"param1": "data"})
     assert result == {"result": "processed data"}
+    # Verify pipeline_id and task_id got injected.
+    assert len(session.pipeline_and_task_id_args) == 1
+    assert session.pipeline_and_task_id_args[0] == ["p1", "t1"]
 
     # Test session injection
     async def tool_with_session(session: BaseBotSession):
-        return {"session_id": session.pipeline_id}
+        return {"pipeline_id": session.pipeline_id}
 
     with patch.object(session, "get_tools") as mock_get_tools:
         mock_get_tools.return_value = [
@@ -190,7 +238,7 @@ async def test_base_session_execute_tool():
             )
         ]
         result = await session._execute_tool("session_tool", {})
-        assert result == {"session_id": "p1"}
+        assert result == {"pipeline_id": "p1"}
 
     # Test tool not found
     result = await session._execute_tool("unknown", {})

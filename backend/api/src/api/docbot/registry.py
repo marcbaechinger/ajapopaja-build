@@ -12,6 +12,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from api.assistant.tool_registry import ToolRegistry
+from functools import wraps
+from typing import Any, Callable, Dict
+from git import Optional
+from api.bot.tool_registry import ToolRegistry
 
 docbot_registry = ToolRegistry()
+
+
+def register_doc_tool(
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+    tool_type: str = "read_only",
+    parameters: Optional[Dict[str, Any]] = None,
+):
+    def decorator(func: Callable):
+        docbot_registry.register_tool(
+            func=func,
+            name=name,
+            description=description,
+            tool_type=tool_type,
+            parameters=parameters,
+        )
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator

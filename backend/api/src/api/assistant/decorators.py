@@ -15,7 +15,7 @@
 from functools import wraps
 from typing import Any, Callable, Dict, Optional
 
-from api.assistant.tool_registry import registry
+from api.bot.tool_registry import registry
 
 
 def register_tool(

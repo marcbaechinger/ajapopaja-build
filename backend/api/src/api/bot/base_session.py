@@ -15,12 +15,13 @@
 import inspect
 import json
 import logging
+from textwrap import dedent
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
 import ollama
 
-from api.assistant.tool_registry import ToolDefinition
+from api.bot.tool_registry import ToolDefinition
 from core import config
 
 logger = logging.getLogger(__name__)
@@ -64,6 +65,30 @@ class BaseBotSession(ABC):
     def is_terminal_tool(self, tool_name: str) -> bool:
         """Determines if a tool call should terminate the autonomous loop."""
         pass
+
+    def get_default_feedback(
+        self, pipeline_id: str, task_id: str, assistant_message: str
+    ) -> str:
+        """
+        Return the default feedback message that is sent to the LLM when the
+        assistant produces plain text. Sub‑classes can override this method
+        to provide a different message, e.g. one that references the
+        specific pipeline or task.
+
+        Args:
+            pipeline_id : Identifier (UID) of the current pipeline.
+            task_id : Identifier (UID) of the current task.
+            assistant_message: The message the assitant sent instead of a tool call.
+
+        Returns: The feedback message.
+        """
+        return dedent(f"""\
+            Continue to analyze and then call the tools to finalize your task.
+            Remember to use the formal tool calling mechanism.
+
+            Current pipeline ID: {pipeline_id}
+            Current task ID: {task_id}
+            """)
 
     async def on_event(self, event_name: str, payload: Optional[Dict[str, Any]] = None):
         """Lifecycle event hook."""
@@ -164,9 +189,8 @@ class BaseBotSession(ABC):
                             )
 
                         # If no tool call, push the agent to finish
-                        feedback = (
-                            "Continue to analyze and then call the tools to finalize your "
-                            "task. Remember to use the formal tool calling mechanism."
+                        feedback = self.get_default_feedback(
+                            self.pipeline_id, self.task_id, full_content
                         )
                         self.history.append({"role": "user", "content": feedback})
                         continue

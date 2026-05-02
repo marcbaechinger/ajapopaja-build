@@ -21,7 +21,7 @@ import ollama
 from core import config
 from core.models.models import ChatMessage, UserChat
 
-from .tool_registry import registry
+from api.bot.tool_registry import registry
 
 logger = logging.getLogger(__name__)
 

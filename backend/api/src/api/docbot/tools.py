@@ -25,7 +25,7 @@ from core.utils import git_utils
 from core.utils.path_utils import safe_join
 
 from .cache import DocBotPreview, set_preview
-from .decorators import register_doc_tool
+from .registry import register_doc_tool
 from .registry import docbot_registry
 
 logger = logging.getLogger(__name__)

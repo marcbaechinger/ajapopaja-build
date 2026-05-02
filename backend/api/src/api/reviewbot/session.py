@@ -15,7 +15,7 @@
 import logging
 from typing import Any, Dict, List, Optional
 
-from api.assistant.tool_registry import ToolDefinition
+from api.bot.tool_registry import ToolDefinition
 from api.bot.base_session import BaseBotSession
 from api.websocket_manager import WSMessage, manager
 from core.queries import pipeline as pipeline_queries

@@ -15,7 +15,7 @@
 import pytest
 
 from api.assistant.decorators import register_tool
-from api.assistant.tool_registry import ToolRegistry
+from api.bot.tool_registry import ToolRegistry
 
 
 def test_tool_registry_registration():
@@ -67,7 +67,7 @@ def test_tool_registry_list_unregister():
 @pytest.mark.asyncio
 async def test_register_tool_decorator():
     # We use the global registry for the decorator test
-    from api.assistant.tool_registry import registry as global_registry
+    from api.bot.tool_registry import registry as global_registry
 
     @register_tool(
         name="decorated_tool",
@@ -101,7 +101,7 @@ async def test_register_tool_decorator():
 
 @pytest.mark.asyncio
 async def test_automatic_metadata_extraction():
-    from api.assistant.tool_registry import ToolRegistry
+    from api.bot.tool_registry import ToolRegistry
 
     registry = ToolRegistry()
 
@@ -142,7 +142,7 @@ async def test_automatic_metadata_extraction():
 
 @pytest.mark.asyncio
 async def test_multiline_docstring_parsing():
-    from api.assistant.tool_registry import ToolRegistry
+    from api.bot.tool_registry import ToolRegistry
 
     registry = ToolRegistry()
 

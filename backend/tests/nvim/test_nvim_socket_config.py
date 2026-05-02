@@ -18,8 +18,8 @@ from unittest.mock import patch
 
 import pytest
 
-from api.assistant.tool_registry import registry
 from api.assistant.tools import nvim_tools
+from api.bot.tool_registry import registry
 
 
 @pytest.fixture(autouse=True)

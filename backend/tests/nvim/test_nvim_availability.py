@@ -18,7 +18,7 @@ from unittest.mock import patch
 import pytest
 
 import api.assistant.tools.nvim_tools as nvim_tools
-from api.assistant.tool_registry import ToolRegistry
+from api.bot.tool_registry import ToolRegistry
 
 
 @pytest.fixture(autouse=True)
@@ -99,7 +99,7 @@ def test_nvim_tools_registered_with_availability():
     # This test checks if the actual nvim tools in nvim_tools.py
     # are registered with the is_nvim_available function.
     # We check the global registry.
-    from api.assistant.tool_registry import registry
+    from api.bot.tool_registry import registry
 
     tool = registry.get_tool("nvim_open_file")
     assert tool is not None

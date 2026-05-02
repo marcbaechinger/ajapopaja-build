@@ -12,6 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from api.assistant.tool_registry import ToolRegistry
+from api.bot.tool_registry import ToolRegistry
 
 reviewbot_registry = ToolRegistry()
