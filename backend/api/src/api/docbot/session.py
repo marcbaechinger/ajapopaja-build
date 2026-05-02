@@ -92,7 +92,7 @@ class DocBotSession(BaseBotSession):
     ) -> str:
         """Override to provide DocBot specific instructions."""
         return dedent(f"""\
-            Your analysis is complete, but you haven't finalized the session yet.
+            You haven't finalized the session yet.
 
             - If updates are needed: Call 'update_ref_doc' or 'update_markdown_section'.
             - If you have finished all updates: Call 'document_update_completed'.

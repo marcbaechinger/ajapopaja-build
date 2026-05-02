@@ -106,8 +106,7 @@ async def test_docbot_session_max_iterations():
         assert mock_chat.call_count == 2
         # History should contain "Continue" prompts
         assert any(
-            "Your analysis is complete, but you haven't finalized the session yet."
-            in msg["content"]
+            "You haven't finalized the session yet." in msg["content"]
             for msg in session.history
             if msg["role"] == "user"
         )
@@ -248,10 +247,7 @@ async def test_docbot_session_custom_feedback():
 
     feedback = session.get_default_feedback("p1", "t1", "Some message")
 
-    assert (
-        "Your analysis is complete, but you haven't finalized the session yet."
-        in feedback
-    )
+    assert "You haven't finalized the session yet." in feedback
     assert "document_update_completed" in feedback
     assert "no_doc_update_needed" in feedback
     assert "p1" in feedback

@@ -89,6 +89,7 @@ for logger_name in ["uvicorn.access", "uvicorn.error"]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info("Application starting up...")
     logger.info("Initializing database...")
     await init_db()
     register_assistant_handlers()

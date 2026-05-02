@@ -267,7 +267,7 @@ async def update_ref_doc(
                 # Derived commit message
                 commit_msg = f"[doc] Update {fname}\n\n{resn}"
 
-                set_preview(
+                await set_preview(
                     tid,
                     DocBotPreview(
                         task_id=tid,
@@ -451,7 +451,7 @@ async def update_markdown_section(
             diff = repo.git.diff("--unified=3", file_path)
             commit_msg = f"[doc] Update section '{heading}' in {fname}\n\n{resn}"
 
-            set_preview(
+            await set_preview(
                 tid,
                 DocBotPreview(
                     task_id=tid,

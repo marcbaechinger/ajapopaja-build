@@ -71,7 +71,8 @@ class CommitRequest(BaseModel):
 
 @router.get("/preview/{task_id}")
 async def get_docbot_preview(pipeline_id: str, task_id: str):
-    preview = get_preview(task_id)
+    logger.info(f"GET /preview/{task_id} for pipeline {pipeline_id}")
+    preview = await get_preview(task_id)
     if not preview:
         raise HTTPException(status_code=404, detail="Preview not found for this task.")
     return preview
@@ -79,7 +80,8 @@ async def get_docbot_preview(pipeline_id: str, task_id: str):
 
 @router.post("/review/commit/{task_id}")
 async def commit_docbot_change(pipeline_id: str, task_id: str, req: CommitRequest):
-    preview = get_preview(task_id)
+    logger.info(f"POST /review/commit/{task_id} for pipeline {pipeline_id}")
+    preview = await get_preview(task_id)
     if not preview:
         raise HTTPException(status_code=404, detail="Preview not found for this task.")
 
@@ -91,7 +93,7 @@ async def commit_docbot_change(pipeline_id: str, task_id: str, req: CommitReques
         repo = git_utils.get_repo(pipeline.workspace_abs_path)
         repo.git.add(preview.file_path)
         repo.git.commit("-m", req.commit_msg)
-        clear_preview(task_id)
+        await clear_preview(task_id)
         return {
             "status": "success",
             "message": f"Committed change for {preview.filename}",
@@ -103,7 +105,8 @@ async def commit_docbot_change(pipeline_id: str, task_id: str, req: CommitReques
 
 @router.post("/review/revert/{task_id}")
 async def revert_docbot_change(pipeline_id: str, task_id: str):
-    preview = get_preview(task_id)
+    logger.info(f"POST /review/revert/{task_id} for pipeline {pipeline_id}")
+    preview = await get_preview(task_id)
     if not preview:
         raise HTTPException(status_code=404, detail="Preview not found for this task.")
 
@@ -128,7 +131,7 @@ async def revert_docbot_change(pipeline_id: str, task_id: str):
             if os.path.exists(preview.file_path):
                 os.remove(preview.file_path)
 
-        clear_preview(task_id)
+        await clear_preview(task_id)
         return {
             "status": "success",
             "message": f"Reverted changes to {preview.filename}",
