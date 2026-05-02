@@ -187,19 +187,45 @@ body {
 }
 
 .prose-theme table {
-  @apply border-collapse w-full my-0 text-sm;
+  @apply border-collapse w-full my-6 text-sm border border-app-border/50 rounded-xl overflow-hidden;
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.prose-theme thead {
+  @apply bg-app-surface;
 }
 
 .prose-theme th {
-  @apply bg-app-surface/50 text-app-muted uppercase text-[10px] tracking-widest font-bold p-2 text-left border-b border-app-border;
+  @apply text-app-accent-2 uppercase text-[10px] tracking-widest font-black px-4 py-3 text-left border-b border-app-border whitespace-nowrap;
 }
 
 .prose-theme td {
-  @apply p-2 border-b border-app-border/50 text-app-text/90;
+  @apply px-4 py-3 border-b border-app-border/30 text-app-text/90 leading-relaxed min-w-[120px];
+}
+
+.prose-theme tr {
+  @apply transition-colors duration-150;
+}
+
+.prose-theme tbody tr:hover {
+  @apply bg-app-accent-1/5;
 }
 
 .prose-theme tr:last-child td {
   @apply border-b-0;
+}
+
+/* Custom Scrollbar for tables */
+.prose-theme table::-webkit-scrollbar {
+  height: 6px;
+}
+.prose-theme table::-webkit-scrollbar-track {
+  @apply bg-app-bg;
+}
+.prose-theme table::-webkit-scrollbar-thumb {
+  @apply bg-app-border rounded-full hover:bg-app-muted/50 transition-colors;
 }
 
 /* Specification Expand/Collapse */

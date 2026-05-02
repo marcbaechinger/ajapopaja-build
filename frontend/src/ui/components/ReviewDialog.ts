@@ -55,7 +55,7 @@ export class ReviewDialog extends BaseDialog<void> {
     
     const html = marked.parse(this.props.task.review_md);
     return `
-      <div class="p-6 prose prose-invert max-w-none prose-pre:bg-app-bg prose-pre:border prose-pre:border-app-border prose-headings:text-app-accent-2 prose-headings:tracking-tight prose-a:text-app-accent-1 hover:prose-a:text-app-accent-1/80 transition-colors">
+      <div class="p-6 prose-theme">
         ${html}
       </div>
     `;
