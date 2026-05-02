@@ -18,162 +18,289 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi import status
 
+from api.auth import get_current_user
+from api.main import app
 from core.models.models import Task, TaskStatus, User
 
 
-@pytest.mark.asyncio
-async def test_open_quickfix_success(async_client, init_mock_db):
-    from api.auth import get_current_user
-    from api.main import app
-
+@pytest.fixture
+def mock_auth():
     mock_user = User(
         username="testuser", email="test@example.com", hashed_password="pw"
     )
     app.dependency_overrides[get_current_user] = lambda: mock_user
-
-    try:
-        with (
-            patch(
-                "api.routes.editor_commands.task_queries.get_task_by_id",
-                new_callable=AsyncMock,
-            ) as mock_get,
-            patch(
-                "api.routes.editor_commands.git_commit_hunks", new_callable=AsyncMock
-            ) as mock_git,
-            patch(
-                "api.routes.editor_commands.nvim_set_quickfix", new_callable=AsyncMock
-            ) as mock_nvim,
-        ):
-            task = Task(
-                title="Fix Bug",
-                pipeline_id="p1",
-                status=TaskStatus.IMPLEMENTED,
-                commit_hash="sha123",
-            )
-            mock_get.return_value = task
-            hunks = [
-                {
-                    "file": "src/main.py",
-                    "first_line": 10,
-                    "last_line": 12,
-                    "type": "change",
-                }
-            ]
-            mock_git.return_value = json.dumps(hunks)
-            mock_nvim.return_value = {"success": True}
-
-            response = await async_client.post("/api/editor/quickfix/t1")
-
-            assert response.status_code == status.HTTP_200_OK
-            assert response.json() == {"status": "ok"}
-
-            mock_git.assert_called_once_with("p1", "sha123")
-            mock_nvim.assert_called_once()
-            args, kwargs = mock_nvim.call_args
-            assert args[0] == "p1"
-            assert args[1] == [
-                {"filename": "src/main.py", "lnum": 10, "text": "[change] Fix Bug"}
-            ]
-            assert kwargs["title"] == "Task: Fix Bug"
-    finally:
-        app.dependency_overrides.clear()
+    yield
+    app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
-async def test_call_quickfix_success(async_client, init_mock_db):
-    from api.auth import get_current_user
-    from api.main import app
-
-    mock_user = User(
-        username="testuser", email="test@example.com", hashed_password="pw"
-    )
-    app.dependency_overrides[get_current_user] = lambda: mock_user
-
-    try:
-        with (
-            patch(
-                "api.routes.editor_commands.task_queries.get_task_by_id",
-                new_callable=AsyncMock,
-            ) as mock_get,
-            patch(
-                "api.routes.editor_commands.git_commit_hunks", new_callable=AsyncMock
-            ) as mock_git,
-            patch(
-                "api.routes.editor_commands.nvim_set_quickfix", new_callable=AsyncMock
-            ) as mock_nvim,
-        ):
-            task = Task(
-                title="Fix Bug",
-                pipeline_id="p1",
-                status=TaskStatus.IMPLEMENTED,
-                commit_hash="sha123",
-            )
-            mock_get.return_value = task
-            hunks = [
-                {
-                    "file": "src/main.py",
-                    "first_line": 10,
-                    "last_line": 12,
-                    "type": "change",
-                }
-            ]
-            mock_git.return_value = json.dumps(hunks)
-            mock_nvim.return_value = {"success": True}
-
-            response = await async_client.post(
-                "/api/editor/call/quickfix", json={"task_id": "t1"}
-            )
-
-            assert response.status_code == status.HTTP_200_OK
-            assert response.json() == {"status": "ok"}
-
-            mock_git.assert_called_once_with("p1", "sha123")
-            mock_nvim.assert_called_once()
-    finally:
-        app.dependency_overrides.clear()
-
-
-@pytest.mark.asyncio
-async def test_call_diff_view_open_success(async_client, init_mock_db):
-    from api.auth import get_current_user
-    from api.main import app
-
-    mock_user = User(
-        username="testuser", email="test@example.com", hashed_password="pw"
-    )
-    app.dependency_overrides[get_current_user] = lambda: mock_user
-
-    try:
-        with patch(
-            "api.routes.editor_commands.nvim_diffview_open", new_callable=AsyncMock
-        ) as mock_nvim:
-            mock_nvim.return_value = {"success": True}
-
-            response = await async_client.post(
-                "/api/editor/call/diff_view_open",
-                json={"pipeline_id": "p1", "commit_hash": "sha123"},
-            )
-
-            assert response.status_code == status.HTTP_200_OK
-            assert response.json() == {"status": "ok"}
-
-            mock_nvim.assert_called_once_with("p1", "sha123")
-    finally:
-        app.dependency_overrides.clear()
-
-
-@pytest.mark.asyncio
-async def test_call_unknown_command(async_client, init_mock_db):
-    from api.auth import get_current_user
-    from api.main import app
-
-    app.dependency_overrides[get_current_user] = lambda: AsyncMock()
-
-    try:
-        response = await async_client.post(
-            "/api/editor/call/unknown", json={"task_id": "t1"}
+async def test_open_quickfix_success(async_client, init_mock_db, mock_auth):
+    with (
+        patch(
+            "api.routes.editor_commands.task_queries.get_task_by_id",
+            new_callable=AsyncMock,
+        ) as mock_get,
+        patch(
+            "api.routes.editor_commands.git_commit_hunks", new_callable=AsyncMock
+        ) as mock_git,
+        patch(
+            "api.routes.editor_commands.nvim_set_quickfix", new_callable=AsyncMock
+        ) as mock_nvim,
+    ):
+        task = Task(
+            title="Fix Bug",
+            pipeline_id="p1",
+            status=TaskStatus.IMPLEMENTED,
+            commit_hash="sha123",
         )
+        mock_get.return_value = task
+        hunks = [
+            {
+                "file": "src/main.py",
+                "first_line": 10,
+                "last_line": 12,
+                "type": "change",
+            }
+        ]
+        mock_git.return_value = json.dumps(hunks)
+        mock_nvim.return_value = {"success": True}
+
+        response = await async_client.post("/api/editor/quickfix/t1")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json() == {"status": "ok"}
+
+        mock_git.assert_called_once_with("p1", "sha123")
+        mock_nvim.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_open_quickfix_task_not_found(async_client, init_mock_db, mock_auth):
+    with patch(
+        "api.routes.editor_commands.task_queries.get_task_by_id",
+        new_callable=AsyncMock,
+    ) as mock_get:
+        mock_get.return_value = None
+
+        response = await async_client.post("/api/editor/quickfix/missing")
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert response.json()["detail"] == "Task not found"
+
+
+@pytest.mark.asyncio
+async def test_open_quickfix_not_implemented(async_client, init_mock_db, mock_auth):
+    with patch(
+        "api.routes.editor_commands.task_queries.get_task_by_id",
+        new_callable=AsyncMock,
+    ) as mock_get:
+        task = Task(
+            title="Fix Bug",
+            pipeline_id="p1",
+            status=TaskStatus.INPROGRESS,  # Not implemented
+        )
+        mock_get.return_value = task
+
+        response = await async_client.post("/api/editor/quickfix/t1")
+
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "Unknown editor command" in response.json()["detail"]
-    finally:
-        app.dependency_overrides.clear()
+        assert "is not implemented" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_open_quickfix_git_error(async_client, init_mock_db, mock_auth):
+    with (
+        patch(
+            "api.routes.editor_commands.task_queries.get_task_by_id",
+            new_callable=AsyncMock,
+        ) as mock_get,
+        patch(
+            "api.routes.editor_commands.git_commit_hunks", new_callable=AsyncMock
+        ) as mock_git,
+    ):
+        task = Task(
+            title="Fix Bug",
+            pipeline_id="p1",
+            status=TaskStatus.IMPLEMENTED,
+            commit_hash="sha123",
+        )
+        mock_get.return_value = task
+        mock_git.return_value = "Error: Git command failed"
+
+        response = await async_client.post("/api/editor/quickfix/t1")
+
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert "Git command failed" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_open_quickfix_git_exception(async_client, init_mock_db, mock_auth):
+    with (
+        patch(
+            "api.routes.editor_commands.task_queries.get_task_by_id",
+            new_callable=AsyncMock,
+        ) as mock_get,
+        patch(
+            "api.routes.editor_commands.git_commit_hunks", new_callable=AsyncMock
+        ) as mock_git,
+    ):
+        task = Task(
+            title="Fix Bug",
+            pipeline_id="p1",
+            status=TaskStatus.IMPLEMENTED,
+            commit_hash="sha123",
+        )
+        mock_get.return_value = task
+        mock_git.side_effect = Exception("Unexpected failure")
+
+        response = await async_client.post("/api/editor/quickfix/t1")
+
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert "Git operation failed" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_open_quickfix_parse_error(async_client, init_mock_db, mock_auth):
+    with (
+        patch(
+            "api.routes.editor_commands.task_queries.get_task_by_id",
+            new_callable=AsyncMock,
+        ) as mock_get,
+        patch(
+            "api.routes.editor_commands.git_commit_hunks", new_callable=AsyncMock
+        ) as mock_git,
+    ):
+        task = Task(
+            title="Fix Bug",
+            pipeline_id="p1",
+            status=TaskStatus.IMPLEMENTED,
+            commit_hash="sha123",
+        )
+        mock_get.return_value = task
+        mock_git.return_value = "invalid json"
+
+        response = await async_client.post("/api/editor/quickfix/t1")
+
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert "Failed to parse hunks" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_open_quickfix_nvim_error(async_client, init_mock_db, mock_auth):
+    with (
+        patch(
+            "api.routes.editor_commands.task_queries.get_task_by_id",
+            new_callable=AsyncMock,
+        ) as mock_get,
+        patch(
+            "api.routes.editor_commands.git_commit_hunks", new_callable=AsyncMock
+        ) as mock_git,
+        patch(
+            "api.routes.editor_commands.nvim_set_quickfix", new_callable=AsyncMock
+        ) as mock_nvim,
+    ):
+        task = Task(
+            title="Fix Bug",
+            pipeline_id="p1",
+            status=TaskStatus.IMPLEMENTED,
+            commit_hash="sha123",
+        )
+        mock_get.return_value = task
+        mock_git.return_value = json.dumps([])
+        mock_nvim.return_value = {"success": False, "error": "Neovim unreachable"}
+
+        response = await async_client.post("/api/editor/quickfix/t1")
+
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert "Neovim unreachable" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_call_quickfix_success(async_client, init_mock_db, mock_auth):
+    with (
+        patch(
+            "api.routes.editor_commands.task_queries.get_task_by_id",
+            new_callable=AsyncMock,
+        ) as mock_get,
+        patch(
+            "api.routes.editor_commands.git_commit_hunks", new_callable=AsyncMock
+        ) as mock_git,
+        patch(
+            "api.routes.editor_commands.nvim_set_quickfix", new_callable=AsyncMock
+        ) as mock_nvim,
+    ):
+        task = Task(
+            title="Fix Bug",
+            pipeline_id="p1",
+            status=TaskStatus.IMPLEMENTED,
+            commit_hash="sha123",
+        )
+        mock_get.return_value = task
+        mock_git.return_value = json.dumps([])
+        mock_nvim.return_value = {"success": True}
+
+        response = await async_client.post(
+            "/api/editor/call/quickfix", json={"task_id": "t1"}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json() == {"status": "ok"}
+
+
+@pytest.mark.asyncio
+async def test_call_quickfix_missing_task_id(async_client, init_mock_db, mock_auth):
+    response = await async_client.post("/api/editor/call/quickfix", json={})
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "task_id is required" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_call_diff_view_open_success(async_client, init_mock_db, mock_auth):
+    with patch(
+        "api.routes.editor_commands.nvim_diffview_open", new_callable=AsyncMock
+    ) as mock_nvim:
+        mock_nvim.return_value = {"success": True}
+
+        response = await async_client.post(
+            "/api/editor/call/diff_view_open",
+            json={"pipeline_id": "p1", "commit_hash": "sha123"},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json() == {"status": "ok"}
+
+
+@pytest.mark.asyncio
+async def test_call_diff_view_open_missing_options(
+    async_client, init_mock_db, mock_auth
+):
+    response = await async_client.post(
+        "/api/editor/call/diff_view_open", json={"pipeline_id": "p1"}
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "required for diff_view_open" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_call_diff_view_open_nvim_error(async_client, init_mock_db, mock_auth):
+    with patch(
+        "api.routes.editor_commands.nvim_diffview_open", new_callable=AsyncMock
+    ) as mock_nvim:
+        mock_nvim.return_value = {"success": False, "error": "Plugin not found"}
+
+        response = await async_client.post(
+            "/api/editor/call/diff_view_open",
+            json={"pipeline_id": "p1", "commit_hash": "sha123"},
+        )
+
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert "Plugin not found" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_call_unknown_command(async_client, init_mock_db, mock_auth):
+    response = await async_client.post(
+        "/api/editor/call/unknown", json={"task_id": "t1"}
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "Unknown editor command" in response.json()["detail"]
