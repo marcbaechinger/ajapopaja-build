@@ -21,19 +21,18 @@ from fastapi import APIRouter, Depends, HTTPException
 from api.assistant.tools.git_tools import git_commit_hunks
 from api.assistant.tools.nvim_tools import nvim_diffview_open, nvim_set_quickfix
 from api.auth import get_current_user
-from core.models.models import TaskStatus, User
+from core.models.models import TaskStatus
 from core.queries import task as task_queries
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/editor", tags=["editor"])
+router = APIRouter(
+    prefix="/editor", tags=["editor"], dependencies=[Depends(get_current_user)]
+)
 
 
 @router.post("/quickfix/{task_id}")
-async def open_quickfix(
-    task_id: str,
-    current_user: User = Depends(get_current_user),
-):
+async def open_quickfix(task_id: str):
     task = await task_queries.get_task_by_id(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -80,7 +79,6 @@ async def open_quickfix(
 async def call_editor_command(
     command: str,
     options: Dict[str, Any],
-    current_user: User = Depends(get_current_user),
 ):
     """
     Generic endpoint for editor commands.
@@ -94,7 +92,7 @@ async def call_editor_command(
             raise HTTPException(
                 status_code=400, detail="task_id is required for quickfix command"
             )
-        return await open_quickfix(task_id, current_user)
+        return await open_quickfix(task_id)
 
     if command == "diff_view_open":
         pipeline_id = options.get("pipeline_id")
