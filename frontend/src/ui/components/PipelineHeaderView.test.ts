@@ -44,12 +44,31 @@ describe('PipelineHeaderView', () => {
     expect(html).toContain('active');
     expect(html).toContain('ID: p1');
     expect(html).toContain('Workspace: /tmp/test');
+    expect(html).toContain('Stats');
+    expect(html).toContain('testuser');
+    expect(html).toContain('Logged In');
+  });
+
+  it('contains tool actions', () => {
+    const html = PipelineHeaderView.render(mockProps);
+    expect(html).toContain("data-action-click=\"open_search\"")
+    expect(html).toContain("data-action-click=\"open_stats\"")
+    expect(html).toContain("data-action-click=\"toggle_assistant\"")
+    expect(html).toContain("data-action-click=\"perform_logout\"")
+    expect(html).toContain("data-action-click=\"open_health_check\"")
   });
 
   it('renders Gemini status when running', () => {
     const props = { ...mockProps, geminiStatus: { running: true, log_file: 'log.txt', available: true } };
     const html = PipelineHeaderView.render(props);
     expect(html).toContain('Gemini Running');
+    expect(html).toContain('animate-ping');
+  });
+
+  it('renders Vibe status when running', () => {
+    const props = { ...mockProps, vibeStatus: { running: true, log_file: 'log.txt', available: true } };
+    const html = PipelineHeaderView.render(props);
+    expect(html).toContain('Vibe Running');
     expect(html).toContain('animate-ping');
   });
 
@@ -60,20 +79,83 @@ describe('PipelineHeaderView', () => {
     expect(html).toContain('Review');
   });
 
-  it('renders header stats based on tasks', () => {
+  it('renders header stats for created', () => {
     const tasks: Task[] = [
       { id: '1', status: TaskStatus.CREATED, deleted: false } as Task,
-      { id: '2', status: TaskStatus.INPROGRESS, deleted: false } as Task,
-      { id: '3', status: TaskStatus.IMPLEMENTED, deleted: false } as Task,
+      { id: '11', status: TaskStatus.CREATED, deleted: false } as Task,
     ];
     const props = { ...mockProps, allTasks: tasks };
     PipelineHeaderView.render(props);
-    
-    // Check for some expected status badges (the actual badges are rendered via renderHeaderStats)
-    // We expect 3 badges since we have 3 tasks with different statuses
+
     const statsHtml = PipelineHeaderView.renderHeaderStats(tasks);
-    expect(statsHtml).toContain('1'); // Count for CREATED
-    expect(statsHtml).toContain('1'); // Count for INPROGRESS
-    expect(statsHtml).toContain('1'); // Count for IMPLEMENTED
+    expect(statsHtml).toContain('title="created"');
+    expect(statsHtml).not.toContain('title="inprogress"');
+    expect(statsHtml).not.toContain('title="scheduled"');
+    expect(statsHtml).not.toContain('title="proposed"');
+    expect(statsHtml).not.toContain('title="implemented"');
+    expect(statsHtml).not.toContain('title="discarded"');
+    expect(statsHtml).toContain('2'); // Count 
+  });
+
+  it('renders header stats for scheduled', () => {
+    const tasks: Task[] = [
+      { id: '1', status: TaskStatus.SCHEDULED, deleted: false } as Task,
+      { id: '11', status: TaskStatus.SCHEDULED, deleted: false } as Task,
+      { id: '111', status: TaskStatus.SCHEDULED, deleted: false } as Task,
+    ];
+    const props = { ...mockProps, allTasks: tasks };
+    PipelineHeaderView.render(props);
+
+    const statsHtml = PipelineHeaderView.renderHeaderStats(tasks);
+    expect(statsHtml).not.toContain('title="created"');
+    expect(statsHtml).not.toContain('title="inprogress"');
+    expect(statsHtml).toContain('title="scheduled"');
+    expect(statsHtml).not.toContain('title="proposed"');
+    expect(statsHtml).not.toContain('title="implemented"');
+    expect(statsHtml).not.toContain('title="discarded"');
+    expect(statsHtml).toContain('3'); // Count 
+  });
+
+  it('renders header stats for inprogress', () => {
+    const tasks: Task[] = [
+      { id: '1', status: TaskStatus.INPROGRESS, deleted: false } as Task,
+      { id: '11', status: TaskStatus.INPROGRESS, deleted: false } as Task,
+      { id: '111', status: TaskStatus.INPROGRESS, deleted: false } as Task,
+    ];
+    const props = { ...mockProps, allTasks: tasks };
+    PipelineHeaderView.render(props);
+
+    const statsHtml = PipelineHeaderView.renderHeaderStats(tasks);
+    expect(statsHtml).not.toContain('title="created"');
+    expect(statsHtml).toContain('title="inprogress"');
+    expect(statsHtml).not.toContain('title="scheduled"');
+    expect(statsHtml).not.toContain('title="proposed"');
+    expect(statsHtml).not.toContain('title="implemented"');
+    expect(statsHtml).not.toContain('title="discarded"');
+    expect(statsHtml).toContain('3'); // Count 
+  });
+
+  it('renders header stats for proposed and implemented', () => {
+    const tasks: Task[] = [
+      { id: '1', status: TaskStatus.PROPOSED, deleted: false } as Task,
+      { id: '11', status: TaskStatus.PROPOSED, deleted: false } as Task,
+      { id: '111', status: TaskStatus.PROPOSED, deleted: false } as Task,
+      { id: '21', status: TaskStatus.IMPLEMENTED, deleted: false } as Task,
+      { id: '221', status: TaskStatus.IMPLEMENTED, deleted: false } as Task,
+      { id: '222', status: TaskStatus.IMPLEMENTED, deleted: false } as Task,
+      { id: '2222', status: TaskStatus.IMPLEMENTED, deleted: false } as Task,
+    ];
+    const props = { ...mockProps, allTasks: tasks };
+    PipelineHeaderView.render(props);
+
+    const statsHtml = PipelineHeaderView.renderHeaderStats(tasks);
+    expect(statsHtml).not.toContain('title="created"');
+    expect(statsHtml).not.toContain('title="inprogress"');
+    expect(statsHtml).not.toContain('title="scheduled"');
+    expect(statsHtml).toContain('title="proposed"');
+    expect(statsHtml).toContain('title="implemented"');
+    expect(statsHtml).not.toContain('title="discarded"');
+    expect(statsHtml).toContain('3'); // Count 
+    expect(statsHtml).toContain('4'); // Count 
   });
 });
