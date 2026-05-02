@@ -262,7 +262,9 @@ export class TaskItem {
                      </svg>
                   </button>
                 ` : ''}
-                <span class="text-[10px] text-app-muted font-bold uppercase tracking-wider ml-1">Order: ${task.order} ${isSystem ? '• System Task' : ''}</span>
+                ${isImplemented ? '' : `
+                  <span class="text-[10px] text-app-muted font-bold uppercase tracking-wider ml-1">Order: ${task.order} ${isSystem ? '• System Task' : ''}</span>
+                `}
               </div>
             </div>
           </div>
