@@ -106,7 +106,8 @@ async def test_docbot_session_max_iterations():
         assert mock_chat.call_count == 2
         # History should contain "Continue" prompts
         assert any(
-            "Continue to analyze" in msg["content"]
+            "Your analysis is complete, but you haven't finalized the session yet."
+            in msg["content"]
             for msg in session.history
             if msg["role"] == "user"
         )
@@ -239,3 +240,19 @@ async def test_docbot_session_terminal_retry_on_error():
 
             # It should have called chat twice because the first terminal call failed
             assert mock_chat.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_docbot_session_custom_feedback():
+    session = DocBotSession(pipeline_id="test_pipeline", task_id="test_task")
+
+    feedback = session.get_default_feedback("p1", "t1", "Some message")
+
+    assert (
+        "Your analysis is complete, but you haven't finalized the session yet."
+        in feedback
+    )
+    assert "document_update_completed" in feedback
+    assert "no_doc_update_needed" in feedback
+    assert "p1" in feedback
+    assert "t1" in feedback

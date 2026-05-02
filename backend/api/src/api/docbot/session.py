@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import logging
+from textwrap import dedent
 from typing import Any, Dict, List, Optional
 
 from api.bot.tool_registry import ToolDefinition
@@ -85,6 +86,23 @@ class DocBotSession(BaseBotSession):
 
     def is_terminal_tool(self, tool_name: str) -> bool:
         return tool_name in ["document_update_completed", "no_doc_update_needed"]
+
+    def get_default_feedback(
+        self, pipeline_id: str, task_id: str, assistant_message: str
+    ) -> str:
+        """Override to provide DocBot specific instructions."""
+        return dedent(f"""\
+            Your analysis is complete, but you haven't finalized the session yet.
+
+            - If updates are needed: Call 'update_ref_doc' or 'update_markdown_section'.
+            - If you have finished all updates: Call 'document_update_completed'.
+            - If NO updates are required at all: Call 'no_doc_update_needed'.
+
+            Remember: Use the formal tool calling mechanism without any preamble or text.
+
+            Current pipeline ID: {pipeline_id}
+            Current task ID: {task_id}
+            """)
 
     async def on_event(self, event_name: str, payload: Optional[Dict[str, Any]] = None):
         if event_name == "bot_started":
