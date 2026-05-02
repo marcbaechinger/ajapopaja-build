@@ -251,9 +251,9 @@ export class SearchDialog extends BaseDialog {
       } else if (action === 'toggle_task_collapse') {
         e.stopPropagation();
         e.preventDefault();
-        const taskContainer = actionElement.closest('[data-view-type="task"]');
+        const taskContainer = actionElement.closest('[data-view-id]');
         const body = taskContainer?.querySelector('.task-body');
-        const icon = taskContainer?.querySelector('.group/header svg');
+        const icon = actionElement.querySelector('svg.transform');
         if (body && icon) {
           const isHidden = body.classList.toggle('hidden');
           icon.classList.toggle('rotate-90', !isHidden);
