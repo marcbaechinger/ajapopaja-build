@@ -32,7 +32,20 @@ router = APIRouter(
 
 
 @router.post("/quickfix/{task_id}")
-async def open_quickfix(task_id: str):
+async def open_quickfix(task_id: str) -> Dict[str, str]:
+    """
+    Triggers a Neovim quickfix for the specified implemented task.
+
+    Args:
+        task_id: The ID of the task to populate the quickfix with.
+
+    Returns:
+        A dictionary indicating the status of the operation.
+
+    Raises:
+        HTTPException: If the task is not found, not implemented, or if the
+                       operation fails.
+    """
     task = await task_queries.get_task_by_id(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -79,12 +92,25 @@ async def open_quickfix(task_id: str):
 async def call_editor_command(
     command: str,
     options: Dict[str, Any],
-):
+) -> Dict[str, Any]:
     """
-    Generic endpoint for editor commands.
+    Generic endpoint for executing various editor commands.
+
     Supported commands:
-    - 'quickfix': triggers the quickfix for a task. options: {'task_id': '...'}
-    - 'diff_view_open': opens a diff view for a commit. options: {'pipeline_id': '...', 'commit_hash': '...'}
+    - 'quickfix': Triggers the quickfix for a task.
+      Options: {'task_id': '...'}
+    - 'diff_view_open': Opens a diff view for a specific commit.
+      Options: {'pipeline_id': '...', 'commit_hash': '...'}
+
+    Args:
+        command: The name of the command to execute.
+        options: A dictionary of arguments specific to the command.
+
+    Returns:
+        A dictionary containing the command execution status.
+
+    Raises:
+        HTTPException: If the command is unknown or required options are missing.
     """
     if command == "quickfix":
         task_id = options.get("task_id")

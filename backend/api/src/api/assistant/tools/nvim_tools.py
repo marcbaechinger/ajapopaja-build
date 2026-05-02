@@ -16,7 +16,7 @@ import logging
 import os
 import socket
 import stat
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 import msgpack
 
@@ -69,7 +69,7 @@ def is_nvim_available() -> bool:
     return False
 
 
-def _nvim_client_call(method: str, params: list) -> Dict:
+def _nvim_client_call(method: str, params: list) -> Dict[str, Any]:
     """Helper to send MessagePack-RPC requests to the Neovim socket."""
     socket_path = get_nvim_socket_path()
     if not is_nvim_available():
@@ -130,7 +130,7 @@ def _nvim_client_call(method: str, params: list) -> Dict:
 @register_tool(tool_type=WRITE_ACCESS, is_available=is_nvim_available)
 async def nvim_open_file(
     pipeline_id: str, path: str, line_number: Optional[int] = None
-) -> Dict:
+) -> Dict[str, Any]:
     """
     Opens a file in the user's running Neovim instance.
     Optionally jumps to a specific line. Use this tool to display
@@ -167,7 +167,7 @@ async def nvim_open_file(
 @register_tool(tool_type=WRITE_ACCESS, is_available=is_nvim_available)
 async def nvim_open_selection(
     pipeline_id: str, path: str, start_line: int, end_line: int
-) -> Dict:
+) -> Dict[str, Any]:
     """
     Opens a file in a running Neovim instance and selects a range of lines.
     Connects to a Neovim instance listening on /tmp/nvimsocket using JSON-RPC.
@@ -201,7 +201,7 @@ async def nvim_open_selection(
 @register_tool(tool_type=WRITE_ACCESS, is_available=is_nvim_available)
 async def nvim_set_quickfix(
     pipeline_id: str, matches: list[dict], title: str = "Assistant Search Results"
-) -> Dict:
+) -> Dict[str, Any]:
     """
     Sets the quickfix list in Neovim to a list of file locations.
     This provides the user with a list of file locations to jump to
@@ -276,7 +276,7 @@ async def nvim_set_quickfix(
 @register_tool(tool_type=WRITE_ACCESS, is_available=is_nvim_available)
 async def nvim_show_diff(
     pipeline_id: str, path: str, commit_hash: str = "HEAD~1"
-) -> Dict:
+) -> Dict[str, Any]:
     """
     Shows a side-by-side diff between the current file and a version in Neovim.
 
@@ -313,7 +313,7 @@ async def nvim_show_diff(
 
 
 @register_tool(tool_type=WRITE_ACCESS, is_available=is_nvim_available)
-async def nvim_diffview_open(pipeline_id: str, commit_hash: str) -> Dict:
+async def nvim_diffview_open(pipeline_id: str, commit_hash: str) -> Dict[str, Any]:
     """
     Opens a side-by-side diff view for a given commit hash in Neovim.
     This typically requires the 'diffview.nvim' plugin.
