@@ -100,7 +100,8 @@ class Pipeline(Document):
     def validate_workspace_path(cls, v):
         if v is not None and v != "":
             if os.path.isabs(v):
-                # Migration logic: if it's an absolute path, try to make it relative to config.WORKSPACES_ROOT
+                # Migration logic: if it's an absolute path, try to make it relative to
+                # config.WORKSPACES_ROOT
                 try:
                     rel_path = os.path.relpath(v, config.WORKSPACES_ROOT)
                     # Check if it's actually within config.WORKSPACES_ROOT
@@ -108,7 +109,8 @@ class Pipeline(Document):
                         import logging
 
                         logging.warning(
-                            f"Absolute path {v} is outside config.WORKSPACES_ROOT {config.WORKSPACES_ROOT}. Nullifying workspace_path."
+                            f"Absolute path {v} is outside config.WORKSPACES_ROOT "
+                            f"{config.WORKSPACES_ROOT}. Nullifying workspace_path."
                         )
                         return None
                     v = rel_path
@@ -116,7 +118,8 @@ class Pipeline(Document):
                     import logging
 
                     logging.warning(
-                        f"Could not migrate absolute path {v} to config.WORKSPACES_ROOT {config.WORKSPACES_ROOT}: {e}. Nullifying workspace_path."
+                        f"Could not migrate absolute path {v} to config.WORKSPACES_ROOT"
+                        f" {config.WORKSPACES_ROOT}: {e}. Nullifying workspace_path."
                     )
                     return None
 

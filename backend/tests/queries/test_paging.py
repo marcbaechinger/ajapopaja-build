@@ -33,12 +33,12 @@ async def test_get_completed_tasks_paging(init_mock_db):
             title=f"Task {i}",
             pipeline_id=pid,
             status=TaskStatus.IMPLEMENTED,
-            updated_at=(datetime.now(UTC) + timedelta(minutes=i)).isoformat(),
+            updated_at=(datetime.now(UTC) + timedelta(minutes=i)),
         )
         await task.insert()
 
     # Total completed should be 12.
-    # The UI shows the *latest* one separately, so the query should return 11 as total_count.
+    # The UI shows the *latest* one separately, so the query should return 11.
 
     # Page 0, Limit 5
     tasks, total = await task_queries.get_completed_tasks_by_pipeline(

@@ -59,7 +59,7 @@ def git_repo():
 
 
 @pytest.mark.asyncio
-async def test_git_tools(init_mock_db, git_repo):
+async def test_git_tools(git_repo, init_mock_db):
     pipeline = Pipeline(name="Git Pipeline", workspace_path=git_repo)
     await pipeline.insert()
     pipeline_id = str(pipeline.id)
@@ -96,7 +96,7 @@ async def test_git_tools(init_mock_db, git_repo):
 
 
 @pytest.mark.asyncio
-async def test_git_commit_hunks(init_mock_db, git_repo):
+async def test_git_commit_hunks(git_repo, init_mock_db):
     pipeline = Pipeline(name="Git Hunks Pipeline", workspace_path=git_repo)
     await pipeline.insert()
     pipeline_id = str(pipeline.id)
@@ -154,7 +154,7 @@ async def test_git_commit_hunks(init_mock_db, git_repo):
 
 
 @pytest.mark.asyncio
-async def test_git_path_sanitization(init_mock_db, git_repo):
+async def test_git_path_sanitization(git_repo, init_mock_db):
     pipeline = Pipeline(name="Git Pipeline", workspace_path=git_repo)
     await pipeline.insert()
     pipeline_id = str(pipeline.id)
@@ -180,16 +180,16 @@ def test_parse_patch_to_hunks_real_life_deletion():
     from api.assistant.tools.git_tools import _parse_patch_to_hunks
 
     # This is a snippet representing commit 87eaa722696212caeab88d3bfc7780d5ac26e00b
-    patch_text = """diff --git a/backend/api/pyproject.toml b/backend/api/pyproject.toml
+    patch_text = """diff --git a/back/api/pyproject.toml b/back/api/pyproject.toml
 index e510243..e791839 100644
---- a/backend/api/pyproject.toml
-+++ b/backend/api/pyproject.toml
+--- a/back/api/pyproject.toml
++++ b/back/api/pyproject.toml
 @@ -15,0 +16 @@ dependencies = [
 +    "gitpython>=3.1.46",
-diff --git a/backend/api/src/api/assistant/tools/git_tools.py b/backend/api/src/api/assistant/tools/git_tools.py
+diff --git a/back/api/src/api/tools/git_tools.py b/back/api/src/api/tools/git_tools.py
 index 4cc0cd9..1040e40 100644
---- a/backend/api/src/api/assistant/tools/git_tools.py
-+++ b/backend/api/src/api/assistant/tools/git_tools.py
+--- a/back/api/src/api/tools/git_tools.py
++++ b/back/api/src/api/tools/git_tools.py
 @@ -16 +15,0 @@ import os
 -import subprocess
 @@ -34,18 +33,0 @@ def _sanitize_path(workspace: str, rel_path: str) -> Optional[str]:
@@ -216,15 +216,15 @@ index 4cc0cd9..1040e40 100644
 
     assert len(hunks) == 3
 
-    assert hunks[0]["file"] == "backend/api/pyproject.toml"
+    assert hunks[0]["file"] == "back/api/pyproject.toml"
     assert hunks[0]["type"] == "addition"
 
-    assert hunks[1]["file"] == "backend/api/src/api/assistant/tools/git_tools.py"
+    assert hunks[1]["file"] == "back/api/src/api/tools/git_tools.py"
     assert hunks[1]["type"] == "deletion"
     assert hunks[1]["first_line"] == 15
     assert hunks[1]["last_line"] == 15
 
-    assert hunks[2]["file"] == "backend/api/src/api/assistant/tools/git_tools.py"
+    assert hunks[2]["file"] == "back/api/src/api/tools/git_tools.py"
     assert hunks[2]["type"] == "deletion"
     assert hunks[2]["first_line"] == 33
     assert hunks[2]["last_line"] == 33

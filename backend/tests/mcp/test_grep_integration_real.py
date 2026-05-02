@@ -32,17 +32,21 @@ async def real_workspace_pipeline(init_mock_db):
 
         pipeline_client = clients_dir / "PipelineClient.ts"
         pipeline_client.write_text(
-            "import { BaseClient } from './BaseClient.ts';\n\nexport class PipelineClient extends BaseClient {\n    constructor() {\n        super();\n    }\n}\n"
+            "import { BaseClient } from './BaseClient.ts';\n\nexport class "
+            "PipelineClient extends BaseClient {\n    constructor() {"
+            "\n        super();\n    }\n}\n"
         )
 
         task_client = clients_dir / "TaskClient.ts"
         task_client.write_text(
-            "import { BaseClient } from './BaseClient.ts';\n\nexport class TaskClient extends BaseClient {\n    constructor() {\n        super();\n    }\n}\n"
+            "import { BaseClient } from './BaseClient.ts';\n\nexport class TaskClient "
+            "extends BaseClient {\n    constructor() {\n        super();\n    }\n}\n"
         )
 
         system_client = clients_dir / "SystemClient.ts"
         system_client.write_text(
-            "import { BaseClient } from './BaseClient.ts';\n\nexport class SystemClient extends BaseClient {\n    constructor() {\n        super();\n    }\n}\n"
+            "import { BaseClient } from './BaseClient.ts';\n\nexport class SystemClient"
+            "  extends BaseClient {\n    constructor() {\n        super();\n    }\n}\n"
         )
 
         # Create a large file for the large file test
@@ -68,7 +72,6 @@ async def real_workspace_pipeline(init_mock_db):
         pipeline = Pipeline(
             name="Test Grep Pipeline",
             workspace_path=str(tmp_path),
-            workspace_abs_path=tmp_path,
         )
         await pipeline.insert()
 

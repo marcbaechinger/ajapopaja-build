@@ -32,7 +32,7 @@ def mock_auth():
 
 
 @pytest.mark.asyncio
-async def test_trigger_docbot_success(async_client, init_mock_db):
+async def test_trigger_docbot_success(async_client):
     with patch(
         "api.routes.docbot.pipeline_queries.get_pipeline_by_id", new_callable=AsyncMock
     ) as mock_p_get:
@@ -57,7 +57,7 @@ async def test_trigger_docbot_success(async_client, init_mock_db):
 
 
 @pytest.mark.asyncio
-async def test_trigger_docbot_no_commit(async_client, init_mock_db):
+async def test_trigger_docbot_no_commit(async_client):
     with patch(
         "api.routes.docbot.pipeline_queries.get_pipeline_by_id", new_callable=AsyncMock
     ) as mock_p_get:
@@ -74,7 +74,7 @@ async def test_trigger_docbot_no_commit(async_client, init_mock_db):
 
 
 @pytest.mark.asyncio
-async def test_get_preview_not_found(async_client, init_mock_db):
+async def test_get_preview_not_found(async_client):
     with patch("api.routes.docbot.get_preview") as mock_get:
         mock_get.return_value = None
         response = await async_client.get("/api/pipelines/p1/docbot/preview/t1")
@@ -82,7 +82,7 @@ async def test_get_preview_not_found(async_client, init_mock_db):
 
 
 @pytest.mark.asyncio
-async def test_commit_docbot_change_success(async_client, init_mock_db):
+async def test_commit_docbot_change_success(async_client):
     with patch("api.routes.docbot.get_preview") as mock_get:
         preview = MagicMock()
         preview.file_path = "some/path"

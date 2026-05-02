@@ -117,7 +117,7 @@ class DocBotSession(BaseBotSession):
             )
 
         try:
-            repo = git_utils.get_repo(pipeline.workspace_abs_path)
+            repo = git_utils.get_repo(str(pipeline.workspace_abs_path))
             diff = repo.git.show(task.commit_hash)
         except Exception as e:
             raise ValueError(

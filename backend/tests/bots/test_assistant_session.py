@@ -86,6 +86,9 @@ async def test_llm_loop_max_retries():
         mock_on_update.assert_any_call(
             {
                 "type": "error",
-                "message": "Assistant failed to produce a valid response after multiple attempts.",
+                "message": (
+                    "Assistant failed to produce a valid response after "
+                    "multiple attempts."
+                ),
             }
         )

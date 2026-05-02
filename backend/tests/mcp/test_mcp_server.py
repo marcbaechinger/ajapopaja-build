@@ -28,8 +28,8 @@ from core.models.models import Pipeline, Task, TaskStatus, User
 
 
 @pytest.mark.asyncio
-async def test_mcp_security_disabled(async_client, init_mock_db, monkeypatch):
-    """Verifies that MCP endpoints are open when authentication is disabled (default)."""
+async def test_mcp_security_disabled(async_client, monkeypatch):
+    """Verifies that MCP endpoints are open when authentication is disabled."""
     monkeypatch.setattr(config, "MCP_AUTHENTICATION_ENABLED", False)
 
     # Should NOT be 401 even without token
@@ -42,7 +42,7 @@ async def test_mcp_security_disabled(async_client, init_mock_db, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_mcp_security_enabled(async_client, init_mock_db, monkeypatch):
+async def test_mcp_security_enabled(async_client, monkeypatch):
     """Verifies that MCP endpoints are secured when authentication is enabled."""
     monkeypatch.setattr(config, "MCP_AUTHENTICATION_ENABLED", True)
 
@@ -371,7 +371,10 @@ async def test_mcp_search_tasks_excludes_deleted():
 
 @pytest.mark.asyncio
 async def test_mcp_mounting_and_precedence(async_client, init_mock_db):
-    """Verifies that MCP is mounted correctly and does not interfere with /api routes."""
+    """
+    Verifies that MCP is mounted correctly and does not interfere with
+    /api routes.
+    """
     # Test /api/health (Standard FastAPI route)
     response = await async_client.get("/api/health")
     assert response.status_code == 200

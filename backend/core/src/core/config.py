@@ -23,7 +23,8 @@ WORKSPACES_ROOT = Path(
 if not WORKSPACES_ROOT.is_dir():
     raise RuntimeError(
         f"WORKSPACES_ROOT '{WORKSPACES_ROOT}' does not exist or is not a directory. "
-        "Please create it or configure the WORKSPACES_ROOT environment variable correctly."
+        "Please create it or configure the WORKSPACES_ROOT environment variable "
+        "correctly."
     )
 
 # Common directories to ignore across all file and search tools

@@ -25,12 +25,12 @@ async def get_tasks_by_pipeline(
     if include_deleted:
         return (
             await Task.find(Task.pipeline_id == pipeline_id)
-            .sort(+Task.order, +Task.scheduled_at, +Task.created_at)
+            .sort("+order", "+scheduled_at", "+created_at")
             .to_list()
         )
     return (
         await Task.find(Task.pipeline_id == pipeline_id, Task.deleted == False)
-        .sort(+Task.order, +Task.scheduled_at, +Task.created_at)
+        .sort("+order", "+scheduled_at", "+created_at")
         .to_list()
     )
 
@@ -45,11 +45,11 @@ async def get_tasks_for_tool(
     total_tasks = await query.count()
 
     if sort_order == "last_created_first":
-        query = query.sort(-Task.created_at)
+        query = query.sort("+created_at")
     elif sort_order == "last_implemented_first":
-        query = query.sort(-Task.updated_at)
+        query = query.sort("-updated_at")
     else:
-        query = query.sort(+Task.order, +Task.scheduled_at, +Task.created_at)
+        query = query.sort("+order", "+scheduled_at", "+created_at")
 
     tasks = await query.skip(offset).limit(page_size).to_list()
 
@@ -74,7 +74,7 @@ async def get_tasks_for_tool(
 
 async def get_completed_tasks_by_pipeline(
     pipeline_id: str, page: int = 0, limit: int = 5
-) -> (List[Task], int):
+) -> tuple[List[Task], int]:
     # Filter for completed tasks (IMPLEMENTED or DISCARDED) that are not deleted
     query = Task.find(
         Task.pipeline_id == pipeline_id,
@@ -89,10 +89,7 @@ async def get_completed_tasks_by_pipeline(
     # We want to return "older" completed tasks, so we skip the first one.
     # We sort by updated_at descending to get the newest first.
     tasks = (
-        await query.sort(-Task.updated_at)
-        .skip(1 + (page * limit))
-        .limit(limit)
-        .to_list()
+        await query.sort("-updated_at").skip(1 + (page * limit)).limit(limit).to_list()
     )
 
     # We return total_completed - 1 because one task is shown separately
@@ -113,7 +110,7 @@ async def get_task_by_id(task_id: str, include_deleted: bool = False) -> Task:
 async def get_design_doc_history(task_id: str) -> List[DesignDocHistory]:
     return (
         await DesignDocHistory.find(DesignDocHistory.task_id == task_id)
-        .sort(-DesignDocHistory.version)
+        .sort("-version")
         .to_list()
     )
 
@@ -171,7 +168,8 @@ async def update_task_details(
     if title is not None:
         if task.status not in [TaskStatus.CREATED, TaskStatus.PROPOSED]:
             raise ValueError(
-                f"Task title can only be updated in CREATED or PROPOSED state, currently {task.status}"
+                "Task title can only be updated in CREATED or PROPOSED state, "
+                "currently {task.status}"
             )
         task.title = title
     if description is not None:
@@ -197,7 +195,8 @@ async def update_task_details(
             new_title = _parse_title_from_design_doc(design_doc)
             if not new_title:
                 raise ValueError(
-                    "Design document must contain a top-level Markdown header (e.g., '# Title') to be used as the task title."
+                    "Design document must contain a top-level Markdown header (e.g., "
+                    "'# Title') to be used as the task title."
                 )
 
             task.title = new_title
@@ -308,7 +307,10 @@ async def complete_task(
         # Create system task for failure
         system_task = Task(
             title=f"Verification failed: {task.title}",
-            description=f"Automated verification failed for task {task_id}. Errors: {', '.join(verification_results['errors'])}",
+            description=(
+                f"Automated verification failed for task {task_id}. "
+                f"Errors: {', '.join(verification_results['errors'])}"
+            ),
             type="system",
             status=TaskStatus.CREATED,
             order=task.order - 1,  # Higher priority
@@ -336,21 +338,26 @@ def _verify_task(task: Task) -> dict:
 
     if task.want_design_doc and (not task.design_doc or not task.design_doc.strip()):
         errors.append(
-            "Missing design_doc. Since want_design_doc is True, you MUST provide a design proposal using update_task_design_doc and have it approved before completing the task."
+            "Missing design_doc. Since want_design_doc is True, you MUST provide a "
+            "design proposal using update_task_design_doc and have it approved before "
+            "completing the task."
         )
 
     return {"success": len(errors) == 0, "errors": errors}
 
 
 async def get_next_task(pipeline_id: str, actor: str = "mcp") -> Optional[Task]:
-    """Finds the first scheduled task (lowest order, then oldest scheduled time), sets it to inprogress, and increments version."""
+    """
+    Finds the first scheduled task (lowest order, then oldest scheduled time),
+    sets it to inprogress, and increments version.
+    """
     task = (
         await Task.find(
             Task.pipeline_id == pipeline_id,
             Task.status == TaskStatus.SCHEDULED,
             Task.deleted == False,
         )
-        .sort(+Task.order, +Task.scheduled_at, +Task.created_at)
+        .sort("+order", "+scheduled_at", "+created_at")
         .first_or_none()
     )
 
@@ -434,8 +441,8 @@ async def search_tasks(
     pipeline_id: Optional[str] = None,
     page: int = 0,
     limit: int = 20,
-) -> (List[Task], int):
-    filters = {"deleted": False}
+) -> tuple[List[Task], int]:
+    filters: Dict[str, Any] = {"deleted": False}
 
     if pipeline_id:
         filters["pipeline_id"] = pipeline_id
@@ -454,6 +461,6 @@ async def search_tasks(
 
     query = Task.find(filters)
     total_count = await query.count()
-    tasks = await query.sort(-Task.updated_at).skip(page * limit).limit(limit).to_list()
+    tasks = await query.sort("-updated_at").skip(page * limit).limit(limit).to_list()
 
     return tasks, total_count

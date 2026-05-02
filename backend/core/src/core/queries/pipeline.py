@@ -57,7 +57,8 @@ async def update_pipeline(
 
     if pipeline.version != version:
         raise VersionMismatchError(
-            f"Pipeline version mismatch. Client has {version}, DB has {pipeline.version}"
+            f"Pipeline version mismatch. Client has {version}, DB "
+            f"has {pipeline.version}"
         )
 
     if name is not None:
