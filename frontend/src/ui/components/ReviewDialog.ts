@@ -18,6 +18,31 @@ import { BaseDialog } from './dialog_common.ts';
 import { Task } from '../../core/domain.ts';
 import type { AppContext } from '../../core/AppContext.ts';
 import { marked } from 'marked';
+import { renderQuickPromptButton, type PromptConfig } from './QuickPromptButton.ts';
+
+const PROMPT_CONFIGS: PromptConfig[] = [
+  {
+    id: 'create_tasks',
+    label: 'Create Tasks',
+    title: 'Copy prompt to create tasks from review',
+    iconSvg: '<svg class="w-3 h-3 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>',
+    getPrompt: (taskId, pipelineId) => `Please analyze the technical review for Task ${taskId} in Pipeline ${pipelineId}. Break down the findings into up to 5 actionable new tasks, prioritized by impact or ease of implementation (low-hanging fruits).`
+  },
+  {
+    id: 'explain_review',
+    label: 'Explain',
+    title: 'Copy prompt to explain review in detail',
+    iconSvg: '<svg class="w-3 h-3 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>',
+    getPrompt: (taskId, pipelineId) => `Can you explain the technical review for Task ${taskId} in Pipeline ${pipelineId} in more detail? Focus on the architectural implications and any potential risks identified.`
+  },
+  {
+    id: 'design_check',
+    label: 'Design Check',
+    title: 'Copy prompt to check design alignment',
+    iconSvg: '<svg class="w-3 h-3 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>',
+    getPrompt: (taskId, pipelineId) => `Based on the technical review for Task ${taskId} in Pipeline ${pipelineId}, does the current implementation deviate from our established design patterns in the 'design/' folder? If so, what should be changed?`
+  }
+];
 
 export interface ReviewDialogProps {
   task: Task;
@@ -62,22 +87,13 @@ export class ReviewDialog extends BaseDialog<void> {
   }
 
   protected renderFooter(): string {
+    const promptButtons = PROMPT_CONFIGS.map(config => renderQuickPromptButton(config)).join('\n');
+
     return `
       <div class="flex flex-col gap-4 p-4 border-t border-app-border bg-app-surface/50 rounded-b-2xl">
         <div class="flex flex-wrap items-center gap-2 justify-center">
           <span class="text-[9px] font-black uppercase tracking-widest text-app-muted mr-1">Quick Prompts:</span>
-          <button data-action-copy="create_tasks" class="px-3 py-1.5 rounded bg-app-bg border border-app-border text-[10px] font-bold uppercase tracking-wider text-app-accent-2 hover:bg-app-accent-2/10 transition-all cursor-pointer flex items-center gap-1.5 group" title="Copy prompt to create tasks from review">
-            <svg class="w-3 h-3 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-            Create Tasks
-          </button>
-          <button data-action-copy="explain_review" class="px-3 py-1.5 rounded bg-app-bg border border-app-border text-[10px] font-bold uppercase tracking-wider text-app-accent-2 hover:bg-app-accent-2/10 transition-all cursor-pointer flex items-center gap-1.5 group" title="Copy prompt to explain review in detail">
-            <svg class="w-3 h-3 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-            Explain
-          </button>
-          <button data-action-copy="design_check" class="px-3 py-1.5 rounded bg-app-bg border border-app-border text-[10px] font-bold uppercase tracking-wider text-app-accent-2 hover:bg-app-accent-2/10 transition-all cursor-pointer flex items-center gap-1.5 group" title="Copy prompt to check design alignment">
-            <svg class="w-3 h-3 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
-            Design Check
-          </button>
+          ${promptButtons}
         </div>
 
         <div class="flex justify-between items-center pt-2 border-t border-app-border/30">
@@ -106,20 +122,10 @@ export class ReviewDialog extends BaseDialog<void> {
     const btn = e.currentTarget as HTMLButtonElement;
     const action = btn.getAttribute('data-action-copy');
     const { task, pipelineId } = this.props;
-    const taskId = task.id;
+    const taskId = task.id || '';
 
-    let prompt = '';
-    switch (action) {
-      case 'create_tasks':
-        prompt = `Please analyze the technical review for Task ${taskId} in Pipeline ${pipelineId}. Break down the findings into up to 5 actionable new tasks, prioritized by impact or ease of implementation (low-hanging fruits).`;
-        break;
-      case 'explain_review':
-        prompt = `Can you explain the technical review for Task ${taskId} in Pipeline ${pipelineId} in more detail? Focus on the architectural implications and any potential risks identified.`;
-        break;
-      case 'design_check':
-        prompt = `Based on the technical review for Task ${taskId} in Pipeline ${pipelineId}, does the current implementation deviate from our established design patterns in the 'design/' folder? If so, what should be changed?`;
-        break;
-    }
+    const config = PROMPT_CONFIGS.find(c => c.id === action);
+    const prompt = config ? config.getPrompt(taskId, pipelineId) : '';
 
     if (prompt) {
       try {
