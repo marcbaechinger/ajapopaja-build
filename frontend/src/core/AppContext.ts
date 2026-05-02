@@ -53,7 +53,7 @@ export class AppContext {
     this.taskClient = new TaskClient(apiBaseUrl, this.authService);
     this.systemClient = new SystemClient(this.authService);
     this.docBotClient = new DocBotClient(apiBaseUrl, this.authService);
-    this.reviewBotClient = new ReviewBotClient(this.authService);
+    this.reviewBotClient = new ReviewBotClient(apiBaseUrl, this.authService);
     this.wsClient = new WebSocketClient(apiBaseUrl, this.authService);
     this.assistantService = new AssistantService(this.wsClient, this.authService);
     

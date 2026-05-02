@@ -14,17 +14,25 @@
  * limitations under the License.
  */
 
-import { BaseClient } from './BaseClient.ts';
+import { BaseClient } from './BaseClient';
+import { AuthService } from '../AuthService';
 
 export class ReviewBotClient extends BaseClient {
+  private apiBaseUrl: string;
+
+  constructor(apiBaseUrl: string, authService: AuthService) {
+    super(authService);
+    this.apiBaseUrl = apiBaseUrl.endsWith('/') ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
+  }
+
   async trigger(pipelineId: string, taskId: string): Promise<void> {
-    await this.fetch(`/api/pipelines/${pipelineId}/reviewbot/trigger/${taskId}`, {
+    await this.fetch(`${this.apiBaseUrl}/pipelines/${pipelineId}/reviewbot/trigger/${taskId}`, {
       method: 'POST'
     });
   }
 
   async deleteReview(pipelineId: string, taskId: string): Promise<void> {
-    await this.fetch(`/api/pipelines/${pipelineId}/reviewbot/review/${taskId}`, {
+    await this.fetch(`${this.apiBaseUrl}/pipelines/${pipelineId}/reviewbot/review/${taskId}`, {
       method: 'DELETE'
     });
   }

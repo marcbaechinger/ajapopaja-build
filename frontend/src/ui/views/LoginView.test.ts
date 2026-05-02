@@ -59,7 +59,7 @@ describe('LoginView', () => {
     view.mount(container);
     container.innerHTML = view.render();
 
-    const loginAction = mockContext.actionRegistry.register.mock.calls.find(call => call[0] === 'perform_login')[1];
+    const loginAction = mockContext.actionRegistry.register.mock.calls.find((call: any) => call[0] === 'perform_login')[1];
     
     const form = container.querySelector('form') as HTMLFormElement;
     (container.querySelector('#username') as HTMLInputElement).value = 'admin';
@@ -77,7 +77,7 @@ describe('LoginView', () => {
     view.mount(container);
     container.innerHTML = view.render();
 
-    const loginAction = mockContext.actionRegistry.register.mock.calls.find(call => call[0] === 'perform_login')[1];
+    const loginAction = mockContext.actionRegistry.register.mock.calls.find((call: any) => call[0] === 'perform_login')[1];
     
     const form = container.querySelector('form') as HTMLFormElement;
     (container.querySelector('#username') as HTMLInputElement).value = 'admin';
@@ -100,7 +100,7 @@ describe('LoginView', () => {
     const errorEl = container.querySelector('#login-error') as HTMLElement;
     errorEl.classList.remove('hidden');
 
-    const loginAction = mockContext.actionRegistry.register.mock.calls.find(call => call[0] === 'perform_login')[1];
+    const loginAction = mockContext.actionRegistry.register.mock.calls.find((call: any) => call[0] === 'perform_login')[1];
     const form = container.querySelector('form') as HTMLFormElement;
 
     await loginAction(new Event('submit'), form);

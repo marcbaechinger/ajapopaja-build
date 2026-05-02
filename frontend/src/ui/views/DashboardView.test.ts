@@ -123,7 +123,7 @@ describe('DashboardView', () => {
     container.innerHTML = view.render();
     view.mount(container);
 
-    const createAction = mockContext.actionRegistry.register.mock.calls.find(c => c[0] === 'create_pipeline')[1];
+    const createAction = mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === 'create_pipeline')[1];
     
     const form = container.querySelector('form') as HTMLFormElement;
     const nameInput = form.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
@@ -139,7 +139,7 @@ describe('DashboardView', () => {
   });
 
   it('should handle pipeline deletion with confirmation', async () => {
-    const { ConfirmationDialog } = await import('../components/ConfirmationDialog.ts');
+    await import('../components/ConfirmationDialog.ts');
     const view = new DashboardView(mockContext);
     container.innerHTML = view.render();
     view.mount(container);
@@ -148,7 +148,7 @@ describe('DashboardView', () => {
     mockContext.pipelineClient.list.mockResolvedValue(pipelines);
     await view.refreshList();
 
-    const deleteAction = mockContext.actionRegistry.register.mock.calls.find(c => c[0] === 'delete_pipeline')[1];
+    const deleteAction = mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === 'delete_pipeline')[1];
     const deleteBtn = container.querySelector('[data-action-click="delete_pipeline"]') as HTMLElement;
     expect(deleteBtn).toBeTruthy();
 
@@ -167,7 +167,7 @@ describe('DashboardView', () => {
     mockContext.pipelineClient.list.mockResolvedValue(pipelines);
     await view.refreshList();
 
-    const viewAction = mockContext.actionRegistry.register.mock.calls.find(c => c[0] === 'view_pipeline')[1];
+    const viewAction = mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === 'view_pipeline')[1];
     const item = container.querySelector('[data-view-id="p1"]') as HTMLElement;
     expect(item).toBeTruthy();
 

@@ -62,7 +62,7 @@ describe('RegisterView', () => {
     view.mount(container);
     container.innerHTML = view.render();
 
-    const registerAction = mockContext.actionRegistry.register.mock.calls.find(call => call[0] === 'perform_register')[1];
+    const registerAction = mockContext.actionRegistry.register.mock.calls.find((call: any) => call[0] === 'perform_register')[1];
     
     const form = container.querySelector('form') as HTMLFormElement;
     (container.querySelector('#password') as HTMLInputElement).value = 'password123';
@@ -83,7 +83,7 @@ describe('RegisterView', () => {
     view.mount(container);
     container.innerHTML = view.render();
 
-    const registerAction = mockContext.actionRegistry.register.mock.calls.find(call => call[0] === 'perform_register')[1];
+    const registerAction = mockContext.actionRegistry.register.mock.calls.find((call: any) => call[0] === 'perform_register')[1];
     
     const form = container.querySelector('form') as HTMLFormElement;
     (container.querySelector('#username') as HTMLInputElement).value = 'newuser';
@@ -106,7 +106,7 @@ describe('RegisterView', () => {
     view.mount(container);
     container.innerHTML = view.render();
 
-    const registerAction = mockContext.actionRegistry.register.mock.calls.find(call => call[0] === 'perform_register')[1];
+    const registerAction = mockContext.actionRegistry.register.mock.calls.find((call: any) => call[0] === 'perform_register')[1];
     
     const form = container.querySelector('form') as HTMLFormElement;
     (container.querySelector('#username') as HTMLInputElement).value = 'newuser';
@@ -124,7 +124,7 @@ describe('RegisterView', () => {
     view.mount(container);
     container.innerHTML = view.render();
 
-    const registerAction = mockContext.actionRegistry.register.mock.calls.find(call => call[0] === 'perform_register')[1];
+    const registerAction = mockContext.actionRegistry.register.mock.calls.find((call: any) => call[0] === 'perform_register')[1];
     
     const form = container.querySelector('form') as HTMLFormElement;
     (container.querySelector('#username') as HTMLInputElement).value = 'existinguser';
