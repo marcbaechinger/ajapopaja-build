@@ -43,8 +43,8 @@ marked.use({
       if (body) body = `<tbody>${body}</tbody>`;
 
       return `
-        <div class="overflow-x-auto my-4 border border-app-border rounded-b-lg shadow-sm bg-app-bg">
-          <table class="w-full text-sm text-left">
+        <div class="overflow-x-auto my-4 border border-app-border rounded-lg">
+          <table class="w-full text-sm text-left bg-app-bg" style="margin-top: 0; margin-bottom: 0">
             <thead class="bg-app-surface text-app-muted uppercase text-[10px] tracking-widest font-bold">
               ${header}
             </thead>
