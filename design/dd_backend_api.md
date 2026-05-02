@@ -1,16 +1,16 @@
 # Backend API Design Document (`dd_backend_api.md`)
 
 ## 1. Overview
-This document defines the architecture and design patterns for the Ajapopaja Build FastAPI backend. The goals are to ensure consistent routing, decouple database access from endpoint logic, and provide a robust, real-time communication layer via WebSockets.
+This document defines the architecture and design patterns for the Ajapopaja Build FastAPI backend. The goals are to ensure consistent routing, decouple database access from endpoint logic, and provide a robust, real‑time communication layer via WebSockets.
 
 ## 2. Router Design & Naming Conventions
-The API is organized into feature-based routers (e.g., `PipelineRouter`, `TaskRouter`) to keep the codebase modular.
+The API is organized into feature‑based routers (e.g., `PipelineRouter`, `TaskRouter`) to keep the codebase modular.
 
 ### URI Naming Convention
 - **Plural nouns** for collections: `/pipelines`, `/tasks`.
 - **Nesting** for child resources: `/pipelines/{id}/tasks`.
 - **Verbs** for specific actions (if not standard CRUD): `/tasks/{id}/retry`.
-- **Kebab-case** for multi-word paths: `/user-settings`.
+- **Kebab‑case** for multi‑word paths: `/user-settings`.
 
 ### Standard Endpoints
 | Resource | Method | URI | Description |
@@ -22,10 +22,19 @@ The API is organized into feature-based routers (e.g., `PipelineRouter`, `TaskRo
 | | POST | `/pipelines/{id}/tasks` | Create a task in a pipeline. |
 | | PATCH | `/tasks/{id}` | Update task (status, title, etc.). |
 
-## 3. Decoupling Database Access
-We follow a **Repository/Query Pattern** to prevent Beanie/MongoDB logic from leaking into the routers. 
+## 2.1 Editor Commands Router
+The `editor` router exposes endpoints for executing editor‑specific actions. The primary endpoint is `POST /editor/quickfix/{task_id}`, which opens a quickfix list in Neovim for the specified task. A generic endpoint `POST /editor/call/{command}` allows future editor commands to be added without changing the API contract. These routes are protected by authentication and use the same dependency injection as other routers.
 
-Database access is separated into feature-based modules within a `queries/` directory (e.g., `queries/pipeline.py`, `queries/task.py`, `queries/dashboard.py`).
+### Endpoints
+| Method | URI | Description | Parameters |
+|--------|-----|-------------|------------|
+| POST | `/editor/quickfix/{task_id}` | Opens Neovim quickfix list for a task. | `task_id` path parameter; user authentication via JWT. |
+| POST | `/editor/call/{command}` | Invokes an editor command by name. | `command` path parameter; JSON body with options. |
+
+## 3. Decoupling Database Access
+We follow a **Repository/Query Pattern** to prevent Beanie/MongoDB logic from leaking into the routers.
+
+Database access is separated into feature‑based modules within a `queries/` directory (e.g., `queries/pipeline.py`, `queries/task.py`, `queries/dashboard.py`).
 
 - **Endpoints**: Responsible for request validation, security, and response formatting.
 - **Query Modules**: Dedicated Python modules containing functions that perform the actual DB operations.
@@ -56,7 +65,7 @@ A centralized exception handler translates internal domain errors into appropria
 | `UnauthorizedError` | `401 Unauthorized` | Missing or invalid authentication. |
 
 ## 5. WebSocket Communication
-The backend provides a single WebSocket endpoint (`/ws`) for real-time, bi-directional communication.
+The backend provides a single WebSocket endpoint (`/ws`) for real‑time, bi‑directional communication.
 
 ### Generic Message Protocol
 All messages follow a common JSON structure:
@@ -79,11 +88,12 @@ All messages follow a common JSON structure:
 - **Message Handling**: Extensible registry for handling incoming client messages.
 
 ### Message Registry (Server Side)
-Similar to the frontend, the server maintains a registry of handlers mapped to message `type`. This allows adding new real-time features without modifying the core WebSocket loop.
+Similar to the frontend, the server maintains a registry of handlers mapped to message `type`. This allows adding new real‑time features without modifying the core WebSocket loop.
 
 ## 6. Implementation Strategy
 1.  **Refactor `main.py`**: Move existing logic into `routes/` and `repositories/`.
 2.  **Add OCC Support**: Update models to include a `version` field and implement version checks in repository functions.
+
 ## 7. Authentication & Security
 The backend implements the **OAuth2 Password Bearer** flow for securing API access.
 
