@@ -187,10 +187,4 @@ export class TaskClient extends BaseClient {
       method: 'DELETE'
     });
   }
-
-  async quickfix(id: string): Promise<void> {
-    await this.fetch(`${this.baseUrl}/tasks/${id}/quickfix`, {
-      method: 'POST'
-    });
-  }
 }

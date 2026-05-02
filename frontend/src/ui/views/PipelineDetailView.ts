@@ -874,7 +874,7 @@ export class PipelineDetailView extends View {
       btn.classList.add('animate-pulse', 'text-app-accent-2');
 
       try {
-        await this.context.taskClient.quickfix(taskId);
+        await this.context.editorClient.quickfix(taskId);
         setTimeout(() => btn.classList.remove('animate-pulse', 'text-app-accent-2'), 1000);
       } catch (err) {
         console.error('Failed to open quickfix:', err);
