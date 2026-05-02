@@ -142,7 +142,7 @@ export class PipelineHeaderView {
     return `
       <header class="flex justify-between items-center bg-app-surface p-6 rounded-2xl shadow-lg border border-app-border shrink-0">
         <div class="flex gap-6 items-center overflow-hidden">
-          <button onclick="window.location.hash = '#'" class="p-3 hover:bg-app-bg rounded-xl transition-all text-app-muted hover:text-app-accent-1 border border-transparent hover:border-app-border group cursor-pointer" title="Back to Dashboard">
+          <button onclick="window.location.hash='#'" class="p-3 hover:bg-app-bg rounded-xl transition-all text-app-muted hover:text-app-accent-1 border border-transparent hover:border-app-border group cursor-pointer" title="Back to Dashboard">
             <svg class="w-6 h-6 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
             </svg>
@@ -151,9 +151,6 @@ export class PipelineHeaderView {
             <div id="pipeline-view-info" class="flex flex-col group relative">
               <div class="flex items-center gap-3">
                 <h2 id="pipeline-title" class="text-3xl font-black text-app-accent-1 tracking-tight truncate">${pipeline.name}</h2>
-                <span class="text-[10px] px-2 py-0.5 rounded border font-bold uppercase ${statusColors[pipeline.status] || 'bg-slate-600/20 text-slate-400 border-slate-600/30'}">
-                  ${pipeline.status}
-                </span>
                 ${geminiStatusHtml}
                 ${vibeStatusHtml}
                 <button data-action-click="edit_pipeline" class="opacity-0 group-hover:opacity-100 p-1 hover:bg-app-bg text-app-muted hover:text-app-accent-1 rounded transition-all cursor-pointer" title="Edit Pipeline">
@@ -161,6 +158,9 @@ export class PipelineHeaderView {
                 </button>
               </div>
               <div class="flex flex-wrap items-center gap-3 mt-2">
+                <span class="text-[10px] px-2 py-0.5 rounded border font-bold uppercase ${statusColors[pipeline.status] || 'bg-slate-600/20 text-slate-400 border-slate-600/30'}">
+                  ${pipeline.status}
+                </span>
                 <div class="flex items-center bg-app-bg rounded border border-app-border overflow-hidden">
                   <p class="text-app-muted text-[10px] uppercase font-bold tracking-widest px-2 py-1">ID: ${pipelineId}</p>
                   <button data-action-click="copy_pipeline_id" class="px-2 py-1 bg-app-surface border-l border-app-border text-app-muted hover:text-app-accent-2 transition-colors cursor-pointer group/copy" title="Copy ID">
@@ -168,6 +168,9 @@ export class PipelineHeaderView {
                   </button>
                 </div>
                 <p class="text-app-muted text-[10px] uppercase font-bold tracking-widest bg-app-bg px-2 py-1 rounded border border-app-border">Workspace: ${pipeline.workspace_path || 'Default'}</p>
+                <button data-action-click="open_health_check" class="-mt-1 hover:bg-app-bg rounded-lg transition-colors cursor-pointer text-app-muted hover:text-green-500" title="System Health">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </button>
                 <div id="header-stats" class="flex flex-wrap gap-2 text-[10px] uppercase font-bold tracking-wider">
                   ${this.renderHeaderStats(allTasks)}
                 </div>
@@ -202,9 +205,6 @@ export class PipelineHeaderView {
                <svg class="w-4 h-4 group-hover/logout:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
              </button>
            </div>
-           <button data-action-click="open_health_check" class="p-2 hover:bg-app-bg rounded-lg transition-colors cursor-pointer text-app-muted hover:text-green-500" title="System Health">
-             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-           </button>
         </div>
       </header>
     `;
