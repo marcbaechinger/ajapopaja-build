@@ -35,10 +35,10 @@ describe('AssistantPanel', () => {
 
   it('should add copy button to assistant messages', () => {
     const onResponseCallback = mockContext.assistantService.onResponse.mock.calls[0][0];
-    
+
     // Simulate a message chunk
     onResponseCallback({ type: 'chunk', content: 'Hello' });
-    
+
     const copyBtn = document.querySelector('.copy-btn');
     expect(copyBtn).toBeTruthy();
     expect(copyBtn?.getAttribute('title')).toBe('Copy Markdown');
@@ -50,10 +50,10 @@ describe('AssistantPanel', () => {
     // Let's just use the DOM.
     const input = document.querySelector('#assistant-input') as HTMLTextAreaElement;
     const form = document.querySelector('#assistant-form') as HTMLFormElement;
-    
+
     input.value = 'My message';
     form.dispatchEvent(new Event('submit'));
-    
+
     const messages = document.querySelectorAll('.flex.flex-col.gap-1');
     const userMessage = messages[messages.length - 1];
     expect(userMessage.querySelector('.copy-btn')).toBeFalsy();
@@ -62,9 +62,9 @@ describe('AssistantPanel', () => {
   it('should copy text to clipboard when copy button is clicked', async () => {
     const onResponseCallback = mockContext.assistantService.onResponse.mock.calls[0][0];
     onResponseCallback({ type: 'chunk', content: 'Hello world' });
-    
+
     const copyBtn = document.querySelector('.copy-btn') as HTMLButtonElement;
-    
+
     // Mock clipboard API
     const writeTextMock = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, {
@@ -74,9 +74,9 @@ describe('AssistantPanel', () => {
     });
 
     await copyBtn.click();
-    
+
     expect(writeTextMock).toHaveBeenCalledWith('Hello world');
-    
+
     // Check visual feedback (green icon)
     expect(copyBtn.innerHTML).toContain('text-green-500');
   });
