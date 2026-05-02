@@ -13,8 +13,7 @@
 # limitations under the License.
 
 from functools import wraps
-from typing import Any, Callable, Dict
-from git import Optional
+from typing import Any, Callable, Dict, Optional
 from api.bot.tool_registry import ToolRegistry
 
 docbot_registry = ToolRegistry()

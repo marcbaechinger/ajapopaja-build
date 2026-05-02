@@ -47,9 +47,12 @@ conceptual design.
 2. **Audit:** Explore the codebase and existing docs to identify drift between the new
    implementation and current design definitions.
 3. **Execute:** 
-    - **If updates are required:** Call `update_ref_doc`. You MUST provide: `filename`,
-      `content`, and `reason`.
-    - **If the design remains intact:** Call `no_doc_update_needed`.
+    - **If updates are required:** Call `update_ref_doc` for full document updates or
+      `update_markdown_section` for targeted changes. You can call these tools multiple
+      times if several documents or sections need updating.
+    - **Finalize:** Once you have performed all necessary updates, you MUST call
+      `document_update_completed` to finish the session.
+    - **If NO updates are required:** Call `no_doc_update_needed` to finish the session.
 
 ### Composition Rules (The "Evergreen" Mandate)
 - **Seamless Integration:** Never use temporal language like "now," "newly added,"
@@ -72,6 +75,7 @@ class DocBotSession(BaseBotSession):
     def __init__(self, pipeline_id: str, task_id: str):
         super().__init__(pipeline_id, task_id)
         self.session_result: Optional[Dict[str, Any]] = None
+        self.has_updates: bool = False
 
     def get_system_instruction(self) -> str:
         return SYSTEM_INSTRUCTION
@@ -80,7 +84,7 @@ class DocBotSession(BaseBotSession):
         return docbot_registry.list_tools()
 
     def is_terminal_tool(self, tool_name: str) -> bool:
-        return tool_name in ["update_ref_doc", "no_doc_update_needed"]
+        return tool_name in ["document_update_completed", "no_doc_update_needed"]
 
     async def on_event(self, event_name: str, payload: Optional[Dict[str, Any]] = None):
         if event_name == "bot_started":

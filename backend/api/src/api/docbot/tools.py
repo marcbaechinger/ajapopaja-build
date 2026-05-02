@@ -14,6 +14,7 @@
 
 import logging
 import os
+import re
 from typing import Any, List, Optional
 
 from api.assistant.tools.file_tools import list_project_structure, read_source_file
@@ -248,6 +249,9 @@ async def update_ref_doc(
 
         logger.info(f"update_ref_doc: Successfully updated {fname}. Reason: {resn}")
 
+        if session and hasattr(session, "has_updates"):
+            session.has_updates = True
+
         # Capture diff and cache preview if task_id is available
         if tid:
             try:
@@ -294,6 +298,175 @@ async def update_ref_doc(
     except Exception as e:
         logger.error(f"update_ref_doc: Failed to write {file_path}: {e}")
         return f"Error writing file: {str(e)}"
+
+
+@register_doc_tool(tool_type="write_access")
+async def update_markdown_section(
+    pipeline_id: str,
+    filename: str,
+    markdown_heading: str,
+    markdown_section: str,
+    reason: str,
+    task_id: Optional[str] = None,
+    session: Optional[Any] = None,
+    **kwargs,
+) -> str:
+    """
+    Updates a specific section of a reference documentation file.
+
+    A section is defined as everything from the specified 'markdown_heading' up to
+    (but not including) the next heading of the SAME LEVEL. All subheadings and
+    content within that range are replaced.
+
+    Args:
+        filename: The name of the file (e.g., 'dd_architecture.md').
+        markdown_heading: The exact header of the section to replace (e.g.,
+                          '## 2. File structure'). Must match a heading in the doc.
+        markdown_section: The new content for this section. If it starts with a
+                          heading of the same level, it is used as is. If not,
+                          'markdown_heading' is prepended.
+        reason: A concise technical explanation for this specific section update.
+    """
+    fname = filename or kwargs.get("path")
+    heading = (markdown_heading or "").strip()
+    section = (markdown_section or "").strip()
+    resn = reason or kwargs.get("summary") or kwargs.get("reasoning")
+    tid = task_id or kwargs.get("task_id")
+
+    if not fname or not heading or not section:
+        return "Error: filename, markdown_heading, and markdown_section are required."
+
+    # Strip 'design/' prefix
+    if fname.startswith(f"{DOC_DIR}/"):
+        fname = fname[len(DOC_DIR) + 1 :]
+
+    try:
+        pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
+        if not pipeline or not pipeline.workspace_abs_path:
+            return "Error: Workspace root missing."
+
+        doc_path = safe_join(pipeline.workspace_abs_path, DOC_DIR)
+        file_path = safe_join(doc_path, fname)
+
+        if not os.path.isfile(file_path):
+            return f"Error: Document '{fname}' not found."
+
+        with open(file_path, "r") as f:
+            lines = f.readlines()
+
+        # 1. Find the heading and its level
+        header_match = re.match(r"^(#+)\s+(.+)$", heading)
+        if not header_match:
+            return f"Error: '{heading}' is not a valid markdown heading (e.g., '## Title')."
+
+        level_hashes = header_match.group(1)
+        level = len(level_hashes)
+
+        start_idx = -1
+        for i, line in enumerate(lines):
+            if line.strip() == heading:
+                start_idx = i
+                break
+
+        if start_idx == -1:
+            return (
+                f"Error: Heading '{heading}' not found in '{fname}'. "
+                "Ensure exact match including level and numbering."
+            )
+
+        # 2. Find the end of the section (next heading of same or higher level)
+        end_idx = len(lines)
+        for i in range(start_idx + 1, len(lines)):
+            match = re.match(r"^(#+)\s+", lines[i])
+            if match:
+                this_level = len(match.group(1))
+                if this_level <= level:
+                    end_idx = i
+                    break
+
+        # 3. Prepare the new content
+        new_section_lines = section.splitlines(keepends=True)
+        # Add trailing newline if missing
+        if new_section_lines and not new_section_lines[-1].endswith("\n"):
+            new_section_lines[-1] += "\n"
+
+        # Check if new section starts with a same-level header
+        first_line_match = re.match(r"^(#+)\s+", new_section_lines[0])
+        if not (first_line_match and len(first_line_match.group(1)) == level):
+            # Prepend the heading
+            new_section_lines.insert(0, heading + "\n")
+
+        # 4. Perform the replacement
+        updated_lines = lines[:start_idx] + new_section_lines + lines[end_idx:]
+        updated_content = "".join(updated_lines)
+
+        # 5. Write back and update session
+        with open(file_path, "w") as f:
+            f.write(updated_content)
+
+        if session and hasattr(session, "has_updates"):
+            session.has_updates = True
+
+        logger.info(f"update_markdown_section: Updated '{heading}' in '{fname}'.")
+
+        # Reuse update_ref_doc logic for preview if task_id exists
+        # Actually, let's just trigger the same preview logic
+        if tid:
+            repo = git_utils.get_repo(pipeline.workspace_abs_path)
+            repo.git.add(file_path, N=True)
+            diff = repo.git.diff("--unified=3", file_path)
+            commit_msg = f"[doc] Update section '{heading}' in {fname}\n\n{resn}"
+
+            set_preview(
+                tid,
+                DocBotPreview(
+                    task_id=tid,
+                    pipeline_id=pipeline_id,
+                    diff=diff,
+                    commit_msg=commit_msg,
+                    file_path=str(file_path),
+                    filename=fname,
+                ),
+            )
+            if session and hasattr(session, "session_result"):
+                session.session_result = {
+                    "status": "update_needed",
+                    "filename": fname,
+                    "reason": resn,
+                }
+            await manager.broadcast(
+                WSMessage(type="DOCBOT_PREVIEW_READY", payload={"task_id": tid})
+            )
+
+        return f"Successfully updated section '{heading}' in {DOC_DIR}/{fname}."
+
+    except Exception as e:
+        logger.error(f"update_markdown_section: Failed: {e}")
+        return f"Error: {str(e)}"
+
+
+@register_doc_tool()
+async def document_update_completed(reason: str, session: Optional[Any] = None) -> str:
+    """
+    Signals that all documentation updates for this session have been completed.
+
+    This tool MUST be called after one or more calls to 'update_ref_doc' or
+    'update_markdown_section' to finalize the documentation process.
+
+    Args:
+        reason: A summary of all documentation changes made in this session.
+    """
+    if session and hasattr(session, "has_updates") and not session.has_updates:
+        return "Error: No updates were made. Use 'no_doc_update_needed' instead."
+
+    logger.info(f"DocBot completed updates. Summary: {reason}")
+    if session and hasattr(session, "session_result"):
+        # The result was already set by the last update tool,
+        # but we can enrich it with the final summary.
+        if isinstance(session.session_result, dict):
+            session.session_result["summary"] = reason
+
+    return "Documentation updates completed and finalized."
 
 
 @register_doc_tool()
