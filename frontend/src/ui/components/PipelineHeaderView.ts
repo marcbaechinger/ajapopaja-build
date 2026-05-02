@@ -88,14 +88,14 @@ export class PipelineHeaderView {
             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
             <span class="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
           </span>
-          <span class="font-bold tracking-wide uppercase">DocBot Analyzing...</span>
+          <span class="font-bold tracking-wide uppercase pt-1">DocBot Analyzing...</span>
         </div>
       `;
     } else if (docbotState.status === 'noUpdate') {
       docbotBannerHtml = `
         <div class="inline-flex bg-slate-800/50 border border-slate-700 text-slate-400 rounded-full px-3 py-1 text-[10px] shadow-sm items-center gap-2" title="${docbotState.reason || ''}">
           <span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
-          <span class="font-bold uppercase tracking-wider">No Doc Update</span>
+          <span class="font-bold uppercase tracking-wider pt-1">No Doc Update</span>
           <button data-action-click="dismiss_docbot_banner" class="ml-1 text-slate-500 hover:text-slate-300 transition-colors cursor-pointer">
             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
           </button>
@@ -105,7 +105,7 @@ export class PipelineHeaderView {
       docbotBannerHtml = `
         <div class="inline-flex bg-yellow-500/10 border border-yellow-500/30 text-yellow-500 rounded-full px-3 py-1 text-[10px] shadow-sm items-center gap-2">
           <span class="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse"></span>
-          <span class="font-bold uppercase tracking-wider">Doc Ready</span>
+          <span class="font-bold uppercase tracking-wider pt-1">Doc Ready</span>
           <button data-action-click="open_docbot_dialog" class="font-black underline hover:text-yellow-400 transition-colors cursor-pointer ml-1">Review</button>
           <button data-action-click="dismiss_docbot_banner" class="ml-1 text-yellow-700 hover:text-yellow-500 transition-colors cursor-pointer">
             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
