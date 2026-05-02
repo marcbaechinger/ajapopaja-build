@@ -16,7 +16,7 @@
 
 import { View } from '../../core/Navigator.ts';
 import { AppContext } from '../../core/AppContext.ts';
-import { Pipeline, TaskStatus, Task, PipelineStatus, type GitStatus } from '../../core/domain.ts';
+import { Pipeline, TaskStatus, Task, type GitStatus } from '../../core/domain.ts';
 import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
 import { TaskItem } from '../components/TaskItem.ts';
 import { HistoryDialog } from '../components/HistoryDialog.ts';
@@ -31,6 +31,7 @@ import { PaginationControl } from '../components/PaginationControl.ts';
 import { LogViewerDialog } from '../components/LogViewerDialog.ts';
 import { DocBotDialog } from '../components/DocBotDialog.ts';
 import type { DocBotDialogProps } from '../components/DocBotDialog.ts';
+import { PipelineEditDialog } from '../components/PipelineEditDialog.ts';
 import { PipelineHeaderView } from '../components/PipelineHeaderView.ts';
 import type { DocbotState } from '../components/PipelineHeaderView.ts';
 import EasyMDE from 'easymde';
@@ -307,39 +308,17 @@ export class PipelineDetailView extends View {
   }
 
   private registerActions() {
-    this.context.actionRegistry.register('edit_pipeline', () => {
-      this.container?.querySelector('#pipeline-view-info')?.classList.add('hidden');
-      this.container?.querySelector('#pipeline-edit-info')?.classList.remove('hidden');
-    });
-
-    this.context.actionRegistry.register('cancel_edit_pipeline', () => {
-      this.container?.querySelector('#pipeline-view-info')?.classList.remove('hidden');
-      this.container?.querySelector('#pipeline-edit-info')?.classList.add('hidden');
-    });
-
-    this.context.actionRegistry.register('save_pipeline', async () => {
-      const editInfo = this.container?.querySelector('#pipeline-edit-info');
-      if (!editInfo || !this.pipeline) return;
-
-      const nameInput = editInfo.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
-      const statusSelect = editInfo.querySelector('select[name="pipeline_status"]') as HTMLSelectElement;
-      const workspaceInput = editInfo.querySelector('input[name="workspace_path"]') as HTMLInputElement;
-      const geminiCheck = editInfo.querySelector('input[name="manage_gemini"]') as HTMLInputElement;
-      const vibeCheck = editInfo.querySelector('input[name="manage_vibe"]') as HTMLInputElement;
-
-      try {
-        await this.context.pipelineClient.update(this.pipelineId, this.pipeline.version, {
-          name: nameInput.value.trim(),
-          status: statusSelect.value as PipelineStatus,
-          workspace_path: workspaceInput.value.trim() || undefined,
-          manage_gemini: geminiCheck.checked,
-          manage_vibe: vibeCheck.checked
-        });
-        this.container?.querySelector('#pipeline-view-info')?.classList.remove('hidden');
-        this.container?.querySelector('#pipeline-edit-info')?.classList.add('hidden');
-      } catch (error) {
-        alert('Failed to update pipeline');
-      }
+    this.context.actionRegistry.register('edit_pipeline', async () => {
+      if (!this.pipeline) return;
+      const dialog = new PipelineEditDialog({
+        pipeline: this.pipeline,
+        pipelineId: this.pipelineId,
+        context: this.context
+      });
+      await dialog.show();
+      // After dialog closes, we might want to refresh the header if it was updated
+      // The dialog itself calls update on the client, and we'll get a websocket update 
+      // or we can refresh manually if needed.
     });
 
     this.context.actionRegistry.register('copy_pipeline_id', async (_e, el) => {

@@ -173,39 +173,6 @@ export class PipelineHeaderView {
                 </div>
               </div>
             </div>
-
-            <div id="pipeline-edit-info" class="hidden flex flex-col gap-3 bg-app-bg/50 p-4 rounded-xl border border-app-accent-1/30">
-              <div class="grid grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Pipeline Name</label>
-                  <input type="text" name="pipeline_name" value="${pipeline.name}" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1">
-                </div>
-                <div>
-                  <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Status</label>
-                  <select name="pipeline_status" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1 cursor-pointer">
-                    <option value="active" ${pipeline.status === 'active' ? 'selected' : ''}>Active</option>
-                    <option value="paused" ${pipeline.status === 'paused' ? 'selected' : ''}>Paused</option>
-                    <option value="completed" ${pipeline.status === 'completed' ? 'selected' : ''}>Completed</option>
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Workspace Path (Optional)</label>
-                <input type="text" name="workspace_path" value="${pipeline.workspace_path || ''}" placeholder="Default Project Root" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1">
-              </div>
-              <div class="flex items-center gap-2 mt-1 px-1">
-                <input type="checkbox" name="manage_gemini" id="manage_gemini" ${pipeline.manage_gemini ? 'checked' : ''} class="w-4 h-4 rounded border-app-border bg-app-bg text-app-accent-1 focus:ring-app-accent-1 cursor-pointer">
-                <label for="manage_gemini" class="text-[10px] font-bold uppercase tracking-wider text-app-text cursor-pointer">Manage Gemini CLI process</label>
-              </div>
-              <div class="flex items-center gap-2 mt-1 px-1">
-                <input type="checkbox" name="manage_vibe" id="manage_vibe" ${pipeline.manage_vibe ? 'checked' : ''} class="w-4 h-4 rounded border-app-border bg-app-bg text-app-accent-1 focus:ring-app-accent-1 cursor-pointer">
-                <label for="manage_vibe" class="text-[10px] font-bold uppercase tracking-wider text-app-text cursor-pointer">Manage Vibe CLI process</label>
-              </div>
-              <div class="flex gap-2 justify-end mt-1">
-                <button data-action-click="cancel_edit_pipeline" class="px-3 py-1 rounded text-[10px] font-bold uppercase tracking-widest text-app-muted hover:bg-app-bg transition-all cursor-pointer">Cancel</button>
-                <button data-action-click="save_pipeline" class="px-4 py-1 rounded bg-app-accent-1 text-white text-[10px] font-bold uppercase tracking-widest hover:brightness-110 transition-all shadow-md cursor-pointer">Save Changes</button>
-              </div>
-            </div>
           </div>
           <div id="docbot-banner-container" class="flex items-center">
             ${docbotBannerHtml}
