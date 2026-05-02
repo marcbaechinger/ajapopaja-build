@@ -49,6 +49,7 @@ export class PipelineDetailView extends View {
   private currentSortOrder: 'execution' | 'newest' | 'status' = 'execution';
   private allLoadedTasks: Task[] = [];
   private collapsedTasks: Set<string> = new Set();
+  private expandedSpecs: Set<string> = new Set();
   private isFirstLoad: boolean = true;
   private completedTasksPage: number = 0;
   private completedPageSize: number = 5;
@@ -539,6 +540,8 @@ export class PipelineDetailView extends View {
 
       try {
         await this.context.taskClient.updateDetails(taskId, version, { spec: newSpec, want_design_doc: wantDesignDoc });
+        // Ensure spec is expanded after save
+        this.expandedSpecs.add(taskId);
         // WS will refresh
       } catch (error) {
         alert('Failed to save specification');
@@ -548,12 +551,20 @@ export class PipelineDetailView extends View {
     this.context.actionRegistry.register('toggle_spec_expand', async (_e, el) => {
       const container = el.closest('.spec-container') as HTMLElement;
       if (!container) return;
+      const taskId = container.getAttribute('data-task-id');
+      if (!taskId) return;
 
       const display = container.querySelector('.spec-display');
       if (!display) return;
 
       const isExpanded = display.classList.toggle('expanded');
       el.textContent = isExpanded ? 'Show Less' : 'Show More';
+
+      if (isExpanded) {
+        this.expandedSpecs.add(taskId);
+      } else {
+        this.expandedSpecs.delete(taskId);
+      }
     });
 
     this.context.actionRegistry.register('view_design_doc', async (_e, el) => {
@@ -1096,7 +1107,7 @@ export class PipelineDetailView extends View {
       );
 
       completedContainer.innerHTML = tasks.length > 0
-        ? tasks.map(t => TaskItem.render(t, false, false, this.collapsedTasks.has(t.id!))).join('')
+        ? tasks.map(t => TaskItem.render(t, false, false, this.collapsedTasks.has(t.id!), false, this.expandedSpecs.has(t.id!))).join('')
         : '<p class="text-app-muted italic text-xs">No older completed tasks.</p>';
 
       if (paginationContainer) {
@@ -1305,7 +1316,7 @@ export class PipelineDetailView extends View {
           const oldTask = this.allLoadedTasks.find(t => t.id === oldTaskId);
           if (oldTask) {
             // Re-render for history feed (without expanded history)
-            const historyHtml = TaskItem.render(oldTask, false, false, this.collapsedTasks.has(oldTask.id!));
+            const historyHtml = TaskItem.render(oldTask, false, false, this.collapsedTasks.has(oldTask.id!), false, this.expandedSpecs.has(oldTask.id!));
             const temp = document.createElement('div');
             temp.innerHTML = historyHtml;
             historyFeed.prepend(temp.firstElementChild as HTMLElement);
@@ -1319,7 +1330,9 @@ export class PipelineDetailView extends View {
       task,
       columnId === 'backlog-list' || columnId === 'scheduled-list',
       columnId === 'last-completed-task',
-      this.collapsedTasks.has(task.id!)
+      this.collapsedTasks.has(task.id!),
+      false,
+      this.expandedSpecs.has(task.id!)
     );
     const temp = document.createElement('div');
     temp.innerHTML = taskHtml;
@@ -1365,7 +1378,9 @@ export class PipelineDetailView extends View {
           task,
           targetColumnId === 'backlog-list' || targetColumnId === 'scheduled-list',
           targetColumnId === 'last-completed-task',
-          this.collapsedTasks.has(task.id!)
+          this.collapsedTasks.has(task.id!),
+          false,
+          this.expandedSpecs.has(task.id!)
         );
         const temp = document.createElement('div');
         temp.innerHTML = taskHtml;

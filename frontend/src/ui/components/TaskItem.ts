@@ -97,7 +97,7 @@ export class TaskItem {
     return parts.join(' ');
   }
 
-  static render(task: Task, showOrdering: boolean = true, expandHistory: boolean = false, isCollapsed: boolean = false, showStatusSelector: boolean = false): string {
+  static render(task: Task, showOrdering: boolean = true, expandHistory: boolean = false, isCollapsed: boolean = false, showStatusSelector: boolean = false, isSpecExpanded: boolean = false): string {
     const taskId = task.id;
     const statusColors: Record<string, string> = {
       [TaskStatus.CREATED]: 'bg-slate-600 text-slate-300',
@@ -133,14 +133,14 @@ export class TaskItem {
               ${isCompleted ? '' : '<span class="text-[10px] text-app-muted opacity-0 group-hover:opacity-100 transition-opacity">Click to edit</span>'}
             </div>
           </div>
-          <div class="spec-display prose-theme prose-xs max-w-none text-app-text/70 overflow-hidden relative transition-all duration-300">
+          <div class="spec-display prose-theme prose-xs max-w-none text-app-text/70 overflow-hidden relative transition-all duration-300 ${isSpecExpanded ? 'expanded' : ''}">
             ${task.spec ? DOMPurify.sanitize(marked.parse(task.spec) as string) : '<span class="italic text-app-muted">No specification provided...</span>'}
             ${task.spec ? '<div class="expand-overlay absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-app-surface to-transparent pointer-events-none"></div>' : ''}
           </div>
         </div>
         ${task.spec ? `
           <button data-action-click="toggle_spec_expand" class="mt-2 text-[10px] text-app-accent-1 hover:underline cursor-pointer">
-            Show More
+            ${isSpecExpanded ? 'Show Less' : 'Show More'}
           </button>
         ` : ''}
         
