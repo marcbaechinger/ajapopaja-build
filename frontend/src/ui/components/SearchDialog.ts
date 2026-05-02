@@ -216,7 +216,11 @@ export class SearchDialog extends BaseDialog {
       if (!action) return;
 
       const taskId = actionElement.closest('[data-task-id]')?.getAttribute('data-task-id');
-      const version = parseInt(actionElement.getAttribute('data-version') || actionElement.closest('[data-version]')?.getAttribute('data-version') || '1');
+      const version = parseInt(
+        actionElement.getAttribute('data-version') ||
+        actionElement.closest('[data-version]')?.getAttribute('data-version') ||
+        '1'
+      );
 
       if (action === 'prev_search_page') {
         e.stopPropagation();
@@ -244,41 +248,57 @@ export class SearchDialog extends BaseDialog {
           const isExpanded = display.classList.toggle('expanded');
           actionElement.textContent = isExpanded ? 'Show Less' : 'Show More';
         }
-      } else if (taskId && action !== 'toggle_task_collapse' && action !== 'edit_title' && action !== 'edit_spec' && action !== 'view_design_doc') {
+      } else if (action === 'toggle_task_collapse') {
+        e.stopPropagation();
+        e.preventDefault();
+        const taskContainer = actionElement.closest('[data-view-type="task"]');
+        const body = taskContainer?.querySelector('.task-body');
+        const icon = taskContainer?.querySelector('.group/header svg');
+        if (body && icon) {
+          const isHidden = body.classList.toggle('hidden');
+          icon.classList.toggle('rotate-90', !isHidden);
+        }
+      } else if (taskId && [
+        'delete_task', 'fail_task', 'schedule_task', 'unschedule_task',
+        'cancel_progress', 'accept_design', 'reject_design'
+      ].includes(action)) {
         // Handle actions that need search refresh
         e.stopPropagation();
         e.preventDefault();
         try {
           if (action === 'delete_task') {
-            const confirmed = await new ConfirmationDialog('Delete Task', 'Are you sure you want to delete this task?', 'Delete').show();
+            const confirmed = await new ConfirmationDialog(
+              'Delete Task',
+              'Are you sure you want to delete this task?',
+              'Delete'
+            ).show();
             if (confirmed) {
               await this.context.taskClient.delete(taskId);
               this.performSearch(this.currentPage);
             }
           } else if (action === 'fail_task') {
-             await this.context.taskClient.updateStatus(taskId, TaskStatus.FAILED, version);
-             this.performSearch(this.currentPage);
+            await this.context.taskClient.updateStatus(taskId, TaskStatus.FAILED, version);
+            this.performSearch(this.currentPage);
           } else if (action === 'schedule_task') {
-             await this.context.taskClient.updateStatus(taskId, TaskStatus.SCHEDULED, version);
-             this.performSearch(this.currentPage);
+            await this.context.taskClient.updateStatus(taskId, TaskStatus.SCHEDULED, version);
+            this.performSearch(this.currentPage);
           } else if (action === 'unschedule_task' || action === 'cancel_progress') {
-             await this.context.taskClient.updateStatus(taskId, TaskStatus.CREATED, version);
-             this.performSearch(this.currentPage);
+            await this.context.taskClient.updateStatus(taskId, TaskStatus.CREATED, version);
+            this.performSearch(this.currentPage);
           } else if (action === 'accept_design') {
-             await this.context.taskClient.acceptDesign(taskId, version);
-             this.performSearch(this.currentPage);
+            await this.context.taskClient.acceptDesign(taskId, version);
+            this.performSearch(this.currentPage);
           } else if (action === 'reject_design') {
-             await this.context.taskClient.rejectDesign(taskId, version);
-             this.performSearch(this.currentPage);
+            await this.context.taskClient.rejectDesign(taskId, version);
+            this.performSearch(this.currentPage);
           }
         } catch (err) {
           console.error(`Action ${action} failed`, err);
           alert(`Failed to perform action: ${action}`);
         }
       }
-      // Actions like toggle_task_collapse, edit_title, edit_spec, view_design_doc 
-      // are allowed to bubble up to the global ActionRegistry which has handlers 
-      // registered in PipelineDetailView.
+      // Other actions like copy_task_id, open_quickfix, trigger_docbot, copy_design_doc
+      // are allowed to bubble up to the global ActionRegistry.
     });
   }
 
