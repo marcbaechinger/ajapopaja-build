@@ -74,7 +74,7 @@ async def test_update_pipeline_missing_version(async_client, init_mock_db):
         "/api/pipelines/p1",
         json={"name": "Updated Name"}
     )
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
 @pytest.mark.asyncio

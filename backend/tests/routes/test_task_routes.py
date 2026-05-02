@@ -47,7 +47,7 @@ async def test_update_task_status_missing_params(async_client, init_mock_db):
         "/api/tasks/t1/status",
         json={"status": "scheduled"} # missing version
     )
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
 @pytest.mark.asyncio

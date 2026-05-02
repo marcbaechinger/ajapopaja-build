@@ -58,7 +58,7 @@ async def test_register_user_invalid_json(async_client, init_mock_db):
         "/api/auth/register",
         json={"username": "testuser"}  # missing password
     )
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
 @pytest.mark.asyncio
