@@ -320,9 +320,11 @@ export class TaskItem {
               
               ${task.commit_hash ? `
                 <div class="flex items-center gap-2">
-                  <div class="text-[10px] font-mono text-app-accent-2 bg-app-surface px-2 py-0.5 rounded border border-app-border" title="Commit Hash">
+                  <button data-action-click="open_diff_view" data-commit-hash="${task.commit_hash}"
+                          class="text-[10px] font-mono text-app-accent-2 bg-app-surface px-2 py-0.5 rounded border border-app-border hover:bg-app-accent-2/10 hover:border-app-accent-2/50 transition-all cursor-pointer" 
+                          title="Open Diff View in Neovim">
                     ${task.commit_hash.substring(0, 7)}
-                  </div>
+                  </button>
                   ${isImplemented && this.calculateDuration(task) ? `
                     <div class="text-[10px] text-app-muted flex items-center gap-1" title="Implementation Duration">
                       <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>

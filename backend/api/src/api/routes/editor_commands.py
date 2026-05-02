@@ -19,7 +19,7 @@ from typing import Any, Dict
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.assistant.tools.git_tools import git_commit_hunks
-from api.assistant.tools.nvim_tools import nvim_set_quickfix
+from api.assistant.tools.nvim_tools import nvim_diffview_open, nvim_set_quickfix
 from api.auth import get_current_user
 from core.models.models import TaskStatus, User
 from core.queries import task as task_queries
@@ -86,6 +86,7 @@ async def call_editor_command(
     Generic endpoint for editor commands.
     Supported commands:
     - 'quickfix': triggers the quickfix for a task. options: {'task_id': '...'}
+    - 'diff_view_open': opens a diff view for a commit. options: {'pipeline_id': '...', 'commit_hash': '...'}
     """
     if command == "quickfix":
         task_id = options.get("task_id")
@@ -94,5 +95,20 @@ async def call_editor_command(
                 status_code=400, detail="task_id is required for quickfix command"
             )
         return await open_quickfix(task_id, current_user)
+
+    if command == "diff_view_open":
+        pipeline_id = options.get("pipeline_id")
+        commit_hash = options.get("commit_hash")
+        if not pipeline_id or not commit_hash:
+            raise HTTPException(
+                status_code=400,
+                detail="pipeline_id and commit_hash are required for diff_view_open command",
+            )
+        result = await nvim_diffview_open(pipeline_id, commit_hash)
+        if not result.get("success"):
+            raise HTTPException(
+                status_code=500, detail=result.get("error", "Failed to open diff view")
+            )
+        return {"status": "ok"}
 
     raise HTTPException(status_code=400, detail=f"Unknown editor command: {command}")

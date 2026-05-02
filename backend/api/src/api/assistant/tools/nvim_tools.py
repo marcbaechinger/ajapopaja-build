@@ -365,3 +365,30 @@ async def nvim_show_diff(
 
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+
+@register_tool(tool_type=WRITE_ACCESS, is_available=is_nvim_available)
+async def nvim_diffview_open(pipeline_id: str, commit_hash: str) -> Dict:
+    """
+    Opens a side-by-side diff view for a given commit hash in Neovim.
+    This typically requires the 'diffview.nvim' plugin.
+
+    Args:
+        pipeline_id: The ID of the pipeline (used to resolve absolute path).
+        commit_hash: The commit hash or reference to open.
+    """
+    try:
+        pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
+        if not pipeline or not pipeline.workspace_abs_path:
+            return {"success": False, "error": "Workspace path not found"}
+
+        # We need to change to the workspace directory first to ensure git commands work
+        lua_script = f"""
+        vim.cmd('cd {pipeline.workspace_abs_path}')
+        vim.cmd('DiffviewOpen {commit_hash}^..{commit_hash}')
+        """
+
+        return _nvim_client_call("nvim_exec_lua", [lua_script, []])
+
+    except Exception as e:
+        return {"success": False, "error": str(e)}

@@ -134,6 +134,35 @@ async def test_call_quickfix_success(async_client, init_mock_db):
 
 
 @pytest.mark.asyncio
+async def test_call_diff_view_open_success(async_client, init_mock_db):
+    from api.auth import get_current_user
+    from api.main import app
+
+    mock_user = User(
+        username="testuser", email="test@example.com", hashed_password="pw"
+    )
+    app.dependency_overrides[get_current_user] = lambda: mock_user
+
+    try:
+        with patch(
+            "api.routes.editor_commands.nvim_diffview_open", new_callable=AsyncMock
+        ) as mock_nvim:
+            mock_nvim.return_value = {"success": True}
+
+            response = await async_client.post(
+                "/api/editor/call/diff_view_open",
+                json={"pipeline_id": "p1", "commit_hash": "sha123"},
+            )
+
+            assert response.status_code == status.HTTP_200_OK
+            assert response.json() == {"status": "ok"}
+
+            mock_nvim.assert_called_once_with("p1", "sha123")
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
 async def test_call_unknown_command(async_client, init_mock_db):
     from api.auth import get_current_user
     from api.main import app

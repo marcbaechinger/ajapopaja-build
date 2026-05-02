@@ -883,6 +883,24 @@ export class PipelineDetailView extends View {
         setTimeout(() => btn.classList.remove('text-red-500'), 2000);
       }
     });
+
+    this.context.actionRegistry.register('open_diff_view', async (_e, el) => {
+      const commitHash = el.dataset.commitHash;
+      if (!commitHash) return;
+
+      const btn = el as HTMLElement;
+      btn.classList.add('animate-pulse', 'text-app-accent-2');
+
+      try {
+        await this.context.editorClient.diffViewOpen(this.pipelineId, commitHash);
+        setTimeout(() => btn.classList.remove('animate-pulse', 'text-app-accent-2'), 1000);
+      } catch (err) {
+        console.error('Failed to open diff view:', err);
+        btn.classList.remove('animate-pulse', 'text-app-accent-2');
+        btn.classList.add('text-red-500');
+        setTimeout(() => btn.classList.remove('text-red-500'), 2000);
+      }
+    });
     this.context.actionRegistry.register('open_docbot_dialog', () => {
       this.openDocBotDialog();
     });

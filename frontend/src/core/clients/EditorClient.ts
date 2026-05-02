@@ -36,4 +36,8 @@ export class EditorClient extends BaseClient {
   async quickfix(taskId: string): Promise<void> {
     return this.call('quickfix', { task_id: taskId });
   }
+
+  async diffViewOpen(pipelineId: string, commitHash: string): Promise<void> {
+    return this.call('diff_view_open', { pipeline_id: pipelineId, commit_hash: commitHash });
+  }
 }
