@@ -83,36 +83,32 @@ export class PipelineHeaderView {
     let docbotBannerHtml = '';
     if (docbotState.status === 'inProgress') {
       docbotBannerHtml = `
-        <div class="inline-flex bg-blue-500/10 border border-blue-500/30 text-blue-400 rounded-lg px-3 py-1.5 text-xs shadow-sm items-center gap-2">
-          <span class="relative flex h-2.5 w-2.5">
+        <div class="inline-flex bg-blue-500/10 border border-blue-500/30 text-blue-400 rounded-full px-3 py-1 text-[10px] shadow-sm items-center gap-2">
+          <span class="relative flex h-2 w-2">
             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
           </span>
-          <span class="font-bold tracking-wide">DocBot is analyzing...</span>
+          <span class="font-bold tracking-wide uppercase">DocBot Analyzing...</span>
         </div>
       `;
     } else if (docbotState.status === 'noUpdate') {
       docbotBannerHtml = `
-        <div class="inline-flex bg-slate-800/50 border border-slate-700 text-slate-300 rounded-lg px-3 py-1.5 text-xs shadow-sm items-center gap-2">
-          <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-          </svg>
-          <span class="font-medium">No doc update needed: <span class="opacity-80 font-normal truncate max-w-xs inline-block align-bottom" title="${docbotState.reason || ''}">${docbotState.reason || 'No reason provided'}</span></span>
-          <button data-action-click="dismiss_docbot_banner" class="ml-2 text-slate-500 hover:text-slate-300 transition-colors cursor-pointer">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        <div class="inline-flex bg-slate-800/50 border border-slate-700 text-slate-400 rounded-full px-3 py-1 text-[10px] shadow-sm items-center gap-2" title="${docbotState.reason || ''}">
+          <span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+          <span class="font-bold uppercase tracking-wider">No Doc Update</span>
+          <button data-action-click="dismiss_docbot_banner" class="ml-1 text-slate-500 hover:text-slate-300 transition-colors cursor-pointer">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
           </button>
         </div>
       `;
     } else if (docbotState.status === 'ready') {
       docbotBannerHtml = `
-        <div class="inline-flex bg-yellow-500/10 border border-yellow-500/30 text-yellow-500 rounded-lg px-3 py-1.5 text-xs shadow-sm items-center gap-2">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-          </svg>
-          <span class="font-medium">Doc update prepared.</span>
-          <button data-action-click="open_docbot_dialog" class="font-bold underline hover:text-yellow-400 transition-colors cursor-pointer ml-1">Review</button>
-          <button data-action-click="dismiss_docbot_banner" class="ml-2 text-yellow-700 hover:text-yellow-500 transition-colors cursor-pointer">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        <div class="inline-flex bg-yellow-500/10 border border-yellow-500/30 text-yellow-500 rounded-full px-3 py-1 text-[10px] shadow-sm items-center gap-2">
+          <span class="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse"></span>
+          <span class="font-bold uppercase tracking-wider">Doc Ready</span>
+          <button data-action-click="open_docbot_dialog" class="font-black underline hover:text-yellow-400 transition-colors cursor-pointer ml-1">Review</button>
+          <button data-action-click="dismiss_docbot_banner" class="ml-1 text-yellow-700 hover:text-yellow-500 transition-colors cursor-pointer">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
           </button>
         </div>
       `;
@@ -120,16 +116,16 @@ export class PipelineHeaderView {
 
     return `
       <header class="flex justify-between items-center bg-app-surface p-6 rounded-2xl shadow-lg border border-app-border shrink-0">
-        <div class="flex gap-6 items-center">
+        <div class="flex gap-6 items-center overflow-hidden">
           <button onclick="window.location.hash = '#'" class="p-3 hover:bg-app-bg rounded-xl transition-all text-app-muted hover:text-app-accent-1 border border-transparent hover:border-app-border group cursor-pointer" title="Back to Dashboard">
             <svg class="w-6 h-6 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
             </svg>
           </button>
-          <div id="pipeline-info-container" class="min-w-[400px]">
+          <div id="pipeline-info-container" class="min-w-0 flex-shrink">
             <div id="pipeline-view-info" class="flex flex-col group relative">
               <div class="flex items-center gap-3">
-                <h2 id="pipeline-title" class="text-3xl font-black text-app-accent-1 tracking-tight">${pipeline.name}</h2>
+                <h2 id="pipeline-title" class="text-3xl font-black text-app-accent-1 tracking-tight truncate">${pipeline.name}</h2>
                 <span class="text-[10px] px-2 py-0.5 rounded border font-bold uppercase ${statusColors[pipeline.status] || 'bg-slate-600/20 text-slate-400 border-slate-600/30'}">
                   ${pipeline.status}
                 </span>
@@ -186,24 +182,24 @@ export class PipelineHeaderView {
               </div>
             </div>
           </div>
-          <div id="docbot-banner-container">
+          <div id="docbot-banner-container" class="flex items-center">
             ${docbotBannerHtml}
           </div>
         </div>
-        <div class="flex gap-2">
-           <button data-action-click="open_search" data-pipeline-id="${pipelineId}" class="flex items-center gap-2 bg-app-bg hover:bg-app-surface px-4 py-2 rounded-xl border border-app-border text-app-muted hover:text-app-accent-2 transition-all cursor-pointer group mr-1" title="Global Search (Ctrl+K)">
+        <div class="flex items-center gap-2">
+           <button data-action-click="open_search" data-pipeline-id="${pipelineId}" class="flex items-center gap-2 bg-app-bg hover:bg-app-surface px-4 py-2 rounded-xl border border-app-border text-app-muted hover:text-app-accent-2 transition-all cursor-pointer group" title="Global Search (Ctrl+K)">
              <svg class="w-4 h-4 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
              <span class="text-xs font-bold uppercase tracking-widest">Search</span>
            </button>
-           <button data-action-click="toggle_assistant" class="flex items-center gap-2 bg-app-bg hover:bg-app-surface px-4 py-2 rounded-xl border border-app-border text-app-muted hover:text-app-accent-2 transition-all cursor-pointer group mr-11" title="AI Assistant (Ctrl+Shift+A)">
+           <button data-action-click="toggle_assistant" class="flex items-center gap-2 bg-app-bg hover:bg-app-surface px-4 py-2 rounded-xl border border-app-border text-app-muted hover:text-app-accent-2 transition-all cursor-pointer group" title="AI Assistant (Ctrl+Shift+A)">
              <svg class="w-4 h-4 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
              <span class="text-xs font-bold uppercase tracking-widest">Assistant</span>
            </button>
-           <button data-action-click="open_stats" class="text-app-accent-2 hover:brightness-110 font-bold transition-all text-sm px-3 py-2 rounded-lg border border-app-border bg-app-bg shadow-sm cursor-pointer" title="Statistics - Keyboard Shortcut: s">
-             <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
-             Stats
+           <button data-action-click="open_stats" class="flex items-center gap-2 bg-app-bg hover:bg-app-surface px-4 py-2 rounded-xl border border-app-border text-app-muted hover:text-app-accent-2 transition-all cursor-pointer group" title="Statistics - Keyboard Shortcut: s">
+             <svg class="w-4 h-4 group-hover:scale-110 transition-transform text-app-accent-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+             <span class="text-xs font-bold uppercase tracking-widest">Stats</span>
            </button>
-           <div class="flex items-center gap-3 bg-app-bg px-4 py-2 rounded-xl border border-app-border">
+           <div class="flex items-center gap-3 bg-app-bg px-4 py-2 rounded-xl border border-app-border h-[42px]">
              <div class="flex flex-col items-end">
                <span class="text-xs font-bold text-app-text">${user?.username || 'User'}</span>
                <span class="text-[9px] text-app-muted uppercase font-black tracking-widest">Logged In</span>
