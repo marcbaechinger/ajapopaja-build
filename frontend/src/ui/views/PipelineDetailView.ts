@@ -42,6 +42,7 @@ export class PipelineDetailView extends View {
   private pipeline: Pipeline | null = null;
   private geminiStatus: { running: boolean, log_file: string | null, available: boolean } = { running: false, log_file: null, available: true };
   private vibeStatus: { running: boolean, log_file: string | null, available: boolean } = { running: false, log_file: null, available: true };
+  private isTwoColumnLayout: boolean = localStorage.getItem('pipeline-layout') === '2-col';
   private context: AppContext;
   private unsubs: (() => void)[] = [];
   private activeEditors: Map<string, EasyMDE> = new Map();
@@ -901,6 +902,20 @@ export class PipelineDetailView extends View {
         setTimeout(() => btn.classList.remove('animate-pulse', 'border-app-accent-2'), 500);
       }
     });
+
+    this.context.actionRegistry.register('toggle_layout', () => {
+      this.isTwoColumnLayout = !this.isTwoColumnLayout;
+      localStorage.setItem('pipeline-layout', this.isTwoColumnLayout ? '2-col' : '3-col');
+      this.reRenderAll();
+    });
+  }
+
+  private reRenderAll() {
+    if (!this.container) return;
+    this.container.innerHTML = this.render() as string;
+    this.updateHeader();
+    this.refreshTasks();
+    this.checkOllama();
   }
 
   async loadPipeline() {
@@ -1118,6 +1133,69 @@ export class PipelineDetailView extends View {
     });
   }
 
+  private renderPrepColumn(): string {
+    return `
+      <div class="flex flex-col gap-8 min-w-0 ${this.isTwoColumnLayout ? '' : 'lg:min-w-[350px]'}">
+        <div class="bg-app-surface/30 p-6 rounded-3xl border border-app-border/30 flex flex-col">
+          ${TaskForm.render()}
+          <div id="col-prep" class="space-y-10">
+            <!-- Proposed and Created tasks will be rendered here -->
+            <p class="text-app-muted animate-pulse text-center py-10">Loading backlog...</p>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderActiveColumn(): string {
+    return `
+      <div class="flex flex-col gap-8 min-w-0 ${this.isTwoColumnLayout ? '' : 'lg:min-w-[350px]'}">
+        <div class="bg-app-surface/30 p-6 rounded-3xl border border-app-border/30 flex flex-col">
+          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 px-1">
+            <h3 class="text-xl font-black text-app-accent-1 uppercase tracking-tighter shrink-0">Execution Engine</h3>
+            <div class="flex items-center gap-2 w-full sm:w-auto">
+              <select data-action-change="change_sort_order" class="w-full sm:w-auto bg-app-bg border border-app-border rounded-lg px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-app-text outline-none focus:ring-1 focus:ring-app-accent-1 cursor-pointer">
+                <option value="execution" ${this.currentSortOrder === 'execution' ? 'selected' : ''}>Execution Order</option>
+                <option value="newest" ${this.currentSortOrder === 'newest' ? 'selected' : ''}>Newest First</option>
+                <option value="status" ${this.currentSortOrder === 'status' ? 'selected' : ''}>By Status</option>
+              </select>
+            </div>
+          </div>
+          <div id="col-active" class="space-y-10">
+            <!-- In Progress and Scheduled tasks will be rendered here -->
+            <p class="text-app-muted animate-pulse text-center py-10">Loading execution queue...</p>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderHistoryColumn(): string {
+    return `
+      <div class="flex flex-col gap-8 min-w-0 ${this.isTwoColumnLayout ? '' : 'lg:min-w-[350px]'}">
+        <div class="bg-app-surface/30 p-6 rounded-3xl border border-app-border/30 flex flex-col">
+          <div id="col-history" class="space-y-8">
+            <!-- Stats and Completed tasks will be rendered here -->
+            <p class="text-app-muted animate-pulse text-center py-10">Loading history...</p>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderLayoutSwitch(): string {
+    return `
+      <div class="flex items-center bg-app-surface/50 rounded-xl border border-app-border p-1 gap-1">
+        <button data-action-click="toggle_layout" class="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer ${!this.isTwoColumnLayout ? 'bg-app-accent-1 text-white shadow-lg' : 'text-app-muted hover:text-app-text'}" title="Switch to 3-Column Layout">
+          3 Cols
+        </button>
+        <button data-action-click="toggle_layout" class="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer ${this.isTwoColumnLayout ? 'bg-app-accent-1 text-white shadow-lg' : 'text-app-muted hover:text-app-text'}" title="Switch to 2-Column Layout">
+          2 Cols
+        </button>
+      </div>
+    `;
+  }
+
   render() {
     return `
       <div class="max-w-[1800px] mx-auto px-6 py-8 flex flex-col gap-8 min-h-screen">
@@ -1125,47 +1203,29 @@ export class PipelineDetailView extends View {
           ${this.renderHeader()}
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start flex-grow w-full">
+        <div class="flex justify-end -mb-4">
+          ${this.renderLayoutSwitch()}
+        </div>
+
+        <div class="grid grid-cols-1 ${this.isTwoColumnLayout ? 'lg:grid-cols-2' : 'lg:grid-cols-3'} gap-8 items-start flex-grow w-full">
           <!-- Column 1: Preparation & Review -->
-          <div class="flex flex-col gap-8 min-w-0 lg:min-w-[350px]">
-            <div class="bg-app-surface/30 p-6 rounded-3xl border border-app-border/30 flex flex-col">
-              ${TaskForm.render()}
-              <div id="col-prep" class="space-y-10">
-                <!-- Proposed and Created tasks will be rendered here -->
-                <p class="text-app-muted animate-pulse text-center py-10">Loading backlog...</p>
-              </div>
-            </div>
-          </div>
+          ${this.renderPrepColumn()}
 
-          <!-- Column 2: Active Execution -->
-          <div class="flex flex-col gap-8 min-w-0 lg:min-w-[350px]">
-            <div class="bg-app-surface/30 p-6 rounded-3xl border border-app-border/30 flex flex-col">
-              <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 px-1">
-                <h3 class="text-xl font-black text-app-accent-1 uppercase tracking-tighter shrink-0">Execution Engine</h3>
-                <div class="flex items-center gap-2 w-full sm:w-auto">
-                  <select data-action-change="change_sort_order" class="w-full sm:w-auto bg-app-bg border border-app-border rounded-lg px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-app-text outline-none focus:ring-1 focus:ring-app-accent-1 cursor-pointer">
-                    <option value="execution" ${this.currentSortOrder === 'execution' ? 'selected' : ''}>Execution Order</option>
-                    <option value="newest" ${this.currentSortOrder === 'newest' ? 'selected' : ''}>Newest First</option>
-                    <option value="status" ${this.currentSortOrder === 'status' ? 'selected' : ''}>By Status</option>
-                  </select>
-                </div>
-              </div>
-              <div id="col-active" class="space-y-10">
-                <!-- In Progress and Scheduled tasks will be rendered here -->
-                <p class="text-app-muted animate-pulse text-center py-10">Loading execution queue...</p>
-              </div>
+          ${this.isTwoColumnLayout ? 
+            `
+            <!-- Column 2: Merged Active and History for 2-col layout -->
+            <div class="flex flex-col gap-8 min-w-0">
+               ${this.renderActiveColumn()}
+               ${this.renderHistoryColumn()}
             </div>
-          </div>
-
-          <!-- Column 3: History & Analytics -->
-          <div class="flex flex-col gap-8 min-w-0 lg:min-w-[350px]">
-            <div class="bg-app-surface/30 p-6 rounded-3xl border border-app-border/30 flex flex-col">
-              <div id="col-history" class="space-y-8">
-                <!-- Stats and Completed tasks will be rendered here -->
-                <p class="text-app-muted animate-pulse text-center py-10">Loading history...</p>
-              </div>
-            </div>
-          </div>
+            ` : 
+            `
+            <!-- Column 2: Active Execution -->
+            ${this.renderActiveColumn()}
+            <!-- Column 3: History & Analytics -->
+            ${this.renderHistoryColumn()}
+            `
+          }
         </div>
       </div>
       <div id="docbot-dialog-container"></div>

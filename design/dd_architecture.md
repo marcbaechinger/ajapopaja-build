@@ -1,84 +1,92 @@
 # Architecture Design Document (`dd_architecture.md`)
 
 ## 1. Introduction
+
 This document defines the architecture for the "Ajapopaja Build" system—an advanced, automated task pipeline manager designed for Coding AI Agents (like Gemini CLI or Claude). The system aims to provide a robust infrastructure for defining, managing, and sequentially executing development pipelines.
 
 ## 2. Core Components
+
 The system is composed of five primary interconnected components:
 
-1.  **MongoDB (Database)**
-    *   **Role**: Central data store for the entire application.
-    *   **Responsibilities**:
-        *   Store Pipeline definitions and metadata.
-        *   Store Task entities linked to pipelines.
-        *   Maintain the strict lifecycle state of each task (`created`, `scheduled`, `inprogress`, `implemented`, `discarded`, `failed`).
-        *   Provide fast, atomic updates to task states to prevent race conditions when multiple agents or human managers interact with the system simultaneously.
+1. **MongoDB (Database)**
+    * **Role**: Central data store for the entire application.
+    * **Responsibilities**:
+        * Store Pipeline definitions and metadata.
+        * Store Task entities linked to pipelines.
+        * Maintain the strict lifecycle state of each task (`created`, `scheduled`, `inprogress`, `implemented`, `discarded`, `failed`).
+        * Provide fast, atomic updates to task states to prevent race conditions when multiple agents or human managers interact with the system simultaneously.
 
-2.  **FastAPI Server (Management API)**
-    *   **Role**: The central management backend serving the Single Page Application (SPA).
-    *   **Responsibilities**:
-        *   Provide a RESTful HTTP API to manage Pipelines and Tasks (CRUD operations).
-        *   Enforce business logic regarding state transitions (e.g., a task cannot move from `created` directly to `implemented` without being `scheduled` and `inprogress`).
-        *   Serve as the backend for the human‑facing management UI.
-        *   Expose WebSockets for real‑time UI updates when the MCP server or human managers change task states.
+2. **FastAPI Server (Management API)**
+    * **Role**: The central management backend serving the Single Page Application (SPA).
+    * **Responsibilities**:
+        * Provide a RESTful HTTP API to manage Pipelines and Tasks (CRUD operations).
+        * Enforce business logic regarding state transitions (e.g., a task cannot move from `created` directly to `implemented` without being `scheduled` and `inprogress`).
+        * Serve as the backend for the human‑facing management UI.
+        * Expose WebSockets for real‑time UI updates when the MCP server or human managers change task states.
 
-3.  **MCP Server (Model Context Protocol)**
-    *   **Role**: The direct interface for external Coding AI Agents (Gemini/Claude).
-    *   **Responsibilities**:
-        *   Expose tools and resources to the LLM via the standard Model Context Protocol.
-        *   Allow the LLM to query the *next available task* in the currently active pipeline.
-        *   Provide tools for the LLM to update the status of the task it is currently working on (e.g., transitioning from `inprogress` to `implemented` or `failed`).
-        *   Provide necessary context (requirements, attached design docs, or related code snippets) attached to the task directly to the LLM.
+3. **MCP Server (Model Context Protocol)**
+    * **Role**: The direct interface for external Coding AI Agents (Gemini/Claude).
+    * **Responsibilities**:
+        * Expose tools and resources to the LLM via the standard Model Context Protocol.
+        * Allow the LLM to query the *next available task* in the currently active pipeline.
+        * Provide tools for the LLM to update the status of the task it is currently working on (e.g., transitioning from `inprogress` to `implemented` or `failed`).
+        * Provide necessary context (requirements, attached design docs, or related code snippets) attached to the task directly to the LLM.
 
-4.  **SPA Frontend (Management UI)**
-    *   **Role**: The human‑facing web interface.
-    *   **Responsibilities**:
-        *   Provide a high‑usability interface to create and manage pipelines.
-        *   Allow users to define tasks, reorder them, and assign them to specific pipelines.
-        *   Monitor the live progress of the AI agent as it burns down the pipeline tasks.
+4. **SPA Frontend (Management UI)**
+    * **Role**: The human‑facing web interface.
+    * **Responsibilities**:
+        * Provide a high‑usability interface to create and manage pipelines.
+        * Allow users to define tasks, reorder them, and assign them to specific pipelines.
+        * Monitor the live progress of the AI agent as it burns down the pipeline tasks.
 
-5.  **Integrated AI Assistant & Local Executors**
-    *   **Role**: Built‑in intelligence and autonomous execution processes within the backend.
-    *   **Responsibilities**:
-        *   Provide an interactive conversational AI Assistant (backed by `ollama.AsyncClient`) accessible via the SPA Frontend to answer queries and execute internal tools.
-        *   Manage autonomous background workers (e.g., `gemini` or `vibe` CLI executors) directly from the API, enabling pipelines to run without requiring external terminal invocations.
-        *   The assistant interface is conditionally rendered based on Ollama availability; if the Ollama service is unreachable, the system degrades gracefully by hiding assistant controls and skipping DocBot background sessions. Health checks are performed on the `/system/health` endpoint and used by both the backend and frontend to determine availability.
+5. **Integrated AI Assistant & Local Executors**
+    * **Role**: Built‑in intelligence and autonomous execution processes within the backend.
+    * **Responsibilities**:
+        * Provide an interactive conversational AI Assistant (backed by `ollama.AsyncClient`) accessible via the SPA Frontend to answer queries and execute internal tools.
+        * Manage autonomous background workers (e.g., `gemini` or `vibe` CLI executors) directly from the API, enabling pipelines to run without requiring external terminal invocations.
+        * The assistant interface is conditionally rendered based on Ollama availability; if the Ollama service is unreachable, the system degrades gracefully by hiding assistant controls and skipping DocBot background sessions. Health checks are performed on the `/system/health` endpoint and used by both the backend and frontend to determine availability.
 
 ## 3. Component Interaction & Data Flow
-1.  **Human Setup**: A user accesses the **SPA Frontend**, which communicates with the **FastAPI Server** to create a new Pipeline and populate it with Tasks in the **MongoDB**. Tasks are initially set to the `created` state.
-2.  **Scheduling**: The user reviews the pipeline and marks tasks as `scheduled` via the SPA.
-3.  **Agent Execution**:
-    *   The Coding AI Agent connects to the **MCP Server**.
-    *   The agent calls an MCP tool (e.g., `get_next_task()`).
-    *   The MCP Server queries **MongoDB**, finds the next `scheduled` task, updates its state to `inprogress`, and returns the task details to the agent.
-4.  **Completion/Failure**:
-    *   The agent performs the required coding work.
-    *   Upon completion, the agent calls an MCP tool (e.g., `mark_task_implemented(task_id)`).
-    *   The MCP Server updates the task state in **MongoDB** to `implemented` (or `failed` if an error occurred).
-5.  **Monitoring**: The user observes these state changes in real‑time via the **SPA Frontend**, which receives events from the **FastAPI Server** over a WebSocket connection.
+
+1. **Human Setup**: A user accesses the **SPA Frontend**, which communicates with the **FastAPI Server** to create a new Pipeline and populate it with Tasks in the **MongoDB**. Tasks are initially set to the `created` state.
+2. **Scheduling**: The user reviews the pipeline and marks tasks as `scheduled` via the SPA.
+3. **Agent Execution**:
+    * The Coding AI Agent connects to the **MCP Server**.
+    * The agent calls an MCP tool (e.g., `get_next_task()`).
+    * The MCP Server queries **MongoDB**, finds the next `scheduled` task, updates its state to `inprogress`, and returns the task details to the agent.
+4. **Completion/Failure**:
+    * The agent performs the required coding work.
+    * Upon completion, the agent calls an MCP tool (e.g., `mark_task_implemented(task_id)`).
+    * The MCP Server updates the task state in **MongoDB** to `implemented` (or `failed` if an error occurred).
+5. **Monitoring**: The user observes these state changes in real‑time via the **SPA Frontend**, which receives events from the **FastAPI Server** over a WebSocket connection.
 
 ## 4. Shared Core Logic
+
 To maintain consistency and avoid code duplication, the **FastAPI Server** and the **MCP Server** share a common Python core library. This core library encapsulates:
-*   Database connection logic.
-*   Data models (schemas) representing Pipelines and Tasks.
-*   The business logic governing state transitions (Lifecycle Management).
+
+* Database connection logic.
+* Data models (schemas) representing Pipelines and Tasks.
+* The business logic governing state transitions (Lifecycle Management).
 
 ### 4.1 Centralized Git Utilities
+
 All Git interactions are consolidated into the `core.utils.git_utils` module. The module offers helper functions for:
-*   **Repository Access** – `get_repo` and `get_repo_for_pipeline` fetch a `git.Repo` instance from a workspace path or pipeline ID.
-*   **Commit Validation** – `validate_commit_hash` confirms the existence of a commit hash within a repository.
-*   **Status Calculation** – `get_git_status_summary` returns a count of staged, unstaged, and untracked changes.
+
+* **Repository Access** – `get_repo` and `get_repo_for_pipeline` fetch a `git.Repo` instance from a workspace path or pipeline ID.
+* **Commit Validation** – `validate_commit_hash` confirms the existence of a commit hash within a repository.
+* **Status Calculation** – `get_git_status_summary` returns a count of staged, unstaged, and untracked changes.
 
 These utilities are employed by the MCP tools, API routes, DocBot tooling, and other components, ensuring a single source of truth for repository access, error handling, and status reporting.
 
 ## 5. Tool Registry Availability
+
 The backend incorporates a dynamic **Tool Registry** that conditionally exposes tools to the model based on runtime environment capabilities. Each registered tool can specify an `is_available` callable. During the health check, the registry evaluates these predicates, ensuring that only tools whose prerequisites are satisfied (e.g., Neovim socket listening, Ollama service reachable) appear in the tool list. The Neovim socket path is configurable via the `NVIM_SOCKET` environment variable (defaulting to `/tmp/nvimsocket`). The socket availability check uses this configurable path. This design prevents the model from attempting to invoke unavailable tools, reducing token waste and improving user experience. See `dd_nvim_socket_config.md` for implementation details.
 
 ## 6. Security & Authentication
+
 The system implements a centralized security model to protect management operations and data integrity.
 
-*   **JWT‑Based Authentication**: All communication between the **SPA Frontend** and **FastAPI Server** is secured using JSON Web Tokens (JWT).
-*   **User Management**: Password‑based login using **bcrypt** for hashing and storage in MongoDB.
-*   **WebSocket Security**: The `/ws` endpoint requires a valid JWT passed as a `token` query parameter during the initial handshake.
-*   **Environment Configuration**: Secrets like `AUTH_SECRET_KEY` are managed via environment variables.
-
+* **JWT‑Based Authentication**: All communication between the **SPA Frontend** and **FastAPI Server** is secured using JSON Web Tokens (JWT).
+* **User Management**: Password‑based login using **bcrypt** for hashing and storage in MongoDB.
+* **WebSocket Security**: The `/ws` endpoint requires a valid JWT passed as a `token` query parameter during the initial handshake.
+* **Environment Configuration**: Secrets like `AUTH_SECRET_KEY` are managed via environment variables.
