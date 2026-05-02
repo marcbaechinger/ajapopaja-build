@@ -255,6 +255,13 @@ export class TaskItem {
                      </svg>
                   </button>
                 ` : ''}
+                ${isImplemented && task.commit_hash ? `
+                  <button data-action-click="open_quickfix" data-task-id="${taskId}" class="p-1 hover:bg-app-surface text-app-muted hover:text-app-accent-2 rounded transition-all cursor-pointer group/quickfix" title="Open Quickfix in Neovim">
+                     <svg class="w-3.5 h-3.5 group-hover/quickfix:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
+                     </svg>
+                  </button>
+                ` : ''}
                 <span class="text-[10px] text-app-muted font-bold uppercase tracking-wider ml-1">Order: ${task.order} ${isSystem ? '• System Task' : ''}</span>
               </div>
             </div>

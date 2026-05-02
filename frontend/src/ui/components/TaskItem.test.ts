@@ -118,4 +118,15 @@ describe('TaskItem', () => {
     expect(html).not.toContain('data-action-click="edit_title"');
     expect(html).not.toContain('title-edit');
   });
+
+  it('should render quickfix button for implemented tasks with commit hash', () => {
+    const implementedTask = { 
+      ...mockTask, 
+      status: TaskStatus.IMPLEMENTED,
+      commit_hash: 'abcdef123'
+    };
+    const html = TaskItem.render(implementedTask as any);
+    expect(html).toContain('Open Quickfix in Neovim');
+    expect(html).toContain('data-action-click="open_quickfix"');
+  });
 });

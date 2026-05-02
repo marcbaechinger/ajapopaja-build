@@ -17,6 +17,8 @@ from typing import List, Optional
 from fastapi import APIRouter, Body, Depends, Query
 from pydantic import BaseModel
 
+from api.assistant.tools.git_tools import git_commit_hunks
+from api.assistant.tools.nvim_tools import nvim_set_quickfix
 from api.auth import get_current_user
 from api.gemini_executor import GeminiExecutor
 from api.websocket_manager import WSMessage, manager
@@ -70,6 +72,57 @@ async def get_task(
     current_user: User = Depends(get_current_user),
 ):
     return await task_queries.get_task_by_id(task_id, include_deleted)
+
+
+@task_router.post("/{task_id}/quickfix")
+async def open_quickfix(
+    task_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    import json
+
+    from fastapi import HTTPException
+
+    task = await task_queries.get_task_by_id(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    if task.status != TaskStatus.IMPLEMENTED or not task.commit_hash:
+        raise HTTPException(
+            status_code=400, detail="Task is not implemented or has no commit hash"
+        )
+
+    # 1. Get hunks for the commit
+    hunks_json = await git_commit_hunks(task.pipeline_id, task.commit_hash)
+    if hunks_json.startswith("Error"):
+        raise HTTPException(status_code=500, detail=hunks_json)
+
+    try:
+        hunks = json.loads(hunks_json)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to parse hunks: {str(e)}")
+
+    # 2. Map hunks to quickfix matches
+    matches = [
+        {
+            "filename": h["file"],
+            "lnum": h["first_line"],
+            "text": f"[{h['type']}] {task.title}",
+        }
+        for h in hunks
+    ]
+
+    # 3. Set quickfix in Neovim
+    result = await nvim_set_quickfix(
+        task.pipeline_id, matches, title=f"Task: {task.title}"
+    )
+
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=500, detail=result.get("error", "Failed to set quickfix")
+        )
+
+    return {"status": "ok"}
 
 
 @task_router.patch("/{task_id}/status", response_model=Task)
