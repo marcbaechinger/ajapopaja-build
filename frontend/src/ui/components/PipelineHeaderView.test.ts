@@ -75,7 +75,7 @@ describe('PipelineHeaderView', () => {
   it('renders DocBot banner when ready', () => {
     const props = { ...mockProps, docbotState: { status: 'ready', taskId: 't1' } as any };
     const html = PipelineHeaderView.render(props);
-    expect(html).toContain('Doc update prepared.');
+    expect(html).toContain('Doc Ready');
     expect(html).toContain('Review');
   });
 
