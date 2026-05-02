@@ -62,6 +62,7 @@ class Task(Document):
     pipeline_id: str
     deleted: bool = False
     history: List[StateTransition] = Field(default_factory=list)
+    review_md: Optional[str] = None
 
     class Settings:
         name = "tasks"

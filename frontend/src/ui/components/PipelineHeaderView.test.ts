@@ -34,6 +34,7 @@ describe('PipelineHeaderView', () => {
     geminiStatus: { running: false, log_file: null, available: true },
     vibeStatus: { running: false, log_file: null, available: true },
     docbotState: { status: 'none', taskId: null },
+    reviewbotState: { status: 'none', taskId: null },
     user: { username: 'testuser' },
     allTasks: []
   };

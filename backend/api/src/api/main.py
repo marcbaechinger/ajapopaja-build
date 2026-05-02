@@ -39,6 +39,7 @@ from api.auth import ALGORITHM, SECRET_KEY, get_current_user_from_token
 from api.gemini_executor import GeminiExecutor
 from api.routes.auth import router as auth_router
 from api.routes.docbot import router as docbot_router
+from api.reviewbot.router import router as reviewbot_router
 from api.routes.pipeline import router as pipeline_router
 from api.routes.system import router as system_router
 from api.routes.task import pipeline_task_router, task_router
@@ -258,6 +259,7 @@ api_router.include_router(pipeline_task_router)
 api_router.include_router(auth_router)
 api_router.include_router(system_router)
 api_router.include_router(docbot_router)
+api_router.include_router(reviewbot_router)
 
 app.include_router(api_router)
 

@@ -22,12 +22,18 @@ export interface DocbotState {
   reason?: string;
 }
 
+export interface ReviewbotState {
+  status: 'none' | 'inProgress';
+  taskId: string | null;
+}
+
 export interface PipelineHeaderViewProps {
   pipeline: Pipeline;
   pipelineId: string;
   geminiStatus: { running: boolean; log_file: string | null; available: boolean };
   vibeStatus: { running: boolean; log_file: string | null; available: boolean };
   docbotState: DocbotState;
+  reviewbotState: ReviewbotState;
   user: any;
   allTasks: Task[];
   gitStatus?: GitStatus;
@@ -35,7 +41,7 @@ export interface PipelineHeaderViewProps {
 
 export class PipelineHeaderView {
   static render(props: PipelineHeaderViewProps): string {
-    const { pipeline, pipelineId, geminiStatus, vibeStatus, docbotState, user, allTasks, gitStatus } = props;
+    const { pipeline, pipelineId, geminiStatus, vibeStatus, docbotState, reviewbotState, user, allTasks, gitStatus } = props;
 
     const statusColors: Record<string, string> = {
       'active': 'bg-green-600/20 text-green-400 border-green-600/30',
@@ -115,6 +121,19 @@ export class PipelineHeaderView {
       `;
     }
 
+    let reviewbotBannerHtml = '';
+    if (reviewbotState && reviewbotState.status === 'inProgress') {
+      reviewbotBannerHtml = `
+        <div class="inline-flex bg-app-accent-2/10 border border-app-accent-2/30 text-app-accent-2 rounded-full px-3 py-1 text-[10px] shadow-sm items-center gap-2">
+          <span class="relative flex h-2 w-2">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-app-accent-2 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-app-accent-2"></span>
+          </span>
+          <span class="font-bold tracking-wide uppercase pt-1">ReviewBot Analyzing...</span>
+        </div>
+      `;
+    }
+
     const gitStatusHtml = !gitStatus ? '' : `
       <div data-action-click="refresh_git_status" class="flex items-center gap-3 bg-app-bg px-3 py-1.5 rounded-xl border border-app-border h-[42px] cursor-pointer transition-all hover:border-app-accent-2/50 group/git" title="Workspace Git Status (Staged, Unstaged, Untracked) - Click to Sync">
         <div class="flex flex-col items-center justify-center">
@@ -177,8 +196,9 @@ export class PipelineHeaderView {
               </div>
             </div>
           </div>
-          <div id="docbot-banner-container" class="flex items-center">
+          <div id="docbot-banner-container" class="flex items-center gap-2">
             ${docbotBannerHtml}
+            ${reviewbotBannerHtml}
           </div>
         </div>
         <div class="flex items-center gap-2">

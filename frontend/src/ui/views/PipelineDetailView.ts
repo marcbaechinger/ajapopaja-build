@@ -32,8 +32,8 @@ import { LogViewerDialog } from '../components/LogViewerDialog.ts';
 import { DocBotDialog } from '../components/DocBotDialog.ts';
 import type { DocBotDialogProps } from '../components/DocBotDialog.ts';
 import { PipelineEditDialog } from '../components/PipelineEditDialog.ts';
-import { PipelineHeaderView } from '../components/PipelineHeaderView.ts';
-import type { DocbotState } from '../components/PipelineHeaderView.ts';
+import { ReviewDialog } from '../components/ReviewDialog.ts';
+import { PipelineHeaderView, type DocbotState, type ReviewbotState } from '../components/PipelineHeaderView.ts';
 import EasyMDE from 'easymde';
 
 export class PipelineDetailView extends View {
@@ -55,6 +55,11 @@ export class PipelineDetailView extends View {
   private gitStatus: GitStatus | undefined = undefined;
   
   private docbotState: DocbotState = {
+    status: 'none',
+    taskId: null,
+  };
+
+  private reviewbotState: ReviewbotState = {
     status: 'none',
     taskId: null,
   };
@@ -254,6 +259,26 @@ export class PipelineDetailView extends View {
           this.fetchDocBotPreview(message.payload.task_id);
        }
     }));
+    this.unsubs.push(this.context.wsClient.on('REVIEWBOT_STARTED', (message: any) => {
+       if (message.payload?.pipeline_id === this.pipelineId) {
+          this.reviewbotState = { status: 'inProgress', taskId: message.payload.task_id };
+          this.updateHeader();
+       }
+    }));
+    this.unsubs.push(this.context.wsClient.on('REVIEWBOT_COMPLETED', async (message: any) => {
+       if (message.payload?.pipeline_id === this.pipelineId) {
+          this.reviewbotState = { status: 'none', taskId: null };
+          await this.refreshTasks();
+          this.updateHeader();
+       }
+    }));
+    this.unsubs.push(this.context.wsClient.on('REVIEWBOT_REVIEW_READY', async (message: any) => {
+       if (message.payload?.pipeline_id === this.pipelineId) {
+          this.reviewbotState = { status: 'none', taskId: null };
+          await this.refreshTasks();
+          this.updateHeader();
+       }
+    }));
   }
 
   private docbotPreviewData: any = null;
@@ -319,6 +344,45 @@ export class PipelineDetailView extends View {
       // After dialog closes, we might want to refresh the header if it was updated
       // The dialog itself calls update on the client, and we'll get a websocket update 
       // or we can refresh manually if needed.
+    });
+
+    this.context.actionRegistry.register('trigger_reviewbot', async (_e, el) => {
+      const taskId = el.getAttribute('data-task-id');
+      if (!taskId) return;
+
+      try {
+        const response = await fetch(`/api/pipelines/${this.pipelineId}/reviewbot/trigger/${taskId}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        if (!response.ok) throw new Error('Failed to trigger ReviewBot');
+        
+        this.reviewbotState = { status: 'inProgress', taskId };
+        this.updateHeader();
+      } catch (error) {
+        console.error('Trigger ReviewBot error:', error);
+        alert('Failed to trigger ReviewBot');
+      }
+    });
+
+    this.context.actionRegistry.register('open_review_dialog', async (_e, el) => {
+      const taskId = el.getAttribute('data-task-id');
+      if (!taskId) return;
+
+      const task = this.allLoadedTasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      const dialog = new ReviewDialog({
+        task,
+        pipelineId: this.pipelineId,
+        context: this.context,
+        onDelete: () => {
+          // Task will be updated via websocket
+        }
+      });
+      await dialog.show();
     });
 
     this.context.actionRegistry.register('copy_pipeline_id', async (_e, el) => {
@@ -1053,6 +1117,7 @@ export class PipelineDetailView extends View {
       geminiStatus: this.geminiStatus,
       vibeStatus: this.vibeStatus,
       docbotState: this.docbotState,
+      reviewbotState: this.reviewbotState,
       user: this.context.authService.getUser(),
       allTasks: this.allLoadedTasks,
       gitStatus: this.gitStatus
