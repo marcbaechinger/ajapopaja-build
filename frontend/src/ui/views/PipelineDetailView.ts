@@ -854,6 +854,16 @@ export class PipelineDetailView extends View {
       this.docbotPreviewData = null;
       this.updateHeader();
     });
+
+    this.context.actionRegistry.register('refresh_git_status', async (_e, el) => {
+      const btn = el as HTMLElement;
+      btn.classList.add('animate-pulse', 'border-app-accent-2');
+      try {
+        await this.refreshGitStatus();
+      } finally {
+        setTimeout(() => btn.classList.remove('animate-pulse', 'border-app-accent-2'), 500);
+      }
+    });
   }
 
   async loadPipeline() {
