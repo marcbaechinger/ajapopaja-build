@@ -122,7 +122,11 @@ async def test_nvim_show_diff_success(init_mock_db):
     await pipeline.insert()
     pipeline_id = str(pipeline.id)
 
-    with patch("os.path.exists", return_value=True), patch("os.stat") as mock_stat:
+    with (
+        patch("os.path.exists", return_value=True),
+        patch("os.path.isfile", return_value=True),
+        patch("os.stat") as mock_stat,
+    ):
         mock_stat.return_value.st_mode = stat.S_IFSOCK
         mock_socket_instance = MagicMock()
         mock_socket_instance.__enter__.return_value = mock_socket_instance
@@ -140,6 +144,44 @@ async def test_nvim_show_diff_success(init_mock_db):
             lua_script = payload[3][0]
             assert "DiffviewOpen HEAD~1^..HEAD~1 -- src/main.py" in lua_script
             assert "cd /tmp/test_ws" in lua_script
+
+
+@pytest.mark.asyncio
+async def test_nvim_show_diff_file_not_found(init_mock_db):
+    pipeline = Pipeline(name="Test Pipeline", workspace_path="/tmp/test_ws")
+    await pipeline.insert()
+    pipeline_id = str(pipeline.id)
+
+    with patch("os.path.exists", return_value=False):
+        result = await nvim_show_diff(pipeline_id, "non-existent.py")
+        assert result["success"] is False
+        assert "File does not exist" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_nvim_show_diff_not_a_file(init_mock_db):
+    pipeline = Pipeline(name="Test Pipeline", workspace_path="/tmp/test_ws")
+    await pipeline.insert()
+    pipeline_id = str(pipeline.id)
+
+    with (
+        patch("os.path.exists", return_value=True),
+        patch("os.path.isfile", return_value=False),
+    ):
+        result = await nvim_show_diff(pipeline_id, "some_directory")
+        assert result["success"] is False
+        assert "Path is not a file" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_nvim_show_diff_invalid_path(init_mock_db):
+    pipeline = Pipeline(name="Test Pipeline", workspace_path="/tmp/test_ws")
+    await pipeline.insert()
+    pipeline_id = str(pipeline.id)
+
+    result = await nvim_show_diff(pipeline_id, "../../outside.py")
+    assert result["success"] is False
+    assert "Invalid path" in result["error"]
 
 
 @pytest.mark.asyncio

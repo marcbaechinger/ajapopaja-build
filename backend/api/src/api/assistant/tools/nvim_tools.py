@@ -290,6 +290,16 @@ async def nvim_show_diff(
         if not pipeline or not pipeline.workspace_abs_path:
             return {"success": False, "error": "Workspace path not found"}
 
+        # Verify the file exists and is within the workspace
+        try:
+            full_path = safe_join(pipeline.workspace_abs_path, path)
+            if not os.path.exists(full_path):
+                return {"success": False, "error": f"File does not exist: {path}"}
+            if not os.path.isfile(full_path):
+                return {"success": False, "error": f"Path is not a file: {path}"}
+        except ValueError as e:
+            return {"success": False, "error": f"Invalid path: {str(e)}"}
+
         # We need to change to the workspace directory first to ensure git commands work
         lua_script = f"""
         vim.cmd('cd {pipeline.workspace_abs_path}')
