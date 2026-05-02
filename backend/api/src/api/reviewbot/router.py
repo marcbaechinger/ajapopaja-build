@@ -17,6 +17,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.auth import get_current_user
+from api.websocket_manager import WSMessage, manager
 from core.queries import pipeline as pipeline_queries
 from core.queries import task as task_queries
 
@@ -79,6 +80,12 @@ async def delete_review(pipeline_id: str, task_id: str):
     try:
         task.review_md = None
         await task.save()
+
+        # Notify frontend
+        await manager.broadcast(
+            WSMessage(type="TASK_UPDATED", payload=task.model_dump(mode="json"))
+        )
+
         return {"status": "success", "message": "Review deleted successfully."}
     except Exception as e:
         logger.error(f"Failed to delete review: {e}")

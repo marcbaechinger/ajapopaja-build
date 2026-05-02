@@ -15,9 +15,13 @@
 import logging
 from typing import Any, Optional
 
-from api.assistant.tools.file_tools import list_project_structure, read_source_file
+from api.assistant.tools.file_tools import (
+    list_project_structure,
+    read_source_file,
+    read_source_file_by_range,
+)
 from api.assistant.tools.git_tools import git_show_commit
-from api.assistant.tools.search_tools import grep
+from api.assistant.tools.search_tools import grep, find, tree
 from api.websocket_manager import WSMessage, manager
 from core.queries import task as task_queries
 
@@ -26,10 +30,13 @@ from .registry import reviewbot_registry
 logger = logging.getLogger(__name__)
 
 # Re-register existing tools for reviewbot
-reviewbot_registry.register_tool(read_source_file)
 reviewbot_registry.register_tool(list_project_structure)
+reviewbot_registry.register_tool(tree)
+reviewbot_registry.register_tool(read_source_file)
+reviewbot_registry.register_tool(read_source_file_by_range)
 reviewbot_registry.register_tool(git_show_commit)
 reviewbot_registry.register_tool(grep)
+reviewbot_registry.register_tool(find)
 
 
 async def save_review(
