@@ -55,3 +55,18 @@ async def test_save_review_task_not_found():
     with patch("api.reviewbot.tools.task_queries.get_task_by_id", return_value=None):
         result = await save_review("p1", "t1", "# Review")
         assert "Error: Task t1 not found" in result
+
+
+@pytest.mark.asyncio
+async def test_save_review_invalid_payload():
+    # Test non-string
+    result = await save_review("p1", "t1", 123)  # type: ignore
+    assert "Error: review_md must be a string" in result
+
+    # Test empty string
+    result = await save_review("p1", "t1", "")
+    assert "Error: review_md cannot be empty" in result
+
+    # Test whitespace string
+    result = await save_review("p1", "t1", "   ")
+    assert "Error: review_md cannot be empty" in result

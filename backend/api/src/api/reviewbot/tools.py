@@ -58,8 +58,11 @@ async def save_review(
     """
     logger.info(f"save_review: Saving review for task {task_id}")
 
-    if not review_md:
-        return "Error: review_md is required."
+    if not isinstance(review_md, str):
+        return f"Error: review_md must be a string, got {type(review_md).__name__}."
+
+    if not review_md.strip():
+        return "Error: review_md cannot be empty or only whitespace."
 
     try:
         task = await task_queries.get_task_by_id(task_id)
