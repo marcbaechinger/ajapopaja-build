@@ -19,7 +19,7 @@ The system is composed of five primary interconnected components:
     *   **Responsibilities**:
         *   Provide a RESTful HTTP API to manage Pipelines and Tasks (CRUD operations).
         *   Enforce business logic regarding state transitions (e.g., a task cannot move from `created` directly to `implemented` without being `scheduled` and `inprogress`).
-        *   Serve as the backend for the human-facing management UI.
+        *   Serve as the backend for the human‑facing management UI.
         *   Expose WebSockets for real‑time UI updates when the MCP server or human managers change task states.
 
 3.  **MCP Server (Model Context Protocol)**
@@ -58,18 +58,26 @@ The system is composed of five primary interconnected components:
 5.  **Monitoring**: The user observes these state changes in real‑time via the **SPA Frontend**, which receives events from the **FastAPI Server** over a WebSocket connection.
 
 ## 4. Shared Core Logic
-To maintain consistency and avoid code duplication, the **FastAPI Server** and the **MCP Server** share a common Python core library. This core library will encapsulate:
+To maintain consistency and avoid code duplication, the **FastAPI Server** and the **MCP Server** share a common Python core library. This core library encapsulates:
 *   Database connection logic.
 *   Data models (schemas) representing Pipelines and Tasks.
 *   The business logic governing state transitions (Lifecycle Management).
 
-## 5. Tool Registry Availability
-The backend incorporates a dynamic **Tool Registry** that conditionally exposes tools to the model based on runtime environment capabilities. Each registered tool can specify an `is_available` callable. During the health check, the registry evaluates these predicates, ensuring that only tools whose prerequisites are satisfied (e.g., Neovim socket listening, Ollama service reachable) appear in the tool list. The Neovim socket path is configurable via the NVIM_SOCKET environment variable (defaulting to `/tmp/nvimsocket`). The socket availability check uses this configurable path. This design prevents the model from attempting to invoke unavailable tools, reducing token waste and improving user experience. See `dd_nvim_socket_config.md` for implementation details.
+### 4.1 Centralized Git Utilities
+All Git interactions are consolidated into the `core.utils.git_utils` module. The module offers helper functions for:
+*   **Repository Access** – `get_repo` and `get_repo_for_pipeline` fetch a `git.Repo` instance from a workspace path or pipeline ID.
+*   **Commit Validation** – `validate_commit_hash` confirms the existence of a commit hash within a repository.
+*   **Status Calculation** – `get_git_status_summary` returns a count of staged, unstaged, and untracked changes.
 
-## 5. Security & Authentication
+These utilities are employed by the MCP tools, API routes, DocBot tooling, and other components, ensuring a single source of truth for repository access, error handling, and status reporting.
+
+## 5. Tool Registry Availability
+The backend incorporates a dynamic **Tool Registry** that conditionally exposes tools to the model based on runtime environment capabilities. Each registered tool can specify an `is_available` callable. During the health check, the registry evaluates these predicates, ensuring that only tools whose prerequisites are satisfied (e.g., Neovim socket listening, Ollama service reachable) appear in the tool list. The Neovim socket path is configurable via the `NVIM_SOCKET` environment variable (defaulting to `/tmp/nvimsocket`). The socket availability check uses this configurable path. This design prevents the model from attempting to invoke unavailable tools, reducing token waste and improving user experience. See `dd_nvim_socket_config.md` for implementation details.
+
+## 6. Security & Authentication
 The system implements a centralized security model to protect management operations and data integrity.
 
-*   **JWT-Based Authentication**: All communication between the **SPA Frontend** and **FastAPI Server** is secured using JSON Web Tokens (JWT).
+*   **JWT‑Based Authentication**: All communication between the **SPA Frontend** and **FastAPI Server** is secured using JSON Web Tokens (JWT).
 *   **User Management**: Password‑based login using **bcrypt** for hashing and storage in MongoDB.
 *   **WebSocket Security**: The `/ws` endpoint requires a valid JWT passed as a `token` query parameter during the initial handshake.
 *   **Environment Configuration**: Secrets like `AUTH_SECRET_KEY` are managed via environment variables.
