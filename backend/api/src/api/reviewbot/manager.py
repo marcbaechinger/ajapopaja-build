@@ -17,7 +17,6 @@ import logging
 from api.bot.manager import bot_manager
 from core.models.models import Task
 
-from . import tools  # noqa: F401
 from .session import ReviewBotSession
 
 logger = logging.getLogger(__name__)
