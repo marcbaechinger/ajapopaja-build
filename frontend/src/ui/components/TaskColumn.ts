@@ -36,9 +36,9 @@ export class TaskColumn {
 
     const taskHtml = tasks.length > 0
       ? tasks.map(t => {
-          const taskId = t.id!;
-          return TaskItem.render(t, showOrdering, false, collapsedTasks.has(taskId));
-        }).join('')
+        const taskId = t.id!;
+        return TaskItem.render(t, showOrdering, false, collapsedTasks.has(taskId));
+      }).join('')
       : `<p class="text-app-muted italic text-sm py-4 text-center border-2 border-dashed border-app-border/30 rounded-xl">${emptyMessage}</p>`;
 
     return `
@@ -46,7 +46,7 @@ export class TaskColumn {
         <div class="flex justify-between items-center px-1">
           <h3 class="text-lg font-black text-app-text uppercase tracking-tight flex items-center gap-2">
             ${title}
-            ${badge ? `<span class="text-[10px] px-2 py-0.5 rounded-full font-black tracking-widest ${badge.class}">${badge.text}</span>` : ''}
+            ${badge ? `<span class="text-[10px] px-2 pt-1.5 py-0.5 rounded-full font-black tracking-widest ${badge.class}">${badge.text}</span>` : ''}
             <span class="text-app-muted font-normal text-sm lowercase tracking-normal">(${tasks.length})</span>
           </h3>
         </div>
