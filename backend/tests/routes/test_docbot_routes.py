@@ -80,9 +80,9 @@ async def test_commit_docbot_change_success(async_client, init_mock_db):
             pipeline = Pipeline(name="P1", workspace_path="p1")
             mock_p_get.return_value = pipeline
             
-            with patch("api.routes.docbot.git.Repo") as mock_repo_cls:
+            with patch("core.utils.git_utils.get_repo") as mock_get_repo:
                 mock_repo = MagicMock()
-                mock_repo_cls.return_value = mock_repo
+                mock_get_repo.return_value = mock_repo
                 
                 response = await async_client.post(
                     "/api/pipelines/p1/docbot/review/commit/t1",

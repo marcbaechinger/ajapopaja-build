@@ -232,19 +232,15 @@ async def test_complete_task_unit():
     mock_task.pipeline_id = VALID_PIPELINE_ID
     mock_task.verification = {"success": True}
 
-    mock_pipeline = MagicMock()
-    mock_pipeline.workspace_abs_path = "/tmp/repo"
-
     with (
         patch("ajapopaja_mcp.tools.init_db", new_callable=AsyncMock) as mock_init_db,
         patch(
-            "ajapopaja_mcp.tools.task_queries.get_task_by_id", new_callable=AsyncMock
-        ) as mock_get_task,
-        patch(
-            "ajapopaja_mcp.tools.pipeline_queries.get_pipeline_by_id",
+            "ajapopaja_mcp.tools.git_utils.get_repo_for_pipeline_by_task",
             new_callable=AsyncMock,
-        ) as mock_get_pipeline,
-        patch("core.utils.git_utils.git.Repo") as mock_repo_cls,
+        ) as mock_get_repo,
+        patch(
+            "ajapopaja_mcp.tools.git_utils.validate_commit_hash"
+        ) as mock_validate_hash,
         patch(
             "ajapopaja_mcp.tools.task_queries.complete_task", new_callable=AsyncMock
         ) as mock_complete,
@@ -252,18 +248,17 @@ async def test_complete_task_unit():
             "ajapopaja_mcp.tools.manager.notify_task_update", new_callable=AsyncMock
         ) as mock_notify,
     ):
-        mock_get_task.return_value = mock_task
-        mock_get_pipeline.return_value = mock_pipeline
-        mock_complete.return_value = mock_task
         mock_repo = MagicMock()
-        mock_repo_cls.return_value = mock_repo
+        mock_repo.working_dir = "/tmp/repo"
+        mock_get_repo.return_value = mock_repo
+        mock_validate_hash.return_value = True
+        mock_complete.return_value = mock_task
 
         result = await complete_task(task_id, commit_hash, completion_info, version)
 
         mock_init_db.assert_awaited_once()
-        mock_get_task.assert_awaited_once_with(task_id)
-        mock_get_pipeline.assert_awaited_once_with(VALID_PIPELINE_ID)
-        mock_repo.git.show.assert_called_once_with(commit_hash, "--no-patch")
+        mock_get_repo.assert_awaited_once_with(task_id)
+        mock_validate_hash.assert_called_once_with(mock_repo, commit_hash)
         mock_complete.assert_awaited_once_with(
             task_id=task_id,
             version=version,
@@ -283,30 +278,20 @@ async def test_complete_task_commit_not_found():
     completion_info = "Done"
     version = 1
 
-    mock_task = MagicMock()
-    mock_task.id = task_id
-    mock_task.pipeline_id = VALID_PIPELINE_ID
-
-    mock_pipeline = MagicMock()
-    mock_pipeline.workspace_abs_path = "/tmp/repo"
-
     with (
+        patch("ajapopaja_mcp.tools.init_db", new_callable=AsyncMock),
         patch(
-            "ajapopaja_mcp.tools.task_queries.get_task_by_id", new_callable=AsyncMock
-        ) as mock_get_task,
-        patch(
-            "ajapopaja_mcp.tools.pipeline_queries.get_pipeline_by_id",
+            "ajapopaja_mcp.tools.git_utils.get_repo_for_pipeline_by_task",
             new_callable=AsyncMock,
-        ) as mock_get_pipeline,
-        patch("core.utils.git_utils.git.Repo") as mock_repo_cls,
+        ) as mock_get_repo,
+        patch(
+            "ajapopaja_mcp.tools.git_utils.validate_commit_hash"
+        ) as mock_validate_hash,
     ):
-        import git
-
-        mock_get_task.return_value = mock_task
-        mock_get_pipeline.return_value = mock_pipeline
         mock_repo = MagicMock()
-        mock_repo.git.show.side_effect = git.exc.GitCommandError("git show", 128)
-        mock_repo_cls.return_value = mock_repo
+        mock_repo.working_dir = "/tmp/repo"
+        mock_get_repo.return_value = mock_repo
+        mock_validate_hash.return_value = False
 
         result = await complete_task(task_id, commit_hash, completion_info, version)
 

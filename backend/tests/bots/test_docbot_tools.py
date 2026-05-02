@@ -15,7 +15,7 @@
 import os
 import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -49,11 +49,12 @@ async def test_docbot_tools_flow():
             reason = "Initial documentation"
             with (
                 patch("api.docbot.tools.set_preview") as mock_set_preview,
-                patch("api.docbot.tools.git.Repo") as mock_repo,
+                patch("core.utils.git_utils.get_repo") as mock_get_repo,
                 patch("api.docbot.tools.manager.broadcast") as mock_broadcast,
             ):
                 # Setup mock repo to return a dummy diff
-                mock_repo_instance = mock_repo.return_value
+                mock_repo_instance = MagicMock()
+                mock_get_repo.return_value = mock_repo_instance
                 mock_repo_instance.git.diff.return_value = "dummy diff"
 
                 result = await update_ref_doc(
@@ -76,10 +77,11 @@ async def test_docbot_tools_flow():
             new_content = "# Updated Doc\nNew content."
             with (
                 patch("api.docbot.tools.set_preview") as mock_set_preview,
-                patch("api.docbot.tools.git.Repo") as mock_repo,
+                patch("core.utils.git_utils.get_repo") as mock_get_repo,
                 patch("api.docbot.tools.manager.broadcast") as mock_broadcast,
             ):
-                mock_repo_instance = mock_repo.return_value
+                mock_repo_instance = MagicMock()
+                mock_get_repo.return_value = mock_repo_instance
                 mock_repo_instance.git.diff.return_value = "dummy diff"
 
                 result = await update_ref_doc(
@@ -152,7 +154,7 @@ async def test_docbot_tools_recursive():
 
             with (
                 patch("api.docbot.tools.set_preview"),
-                patch("api.docbot.tools.git.Repo"),
+                patch("core.utils.git_utils.get_repo"),
                 patch("api.docbot.tools.manager.broadcast"),
             ):
                 result = await update_ref_doc(pipeline_id, filename, content, reason)
