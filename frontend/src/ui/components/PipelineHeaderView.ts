@@ -118,9 +118,7 @@ export class PipelineHeaderView {
     const gitStatusHtml = !gitStatus ? '' : `
       <div data-action-click="refresh_git_status" class="flex items-center gap-3 bg-app-bg px-3 py-1.5 rounded-xl border border-app-border h-[42px] cursor-pointer transition-all hover:border-app-accent-2/50 group/git" title="Workspace Git Status (Staged, Unstaged, Untracked) - Click to Sync">
         <div class="flex flex-col items-center justify-center">
-           <svg class="w-3.5 h-3.5 text-app-muted group-hover/git:text-app-accent-2 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"></path>
-           </svg>
+           <svg xmlns="http://www.w3.org/2000/svg" width="12pt" height="12pt" viewBox="0 0 78 78"><path fill="#ffffff" transform="translate(10 10) rotate(-45 29 29)" d="M5,58c-2.76142,0 -5,-2.23858 -5,-5v-48c0,-2.76142 2.23858,-5 5,-5h33v12.54404c-2.06553,0.94801 -3.5,3.03446 -3.5,5.45596c0,0.73514 0.13221,1.43941 0.37415,2.09031l-15.28384,15.28384c-0.6509,-0.24194 -1.35517,-0.37415 -2.09031,-0.37415c-3.31371,0 -6,2.68629 -6,6c0,3.31371 2.68629,6 6,6c3.31371,0 6,-2.68629 6,-6c0,-0.73514 -0.13221,-1.43941 -0.37415,-2.09031l14.87415,-14.87415l0,11.50851c-2.06553,0.94801 -3.5,3.03446 -3.5,5.45596c0,3.31371 2.68629,6 6,6c3.31371,0 6,-2.68629 6,-6c0,-2.42149 -1.43447,-4.50795 -3.5,-5.45596l0,-12.08808c2.06553,-0.94801 3.5,-3.03446 3.5,-5.45596c0,-2.42149 -1.43447,-4.50795 -3.5,-5.45596l0,-12.54404h10c2.76142,0 5,2.23858 5,5v48c0,2.76142 -2.23858,5 -5,5z"/></svg>
         </div>
         <div class="flex gap-2 items-center h-full">
           <div class="flex flex-col items-center">
