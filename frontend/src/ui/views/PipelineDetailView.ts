@@ -351,13 +351,7 @@ export class PipelineDetailView extends View {
       if (!taskId) return;
 
       try {
-        const response = await fetch(`/api/pipelines/${this.pipelineId}/reviewbot/trigger/${taskId}`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        });
-        if (!response.ok) throw new Error('Failed to trigger ReviewBot');
+        await this.context.reviewBotClient.trigger(this.pipelineId, taskId);
         
         this.reviewbotState = { status: 'inProgress', taskId };
         this.updateHeader();

@@ -40,16 +40,16 @@ describe('ReviewDialog', () => {
         review_md: '# Review\n\nLooks good.'
       }),
       pipelineId: 'pipeline-1',
-      context: {} as any,
+      context: {
+        reviewBotClient: {
+          deleteReview: vi.fn().mockResolvedValue(undefined)
+        }
+      } as any,
       onDelete: vi.fn()
     };
 
     vi.stubGlobal('confirm', vi.fn().mockReturnValue(true));
     vi.stubGlobal('alert', vi.fn());
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
-    vi.stubGlobal('localStorage', {
-        getItem: vi.fn().mockReturnValue('mock-token')
-    });
   });
 
   it('should render Markdown content', async () => {
@@ -74,15 +74,15 @@ describe('ReviewDialog', () => {
     await showPromise;
 
     expect(window.confirm).toHaveBeenCalled();
-    expect(window.fetch).toHaveBeenCalledWith(
-      '/api/pipelines/pipeline-1/reviewbot/review/task-1',
-      expect.objectContaining({ method: 'DELETE' })
+    expect(mockProps.context.reviewBotClient.deleteReview).toHaveBeenCalledWith(
+      'pipeline-1',
+      'task-1'
     );
     expect(mockProps.onDelete).toHaveBeenCalled();
   });
 
   it('should handle delete failure', async () => {
-    (window.fetch as any).mockResolvedValue({ ok: false });
+    (mockProps.context.reviewBotClient.deleteReview as any).mockRejectedValue(new Error('Delete failed'));
     const dialog = new ReviewDialog(mockProps);
     const showPromise = dialog.show();
 

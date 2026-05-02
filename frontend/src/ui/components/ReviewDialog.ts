@@ -88,14 +88,7 @@ export class ReviewDialog extends BaseDialog<void> {
     deleteBtn.textContent = 'Deleting...';
 
     try {
-      const response = await fetch(`/api/pipelines/${this.props.pipelineId}/reviewbot/review/${this.props.task.id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      if (!response.ok) throw new Error('Failed to delete review');
+      await this.props.context.reviewBotClient.deleteReview(this.props.pipelineId, this.props.task.id!);
 
       if (this.props.onDelete) {
         this.props.onDelete();

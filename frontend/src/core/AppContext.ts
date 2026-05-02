@@ -20,6 +20,7 @@ import { PipelineClient } from './clients/PipelineClient';
 import { TaskClient } from './clients/TaskClient';
 import { SystemClient } from './clients/SystemClient';
 import { DocBotClient } from './clients/DocBotClient';
+import { ReviewBotClient } from './clients/ReviewBotClient';
 import { WebSocketClient } from './WebSocketClient';
 import { AuthService } from './AuthService';
 import { AssistantService } from './AssistantService';
@@ -38,6 +39,7 @@ export class AppContext {
   public readonly taskClient: TaskClient;
   public readonly systemClient: SystemClient;
   public readonly docBotClient: DocBotClient;
+  public readonly reviewBotClient: ReviewBotClient;
   public readonly wsClient: WebSocketClient;
   public readonly authService: AuthService;
   public readonly assistantService: AssistantService;
@@ -51,6 +53,7 @@ export class AppContext {
     this.taskClient = new TaskClient(apiBaseUrl, this.authService);
     this.systemClient = new SystemClient(this.authService);
     this.docBotClient = new DocBotClient(apiBaseUrl, this.authService);
+    this.reviewBotClient = new ReviewBotClient(this.authService);
     this.wsClient = new WebSocketClient(apiBaseUrl, this.authService);
     this.assistantService = new AssistantService(this.wsClient, this.authService);
     
