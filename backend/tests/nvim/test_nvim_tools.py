@@ -122,36 +122,24 @@ async def test_nvim_show_diff_success(init_mock_db):
     await pipeline.insert()
     pipeline_id = str(pipeline.id)
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(
-            stdout="old content\nmore content", returncode=0
-        )
+    with patch("os.path.exists", return_value=True), patch("os.stat") as mock_stat:
+        mock_stat.return_value.st_mode = stat.S_IFSOCK
+        mock_socket_instance = MagicMock()
+        mock_socket_instance.__enter__.return_value = mock_socket_instance
+        mock_socket_instance.recv.return_value = msgpack.packb([1, 1, None, None])
 
-        with patch("os.path.exists", return_value=True), patch("os.stat") as mock_stat:
-            mock_stat.return_value.st_mode = stat.S_IFSOCK
-            mock_socket_instance = MagicMock()
-            mock_socket_instance.__enter__.return_value = mock_socket_instance
-            mock_socket_instance.recv.return_value = msgpack.packb([1, 1, None, None])
+        with patch("socket.socket", return_value=mock_socket_instance):
+            result = await nvim_show_diff(pipeline_id, "src/main.py", "HEAD~1")
 
-            with patch("socket.socket", return_value=mock_socket_instance):
-                result = await nvim_show_diff(pipeline_id, "src/main.py", "HEAD~1")
+            assert result["success"] is True, f"Error: {result.get('error')}"
 
-                assert result["success"] is True, f"Error: {result.get('error')}"
-
-                # Verify git subprocess was called correctly
-                mock_run.assert_called_once()
-                args = mock_run.call_args[0][0]
-                assert args == ["git", "show", "HEAD~1:src/main.py"]
-                assert mock_run.call_args[1]["cwd"] == "/tmp/test_ws"
-
-                # Verify payload
-                sent_data = mock_socket_instance.sendall.call_args[0][0]
-                payload = msgpack.unpackb(sent_data)
-                assert payload[2] == "nvim_exec_lua"
-                passed_args = payload[3][1]
-                assert passed_args[0] == "/tmp/test_ws/src/main.py"  # full path
-                assert passed_args[1] == "old content\nmore content"  # content
-                assert passed_args[2] == "HEAD~1"  # commit_hash short
+            # Verify payload
+            sent_data = mock_socket_instance.sendall.call_args[0][0]
+            payload = msgpack.unpackb(sent_data)
+            assert payload[2] == "nvim_exec_lua"
+            lua_script = payload[3][0]
+            assert "DiffviewOpen HEAD~1^..HEAD~1 -- src/main.py" in lua_script
+            assert "cd /tmp/test_ws" in lua_script
 
 
 @pytest.mark.asyncio

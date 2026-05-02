@@ -290,78 +290,13 @@ async def nvim_show_diff(
         if not pipeline or not pipeline.workspace_abs_path:
             return {"success": False, "error": "Workspace path not found"}
 
-        try:
-            full_path = str(safe_join(pipeline.workspace_abs_path, path))
-        except ValueError as e:
-            return {"success": False, "error": str(e)}
+        # We need to change to the workspace directory first to ensure git commands work
+        lua_script = f"""
+        vim.cmd('cd {pipeline.workspace_abs_path}')
+        vim.cmd('DiffviewOpen {commit_hash}^..{commit_hash} -- {path}')
+        """
 
-        # 1. Get the content of the file from the git history
-        cmd = ["git", "show", f"{commit_hash}:{path}"]
-        try:
-            import subprocess
-
-            result = subprocess.run(
-                cmd,
-                cwd=str(pipeline.workspace_abs_path),
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            if result.returncode != 0:
-                print(f"GIT ERROR: {result.stderr}")
-                return {
-                    "success": False,
-                    "error": (
-                        f"Git could not find that file at that commit: {result.stderr}"
-                    ),
-                }
-
-            old_content = result.stdout
-            print(f"Length of fetched git content: {len(old_content)}")
-            print("content: " + old_content)
-        except subprocess.CalledProcessError as e:
-            return {"success": False, "error": f"Git error: {e.stderr}"}
-
-        # 2. Prepare the Lua script to set up the side-by-side view
-        # We pass arguments cleanly to avoid string escaping issues in Lua
-        lua_script = """
-            local file_path, old_text, commit_short = ...
-
-            -- 1. Setup the 'Current' side
-            vim.cmd("edit " .. vim.fn.fnameescape(file_path))
-            local original_ft = vim.bo.filetype
-            vim.cmd("diffthis")
-
-            -- Create a COMPLETELY NEW scratch buffer
-            -- (false = not listed, true = scratch/unnamed)
-            local buf = vim.api.nvim_create_buf(false, true)
-
-            -- Fill it with the old text
-            local lines = vim.split(old_text, "\\n", {plain=true})
-            if lines[#lines] == "" then table.remove(lines) end
-            vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-
-            -- Open a vertical split and put the NEW buffer in it
-            vim.cmd("vsplit")
-            vim.api.nvim_win_set_buf(0, buf)
-
-            -- Configure look and feel
-            vim.bo[buf].filetype = original_ft
-            vim.bo[buf].buftype = "nofile"
-            vim.bo[buf].bufhidden = "wipe"
-            local name = "git://" .. commit_short .. "/"
-            name = name .. vim.fn.fnamemodify(file_path, ":t")
-            pcall(vim.api.nvim_buf_set_name, buf, name)
-
-            -- 6. Turn on diff for the new window
-            vim.cmd("diffthis")
-            vim.cmd("diffupdate")
-            """
-
-        commit_short = commit_hash[:7]
-        return _nvim_client_call(
-            "nvim_exec_lua", [lua_script, [full_path, old_content, commit_short]]
-        )
+        return _nvim_client_call("nvim_exec_lua", [lua_script, []])
 
     except Exception as e:
         return {"success": False, "error": str(e)}
