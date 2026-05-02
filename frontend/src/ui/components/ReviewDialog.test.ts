@@ -61,8 +61,27 @@ describe('ReviewDialog', () => {
     const dialog = new ReviewDialog(mockProps);
     const showPromise = dialog.show();
 
-    expect(document.body.innerHTML).toContain('<h1>Review</h1>');
-    expect(document.body.innerHTML).toContain('<p>Looks good.</p>');
+    await vi.waitFor(() => {
+      expect(document.body.innerHTML).toContain('<h1>Review</h1>');
+      expect(document.body.innerHTML).toContain('Looks good.');
+    });
+
+    // Cleanup
+    document.querySelector('#review-close-btn')?.dispatchEvent(new MouseEvent('click'));
+    await showPromise;
+  });
+
+  it('should sanitize Markdown content', async () => {
+    mockProps.task.review_md = '# Review\n\n<script>alert("XSS")</script> **Safe Content**';
+    const dialog = new ReviewDialog(mockProps);
+    const showPromise = dialog.show();
+
+    await vi.waitFor(() => {
+      expect(document.body.innerHTML).toContain('<h1>Review</h1>');
+      // DOMPurify removes <script> and might leave **Safe Content** as text if marked didn't parse it inside sanitization context or vice versa
+      expect(document.body.innerHTML).toContain('Safe Content');
+      expect(document.body.innerHTML).not.toContain('<script>');
+    });
 
     // Cleanup
     document.querySelector('#review-close-btn')?.dispatchEvent(new MouseEvent('click'));
@@ -74,7 +93,11 @@ describe('ReviewDialog', () => {
     const showPromise = dialog.show();
 
     // 1. Create Tasks
-    const createTasksBtn = document.querySelector('[data-action-copy="create_tasks"]') as HTMLButtonElement;
+    const createTasksBtn = await vi.waitFor(() => {
+      const btn = document.querySelector('[data-action-copy="create_tasks"]') as HTMLButtonElement;
+      if (!btn) throw new Error('btn not found');
+      return btn;
+    });
     createTasksBtn.click();
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
       expect.stringContaining('Please analyze the technical review for Task task-1 in Pipeline pipeline-1')

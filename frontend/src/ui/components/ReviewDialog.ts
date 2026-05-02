@@ -18,6 +18,7 @@ import { BaseDialog } from './dialog_common.ts';
 import { Task } from '../../core/domain.ts';
 import type { AppContext } from '../../core/AppContext.ts';
 import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 import { renderQuickPromptButton, type PromptConfig } from './QuickPromptButton.ts';
 
 const PROMPT_CONFIGS: PromptConfig[] = [
@@ -78,10 +79,11 @@ export class ReviewDialog extends BaseDialog<void> {
   protected renderBody(): string {
     if (!this.props || !this.props.task.review_md) return '<div class="p-8 text-center text-app-muted font-bold uppercase tracking-widest">No review available</div>';
     
-    const html = marked.parse(this.props.task.review_md);
+    const rawHtml = marked.parse(this.props.task.review_md) as string;
+    const cleanHtml = DOMPurify.sanitize(rawHtml);
     return `
       <div class="p-6 prose-theme">
-        ${html}
+        ${cleanHtml}
       </div>
     `;
   }
