@@ -50,6 +50,11 @@ describe('ReviewDialog', () => {
 
     vi.stubGlobal('confirm', vi.fn().mockReturnValue(true));
     vi.stubGlobal('alert', vi.fn());
+    vi.stubGlobal('navigator', {
+      clipboard: {
+        writeText: vi.fn().mockResolvedValue(undefined)
+      }
+    });
   });
 
   it('should render Markdown content', async () => {
@@ -64,11 +69,48 @@ describe('ReviewDialog', () => {
     await showPromise;
   });
 
+  it('should copy prompts to clipboard', async () => {
+    const dialog = new ReviewDialog(mockProps);
+    const showPromise = dialog.show();
+
+    // 1. Create Tasks
+    const createTasksBtn = document.querySelector('[data-action-copy="create_tasks"]') as HTMLButtonElement;
+    createTasksBtn.click();
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+      expect.stringContaining('Please analyze the technical review for Task task-1 in Pipeline pipeline-1')
+    );
+    await vi.waitFor(() => {
+      expect(createTasksBtn.innerHTML).toContain('Copied!');
+    });
+
+    // 2. Explain
+    const explainBtn = document.querySelector('[data-action-copy="explain_review"]') as HTMLButtonElement;
+    explainBtn.click();
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+      expect.stringContaining('Can you explain the technical review for Task task-1 in Pipeline pipeline-1')
+    );
+
+    // 3. Design Check
+    const designBtn = document.querySelector('[data-action-copy="design_check"]') as HTMLButtonElement;
+    designBtn.click();
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+      expect.stringContaining('established design patterns')
+    );
+
+    // Cleanup
+    document.querySelector('#review-close-btn')?.dispatchEvent(new MouseEvent('click'));
+    await showPromise;
+  });
+
   it('should handle delete action', async () => {
     const dialog = new ReviewDialog(mockProps);
     const showPromise = dialog.show();
 
-    const deleteBtn = document.querySelector('#review-delete-btn') as HTMLButtonElement;
+    const deleteBtn = await vi.waitFor(() => {
+        const btn = document.querySelector('#review-delete-btn') as HTMLButtonElement;
+        if (!btn) throw new Error('btn not found');
+        return btn;
+    });
     deleteBtn.click();
 
     await showPromise;
@@ -86,7 +128,11 @@ describe('ReviewDialog', () => {
     const dialog = new ReviewDialog(mockProps);
     const showPromise = dialog.show();
 
-    const deleteBtn = document.querySelector('#review-delete-btn') as HTMLButtonElement;
+    const deleteBtn = await vi.waitFor(() => {
+        const btn = document.querySelector('#review-delete-btn') as HTMLButtonElement;
+        if (!btn) throw new Error('btn not found');
+        return btn;
+    });
     deleteBtn.click();
 
     await vi.waitFor(() => {
