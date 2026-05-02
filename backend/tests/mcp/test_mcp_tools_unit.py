@@ -229,10 +229,22 @@ async def test_complete_task_unit():
 
     mock_task = MagicMock()
     mock_task.id = task_id
+    mock_task.pipeline_id = VALID_PIPELINE_ID
     mock_task.verification = {"success": True}
+
+    mock_pipeline = MagicMock()
+    mock_pipeline.workspace_abs_path = "/tmp/repo"
 
     with (
         patch("ajapopaja_mcp.tools.init_db", new_callable=AsyncMock) as mock_init_db,
+        patch(
+            "ajapopaja_mcp.tools.task_queries.get_task_by_id", new_callable=AsyncMock
+        ) as mock_get_task,
+        patch(
+            "ajapopaja_mcp.tools.pipeline_queries.get_pipeline_by_id",
+            new_callable=AsyncMock,
+        ) as mock_get_pipeline,
+        patch("ajapopaja_mcp.tools.git.Repo") as mock_repo_cls,
         patch(
             "ajapopaja_mcp.tools.task_queries.complete_task", new_callable=AsyncMock
         ) as mock_complete,
@@ -240,11 +252,18 @@ async def test_complete_task_unit():
             "ajapopaja_mcp.tools.manager.notify_task_update", new_callable=AsyncMock
         ) as mock_notify,
     ):
+        mock_get_task.return_value = mock_task
+        mock_get_pipeline.return_value = mock_pipeline
         mock_complete.return_value = mock_task
+        mock_repo = MagicMock()
+        mock_repo_cls.return_value = mock_repo
 
         result = await complete_task(task_id, commit_hash, completion_info, version)
 
         mock_init_db.assert_awaited_once()
+        mock_get_task.assert_awaited_once_with(task_id)
+        mock_get_pipeline.assert_awaited_once_with(VALID_PIPELINE_ID)
+        mock_repo.git.show.assert_called_once_with(commit_hash, "--no-patch")
         mock_complete.assert_awaited_once_with(
             task_id=task_id,
             version=version,
@@ -255,6 +274,43 @@ async def test_complete_task_unit():
         mock_notify.assert_awaited_once_with(task_id)
 
         assert "completed successfully" in result
+
+
+@pytest.mark.asyncio
+async def test_complete_task_commit_not_found():
+    task_id = VALID_TASK_ID
+    commit_hash = "1234567"
+    completion_info = "Done"
+    version = 1
+
+    mock_task = MagicMock()
+    mock_task.id = task_id
+    mock_task.pipeline_id = VALID_PIPELINE_ID
+
+    mock_pipeline = MagicMock()
+    mock_pipeline.workspace_abs_path = "/tmp/repo"
+
+    with (
+        patch(
+            "ajapopaja_mcp.tools.task_queries.get_task_by_id", new_callable=AsyncMock
+        ) as mock_get_task,
+        patch(
+            "ajapopaja_mcp.tools.pipeline_queries.get_pipeline_by_id",
+            new_callable=AsyncMock,
+        ) as mock_get_pipeline,
+        patch("ajapopaja_mcp.tools.git.Repo") as mock_repo_cls,
+    ):
+        import git
+
+        mock_get_task.return_value = mock_task
+        mock_get_pipeline.return_value = mock_pipeline
+        mock_repo = MagicMock()
+        mock_repo.git.show.side_effect = git.exc.GitCommandError("git show", 128)
+        mock_repo_cls.return_value = mock_repo
+
+        result = await complete_task(task_id, commit_hash, completion_info, version)
+
+        assert f"Error: Commit hash '{commit_hash}' not found" in result
 
 
 @pytest.mark.asyncio

@@ -16,10 +16,13 @@ import logging
 import re
 from typing import Any, Dict, List, Optional
 
+import git
+
 from api.websocket_manager import manager
 from core.db import init_db
 from core.exceptions import EntityNotFoundError, VersionMismatchError
 from core.models.models import TaskStatus
+from core.queries import pipeline as pipeline_queries
 from core.queries import task as task_queries
 
 
@@ -45,13 +48,15 @@ async def get_next_task(pipeline_id: str) -> Dict[str, Any]:
     The task will automatically move to 'proposed' status once the design_doc is set.
     Once you have submitted the design, you should stop working on this task.
     You can then call 'get_next_task' again to pick up the next available task
-    (which might be this one again once it has been approved and moved back to 'scheduled').
+    (which might be this one again once it has been approved and moved back to
+    'scheduled').
 
     Args:
         pipeline_id: The ID of the pipeline to pull from.
 
     Returns:
-        A dictionary containing task details (id, title, description, design_doc, spec, want_design_doc, design_doc_ready, version).
+        A dictionary containing task details (id, title, description, design_doc,
+        spec, want_design_doc, design_doc_ready, version).
     """
     if not _is_valid_id(pipeline_id):
         return {
@@ -123,8 +128,8 @@ async def complete_task(
     """
     Finalizes a task implementation.
 
-    IMPORTANT: If 'want_design_doc' was True for this task, a 'design_doc' must have been
-    provided and approved by the user before calling this tool.
+    IMPORTANT: If 'want_design_doc' was True for this task, a 'design_doc' must have
+    been provided and approved by the user before calling this tool.
 
     Args:
         task_id: The target task ID.
@@ -146,6 +151,28 @@ async def complete_task(
 
     await init_db()
     try:
+        # Fetch task to get pipeline_id for repo location
+        task = await task_queries.get_task_by_id(task_id)
+        pipeline = await pipeline_queries.get_pipeline_by_id(task.pipeline_id)
+
+        if not pipeline.workspace_abs_path:
+            return (
+                f"Error: Workspace path not configured for pipeline {task.pipeline_id}."
+            )
+
+        # Validate commit hash exists in repo
+        try:
+            repo = git.Repo(pipeline.workspace_abs_path)
+            # Use 'git show' to verify existence without fetching full diff
+            repo.git.show(commit_hash, "--no-patch")
+        except git.exc.GitCommandError:
+            return (
+                f"Error: Commit hash '{commit_hash}' not found in the repository "
+                f"at {pipeline.workspace_abs_path}. Please provide a valid commit hash."
+            )
+        except Exception as e:
+            return f"Error validating commit hash: {str(e)}"
+
         task = await task_queries.complete_task(
             task_id=task_id,
             version=version,

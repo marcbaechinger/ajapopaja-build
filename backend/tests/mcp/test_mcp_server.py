@@ -191,18 +191,28 @@ async def test_mcp_update_design_doc_occ_failure():
 
 
 @pytest.mark.asyncio
-async def test_mcp_complete_task_success():
+async def test_mcp_complete_task_success(monkeypatch):
+    # Ensure pipeline exists
+    pipeline = Pipeline(id=VALID_PID, name="Test Pipeline", workspace_path="test_ws")
+    await pipeline.insert()
+
     task = Task(
         title="Task 1", pipeline_id=VALID_PID, version=1, status=TaskStatus.INPROGRESS
     )
     await task.insert()
 
-    result = await complete_task(
-        task_id=str(task.id),
-        commit_hash="abc12345678",
-        completion_info="Implemented feature X",
-        version=1,
-    )
+    with monkeypatch.context() as m:
+        from unittest.mock import MagicMock
+
+        mock_repo = MagicMock()
+        m.setattr("ajapopaja_mcp.tools.git.Repo", MagicMock(return_value=mock_repo))
+
+        result = await complete_task(
+            task_id=str(task.id),
+            commit_hash="abc12345678",
+            completion_info="Implemented feature X",
+            version=1,
+        )
 
     assert "completed successfully" in result
 
@@ -216,7 +226,11 @@ async def test_mcp_complete_task_success():
 
 
 @pytest.mark.asyncio
-async def test_mcp_complete_task_verification_warning():
+async def test_mcp_complete_task_verification_warning(monkeypatch):
+    # Ensure pipeline exists
+    pipeline = Pipeline(id=VALID_PID, name="Test Pipeline", workspace_path="test_ws")
+    await pipeline.insert()
+
     task = Task(
         title="Task 1",
         pipeline_id=VALID_PID,
@@ -227,13 +241,19 @@ async def test_mcp_complete_task_verification_warning():
     # want_design_doc=True but no design_doc should trigger warning
     await task.insert()
 
-    # Complete with a valid hash but no verification success recorded in db
-    result = await complete_task(
-        task_id=str(task.id),
-        commit_hash="1234567890",
-        completion_info="Some info",
-        version=1,
-    )
+    with monkeypatch.context() as m:
+        from unittest.mock import MagicMock
+
+        mock_repo = MagicMock()
+        m.setattr("ajapopaja_mcp.tools.git.Repo", MagicMock(return_value=mock_repo))
+
+        # Complete with a valid hash but no verification success recorded in db
+        result = await complete_task(
+            task_id=str(task.id),
+            commit_hash="1234567890",
+            completion_info="Some info",
+            version=1,
+        )
 
     assert "WARNING: Verification failed" in result
 
@@ -359,8 +379,9 @@ async def test_mcp_mounting_and_precedence(async_client, init_mock_db):
 
     # Test /mcp (MCP Mount)
     # FastMCP streamable-http requires a lifespan to initialize its task group.
-    # In this test environment, we might get a RuntimeError if the lifespan is not fully triggered,
-    # but receiving that error actually CONFIRMS that the request was routed to the mcp_app.
+    # In this test environment, we might get a RuntimeError if the lifespan is not
+    # fully triggered, but receiving that error actually CONFIRMS that the request
+    # was routed to the mcp_app.
     try:
         response = await async_client.post("/mcp/")
         # If it doesn't raise, we check it's not a 404/405 from the parent app

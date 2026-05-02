@@ -214,7 +214,6 @@ export class PipelineHeaderView {
           </div>
         </div>
         <div class="flex items-center gap-2">
-           ${gitStatusHtml}
            <button data-action-click="open_search" data-pipeline-id="${pipelineId}" class="flex items-center gap-2 bg-app-bg hover:bg-app-surface px-4 py-2 rounded-xl border border-app-border text-app-muted hover:text-app-accent-2 transition-all cursor-pointer group" title="Global Search (Ctrl+K)">
              <svg class="w-4 h-4 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
              <span class="text-xs font-bold uppercase tracking-widest">Search</span>
@@ -227,6 +226,7 @@ export class PipelineHeaderView {
              <svg class="w-4 h-4 group-hover:scale-110 transition-transform text-app-accent-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
              <span class="text-xs font-bold uppercase tracking-widest">Stats</span>
            </button>
+           ${gitStatusHtml}
            <div class="flex items-center gap-3 bg-app-bg px-4 py-2 rounded-xl border border-app-border h-[42px]">
              <div class="flex flex-col items-end">
                <span class="text-xs font-bold text-app-text">${user?.username || 'User'}</span>
