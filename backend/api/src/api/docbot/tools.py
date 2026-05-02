@@ -300,6 +300,73 @@ async def update_ref_doc(
         return f"Error writing file: {str(e)}"
 
 
+class MarkdownEditor:
+    """
+    Utility to edit markdown documents.
+    """
+
+    def __init__(self, content: str):
+        self.lines = content.splitlines(keepends=True)
+        # Ensure last line has a newline if content is not empty
+        if self.lines and not self.lines[-1].endswith("\n"):
+            self.lines[-1] += "\n"
+
+    def get_content(self) -> str:
+        return "".join(self.lines)
+
+    def replace_section(self, heading: str, new_section: str) -> bool:
+        """
+        Replaces a section identified by a heading.
+
+        A section starts with the given heading and ends before the next heading of
+        the same or higher level.
+
+        Returns:
+            True if the section was found and replaced, False otherwise.
+        """
+        heading = heading.strip()
+        header_match = re.match(r"^(#+)\s+(.+)$", heading)
+        if not header_match:
+            raise ValueError(f"Invalid markdown heading: '{heading}'")
+
+        level = len(header_match.group(1))
+        start_idx = -1
+        for i, line in enumerate(self.lines):
+            if line.strip() == heading:
+                start_idx = i
+                break
+
+        if start_idx == -1:
+            return False
+
+        # Find the end of the section (next heading of same or higher level)
+        end_idx = len(self.lines)
+        for i in range(start_idx + 1, len(self.lines)):
+            match = re.match(r"^(#+)\s+", self.lines[i])
+            if match:
+                this_level = len(match.group(1))
+                if this_level <= level:
+                    end_idx = i
+                    break
+
+        # Prepare the new content
+        new_section_lines = new_section.splitlines(keepends=True)
+        if new_section_lines and not new_section_lines[-1].endswith("\n"):
+            new_section_lines[-1] += "\n"
+
+        # Check if new section starts with a same-level header
+        first_line_match = (
+            re.match(r"^(#+)\s+", new_section_lines[0]) if new_section_lines else None
+        )
+        if not (first_line_match and len(first_line_match.group(1)) == level):
+            # Prepend the heading
+            new_section_lines.insert(0, heading + "\n")
+
+        # Perform the replacement
+        self.lines = self.lines[:start_idx] + new_section_lines + self.lines[end_idx:]
+        return True
+
+
 @register_doc_tool(tool_type="write_access")
 async def update_markdown_section(
     pipeline_id: str,
@@ -352,53 +419,21 @@ async def update_markdown_section(
             return f"Error: Document '{fname}' not found."
 
         with open(file_path, "r") as f:
-            lines = f.readlines()
+            content = f.read()
 
-        # 1. Find the heading and its level
-        header_match = re.match(r"^(#+)\s+(.+)$", heading)
-        if not header_match:
-            return f"Error: '{heading}' is not a valid markdown heading (e.g., '## Title')."
+        editor = MarkdownEditor(content)
+        try:
+            success = editor.replace_section(heading, section)
+        except ValueError as e:
+            return f"Error: {str(e)}"
 
-        level_hashes = header_match.group(1)
-        level = len(level_hashes)
-
-        start_idx = -1
-        for i, line in enumerate(lines):
-            if line.strip() == heading:
-                start_idx = i
-                break
-
-        if start_idx == -1:
+        if not success:
             return (
                 f"Error: Heading '{heading}' not found in '{fname}'. "
                 "Ensure exact match including level and numbering."
             )
 
-        # 2. Find the end of the section (next heading of same or higher level)
-        end_idx = len(lines)
-        for i in range(start_idx + 1, len(lines)):
-            match = re.match(r"^(#+)\s+", lines[i])
-            if match:
-                this_level = len(match.group(1))
-                if this_level <= level:
-                    end_idx = i
-                    break
-
-        # 3. Prepare the new content
-        new_section_lines = section.splitlines(keepends=True)
-        # Add trailing newline if missing
-        if new_section_lines and not new_section_lines[-1].endswith("\n"):
-            new_section_lines[-1] += "\n"
-
-        # Check if new section starts with a same-level header
-        first_line_match = re.match(r"^(#+)\s+", new_section_lines[0])
-        if not (first_line_match and len(first_line_match.group(1)) == level):
-            # Prepend the heading
-            new_section_lines.insert(0, heading + "\n")
-
-        # 4. Perform the replacement
-        updated_lines = lines[:start_idx] + new_section_lines + lines[end_idx:]
-        updated_content = "".join(updated_lines)
+        updated_content = editor.get_content()
 
         # 5. Write back and update session
         with open(file_path, "w") as f:
@@ -410,7 +445,6 @@ async def update_markdown_section(
         logger.info(f"update_markdown_section: Updated '{heading}' in '{fname}'.")
 
         # Reuse update_ref_doc logic for preview if task_id exists
-        # Actually, let's just trigger the same preview logic
         if tid:
             repo = git_utils.get_repo(pipeline.workspace_abs_path)
             repo.git.add(file_path, N=True)
