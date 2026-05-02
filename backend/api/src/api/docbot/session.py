@@ -15,13 +15,12 @@
 import logging
 from typing import Any, Dict, List, Optional
 
-import git
-
 from api.assistant.tool_registry import ToolDefinition
 from api.bot.base_session import BaseBotSession
 from api.websocket_manager import WSMessage, manager
 from core.queries import pipeline as pipeline_queries
 from core.queries import task as task_queries
+from core.utils import git_utils
 
 from .registry import docbot_registry
 
@@ -118,7 +117,7 @@ class DocBotSession(BaseBotSession):
             )
 
         try:
-            repo = git.Repo(pipeline.workspace_abs_path)
+            repo = git_utils.get_repo(pipeline.workspace_abs_path)
             diff = repo.git.show(task.commit_hash)
         except Exception as e:
             raise ValueError(

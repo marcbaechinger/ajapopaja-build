@@ -16,13 +16,12 @@ import logging
 import os
 from typing import Any, List, Optional
 
-import git
-
 from api.assistant.tools.file_tools import list_project_structure, read_source_file
 from api.assistant.tools.git_tools import git_show_commit
 from api.assistant.tools.search_tools import grep
 from api.websocket_manager import WSMessage, manager
 from core.queries import pipeline as pipeline_queries
+from core.utils import git_utils
 from core.utils.path_utils import safe_join
 
 from .cache import DocBotPreview, set_preview
@@ -252,7 +251,7 @@ async def update_ref_doc(
         # Capture diff and cache preview if task_id is available
         if tid:
             try:
-                repo = git.Repo(pipeline.workspace_abs_path)
+                repo = git_utils.get_repo(pipeline.workspace_abs_path)
 
                 # Intent-to-add so untracked files show up in diff
                 repo.git.add(file_path, N=True)

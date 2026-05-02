@@ -14,13 +14,13 @@
 
 import logging
 
-import git
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from api.auth import get_current_user
 from core.queries import pipeline as pipeline_queries
 from core.queries import task as task_queries
+from core.utils import git_utils
 
 from ..docbot.cache import clear_preview, get_preview
 from ..docbot.manager import DocBotManager
@@ -88,7 +88,7 @@ async def commit_docbot_change(pipeline_id: str, task_id: str, req: CommitReques
         raise HTTPException(status_code=404, detail="Pipeline or workspace not found.")
 
     try:
-        repo = git.Repo(pipeline.workspace_abs_path)
+        repo = git_utils.get_repo(pipeline.workspace_abs_path)
         repo.git.add(preview.file_path)
         repo.git.commit("-m", req.commit_msg)
         clear_preview(task_id)
@@ -112,7 +112,7 @@ async def revert_docbot_change(pipeline_id: str, task_id: str):
         raise HTTPException(status_code=404, detail="Pipeline or workspace not found.")
 
     try:
-        repo = git.Repo(pipeline.workspace_abs_path)
+        repo = git_utils.get_repo(pipeline.workspace_abs_path)
 
         try:
             repo.git.reset("HEAD", preview.file_path)

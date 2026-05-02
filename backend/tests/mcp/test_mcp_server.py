@@ -205,7 +205,7 @@ async def test_mcp_complete_task_success(monkeypatch):
         from unittest.mock import MagicMock
 
         mock_repo = MagicMock()
-        m.setattr("ajapopaja_mcp.tools.git.Repo", MagicMock(return_value=mock_repo))
+        m.setattr("core.utils.git_utils.git.Repo", MagicMock(return_value=mock_repo))
 
         result = await complete_task(
             task_id=str(task.id),
@@ -245,7 +245,7 @@ async def test_mcp_complete_task_verification_warning(monkeypatch):
         from unittest.mock import MagicMock
 
         mock_repo = MagicMock()
-        m.setattr("ajapopaja_mcp.tools.git.Repo", MagicMock(return_value=mock_repo))
+        m.setattr("core.utils.git_utils.git.Repo", MagicMock(return_value=mock_repo))
 
         # Complete with a valid hash but no verification success recorded in db
         result = await complete_task(

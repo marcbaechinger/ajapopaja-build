@@ -244,7 +244,7 @@ async def test_complete_task_unit():
             "ajapopaja_mcp.tools.pipeline_queries.get_pipeline_by_id",
             new_callable=AsyncMock,
         ) as mock_get_pipeline,
-        patch("ajapopaja_mcp.tools.git.Repo") as mock_repo_cls,
+        patch("core.utils.git_utils.git.Repo") as mock_repo_cls,
         patch(
             "ajapopaja_mcp.tools.task_queries.complete_task", new_callable=AsyncMock
         ) as mock_complete,
@@ -298,7 +298,7 @@ async def test_complete_task_commit_not_found():
             "ajapopaja_mcp.tools.pipeline_queries.get_pipeline_by_id",
             new_callable=AsyncMock,
         ) as mock_get_pipeline,
-        patch("ajapopaja_mcp.tools.git.Repo") as mock_repo_cls,
+        patch("core.utils.git_utils.git.Repo") as mock_repo_cls,
     ):
         import git
 

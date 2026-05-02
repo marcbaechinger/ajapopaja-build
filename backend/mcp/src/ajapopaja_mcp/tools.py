@@ -16,14 +16,12 @@ import logging
 import re
 from typing import Any, Dict, List, Optional
 
-import git
-
 from api.websocket_manager import manager
 from core.db import init_db
 from core.exceptions import EntityNotFoundError, VersionMismatchError
 from core.models.models import TaskStatus
-from core.queries import pipeline as pipeline_queries
 from core.queries import task as task_queries
+from core.utils import git_utils
 
 
 def _is_valid_id(id_str: str) -> bool:
@@ -151,27 +149,18 @@ async def complete_task(
 
     await init_db()
     try:
-        # Fetch task to get pipeline_id for repo location
-        task = await task_queries.get_task_by_id(task_id)
-        pipeline = await pipeline_queries.get_pipeline_by_id(task.pipeline_id)
-
-        if not pipeline.workspace_abs_path:
-            return (
-                f"Error: Workspace path not configured for pipeline {task.pipeline_id}."
-            )
+        # Fetch repo for pipeline
+        try:
+            repo = await git_utils.get_repo_for_pipeline_by_task(task_id)
+        except EntityNotFoundError as e:
+            return f"Error: {str(e)}"
 
         # Validate commit hash exists in repo
-        try:
-            repo = git.Repo(pipeline.workspace_abs_path)
-            # Use 'git show' to verify existence without fetching full diff
-            repo.git.show(commit_hash, "--no-patch")
-        except git.exc.GitCommandError:
+        if not git_utils.validate_commit_hash(repo, commit_hash):
             return (
                 f"Error: Commit hash '{commit_hash}' not found in the repository "
-                f"at {pipeline.workspace_abs_path}. Please provide a valid commit hash."
+                f"at {repo.working_dir}. Please provide a valid commit hash."
             )
-        except Exception as e:
-            return f"Error validating commit hash: {str(e)}"
 
         task = await task_queries.complete_task(
             task_id=task_id,
