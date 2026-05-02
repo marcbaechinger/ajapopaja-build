@@ -15,8 +15,11 @@
 import os
 from typing import Dict
 
+import git
 from fastapi import APIRouter
 from pymongo import AsyncMongoClient
+
+from core.queries import pipeline as pipeline_queries
 
 from ..assistant.tools.nvim_tools import get_nvim_socket_path, is_nvim_available
 from ..ollama_utils import is_ollama_available
@@ -76,3 +79,38 @@ async def health_check() -> Dict[str, dict]:
         results["nvim"] = {"status": "error", "details": str(e)}
 
     return results
+
+
+@router.get("/git-status/{pipeline_id}")
+async def get_git_status(pipeline_id: str) -> Dict[str, int]:
+    """
+    Return a summary of the git status for the workspace associated with
+     the given pipeline_id.
+    """
+    pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
+    if not pipeline or not pipeline.workspace_abs_path:
+        return {"staged": 0, "unstaged": 0, "untracked": 0}
+
+    try:
+        repo = git.Repo(pipeline.workspace_abs_path)
+        status_output = repo.git.status("--porcelain")
+
+        staged = 0
+        unstaged = 0
+        untracked = 0
+
+        for line in status_output.splitlines():
+            if len(line) < 3:
+                continue
+            x, y = line[0], line[1]
+            if x == "?" and y == "?":
+                untracked += 1
+            else:
+                if x != " ":
+                    staged += 1
+                if y != " " and y != "?":
+                    unstaged += 1
+
+        return {"staged": staged, "unstaged": unstaged, "untracked": untracked}
+    except Exception:
+        return {"staged": 0, "unstaged": 0, "untracked": 0}

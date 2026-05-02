@@ -164,6 +164,12 @@ export interface User {
   created_at?: string;
 }
 
+export interface GitStatus {
+  staged: number;
+  unstaged: number;
+  untracked: number;
+}
+
 export interface WSMessage {
   type: string;
   id?: string;

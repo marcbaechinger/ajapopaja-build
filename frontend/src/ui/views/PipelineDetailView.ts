@@ -16,7 +16,7 @@
 
 import { View } from '../../core/Navigator.ts';
 import { AppContext } from '../../core/AppContext.ts';
-import { Pipeline, TaskStatus, Task, PipelineStatus } from '../../core/domain.ts';
+import { Pipeline, TaskStatus, Task, PipelineStatus, type GitStatus } from '../../core/domain.ts';
 import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
 import { TaskItem } from '../components/TaskItem.ts';
 import { HistoryDialog } from '../components/HistoryDialog.ts';
@@ -51,6 +51,7 @@ export class PipelineDetailView extends View {
   private completedTasksPage: number = 0;
   private completedPageSize: number = 5;
   private keydownHandler: ((e: KeyboardEvent) => void) | null = null;
+  private gitStatus: GitStatus | undefined = undefined;
   
   private docbotState: DocbotState = {
     status: 'none',
@@ -157,7 +158,13 @@ export class PipelineDetailView extends View {
     const handleUpdate = (message: any) => {
       // Refresh if the updated task belongs to this pipeline
       if (message.payload?.pipeline_id === this.pipelineId) {
-        this.updateSingleTask(new Task(message.payload));
+        const task = new Task(message.payload);
+        this.updateSingleTask(task);
+        
+        // Refresh git status if task was implemented
+        if (task.status === TaskStatus.IMPLEMENTED) {
+           this.refreshGitStatus();
+        }
       }
     };
 
@@ -854,10 +861,20 @@ export class PipelineDetailView extends View {
       this.pipeline = await this.context.pipelineClient.get(this.pipelineId);
       this.geminiStatus = await this.context.pipelineClient.getGeminiStatus(this.pipelineId);
       this.vibeStatus = await this.context.pipelineClient.getVibeStatus(this.pipelineId);
+      this.refreshGitStatus();
       this.updateHeader();
     } catch (error) {
       console.error('Error loading pipeline:', error);
     }
+  }
+
+  private async refreshGitStatus() {
+     try {
+        this.gitStatus = await this.context.systemClient.getGitStatus(this.pipelineId);
+        this.updateHeader();
+     } catch (error) {
+        console.error('Failed to refresh git status:', error);
+     }
   }
 
   async refreshTasks() {
@@ -1048,7 +1065,8 @@ export class PipelineDetailView extends View {
       vibeStatus: this.vibeStatus,
       docbotState: this.docbotState,
       user: this.context.authService.getUser(),
-      allTasks: this.allLoadedTasks
+      allTasks: this.allLoadedTasks,
+      gitStatus: this.gitStatus
     });
   }
 

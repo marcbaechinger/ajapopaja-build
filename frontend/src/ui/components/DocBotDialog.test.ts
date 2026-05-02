@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { DocBotDialog, DocBotDialogProps } from './DocBotDialog.ts';
+import { DocBotDialog, type DocBotDialogProps } from './DocBotDialog.ts';
 
 describe('DocBotDialog', () => {
   let container: HTMLElement;

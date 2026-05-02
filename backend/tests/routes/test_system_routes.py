@@ -62,3 +62,32 @@ async def test_health_check_mixed_status(async_client, init_mock_db):
                         assert data["mongodb"]["status"] == "error"
                         assert data["ollama"]["status"] == "error"
                         assert data["nvim"]["status"] == "error"
+
+
+@pytest.mark.asyncio
+async def test_get_git_status_ok(async_client, init_mock_db):
+    pipeline_id = "p1"
+    mock_pipeline = MagicMock()
+    mock_pipeline.workspace_abs_path = "/tmp/workspace"
+
+    with patch(
+        "api.routes.system.pipeline_queries.get_pipeline_by_id", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.return_value = mock_pipeline
+        with patch("api.routes.system.git.Repo") as mock_repo_cls:
+            mock_repo = MagicMock()
+            mock_repo.git.status.return_value = (
+                "M  file1.txt\n M file2.txt\n?? file3.txt\nAM file4.txt"
+            )
+            mock_repo_cls.return_value = mock_repo
+
+            response = await async_client.get(f"/api/system/git-status/{pipeline_id}")
+            assert response.status_code == status.HTTP_200_OK
+            data = response.json()
+            # file1: M  -> staged:1, unstaged:0
+            # file2:  M -> staged:0, unstaged:1
+            # file3: ?? -> untracked:1
+            # file4: AM -> staged:1, unstaged:1
+            assert data["staged"] == 2
+            assert data["unstaged"] == 2
+            assert data["untracked"] == 1

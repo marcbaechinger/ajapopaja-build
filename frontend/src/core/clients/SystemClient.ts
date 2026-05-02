@@ -16,6 +16,7 @@
 
 import { BaseClient } from './BaseClient.ts';
 import { AuthService } from '../AuthService.ts';
+import type { GitStatus } from '../domain.ts';
 
 export interface HealthCheckResponse {
   mongodb: { status: string; details: string };
@@ -55,6 +56,16 @@ export class SystemClient extends BaseClient {
     } catch (e) {
       console.error('Failed to fetch version', e);
       return 'unknown';
+    }
+  }
+
+  async getGitStatus(pipelineId: string): Promise<GitStatus> {
+    try {
+      const response = await this.fetch(`/api/system/git-status/${pipelineId}`);
+      return await response.json();
+    } catch (e) {
+      console.error('Failed to fetch git status', e);
+      return { staged: 0, unstaged: 0, untracked: 0 };
     }
   }
 }

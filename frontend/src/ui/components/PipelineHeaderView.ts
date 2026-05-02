@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { Pipeline, Task, TaskStatus } from '../../core/domain.ts';
+import { Pipeline, Task, TaskStatus, type GitStatus } from '../../core/domain.ts';
 
 export interface DocbotState {
   status: 'none' | 'ready' | 'inProgress' | 'noUpdate';
@@ -30,11 +30,12 @@ export interface PipelineHeaderViewProps {
   docbotState: DocbotState;
   user: any;
   allTasks: Task[];
+  gitStatus?: GitStatus;
 }
 
 export class PipelineHeaderView {
   static render(props: PipelineHeaderViewProps): string {
-    const { pipeline, pipelineId, geminiStatus, vibeStatus, docbotState, user, allTasks } = props;
+    const { pipeline, pipelineId, geminiStatus, vibeStatus, docbotState, user, allTasks, gitStatus } = props;
 
     const statusColors: Record<string, string> = {
       'active': 'bg-green-600/20 text-green-400 border-green-600/30',
@@ -114,6 +115,32 @@ export class PipelineHeaderView {
       `;
     }
 
+    const gitStatusHtml = !gitStatus ? '' : `
+      <div class="flex items-center gap-3 bg-app-bg px-3 py-1.5 rounded-xl border border-app-border h-[42px] cursor-help transition-all hover:border-app-accent-2/50 group/git" title="Workspace Git Status (Staged, Unstaged, Untracked)">
+        <div class="flex flex-col items-center justify-center">
+           <svg class="w-3.5 h-3.5 text-app-muted group-hover/git:text-app-accent-2 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"></path>
+           </svg>
+        </div>
+        <div class="flex gap-2 items-center h-full">
+          <div class="flex flex-col items-center">
+            <span class="text-[9px] font-black text-app-muted uppercase leading-none mb-0.5">Stg</span>
+            <span class="text-xs font-black ${gitStatus.staged > 0 ? 'text-green-500' : 'text-app-muted'} leading-none">${gitStatus.staged}</span>
+          </div>
+          <div class="w-px h-4 bg-app-border"></div>
+          <div class="flex flex-col items-center">
+            <span class="text-[9px] font-black text-app-muted uppercase leading-none mb-0.5">Ust</span>
+            <span class="text-xs font-black ${gitStatus.unstaged > 0 ? 'text-amber-500' : 'text-app-muted'} leading-none">${gitStatus.unstaged}</span>
+          </div>
+          <div class="w-px h-4 bg-app-border"></div>
+          <div class="flex flex-col items-center">
+            <span class="text-[9px] font-black text-app-muted uppercase leading-none mb-0.5">Unt</span>
+            <span class="text-xs font-black ${gitStatus.untracked > 0 ? 'text-app-text' : 'text-app-muted'} leading-none">${gitStatus.untracked}</span>
+          </div>
+        </div>
+      </div>
+    `;
+
     return `
       <header class="flex justify-between items-center bg-app-surface p-6 rounded-2xl shadow-lg border border-app-border shrink-0">
         <div class="flex gap-6 items-center overflow-hidden">
@@ -187,6 +214,7 @@ export class PipelineHeaderView {
           </div>
         </div>
         <div class="flex items-center gap-2">
+           ${gitStatusHtml}
            <button data-action-click="open_search" data-pipeline-id="${pipelineId}" class="flex items-center gap-2 bg-app-bg hover:bg-app-surface px-4 py-2 rounded-xl border border-app-border text-app-muted hover:text-app-accent-2 transition-all cursor-pointer group" title="Global Search (Ctrl+K)">
              <svg class="w-4 h-4 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
              <span class="text-xs font-bold uppercase tracking-widest">Search</span>
