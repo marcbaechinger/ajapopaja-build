@@ -28,7 +28,8 @@ async def test_get_repo_for_pipeline_success():
     mock_pipeline.workspace_abs_path = "/tmp/repo"
 
     with patch(
-        "core.utils.git_utils.pipeline_queries.get_pipeline_by_id", new_callable=AsyncMock
+        "core.utils.git_utils.pipeline_queries.get_pipeline_by_id",
+        new_callable=AsyncMock,
     ) as mock_get:
         mock_get.return_value = mock_pipeline
         with patch("core.utils.git_utils.git.Repo") as mock_repo_cls:
@@ -48,7 +49,8 @@ async def test_get_repo_for_pipeline_no_path():
     mock_pipeline.workspace_abs_path = None
 
     with patch(
-        "core.utils.git_utils.pipeline_queries.get_pipeline_by_id", new_callable=AsyncMock
+        "core.utils.git_utils.pipeline_queries.get_pipeline_by_id",
+        new_callable=AsyncMock,
     ) as mock_get:
         mock_get.return_value = mock_pipeline
         with pytest.raises(EntityNotFoundError, match="Workspace path not found"):
@@ -100,7 +102,9 @@ def test_validate_commit_hash():
 
 def test_get_git_status_summary():
     mock_repo = MagicMock()
-    mock_repo.git.status.return_value = "M  file1.txt\n M file2.txt\n?? file3.txt\nAM file4.txt"
+    mock_repo.git.status.return_value = (
+        "M  file1.txt\n M file2.txt\n?? file3.txt\nAM file4.txt"
+    )
 
     summary = git_utils.get_git_status_summary(mock_repo)
 

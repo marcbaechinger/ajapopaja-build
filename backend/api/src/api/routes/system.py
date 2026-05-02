@@ -17,7 +17,6 @@ from typing import Dict
 from fastapi import APIRouter
 from pymongo import AsyncMongoClient
 
-
 from core.utils import git_utils
 
 from ..assistant.tools.nvim_tools import get_nvim_socket_path, is_nvim_available
