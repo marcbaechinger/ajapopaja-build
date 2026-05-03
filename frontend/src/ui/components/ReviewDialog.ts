@@ -19,6 +19,7 @@ import { Task } from '../../core/domain.ts';
 import type { AppContext } from '../../core/AppContext.ts';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import { ConfirmationDialog } from './ConfirmationDialog.ts';
 import { renderQuickPromptButton, type PromptConfig } from './QuickPromptButton.ts';
 
 const PROMPT_CONFIGS: PromptConfig[] = [
@@ -146,7 +147,12 @@ export class ReviewDialog extends BaseDialog<void> {
   }
 
   private async handleDelete() {
-    if (!confirm('Are you sure you want to delete this review?')) return;
+    const confirmed = await new ConfirmationDialog(
+      'Delete Review',
+      'Are you sure you want to delete this review?',
+      'Delete'
+    ).show();
+    if (!confirmed) return;
 
     const deleteBtn = this.dialog.querySelector('#review-delete-btn') as HTMLButtonElement;
     deleteBtn.disabled = true;
