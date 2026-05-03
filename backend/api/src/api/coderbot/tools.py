@@ -17,11 +17,10 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from api.assistant.tools.search_tools import (
-    _python_tree,
-)
-from api.assistant.tools.search_tools import (
-    _run_command as search_run_command,
+from api.assistant.tools.shared_utils import (
+    get_match_context,
+    python_tree_impl,
+    run_command_in_dir,
 )
 from api.websocket_manager import WSMessage, manager as ws_manager
 from core import config
@@ -236,10 +235,10 @@ async def tree(
 
     try:
         subprocess.run(["tree", "--version"], capture_output=True, check=True)
-        result = await search_run_command(str(full_path), args)
+        result = await run_command_in_dir(str(full_path), args)
         return result[:10000]
     except (subprocess.CalledProcessError, FileNotFoundError):
-        return _python_tree(str(full_path), depth)
+        return python_tree_impl(str(full_path), depth)
 
 
 async def read_source_file(pipeline_id: str, task_id: str, path: str) -> str:
@@ -292,7 +291,7 @@ async def grep(
     args.append(pattern)
     args.append(".")
 
-    result = await search_run_command(str(sandbox_root), args)
+    result = await run_command_in_dir(str(sandbox_root), args)
 
     if result.startswith("Error:"):
         return {"error": result}
@@ -313,7 +312,7 @@ async def grep(
                     {
                         "path": clean_path,
                         "line": line_num,
-                        "match": text.strip()[:100],
+                        "match": get_match_context(text, pattern, ignore_case),
                     }
                 )
             except (ValueError, IndexError):

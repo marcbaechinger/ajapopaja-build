@@ -16,70 +16,22 @@ import logging
 import os
 import re
 import subprocess
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from api.assistant.decorators import register_tool
 from core.config import IGNORED_DIRECTORIES
 from core.queries import pipeline as pipeline_queries
-from core.utils.path_utils import safe_join
+
+from .shared_utils import (
+    get_match_context,
+    python_tree_impl,
+    run_command_in_dir,
+    sanitize_and_resolve_path,
+)
 
 logger = logging.getLogger(__name__)
 
 READ_ONLY = "read_only"
-
-
-async def _run_command(workspace_path: str, args: List[str]) -> str:
-    try:
-        cmd_args = [arg for arg in args if arg]
-        result = subprocess.run(
-            cmd_args,
-            cwd=workspace_path,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if result.returncode not in (0, 1):  # grep returns 1 if no lines were selected
-            return f"Error executing command {' '.join(cmd_args)}: {result.stderr}"
-        return (
-            result.stdout
-            if result.stdout
-            else (result.stderr if result.stderr else "No results found.")
-        )
-    except Exception as e:
-        return f"Error: {str(e)}"
-
-
-def _sanitize_path(workspace_path: str, relative_path: str) -> Optional[str]:
-    try:
-        return str(safe_join(Path(workspace_path), relative_path))
-    except Exception:
-        return None
-
-
-def _get_match_context(
-    text: str, pattern: str, ignore_case: bool, context: int = 50
-) -> str:
-    flags = re.IGNORECASE if ignore_case else 0
-    try:
-        match = re.search(pattern, text, flags)
-        if not match:
-            # Fallback if re.search doesn't find it
-            return (
-                text[: context * 2] + ("..." if len(text) > context * 2 else "")
-            ).strip()
-
-        start = max(0, match.start() - context)
-        end = min(len(text), match.end() + context)
-
-        prefix = "..." if start > 0 else ""
-        suffix = "..." if end < len(text) else ""
-
-        return (prefix + text[start:end] + suffix).strip()
-    except Exception:
-        return (
-            text[: context * 2] + ("..." if len(text) > context * 2 else "")
-        ).strip()
 
 
 @register_tool(tool_type=READ_ONLY)
@@ -128,7 +80,7 @@ async def grep(
 
     logger.info(f"grep with {args}")
 
-    result = await _run_command(str(pipeline.workspace_abs_path), args)
+    result = await run_command_in_dir(str(pipeline.workspace_abs_path), args)
 
     if result.startswith("Error:"):
         logger.warning(f"grep with error: {result}")
@@ -158,7 +110,7 @@ async def grep(
                     {
                         "path": clean_path,
                         "line": line_num,
-                        "match": _get_match_context(text, pattern, ignore_case),
+                        "match": get_match_context(text, pattern, ignore_case),
                     }
                 )
             except (ValueError, IndexError):
@@ -197,43 +149,11 @@ async def find(
     if not pipeline or not pipeline.workspace_abs_path:
         return "Error: Workspace path not found."
 
-    args = ["find", "."]
-
-    # Prune ignored directories to speed up search
-    args.extend(
-        [
-            "-type",
-            "d",
-            "\\(",
-            "-name",
-            ".git",
-            "-o",
-            "-name",
-            "node_modules",
-            "-o",
-            "-name",
-            ".venv",
-            "-o",
-            "-name",
-            "__pycache__",
-            "\\)",
-            "-prune",
-            "-o",
-        ]
-    )
-
-    if type:
-        if type not in ["f", "d"]:
-            return "Error: type must be 'f' or 'd'."
-        args.extend(["-type", type])
-
-    args.extend(["-name", name_pattern, "-print"])
-
-    # run_command will struggle with the parenthesis if we just pass them, let's use a cleaner python implementation or simple find
-
     # Let's simplify find to avoid complex subprocess escaping issues with -prune
     args_simple = ["find", ".", "-name", name_pattern]
     if type:
+        if type not in ["f", "d"]:
+            return "Error: type must be 'f' or 'd'."
         args_simple.extend(["-type", type])
 
     try:
@@ -276,7 +196,7 @@ async def tree(
     if not pipeline or not pipeline.workspace_abs_path:
         return "Error: Workspace path not found."
 
-    full_path = _sanitize_path(str(pipeline.workspace_abs_path), path)
+    full_path = sanitize_and_resolve_path(str(pipeline.workspace_abs_path), path)
     if not full_path:
         return "Error: Invalid path. Path must be relative and within workspace."
 
@@ -295,43 +215,11 @@ async def tree(
     try:
         # Check if tree is available
         subprocess.run(["tree", "--version"], capture_output=True, check=True)
-        result = await _run_command(full_path, args)
+        result = await run_command_in_dir(str(full_path), args)
         return result[:10000]
     except (subprocess.CalledProcessError, FileNotFoundError):
         # Python fallback if 'tree' command is missing
-        return _python_tree(full_path, depth)
-
-
-def _python_tree(
-    directory: str, max_depth: Optional[int] = None, current_depth: int = 0
-) -> str:
-    if max_depth is not None and current_depth > max_depth:
-        return ""
-
-    output = []
-    try:
-        items = sorted(os.listdir(directory))
-    except PermissionError:
-        return ""
-
-    ignored = IGNORED_DIRECTORIES
-    items = [item for item in items if item not in ignored]
-
-    for i, item in enumerate(items):
-        is_last = i == len(items) - 1
-        prefix = "└── " if is_last else "├── "
-        indent = "    " if is_last else "│   "
-
-        output.append(f"{prefix}{item}")
-
-        path = os.path.join(directory, item)
-        if os.path.isdir(path):
-            sub_tree = _python_tree(path, max_depth, current_depth + 1)
-            if sub_tree:
-                sub_lines = sub_tree.splitlines()
-                output.extend([f"{indent}{line}" for line in sub_lines])
-
-    return "\n".join(output)
+        return python_tree_impl(str(full_path), depth)
 
 
 @register_tool(tool_type=READ_ONLY)
@@ -348,7 +236,7 @@ async def head(pipeline_id: str, file_path: str, lines: int = 10) -> str:
     if not pipeline or not pipeline.workspace_abs_path:
         return "Error: Workspace path not found."
 
-    full_path = _sanitize_path(str(pipeline.workspace_abs_path), file_path)
+    full_path = sanitize_and_resolve_path(str(pipeline.workspace_abs_path), file_path)
     if not full_path:
         return "Error: Invalid path. Path must be relative and within workspace."
 
@@ -382,15 +270,15 @@ async def tail(pipeline_id: str, file_path: str, lines: int = 10) -> str:
     if not pipeline or not pipeline.workspace_abs_path:
         return "Error: Workspace path not found."
 
-    full_path = _sanitize_path(str(pipeline.workspace_abs_path), file_path)
+    full_path = sanitize_and_resolve_path(str(pipeline.workspace_abs_path), file_path)
     if not full_path:
         return "Error: Invalid path. Path must be relative and within workspace."
 
     if not os.path.isfile(full_path):
         return f"Error: File not found: {file_path}"
 
-    args = ["tail", "-n", str(lines), full_path]
-    return await _run_command(str(pipeline.workspace_abs_path), args)
+    args = ["tail", "-n", str(lines), str(full_path)]
+    return await run_command_in_dir(str(pipeline.workspace_abs_path), args)
 
 
 @register_tool(tool_type=READ_ONLY)
@@ -407,7 +295,7 @@ async def search_file_content(pipeline_id: str, file_path: str, pattern: str) ->
     if not pipeline or not pipeline.workspace_abs_path:
         return "Error: Workspace path not found."
 
-    full_path = _sanitize_path(str(pipeline.workspace_abs_path), file_path)
+    full_path = sanitize_and_resolve_path(str(pipeline.workspace_abs_path), file_path)
     if not full_path:
         return "Error: Invalid path. Path must be relative and within workspace."
 
