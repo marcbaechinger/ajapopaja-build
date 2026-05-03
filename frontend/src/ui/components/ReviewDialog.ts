@@ -21,27 +21,28 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { ConfirmationDialog } from './ConfirmationDialog.ts';
 import { renderQuickPromptButton, type PromptConfig } from './QuickPromptButton.ts';
+import { Icon } from './Icon.ts';
 
 const PROMPT_CONFIGS: PromptConfig[] = [
   {
     id: 'create_tasks',
     label: 'Create Tasks',
     title: 'Copy prompt to create tasks from review',
-    iconSvg: '<svg class="w-3 h-3 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>',
+    iconSvg: Icon.render('documentation', { size: 12, className: 'group-hover:scale-110 transition-transform' }),
     getPrompt: (taskId, pipelineId) => `Please analyze the technical review for Task ${taskId} in Pipeline ${pipelineId}. Break down the findings into up to 5 actionable new tasks, prioritized by impact or ease of implementation (low-hanging fruits).`
   },
   {
     id: 'explain_review',
     label: 'Explain',
     title: 'Copy prompt to explain review in detail',
-    iconSvg: '<svg class="w-3 h-3 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>',
+    iconSvg: Icon.render('documentation', { size: 12, className: 'group-hover:scale-110 transition-transform' }),
     getPrompt: (taskId, pipelineId) => `Can you explain the technical review for Task ${taskId} in Pipeline ${pipelineId} in more detail? Focus on the architectural implications and any potential risks identified.`
   },
   {
     id: 'design_check',
     label: 'Design Check',
     title: 'Copy prompt to check design alignment',
-    iconSvg: '<svg class="w-3 h-3 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>',
+    iconSvg: Icon.render('check', { size: 12, className: 'group-hover:scale-110 transition-transform' }),
     getPrompt: (taskId, pipelineId) => `Based on the technical review for Task ${taskId} in Pipeline ${pipelineId}, does the current implementation deviate from our established design patterns in the 'design/' folder? If so, what should be changed?`
   }
 ];
@@ -61,7 +62,7 @@ export class ReviewDialog extends BaseDialog<void> {
       title: 'Technical Review',
       maxWidth: 'max-w-4xl',
       maxHeight: 'max-h-[85vh]',
-      iconSvg: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>'
+      iconSvg: Icon.render('documentation', { size: 20 })
     });
     this.props = props;
     this.reRender();
@@ -101,7 +102,7 @@ export class ReviewDialog extends BaseDialog<void> {
 
         <div class="flex justify-between items-center pt-2 border-t border-app-border/30">
           <button id="review-delete-btn" class="px-4 py-2 rounded text-xs font-bold uppercase tracking-widest text-red-500 hover:bg-red-500/10 transition-all cursor-pointer flex items-center gap-2">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+            ${Icon.render('trash', { size: 16 })}
             Delete Review
           </button>
           <button id="review-close-btn" class="px-6 py-2 rounded bg-app-bg text-app-text border border-app-border text-xs font-bold uppercase tracking-widest hover:bg-app-surface transition-all cursor-pointer">
@@ -134,7 +135,7 @@ export class ReviewDialog extends BaseDialog<void> {
       try {
         await navigator.clipboard.writeText(prompt);
         const originalHtml = btn.innerHTML;
-        btn.innerHTML = `<svg class="w-3 h-3 text-green-500 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Copied!`;
+        btn.innerHTML = `${Icon.render('check', { size: 12, className: 'text-green-500 animate-bounce' })} Copied!`;
         btn.classList.add('bg-green-500/10', 'border-green-500/30');
         setTimeout(() => {
           btn.innerHTML = originalHtml;
@@ -170,7 +171,7 @@ export class ReviewDialog extends BaseDialog<void> {
       alert('Failed to delete review. Please check the console.');
       deleteBtn.disabled = false;
       deleteBtn.innerHTML = `
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+        ${Icon.render('trash', { size: 16 })}
         Delete Review
       `;
     }

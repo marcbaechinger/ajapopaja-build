@@ -17,6 +17,7 @@
 import { BaseDialog } from './dialog_common.ts';
 import { Pipeline, PipelineStatus } from '../../core/domain.ts';
 import type { AppContext } from '../../core/AppContext.ts';
+import { Icon } from './Icon.ts';
 
 export interface PipelineEditDialogProps {
   pipeline: Pipeline;
@@ -38,7 +39,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
     super({
       title: 'Edit Pipeline',
       maxWidth: 'max-w-lg',
-      iconSvg: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>'
+      iconSvg: Icon.render('edit', { size: 20 })
     });
     this.props = props;
     // After props are set, we MUST re-render because the first render in super() had no props.

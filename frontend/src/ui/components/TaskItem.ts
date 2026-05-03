@@ -21,6 +21,7 @@ import { calculateDuration, calculateDesignDuration } from './utils/duration.ts'
 import { renderStatusHistorySection } from './StatusHistorySection.ts';
 import { renderSpecSection } from './SpecSection.ts';
 import { renderDesignDocSection } from './DesignDocSection.ts';
+import { Icon } from './Icon.ts';
 
 export class TaskItem {
   static render(
@@ -50,7 +51,6 @@ export class TaskItem {
     const isInProgress = task.status === TaskStatus.INPROGRESS;
 
     const isImplemented = task.status === TaskStatus.IMPLEMENTED;
-    const isCompleted = ([TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED] as any[]).includes(task.status);
 
     const isEditableTitle = ([TaskStatus.CREATED, TaskStatus.PROPOSED] as any[]).includes(task.status);
 
@@ -63,15 +63,13 @@ export class TaskItem {
         <div class="flex justify-between items-start cursor-pointer group/header" data-action-click="toggle_task_collapse">
           <div class="flex items-center gap-3">
             <div class="p-1 text-app-muted group-hover/header:text-app-text transition-all">
-              <svg class="w-4 h-4 transform transition-transform ${isCollapsed ? '' : 'rotate-90'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-              </svg>
+              ${Icon.render('chevronRight', { size: 16, className: `transform transition-transform ${isCollapsed ? '' : 'rotate-90'}` })}
             </div>
             <div class="title-container flex flex-col" data-task-id="${taskId}" data-version="${task.version}">
               <div class="title-view flex items-center gap-2 ${isEditableTitle ? 'cursor-pointer group/title' : ''}" 
                    ${isEditableTitle ? 'data-action-click="edit_title"' : ''}>
                 <span class="font-medium text-app-text text-lg">${task.title}</span>
-                ${isEditableTitle ? '<svg class="w-3 h-3 text-app-muted opacity-0 group-hover/title:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>' : ''}
+                ${isEditableTitle ? Icon.render('edit', { size: 12, className: 'text-app-muted opacity-0 group-hover/title:opacity-100 transition-opacity' }) : ''}
               </div>
               ${isEditableTitle ? `
                 <div class="title-edit hidden flex flex-col gap-2 mt-1">
@@ -86,27 +84,23 @@ export class TaskItem {
               <div class="flex items-center gap-2 mt-1" data-task-id="${taskId}">
                 <span class="text-[10px] text-app-muted uppercase font-bold tracking-widest bg-app-surface px-2 py-0.5 rounded border border-app-border">${taskId}</span>
                 <button data-action-click="copy_task_id" class="p-1 hover:bg-app-surface text-app-muted hover:text-app-accent-2 rounded transition-all cursor-pointer group/copy" title="Copy Task ID">
-                   <svg class="w-3 h-3 group-hover/copy:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                   ${Icon.render('copy', { size: 12, className: 'group-hover/copy:scale-110 transition-transform' })}
                 </button>
                 ${isImplemented ? `
                   <button data-action-click="trigger_docbot" data-task-id="${taskId}" class="p-1 hover:bg-app-surface text-app-muted hover:text-green-600 rounded transition-all cursor-pointer group/docbot" title="Trigger DocBot (needs Ollama)">
-                     <svg class="w-3 h-3 group-hover/docbot:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                     </svg>
+                     ${Icon.render('documentation', { size: 12, className: 'group-hover/docbot:scale-110 transition-transform' })}
                   </button>
                 ` : ''}
                 ${isImplemented && task.commit_hash ? `
                   <button data-action-click="open_quickfix" data-task-id="${taskId}" class="p-1 hover:bg-app-surface text-app-muted hover:text-app-accent-2 rounded transition-all cursor-pointer group/quickfix" title="Open Quickfix in Neovim">
-                     <svg class="w-3.5 h-3.5 group-hover/quickfix:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
-                     </svg>
+                     ${Icon.render('quickfix', { size: 14, className: 'group-hover/quickfix:scale-110 transition-transform' })}
                   </button>
                 ` : ''}
                 ${isImplemented ? (
                   task.review_md 
                     ? `
                       <button data-action-click="open_review_dialog" data-task-id="${taskId}" class="p-1 hover:bg-app-surface text-app-accent-2 hover:text-app-accent-2/80 rounded transition-all cursor-pointer group/review relative" title="View Technical Review">
-                        <svg class="w-3 h-3 group-hover/review:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        ${Icon.render('documentation', { size: 12, className: 'group-hover/review:scale-110 transition-transform' })}
                         <span class="absolute -top-1 -right-1 flex h-1.5 w-1.5">
                           <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-app-accent-2 opacity-75"></span>
                           <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-app-accent-2"></span>
@@ -115,7 +109,7 @@ export class TaskItem {
                     `
                     : `
                       <button data-action-click="trigger_reviewbot" data-task-id="${taskId}" class="p-1 hover:bg-app-surface text-app-muted hover:text-app-accent-2 rounded transition-all cursor-pointer group/review" title="Trigger Technical Review">
-                        <svg class="w-3 h-3 group-hover/review:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+                        ${Icon.render('check', { size: 12, className: 'group-hover/review:scale-110 transition-transform' })}
                       </button>
                     `
                 ) : ''}
@@ -167,13 +161,13 @@ export class TaskItem {
                   </button>
                   ${isImplemented && calculateDuration(task) ? `
                     <div class="text-[10px] text-app-muted flex items-center gap-1" title="Implementation Duration">
-                      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                      ${Icon.render('clock', { size: 12 })}
                       Impl: ${calculateDuration(task)}
                     </div>
                   ` : ''}
                   ${calculateDesignDuration(task) ? `
                     <div class="text-[10px] text-app-muted flex items-center gap-1" title="Design Duration">
-                      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                      ${Icon.render('edit', { size: 12 })}
                       Design: ${calculateDesignDuration(task)}
                     </div>
                   ` : ''}
@@ -194,7 +188,7 @@ export class TaskItem {
               ` : `
                 <button data-action-click="delete_task" 
                         class="p-1.5 hover:bg-red-500/20 text-app-muted hover:text-red-400 rounded transition-all cursor-pointer" title="Delete Task">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                  ${Icon.render('trash', { size: 16 })}
                 </button>
                 ${canFail ? `
                   <button data-action-click="fail_task" data-version="${task.version}" 
@@ -228,7 +222,7 @@ export class TaskItem {
           ${task.completion_info ? `
             <div class="bg-green-500/10 border border-green-500/20 p-3 rounded-lg text-sm text-app-text/80">
               <div class="font-bold text-green-400 mb-1 flex items-center gap-2">
-                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                 ${Icon.render('check', { size: 16 })}
                  Implementation Summary
               </div>
               <div class="prose-theme prose-sm max-w-none text-app-text/80 marker:text-green-500">

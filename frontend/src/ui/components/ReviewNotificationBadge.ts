@@ -15,6 +15,7 @@
  */
 
 import { Task } from '../../core/domain.ts';
+import { Icon } from './Icon.ts';
 
 export class ReviewNotificationBadge {
   static render(pendingReviewTaskIds: string[], allTasks: Task[]): string {
@@ -51,12 +52,12 @@ export class ReviewNotificationBadge {
     }
 
     return `
-      <div class="relative group/reviewdropdown inline-flex">
+        <div class="relative group/reviewdropdown inline-flex">
         <div class="inline-flex bg-app-accent-2/10 border border-app-accent-2/30 text-app-accent-2 rounded-full px-3 py-1 text-[10px] shadow-sm items-center gap-2 cursor-pointer group-hover/reviewdropdown:rounded-b-none group-hover/reviewdropdown:border-b-transparent relative z-10">
           <span class="w-1.5 h-1.5 rounded-full bg-app-accent-2 animate-pulse"></span>
           <span class="font-bold uppercase tracking-wider">${pendingReviewTaskIds.length} Reviews Ready</span>
           <button data-action-click="open_review_dialog" data-task-id="${oldestTaskId}" class="font-black underline hover:text-app-accent-2/80 transition-colors cursor-pointer ml-1 pl-2 border-l border-app-accent-2/30">Open Oldest</button>
-          <svg class="w-3 h-3 transform group-hover/reviewdropdown:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+          ${Icon.render('chevronDown', { size: 12, className: 'transform group-hover/reviewdropdown:rotate-180 transition-transform' })}
         </div>
         <div class="absolute top-full left-0 right-0 hidden group-hover/reviewdropdown:flex flex-col bg-app-surface border border-app-accent-2/30 rounded-b-lg shadow-xl z-50 overflow-hidden min-w-[200px]">
            <div class="bg-app-bg/50 px-3 py-1.5 border-b border-app-border text-[9px] font-black tracking-widest text-app-muted uppercase">Other pending reviews</div>

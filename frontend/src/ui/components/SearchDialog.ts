@@ -20,6 +20,7 @@ import { AppContext } from '../../core/AppContext.ts';
 import { TaskItem } from './TaskItem.ts';
 import { PaginationControl } from './PaginationControl.ts';
 import { ConfirmationDialog } from './ConfirmationDialog.ts';
+import { Icon } from './Icon.ts';
 
 export class SearchDialog extends BaseDialog {
   private context: AppContext;
@@ -38,7 +39,7 @@ export class SearchDialog extends BaseDialog {
       title: pipelineId ? 'Search Pipeline Tasks' : 'Global Task Search',
       maxWidth: 'max-w-4xl',
       maxHeight: 'max-h-[85vh]',
-      iconSvg: `<svg class="w-6 h-6 text-app-accent-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>`
+      iconSvg: Icon.render('search', { size: 24, className: 'text-app-accent-2' })
     });
     this.context = context;
     this.pipelineId = pipelineId;
@@ -76,7 +77,7 @@ export class SearchDialog extends BaseDialog {
                  placeholder="${this.pipelineId ? 'Search in this pipeline...' : 'Search by keywords in title, spec, or design doc...'}"
                  value="${this.keywords}">
           <div class="absolute left-4 top-1/2 -translate-y-1/2 text-app-muted group-focus-within:text-app-accent-2 transition-colors">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            ${Icon.render('search', { size: 24 })}
           </div>
           <div id="search-spinner" class="absolute right-4 top-1/2 -translate-y-1/2 hidden">
              <svg class="animate-spin h-5 w-5 text-app-accent-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -126,7 +127,7 @@ export class SearchDialog extends BaseDialog {
     if (this.results.length === 0) {
       if (!this.keywords && this.selectedStatuses.size === 0) {
         return `<div class="flex flex-col items-center justify-center py-20 text-app-muted italic">
-          <svg class="w-12 h-12 mb-4 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+          ${Icon.render('search', { size: 48, className: 'mb-4 opacity-20' })}
           Start typing to search for tasks...
         </div>`;
       }

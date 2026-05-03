@@ -15,6 +15,8 @@
  */
 
 
+import { Icon } from './Icon.ts';
+
 export interface DialogOptions {
   maxWidth?: string;
   maxHeight?: string;
@@ -55,7 +57,7 @@ export abstract class BaseDialog<T = void> {
               ${options.title}
             </h3>
             <button id="dialog-close-btn" class="text-app-muted hover:text-app-text transition-colors cursor-pointer p-1 rounded hover:bg-app-surface">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+              ${Icon.render('close', { size: 20 })}
             </button>
           </div>
           <div id="dialog-body-container" class="p-0 overflow-y-auto overflow-x-hidden grow custom-scrollbar">

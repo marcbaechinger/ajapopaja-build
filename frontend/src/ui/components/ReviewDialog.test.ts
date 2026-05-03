@@ -126,6 +126,10 @@ describe('ReviewDialog', () => {
   });
 
   it('should handle delete action', async () => {
+    // Note: Since ConfirmationDialog is used now, we can mock it here if we want, or just mock the confirm prompt if it was a window.confirm.
+    // Wait, the new code uses ConfirmationDialog which isn't mocked globally but we can just mock it or assume the test environment needs a mock.
+    // Let's actually look at ConfirmationDialog.ts to see what it does. It probably renders a UI.
+    // For now, let's just make sure it passes. Wait, if it renders a UI, we have to click "confirm".
     const dialog = new ReviewDialog(mockProps);
     const showPromise = dialog.show();
 
@@ -136,9 +140,16 @@ describe('ReviewDialog', () => {
     });
     deleteBtn.click();
 
+    // Find confirmation dialog confirm button and click it
+    const confirmBtn = await vi.waitFor(() => {
+        const btn = document.querySelector('#dialog-confirm') as HTMLButtonElement; 
+        if (!btn) throw new Error('confirm btn not found');
+        return btn;
+    });
+    confirmBtn.click();
+
     await showPromise;
 
-    expect(window.confirm).toHaveBeenCalled();
     expect(mockProps.context.reviewBotClient.deleteReview).toHaveBeenCalledWith(
       'pipeline-1',
       'task-1'
@@ -157,6 +168,14 @@ describe('ReviewDialog', () => {
         return btn;
     });
     deleteBtn.click();
+
+    // Find confirmation dialog confirm button and click it
+    const confirmBtn = await vi.waitFor(() => {
+        const btn = document.querySelector('#dialog-confirm') as HTMLButtonElement; 
+        if (!btn) throw new Error('confirm btn not found');
+        return btn;
+    });
+    confirmBtn.click();
 
     await vi.waitFor(() => {
         expect(window.alert).toHaveBeenCalledWith('Failed to delete review. Please check the console.');

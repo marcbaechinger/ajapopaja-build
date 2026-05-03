@@ -15,6 +15,7 @@
  */
 
 import { Task, TaskStatus } from '../../core/domain.ts';
+import { Icon } from './Icon.ts';
 
 export interface TaskDurations {
   designTime: number;
@@ -212,7 +213,7 @@ export class PipelineStatsView {
         ${!hideDistribution ? `
         <div class="bg-app-bg p-6 rounded-xl border border-app-border shadow-sm">
           <h4 class="text-sm font-bold text-app-text mb-6 flex items-center gap-2">
-            <svg class="w-4 h-4 text-app-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"></path></svg>
+            ${Icon.render('pieChart', { size: 16, className: 'text-app-muted' })}
             Task Distribution
           </h4>
           <div class="space-y-1">
@@ -224,7 +225,7 @@ export class PipelineStatsView {
         ${dailyStats && dailyStats.length > 0 ? `
         <div class="bg-app-bg p-6 rounded-xl border border-app-border shadow-sm">
           <h4 class="text-sm font-bold text-app-text mb-6 flex items-center gap-2">
-            <svg class="w-4 h-4 text-app-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+            ${Icon.render('calendar', { size: 16, className: 'text-app-muted' })}
             Daily Productivity
           </h4>
           <div class="overflow-x-auto">

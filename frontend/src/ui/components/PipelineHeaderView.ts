@@ -20,6 +20,7 @@ import { TaskStatusCounter } from './TaskStatusCounter.ts';
 import { RepositoryStatusBadge } from './RepositoryStatusBadge.ts';
 import { HeaderDialogButtons } from './HeaderDialogButtons.ts';
 import { ReviewNotificationBadge } from './ReviewNotificationBadge.ts';
+import { Icon } from './Icon.ts';
 
 export interface DocbotState {
   status: 'none' | 'ready' | 'inProgress' | 'noUpdate';
@@ -73,7 +74,7 @@ export class PipelineHeaderView {
           <span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
           <span class="font-bold uppercase tracking-wider">No Doc Update</span>
           <button data-action-click="dismiss_docbot_banner" class="ml-1 text-slate-500 hover:text-slate-300 transition-colors cursor-pointer">
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            ${Icon.render('close', { size: 12 })}
           </button>
         </div>
       `;
@@ -84,7 +85,7 @@ export class PipelineHeaderView {
           <span class="font-bold uppercase tracking-wider">Doc Ready</span>
           <button data-action-click="open_docbot_dialog" class="font-black underline hover:text-yellow-400 transition-colors cursor-pointer ml-1">Review</button>
           <button data-action-click="dismiss_docbot_banner" class="ml-1 text-yellow-700 hover:text-yellow-500 transition-colors cursor-pointer">
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            ${Icon.render('close', { size: 12 })}
           </button>
         </div>
       `;
@@ -129,10 +130,10 @@ export class PipelineHeaderView {
             <div class="flex items-center gap-3">
               <h2 id="pipeline-title" class="text-xl font-black text-app-accent-1 tracking-tight truncate">${pipeline.name}</h2>
               <button data-action-click="edit_pipeline" class="p-1 hover:bg-app-bg text-app-muted hover:text-app-accent-1 rounded transition-all cursor-pointer" title="Edit Pipeline">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                ${Icon.render('edit', { size: 14 })}
               </button>
               <button data-action-click="open_health_check" class="p-1 hover:bg-app-bg rounded-lg transition-colors cursor-pointer text-app-muted hover:text-green-500" title="System Health">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                ${Icon.render('check', { size: 16 })}
               </button>
               <div id="docbot-banner-container" class="flex items-center gap-2">
                 ${docbotBannerHtml}
@@ -146,7 +147,7 @@ export class PipelineHeaderView {
               <div class="flex items-center bg-app-bg rounded-lg border border-app-border overflow-hidden">
                 <span class="text-app-muted text-[9px] uppercase font-black tracking-widest px-2 py-0.5">ID: ${pipelineId}</span>
                 <button data-action-click="copy_pipeline_id" class="px-1.5 py-0.5 bg-app-surface border-l border-app-border text-app-muted hover:text-app-accent-2 transition-colors cursor-pointer group/copy" title="Copy ID">
-                   <svg class="w-2.5 h-2.5 group-hover/copy:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                   ${Icon.render('copy', { size: 10, className: 'group-hover/copy:scale-110 transition-transform' })}
                 </button>
               </div>
               <span class="text-app-muted text-[9px] uppercase font-black tracking-widest bg-app-bg px-2 py-0.5 rounded-lg border border-app-border">Workspace: ${pipeline.workspace_path || 'Default'}</span>

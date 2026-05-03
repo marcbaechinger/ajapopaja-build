@@ -16,6 +16,7 @@
 
 import { Task } from '../../core/domain.ts';
 import { TaskItem } from './TaskItem.ts';
+import { Icon } from './Icon.ts';
 
 export interface CompletedSectionOptions {
   lastCompleted: Task | null;
@@ -44,9 +45,7 @@ export class CompletedSection {
         <div class="pt-2">
           <details class="group/completed" open>
             <summary class="flex items-center gap-2 cursor-pointer list-none text-app-muted hover:text-app-text transition-colors mb-4 px-1">
-              <svg class="w-4 h-4 transition-transform group-open/completed:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-              </svg>
+              ${Icon.render('chevronRight', { size: 16, className: 'transition-transform group-open/completed:rotate-90' })}
               <span class="font-black text-[10px] uppercase tracking-widest">History Feed</span>
             </summary>
             

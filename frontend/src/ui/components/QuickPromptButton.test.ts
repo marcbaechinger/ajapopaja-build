@@ -16,13 +16,14 @@
 
 import { describe, it, expect } from 'vitest';
 import { renderQuickPromptButton, type PromptConfig } from './QuickPromptButton.ts';
+import { Icon } from './Icon.ts';
 
 describe('QuickPromptButton', () => {
   const mockConfig: PromptConfig = {
     id: 'test-action',
     label: 'Test Label',
     title: 'Test Title',
-    iconSvg: '<svg id="test-icon"></svg>',
+    iconSvg: Icon.render('check', { size: 16 }),
     getPrompt: (taskId, pipelineId) => `Prompt for ${taskId} in ${pipelineId}`
   };
 
@@ -32,7 +33,7 @@ describe('QuickPromptButton', () => {
     expect(html).toContain('data-action-copy="test-action"');
     expect(html).toContain('title="Test Title"');
     expect(html).toContain('Test Label');
-    expect(html).toContain('<svg id="test-icon"></svg>');
+    expect(html).toContain(Icon.render('check', { size: 16 }));
   });
 
   it('should generate correct prompt via getPrompt', () => {

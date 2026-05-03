@@ -16,6 +16,7 @@
 
 import { Task, TaskStatus } from '../../core/domain.ts';
 import { BaseDialog } from './dialog_common.ts';
+import { Icon } from './Icon.ts';
 
 export class HistoryDialog extends BaseDialog {
   private tasks: Task[];
@@ -24,7 +25,7 @@ export class HistoryDialog extends BaseDialog {
     super({
       title: 'History (--oneline)',
       maxWidth: 'max-w-2xl',
-      iconSvg: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`
+      iconSvg: Icon.render('clock', { size: 20 })
     });
     this.tasks = tasks;
     

@@ -17,6 +17,7 @@
 import { Task, TaskStatus } from '../../core/domain.ts';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import { Icon } from './Icon.ts';
 
 /**
  * Renders the design document section of a task card.
@@ -43,7 +44,7 @@ export function renderDesignDocSection(task: Task, isProposed: boolean): string 
                       ${!task.spec ? 'disabled title="Please create a spec first"' : 'title="Generate design document with ArchitectureBot"'}
                       class="text-[10px] bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded font-bold uppercase tracking-tight transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
                 <span class="flex items-center gap-1">
-                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+                  ${Icon.render('architecture', { size: 12 })}
                   Auto-Design
                 </span>
               </button>
@@ -63,11 +64,11 @@ export function renderDesignDocSection(task: Task, isProposed: boolean): string 
       ${task.design_doc ? `
         <div class="design-doc-actions flex items-center gap-3 mt-2">
           <button data-action-click="copy_design_doc" class="flex items-center gap-1 text-[10px] text-app-muted hover:text-app-text transition-colors cursor-pointer" title="Copy markdown to clipboard">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            ${Icon.render('copyRects', { size: 14 })}
             Copy
           </button>
           <button data-action-click="view_design_doc_history" class="flex items-center gap-1 text-[10px] text-app-muted hover:text-app-text transition-colors cursor-pointer" title="View version history">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            ${Icon.render('clock', { size: 14 })}
             History
           </button>
         </div>

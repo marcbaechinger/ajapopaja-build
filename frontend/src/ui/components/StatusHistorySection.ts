@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 import { Task } from '../../core/domain.ts';
+import { Icon } from './Icon.ts';
 
 /**
  * Renders the status history section of a task card.
@@ -29,7 +29,7 @@ export function renderStatusHistorySection(task: Task, expandHistory: boolean): 
   return `
     <details class="group/history mt-4 pt-4 border-t border-app-border/30" ${expandHistory ? 'open' : ''}>
       <summary class="flex items-center gap-2 cursor-pointer list-none text-[10px] font-bold text-app-muted uppercase tracking-widest mb-2 hover:text-app-text transition-colors">
-        <svg class="w-3 h-3 transition-transform group-open/history:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+        ${Icon.render('chevronRight', { size: 12, className: 'transition-transform group-open/history:rotate-90' })}
         Status History
       </summary>
       <div class="space-y-2 mt-2">

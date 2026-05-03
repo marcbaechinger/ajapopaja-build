@@ -20,7 +20,6 @@ import DOMPurify from 'dompurify';
 
 /**
  * Renders the specification section of a task card.
- * 
  * @param task The task object containing the specification.
  * @param isSpecExpanded Whether the specification section is expanded.
  * @returns An HTML string representing the specification section.

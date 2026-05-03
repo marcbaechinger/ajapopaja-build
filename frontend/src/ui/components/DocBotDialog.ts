@@ -1,5 +1,6 @@
 // frontend/src/ui/components/DocBotDialog.ts
 import { AppContext } from '../../core/AppContext';
+import { Icon } from './Icon.ts';
 
 export interface DocBotDialogProps {
   taskId: string;
@@ -94,9 +95,7 @@ export class DocBotDialog {
           <div class="p-4 border-b border-app-border flex justify-between items-center bg-app-surface">
             <h2 class="text-xl font-bold text-app-text">DocBot Review: ${this.props.filename}</h2>
             <button id="docbot-close-btn" class="text-app-muted hover:text-app-text transition-colors p-1 hover:bg-app-bg rounded-lg">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-              </svg>
+              ${Icon.render('close', { size: 24 })}
             </button>
           </div>
           

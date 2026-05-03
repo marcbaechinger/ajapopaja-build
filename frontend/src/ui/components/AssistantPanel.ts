@@ -18,6 +18,7 @@ import { AppContext } from '../../core/AppContext.ts';
 import type { AssistantResponse } from '../../core/AssistantService.ts';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import { Icon } from './Icon.ts';
 
 // Configure marked to wrap tables in a scrollable div
 marked.use({
@@ -172,19 +173,19 @@ export class AssistantPanel {
       <div class="bg-app-bg p-4 border-b border-app-border flex justify-between items-center shrink-0">
         <div class="flex items-center gap-2">
           <div class="p-1.5 bg-app-accent-2/10 rounded-lg">
-             <svg class="w-5 h-5 text-app-accent-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+             ${Icon.render('lightning', { size: 20, className: 'text-app-accent-2' })}
           </div>
           <span class="font-black text-app-accent-2 uppercase tracking-widest text-sm">Assistant</span>
         </div>
         <div class="flex gap-2">
           <button id="assistant-settings-toggle" class="p-1.5 hover:bg-app-bg text-app-muted hover:text-app-text rounded-lg transition-colors cursor-pointer focus:ring-2 outline-none focus:ring-app-accent-2" title="Panel Settings">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            ${Icon.render('settings', { size: 16 })}
           </button>
           <button id="assistant-clear" class="p-1.5 hover:bg-app-bg text-app-muted hover:text-app-text rounded-lg transition-colors cursor-pointer focus:ring-2 outline-none focus:ring-app-accent-2" title="Clear History">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+            ${Icon.render('trash', { size: 16 })}
           </button>
           <button id="assistant-close" class="p-1.5 hover:bg-app-bg text-app-muted hover:text-app-text rounded-lg transition-colors cursor-pointer focus:ring-2 outline-none focus:ring-app-accent-2">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            ${Icon.render('close', { size: 16 })}
           </button>
         </div>
       </div>
@@ -227,7 +228,7 @@ export class AssistantPanel {
                     placeholder="Ask me anything..."
                     rows="1"></textarea>
           <button type="submit" class="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-app-accent-2 text-white rounded-lg hover:brightness-110 transition-all shadow-lg cursor-pointer focus:ring-2 focus:ring-offset-2 focus:ring-app-accent-2 outline-none" aria-label="Send Message">
-             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+             ${Icon.render('arrowRight', { size: 16 })}
           </button>
         </form>
       </div>
@@ -391,7 +392,7 @@ export class AssistantPanel {
       await navigator.clipboard.writeText(text);
       const originalIcon = btn.innerHTML;
       btn.innerHTML = `
-        <svg class="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+        ${Icon.render('check', { size: 14, className: 'text-green-500' })}
       `;
       btn.classList.add('text-green-500');
 
@@ -415,7 +416,7 @@ export class AssistantPanel {
     const thinkingHtml = isAssistant ? `
       <details class="thinking-container mb-2 group/thinking ${thought ? '' : 'hidden'}" ${thought ? '' : 'open'}>
         <summary class="text-[10px] uppercase font-bold tracking-widest text-app-muted cursor-pointer hover:text-app-text select-none flex items-center gap-1">
-          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+          ${Icon.render('lightning', { size: 12 })}
           Thinking
         </summary>
         <div class="thinking-content mt-1 p-2 bg-app-surface/50 border-l-2 border-app-accent-2/50 text-[11px] text-app-muted italic font-mono whitespace-pre-wrap max-h-48 overflow-y-auto custom-scrollbar">${thought || ''}</div>
@@ -431,7 +432,7 @@ export class AssistantPanel {
         </div>
         ${isAssistant ? `
           <button class="copy-btn absolute -right-2 -top-2 p-1.5 bg-app-surface/90 hover:bg-app-surface border border-app-border rounded-lg text-app-muted hover:text-app-accent-2 transition-all opacity-0 group-hover:opacity-100 cursor-pointer focus:ring-2 focus:ring-app-accent-2 outline-none z-10 shadow-md" title="Copy Markdown">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>
+            ${Icon.render('copy', { size: 14 })}
           </button>
         ` : ''}
       </div>
@@ -477,7 +478,7 @@ export class AssistantPanel {
 
     el.innerHTML = `
       <div class="flex items-center gap-2 text-app-muted">
-        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+        ${Icon.render('refresh', { size: 12 })}
         <span class="text-[9px] font-bold uppercase tracking-widest">Executing Tool (Read-Only)</span>
       </div>
       <div class="text-[11px] font-bold text-app-muted/80">${response.tool}</div>
@@ -499,7 +500,7 @@ export class AssistantPanel {
 
     el.innerHTML = `
       <div class="flex items-center gap-2 text-app-accent-2">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+        ${Icon.render('copyRects', { size: 16 })}
         <span class="text-[10px] font-black uppercase tracking-widest">Tool Request</span>
       </div>
       <div class="text-xs font-bold text-app-text">${request.tool}</div>

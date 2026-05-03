@@ -1,18 +1,20 @@
 import { BaseDialog } from './dialog_common.ts';
-import type { AppContext } from '../../core/AppContext.ts';
+import { AppContext } from '../../core/AppContext.ts';
+import { Icon } from './Icon.ts';
 
 export class HealthCheckDialog extends BaseDialog {
   private appContext: AppContext;
-  
+
   constructor(appContext: AppContext) {
     super({
       title: 'System Health Check',
       maxWidth: 'max-w-xl',
       maxHeight: 'max-h-[80vh]',
-      iconSvg: `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`
+      iconSvg: Icon.render('check', { size: 20 })
     });
     this.appContext = appContext;
   }
+
 
   protected renderBody(): HTMLElement {
     const container = document.createElement('div');
@@ -39,10 +41,11 @@ export class HealthCheckDialog extends BaseDialog {
       const createRow = (name: string, data: {status: string, details: string}) => {
         const isOk = data.status === 'ok';
         const icon = isOk 
-            ? '<svg class="w-5 h-5 text-green-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>'
-            : '<svg class="w-5 h-5 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>';
-        
+            ? Icon.render('check', { size: 20, className: 'text-green-500 shrink-0' })
+            : Icon.render('close', { size: 20, className: 'text-red-500 shrink-0' }); // Assuming 'close' or 'x' can be used for failure
+
         return `
+
           <div class="flex flex-col border border-app-border rounded-lg p-4 bg-app-surface">
             <div class="flex items-center gap-3 mb-2">
               ${icon}

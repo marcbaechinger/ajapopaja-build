@@ -22,6 +22,8 @@ export interface PaginationOptions {
   nextAction: string;
 }
 
+import { Icon } from './Icon.ts';
+
 export class PaginationControl {
   static render(options: PaginationOptions): string {
     const { currentPage, pageSize, totalCount, prevAction, nextAction } = options;
@@ -32,15 +34,15 @@ export class PaginationControl {
     return `
       <div class="flex justify-between items-center mt-6 pt-4 border-t border-app-border/20">
         <button data-action-click="${prevAction}" ${currentPage === 0 ? 'disabled' : ''}
-                class="text-[10px] font-bold uppercase tracking-widest text-app-muted hover:text-app-accent-1 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1">
-          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                class="text-[10px] font-bold uppercase tracking-widest text-app-muted hover:text-app-accent-1 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1 flex-row-reverse">
           Previous
+          ${Icon.render('chevronRight', { size: 12, className: 'rotate-180' })}
         </button>
         <span class="text-[10px] font-bold text-app-muted uppercase tracking-widest">Page ${currentPage + 1} of ${totalPages}</span>
         <button data-action-click="${nextAction}" ${currentPage === totalPages - 1 ? 'disabled' : ''}
                 class="text-[10px] font-bold uppercase tracking-widest text-app-muted hover:text-app-accent-1 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1">
           Next
-          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+          ${Icon.render('chevronRight', { size: 12 })}
         </button>
       </div>
     `;
