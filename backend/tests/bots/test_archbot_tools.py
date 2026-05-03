@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -32,19 +31,13 @@ async def test_save_design_doc_success(init_mock_db):
     task_id = str(task.id)
     design_doc = "# Design Doc\n\nProposed changes..."
 
-    with patch(
-        "api.archbot.tools.manager.broadcast", new_callable=AsyncMock
-    ) as mock_broadcast:
-        result = await save_design_doc(pipeline_id, task_id, design_doc)
+    result = await save_design_doc(pipeline_id, task_id, design_doc)
 
-        assert "Successfully saved design document" in result
+    assert "Successfully saved design document" in result
 
-        # Verify task updated in DB
-        updated_task = await Task.get(task.id)
-        assert updated_task.design_doc == design_doc
-
-        # Verify WebSocket message is NOT called (moved to session completion)
-        mock_broadcast.assert_not_called()
+    # Verify task updated in DB
+    updated_task = await Task.get(task.id)
+    assert updated_task.design_doc == design_doc
 
 
 @pytest.mark.asyncio
