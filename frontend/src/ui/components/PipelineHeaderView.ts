@@ -118,7 +118,7 @@ export class PipelineHeaderView {
 
     return `
       <header class="flex justify-between items-center bg-app-surface px-6 py-4 rounded-2xl shadow-lg border border-app-border shrink-0">
-        <div class="flex gap-4 items-center overflow-hidden">
+        <div class="flex gap-4 items-center">
           <button onclick="window.location.hash='#'" class="p-2 hover:bg-app-bg rounded-xl transition-all text-app-muted hover:text-app-accent-1 border border-transparent hover:border-app-border group cursor-pointer" title="Back to Dashboard">
             <svg class="w-5 h-5 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>

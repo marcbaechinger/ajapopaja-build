@@ -341,7 +341,6 @@ export class PipelineDetailView extends View {
       const task = this.allLoadedTasks.find(t => t.id === taskId);
       if (!task) return;
 
-      console.log("open_review_dialog: " + task?.review_md);
       const dialog = new ReviewDialog({
         task,
         pipelineId: this.pipelineId,

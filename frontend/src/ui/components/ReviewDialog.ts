@@ -78,7 +78,7 @@ export class ReviewDialog extends BaseDialog<void> {
 
   protected renderBody(): string {
     if (!this.props || !this.props.task.review_md) return '<div class="p-8 text-center text-app-muted font-bold uppercase tracking-widest">No review available</div>';
-    
+
     const rawHtml = marked.parse(this.props.task.review_md) as string;
     const cleanHtml = DOMPurify.sanitize(rawHtml);
     return `
@@ -114,7 +114,7 @@ export class ReviewDialog extends BaseDialog<void> {
   private attachInternalEventListeners() {
     this.dialog.querySelector('#review-close-btn')?.addEventListener('click', () => this.close());
     this.dialog.querySelector('#review-delete-btn')?.addEventListener('click', () => this.handleDelete());
-    
+
     this.dialog.querySelectorAll('[data-action-copy]').forEach(btn => {
       btn.addEventListener('click', (e) => this.handleCopyPrompt(e));
     });
