@@ -17,6 +17,7 @@
 import { describe, it, expect } from 'vitest';
 import { PipelineHeaderView } from './PipelineHeaderView';
 import type { PipelineHeaderViewProps } from './PipelineHeaderView';
+import { TaskStatusCounter } from './TaskStatusCounter';
 import { Pipeline, Task, TaskStatus, PipelineStatus } from '../../core/domain';
 
 describe('PipelineHeaderView', () => {
@@ -71,7 +72,7 @@ describe('PipelineHeaderView', () => {
     const props = { ...mockProps, allTasks: tasks };
     PipelineHeaderView.render(props);
 
-    const statsHtml = PipelineHeaderView.renderHeaderStats(tasks);
+    const statsHtml = TaskStatusCounter.render(tasks);
     expect(statsHtml).toContain('title="created"');
     expect(statsHtml).not.toContain('title="inprogress"');
     expect(statsHtml).not.toContain('title="scheduled"');
@@ -90,7 +91,7 @@ describe('PipelineHeaderView', () => {
     const props = { ...mockProps, allTasks: tasks };
     PipelineHeaderView.render(props);
 
-    const statsHtml = PipelineHeaderView.renderHeaderStats(tasks);
+    const statsHtml = TaskStatusCounter.render(tasks);
     expect(statsHtml).not.toContain('title="created"');
     expect(statsHtml).not.toContain('title="inprogress"');
     expect(statsHtml).toContain('title="scheduled"');
@@ -109,7 +110,7 @@ describe('PipelineHeaderView', () => {
     const props = { ...mockProps, allTasks: tasks };
     PipelineHeaderView.render(props);
 
-    const statsHtml = PipelineHeaderView.renderHeaderStats(tasks);
+    const statsHtml = TaskStatusCounter.render(tasks);
     expect(statsHtml).not.toContain('title="created"');
     expect(statsHtml).toContain('title="inprogress"');
     expect(statsHtml).not.toContain('title="scheduled"');
@@ -132,7 +133,7 @@ describe('PipelineHeaderView', () => {
     const props = { ...mockProps, allTasks: tasks };
     PipelineHeaderView.render(props);
 
-    const statsHtml = PipelineHeaderView.renderHeaderStats(tasks);
+    const statsHtml = TaskStatusCounter.render(tasks);
     expect(statsHtml).not.toContain('title="created"');
     expect(statsHtml).not.toContain('title="inprogress"');
     expect(statsHtml).not.toContain('title="scheduled"');

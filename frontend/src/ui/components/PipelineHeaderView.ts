@@ -14,7 +14,11 @@
  * limitations under the License.
  */
 
-import { Pipeline, Task, TaskStatus, type GitStatus } from '../../core/domain.ts';
+import { Pipeline, Task, type GitStatus } from '../../core/domain.ts';
+import { UserProfileBadge } from './UserProfileBadge.ts';
+import { TaskStatusCounter } from './TaskStatusCounter.ts';
+import { RepositoryStatusBadge } from './RepositoryStatusBadge.ts';
+import { HeaderDialogButtons } from './HeaderDialogButtons.ts';
 
 export interface DocbotState {
   status: 'none' | 'ready' | 'inProgress' | 'noUpdate';
@@ -90,17 +94,6 @@ export class PipelineHeaderView {
       `;
     }
 
-    const gitStatusHtml = !gitStatus ? '' : `
-      <div data-action-click="refresh_git_status" class="flex items-center gap-2 bg-app-bg px-2 py-1 rounded border border-app-border cursor-pointer transition-all hover:border-app-accent-2/50 group/git" title="Workspace Git Status (Staged, Unstaged, Untracked) - Click to Sync">
-        <svg xmlns="http://www.w3.org/2000/svg" width="10pt" height="10pt" viewBox="0 0 78 78" class="opacity-70 group-hover/git:opacity-100"><path fill="currentColor" transform="translate(10 10) rotate(-45 29 29)" d="M5,58c-2.76142,0 -5,-2.23858 -5,-5v-48c0,-2.76142 2.23858,-5 5,-5h33v12.54404c-2.06553,0.94801 -3.5,3.03446 -3.5,5.45596c0,0.73514 0.13221,1.43941 0.37415,2.09031l-15.28384,15.28384c-0.6509,-0.24194 -1.35517,-0.37415 -2.09031,-0.37415c-3.31371,0 -6,2.68629 -6,6c0,3.31371 2.68629,6 6,6c3.31371,0 6,-2.68629 6,-6c0,-0.73514 -0.13221,-1.43941 -0.37415,-2.09031l14.87415,-14.87415l0,11.50851c-2.06553,0.94801 -3.5,3.03446 -3.5,5.45596c0,3.31371 2.68629,6 6,6c3.31371,0 6,-2.68629 6,-6c0,-2.42149 -1.43447,-4.50795 -3.5,-5.45596l0,-12.08808c2.06553,-0.94801 3.5,-3.03446 3.5,-5.45596c0,-2.42149 -1.43447,-4.50795 -3.5,-5.45596l0,-12.54404h10c2.76142,0 5,2.23858 5,5v48c0,2.76142 -2.23858,5 -5,5z"/></svg>
-        <div class="flex gap-1.5 items-center text-[9px] font-bold">
-          <span class="${gitStatus.staged > 0 ? 'text-green-500' : 'text-app-muted'}">${gitStatus.staged}S</span>
-          <span class="${gitStatus.unstaged > 0 ? 'text-amber-500' : 'text-app-muted'}">${gitStatus.unstaged}M</span>
-          <span class="${gitStatus.untracked > 0 ? 'text-app-text' : 'text-app-muted'}">${gitStatus.untracked}U</span>
-        </div>
-      </div>
-    `;
-
     return `
       <header class="flex justify-between items-center bg-app-surface px-6 py-4 rounded-2xl shadow-lg border border-app-border shrink-0">
         <div class="flex gap-4 items-center overflow-hidden">
@@ -133,78 +126,19 @@ export class PipelineHeaderView {
                 </button>
               </div>
               <span class="text-app-muted text-[9px] uppercase font-black tracking-widest bg-app-bg px-2 py-0.5 rounded-lg border border-app-border">Workspace: ${pipeline.workspace_path || 'Default'}</span>
-              ${gitStatusHtml}
+              ${RepositoryStatusBadge.render(gitStatus)}
               <div id="header-stats" class="flex gap-1.5">
-                ${this.renderHeaderStats(allTasks)}
+                ${TaskStatusCounter.render(allTasks)}
               </div>
             </div>
           </div>
         </div>
 
         <div class="flex items-center gap-4">
-          <div class="flex items-center gap-2">
-             <button data-action-click="open_search" data-pipeline-id="${pipelineId}" class="p-2 bg-app-bg hover:bg-app-surface rounded-xl border border-app-border text-app-muted hover:text-app-accent-2 transition-all cursor-pointer group" title="Global Search (Ctrl+K)">
-               <svg class="w-4 h-4 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-             </button>
-             <button data-action-click="toggle_assistant" class="p-2 bg-app-bg hover:bg-app-surface rounded-xl border border-app-border text-app-muted hover:text-app-accent-2 transition-all cursor-pointer group" title="AI Assistant (Ctrl+Shift+A)">
-               <svg class="w-4 h-4 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-             </button>
-             <button data-action-click="open_stats" class="p-2 bg-app-bg hover:bg-app-surface rounded-xl border border-app-border text-app-muted hover:text-app-accent-2 transition-all cursor-pointer group" title="Statistics (S)">
-               <svg class="w-4 h-4 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
-             </button>
-          </div>
-
-          <div class="flex items-center gap-3 bg-app-bg px-3 py-1.5 rounded-xl border border-app-border h-[40px]">
-            <span class="text-xs font-bold text-app-text tracking-tight">${user?.username || 'User'}</span>
-            <div class="w-px h-4 bg-app-border mx-1"></div>
-            <button data-action-click="perform_logout" class="p-1 hover:bg-red-500/10 text-app-muted hover:text-red-400 rounded-lg transition-all cursor-pointer group/logout" title="Logout">
-              <svg class="w-3.5 h-3.5 group-hover/logout:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
-            </button>
-          </div>
+          ${HeaderDialogButtons.render(pipelineId)}
+          ${UserProfileBadge.render(user)}
         </div>
       </header>
     `;
-  }
-
-  static renderHeaderStats(allTasks: Task[]): string {
-    const statusCounts: Record<string, number> = {
-      [TaskStatus.CREATED]: 0,
-      [TaskStatus.SCHEDULED]: 0,
-      [TaskStatus.PROPOSED]: 0,
-      [TaskStatus.INPROGRESS]: 0,
-      [TaskStatus.IMPLEMENTED]: 0,
-      [TaskStatus.FAILED]: 0,
-      [TaskStatus.DISCARDED]: 0,
-    };
-
-    let total = 0;
-    allTasks.forEach(t => {
-      if (!t.deleted && statusCounts[t.status] !== undefined) {
-        statusCounts[t.status]++;
-        total++;
-      }
-    });
-
-    if (total === 0) return '';
-
-    const colors: Record<string, string> = {
-      [TaskStatus.CREATED]: 'bg-slate-500',
-      [TaskStatus.SCHEDULED]: 'bg-blue-500',
-      [TaskStatus.PROPOSED]: 'bg-purple-500',
-      [TaskStatus.INPROGRESS]: 'bg-amber-500',
-      [TaskStatus.IMPLEMENTED]: 'bg-green-500',
-      [TaskStatus.FAILED]: 'bg-red-500',
-      [TaskStatus.DISCARDED]: 'bg-slate-700',
-    };
-
-    return Object.entries(statusCounts)
-      .filter(([_, count]) => count > 0)
-      .map(([status, count]) => `
-        <span class="flex items-center text-[9px] font-black text-app-muted border border-app-border rounded-md px-1.5 py-0.5 bg-app-bg" title="${status}">
-          <span class="w-1.5 h-1.5 rounded-full ${colors[status]} mr-1.5"></span>
-          ${count}
-        </span>
-      `).join('');
-
   }
 }
