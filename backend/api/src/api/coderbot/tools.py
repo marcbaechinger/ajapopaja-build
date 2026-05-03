@@ -147,10 +147,8 @@ async def test(pipeline_id: str, task_id: str):
 async def task_completed(pipeline_id: str, task_id: str, summary: str):
     """
     Called when the coding task is completed. This creates a Pull Request.
-
-    Args:
-        summary: A summary of the changes made and the work done.
     """
+    helper = None
     try:
         pipeline = await Pipeline.get(pipeline_id)
         if not pipeline:
@@ -192,14 +190,15 @@ async def task_completed(pipeline_id: str, task_id: str, summary: str):
             )
         )
 
-        # Cleanup sandbox after PR creation
-        helper.cleanup()
-
         return (
             f"Pull Request created successfully for task {task_id}. Summary: {summary}"
         )
     except Exception as e:
         return f"Error completing task: {str(e)}"
+    finally:
+        if helper:
+            # Cleanup sandbox after PR creation (or failure)
+            helper.cleanup()
 
 
 async def tree(

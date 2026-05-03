@@ -124,3 +124,37 @@ async def test_path_validation_exhaustive(tmp_path, monkeypatch):
     # Re-testing partially with invalid path
     res = await tools.write_file_partially("p1", task_id, "/abs/path", "old", "new")
     assert "Security error" in res
+
+
+@pytest.mark.asyncio
+async def test_task_completed_robust_cleanup(init_mock_db, tmp_path, monkeypatch):
+    monkeypatch.setattr("core.config.SANDBOX_ROOT", tmp_path)
+
+    pipeline = Pipeline(name="Test Pipeline", workspace_path="test")
+    await pipeline.insert()
+
+    task_id = "task_cleanup_fail"
+    sandbox_path = tmp_path / task_id
+    sandbox_path.mkdir()
+
+    with (
+        patch("api.coderbot.tools.SandboxGitHelper") as mock_helper_cls,
+        patch("api.coderbot.tools.PullRequest.insert") as mock_insert,
+    ):
+        mock_helper = MagicMock()
+        mock_helper_cls.return_value = mock_helper
+        mock_helper.get_patch.return_value = "fake patch"
+        mock_helper.branch_name = "coderbot/task_cleanup_fail"
+
+        # Simulate DB failure during PR insertion
+        mock_insert.side_effect = Exception("DB Connection Failed")
+
+        res = await tools.task_completed(
+            str(pipeline.id), task_id, "Attempting work..."
+        )
+
+        assert "Error completing task" in res
+        assert "DB Connection Failed" in res
+
+        # Verify cleanup was still called despite the exception
+        mock_helper.cleanup.assert_called_once()
