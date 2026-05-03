@@ -31,12 +31,12 @@ class ConcreteBotSession(BaseBotSession):
         pipeline_id: str,
         task_id: str,
         use_custom_feedback: bool = False,
-        use_custom_step_warnings: bool = False,
+        use_custom_turn_warning: bool = False,
     ):
         super().__init__(pipeline_id, task_id)
         self.pipeline_and_task_id_args = []
         self.use_custom_feedback = use_custom_feedback
-        self.user_custom_step_warning = use_custom_step_warnings
+        self.use_custom_turn_warning = use_custom_turn_warning
 
     def get_system_instruction(self) -> str:
         return "Test instruction"
@@ -83,11 +83,29 @@ class ConcreteBotSession(BaseBotSession):
         )
 
     def get_turn_warning(self, remaining: int) -> Optional[str]:
-        return (
-            "Custom step warning"
-            if self.user_custom_step_warning
-            else super().get_turn_warning(remaining=remaining)
-        )
+        """
+        Returns a warning message when turns are running low.
+        Subclasses can override this to customize the messages.
+
+        Args:
+            remaining: Number of turns remaining.
+
+        Returns:
+            Warning message or None if no warning is needed.
+        """
+        if remaining == 5:
+            return (
+                "Only 5 custom warning"
+                if self.use_custom_turn_warning
+                else super().get_turn_warning(remaining)
+            )
+        if remaining == 1:
+            return (
+                "Only 1 custom warning"
+                if self.use_custom_turn_warning
+                else super().get_turn_warning(remaining)
+            )
+        return None
 
 
 class AsyncIter:
@@ -144,6 +162,66 @@ async def test_base_session_run_loop():
         assert "tool_calls" in session.history[2]
         assert session.history[3]["role"] == "tool"
         assert session.history[3]["name"] == "test_tool"
+
+
+@pytest.mark.asyncio
+async def test_base_session_end_of_turns_warnings():
+    session = ConcreteBotSession("p1", "t1")
+    session.on_event = AsyncMock()
+
+    # Mock Ollama tool call response
+    mock_response_1 = MagicMock()
+    mock_response_1.message.content = "I will call a tool."
+    mock_tool_call_1 = MagicMock()
+    mock_tool_call_1.function.name = "test_tool"
+    mock_tool_call_1.function.arguments = json.dumps({"param1": "value1"})
+    mock_response_1.message.tool_calls = [mock_tool_call_1]
+
+    with patch.object(session.client, "chat") as mock_chat:
+        mock_chat.side_effect = lambda *args, **kwargs: AsyncIter([mock_response_1])
+
+        await session.run(max_iterations=20)
+
+        five_warning = False
+        last_warning = False
+        for item in session.history:
+            if "Only 5 calls" in item["content"]:
+                five_warning = True
+            elif "Only 1 call" in item["content"]:
+                last_warning = True
+
+        assert five_warning
+        assert last_warning
+
+
+@pytest.mark.asyncio
+async def test_base_session_end_of_turns_custom_warnings():
+    session = ConcreteBotSession("p1", "t1", use_custom_turn_warning=True)
+    session.on_event = AsyncMock()
+
+    # Mock Ollama tool call response
+    mock_response_1 = MagicMock()
+    mock_response_1.message.content = "I will call a tool."
+    mock_tool_call_1 = MagicMock()
+    mock_tool_call_1.function.name = "test_tool"
+    mock_tool_call_1.function.arguments = json.dumps({"param1": "value1"})
+    mock_response_1.message.tool_calls = [mock_tool_call_1]
+
+    with patch.object(session.client, "chat") as mock_chat:
+        mock_chat.side_effect = lambda *args, **kwargs: AsyncIter([mock_response_1])
+
+        await session.run(max_iterations=20)
+
+        five_warning = False
+        last_warning = False
+        for item in session.history:
+            if "Only 5 custom warning" in item["content"]:
+                five_warning = True
+            elif "Only 1 custom warning" in item["content"]:
+                last_warning = True
+
+        assert five_warning
+        assert last_warning
 
 
 @pytest.mark.asyncio

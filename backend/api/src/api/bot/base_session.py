@@ -66,6 +66,26 @@ class BaseBotSession(ABC):
         """Determines if a tool call should terminate the autonomous loop."""
         pass
 
+    def get_turn_warning(self, remaining: int) -> Optional[str]:
+        """
+        Returns a warning message when turns are running low.
+        Subclasses can override this to customize the messages.
+
+        Args:
+            remaining: Number of turns remaining.
+
+        Returns:
+            Warning message or None if no warning is needed.
+        """
+        if remaining == 5:
+            return "Only 5 calls left. Please call the terminating tool."
+        if remaining == 1:
+            return (
+                "Only 1 call left. Call the terminating tool NOW or the "
+                "execution loop ends without a result."
+            )
+        return None
+
     def get_default_feedback(
         self, pipeline_id: str, task_id: str, assistant_message: str
     ) -> str:
@@ -212,45 +232,53 @@ class BaseBotSession(ABC):
                             self.pipeline_id, self.task_id, full_content
                         )
                         self.history.append({"role": "user", "content": feedback})
-                        continue
+                    else:
+                        # Process tool calls
+                        terminal_call = False
+                        for tool_call in tool_calls:
+                            tool_name = tool_call.function.name
+                            args = tool_call.function.arguments
 
-                    # Process tool calls
-                    terminal_call = False
-                    for tool_call in tool_calls:
-                        tool_name = tool_call.function.name
-                        args = tool_call.function.arguments
+                            logger.info(
+                                f"{self.__class__.__name__} iteration {i + 1}: "
+                                f"Calling tool '{tool_name}'"
+                            )
 
-                        logger.info(
-                            f"{self.__class__.__name__} iteration {i + 1}: "
-                            f"Calling tool '{tool_name}'"
-                        )
+                            if self.is_terminal_tool(tool_name):
+                                terminal_call = True
 
-                        if self.is_terminal_tool(tool_name):
-                            terminal_call = True
+                            result = await self._execute_tool(tool_name, args)
 
-                        result = await self._execute_tool(tool_name, args)
+                            # Append tool result to history
+                            self.history.append(
+                                {
+                                    "role": "tool",
+                                    "content": json.dumps(result),
+                                    "name": tool_name,
+                                }
+                            )
 
-                        # Append tool result to history
-                        self.history.append(
-                            {
-                                "role": "tool",
-                                "content": json.dumps(result),
-                                "name": tool_name,
-                            }
-                        )
+                            if terminal_call:
+                                if self._is_tool_error(result):
+                                    logger.warning(
+                                        f"Terminal tool '{tool_name}' failed. Forcing retry."
+                                    )
+                                    terminal_call = False
 
-                        if terminal_call:
-                            if self._is_tool_error(result):
-                                logger.warning(
-                                    f"Terminal tool '{tool_name}' failed. Forcing retry."
+                        # Inject warning AFTER processing tool results if not terminal
+                        if not terminal_call:
+                            remaining = max_iterations - (i + 1)
+                            warning = self.get_turn_warning(remaining)
+                            if warning:
+                                logger.warning(f"Injecting turn warning: {warning}")
+                                self.history.append(
+                                    {"role": "user", "content": warning}
                                 )
-                                terminal_call = False
-
-                    if terminal_call:
-                        logger.info(
-                            f"{self.__class__.__name__} finished with terminal call."
-                        )
-                        return
+                        else:
+                            logger.info(
+                                f"{self.__class__.__name__} finished with terminal call."
+                            )
+                            return
 
                     remaining_turns = max_iterations - (i + 1)
                     if remaining_turns > 0:
