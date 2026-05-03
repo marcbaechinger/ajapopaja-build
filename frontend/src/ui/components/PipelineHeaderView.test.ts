@@ -38,7 +38,8 @@ describe('PipelineHeaderView', () => {
     reviewbotState: { status: 'none', taskId: null },
     user: { username: 'testuser' },
     allTasks: [],
-    isTwoColumnLayout: false
+    isTwoColumnLayout: false,
+    pendingReviews: [],
   };
 
   it('renders pipeline name and status', () => {

@@ -58,6 +58,7 @@ export class PipelineDetailView extends View {
   private gitStatusRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   private gitStatusRefreshInProgress: boolean = false;
   private gitStatusRefreshPending: boolean = false;
+  private pendingReviews: string[] = [];
 
   private docbotState: DocbotState = {
     status: 'none',
@@ -216,7 +217,13 @@ export class PipelineDetailView extends View {
       'DOCBOT_PREVIEW_READY': (p) => { this.fetchDocBotPreview(p.task_id); },
       'REVIEWBOT_STARTED': (p) => { this.reviewbotState = { status: 'inProgress', taskId: p.task_id }; },
       'REVIEWBOT_COMPLETED': () => { this.reviewbotState = { status: 'none', taskId: null }; },
-      'REVIEWBOT_REVIEW_READY': () => { this.reviewbotState = { status: 'none', taskId: null }; },
+      'REVIEWBOT_REVIEW_READY': (p) => {
+        this.reviewbotState = { status: 'none', taskId: null };
+        if (p.task_id && !this.pendingReviews.includes(p.task_id)) {
+          this.pendingReviews.push(p.task_id);
+        }
+      },
+
       'ARCHBOT_STARTED': (p) => { this.archbotState = { status: 'inProgress', taskId: p.task_id }; },
       'ARCHBOT_COMPLETED': () => { this.archbotState = { status: 'none', taskId: null }; },
     };
@@ -326,6 +333,9 @@ export class PipelineDetailView extends View {
     this.context.actionRegistry.register('open_review_dialog', async (_e, el) => {
       const taskId = el.getAttribute('data-task-id');
       if (!taskId) return;
+
+      this.pendingReviews = this.pendingReviews.filter(id => id !== taskId);
+      this.updateHeader();
 
       const task = this.allLoadedTasks.find(t => t.id === taskId);
       if (!task) return;
@@ -1152,7 +1162,8 @@ export class PipelineDetailView extends View {
       user: this.context.authService.getUser(),
       allTasks: this.allLoadedTasks,
       gitStatus: this.gitStatus,
-      isTwoColumnLayout: this.isTwoColumnLayout
+      isTwoColumnLayout: this.isTwoColumnLayout,
+      pendingReviews: this.pendingReviews,
     });
 
   }

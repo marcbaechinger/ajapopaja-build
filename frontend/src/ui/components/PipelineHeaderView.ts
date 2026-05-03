@@ -19,6 +19,7 @@ import { UserProfileBadge } from './UserProfileBadge.ts';
 import { TaskStatusCounter } from './TaskStatusCounter.ts';
 import { RepositoryStatusBadge } from './RepositoryStatusBadge.ts';
 import { HeaderDialogButtons } from './HeaderDialogButtons.ts';
+import { ReviewNotificationBadge } from './ReviewNotificationBadge.ts';
 
 export interface DocbotState {
   status: 'none' | 'ready' | 'inProgress' | 'noUpdate';
@@ -48,11 +49,12 @@ export interface PipelineHeaderViewProps {
   allTasks: Task[];
   gitStatus?: GitStatus;
   isTwoColumnLayout: boolean;
+  pendingReviews: string[];
 }
 
 export class PipelineHeaderView {
   static render(props: PipelineHeaderViewProps): string {
-    const { pipeline, pipelineId, docbotState, reviewbotState, archbotState, user, allTasks, gitStatus, isTwoColumnLayout } = props;
+    const { pipeline, pipelineId, docbotState, reviewbotState, archbotState, user, allTasks, gitStatus, isTwoColumnLayout, pendingReviews } = props;
 
     let docbotBannerHtml = '';
     if (docbotState.status === 'inProgress') {
@@ -136,6 +138,7 @@ export class PipelineHeaderView {
                 ${docbotBannerHtml}
                 ${reviewbotBannerHtml}
                 ${archbotBannerHtml}
+                ${ReviewNotificationBadge.render(pendingReviews, allTasks)}
               </div>
             </div>
             

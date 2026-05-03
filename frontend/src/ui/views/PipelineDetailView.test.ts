@@ -119,3 +119,97 @@ describe('PipelineDetailView Layout', () => {
     expect(container.innerHTML).toContain('lg:grid-cols-3');
   });
 });
+
+describe('PipelineDetailView Review Notifications', () => {
+  let mockContext: any;
+  let container: HTMLElement;
+  let dataManagerHandlers: Record<string, Function> = {};
+
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    dataManagerHandlers = {};
+
+    mockContext = {
+      actionRegistry: {
+        register: vi.fn(),
+      },
+      wsClient: {
+        on: vi.fn(),
+      },
+      dataManager: {
+        on: vi.fn((event, handler) => {
+          dataManagerHandlers[event] = handler;
+          return () => {};
+        }),
+        updateTask: vi.fn(),
+        updatePipeline: vi.fn(),
+      },
+      authService: {
+        getUser: vi.fn(),
+        getAccessToken: vi.fn(),
+      },
+      pipelineClient: {
+        get: vi.fn().mockResolvedValue({ id: 'p1' }),
+        getGeminiStatus: vi.fn().mockResolvedValue({}),
+        getVibeStatus: vi.fn().mockResolvedValue({}),
+      },
+      taskClient: {
+        listByPipeline: vi.fn().mockResolvedValue([]),
+        listCompletedByPipeline: vi.fn().mockResolvedValue({ tasks: [], total_count: 0 }),
+      },
+      systemClient: {
+        getGitStatus: vi.fn().mockResolvedValue({}),
+        isOllamaAvailable: vi.fn().mockResolvedValue(true),
+      }
+    };
+  });
+
+  it('should track pending reviews from REVIEWBOT_REVIEW_READY events', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+
+    // Get the handler for ws events
+    const wsHandler = dataManagerHandlers['ws:REVIEWBOT_REVIEW_READY:p1'];
+    expect(wsHandler).toBeDefined();
+
+    // Trigger two events
+    wsHandler({ task_id: 't1' });
+    wsHandler({ task_id: 't2' });
+
+    // Internal state should have them
+    expect((view as any).pendingReviews).toEqual(['t1', 't2']);
+  });
+
+  it('should remove pending review when open_review_dialog is triggered', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+
+    // Mock loaded tasks so open dialog doesn't early return
+    (view as any).allLoadedTasks = [{ id: 't1' }, { id: 't2' }];
+
+    // Set internal state
+    (view as any).pendingReviews = ['t1', 't2'];
+
+    // Get the action
+    const openReviewAction = mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === 'open_review_dialog')[1];
+    expect(openReviewAction).toBeDefined();
+
+    // Create a mock element that has data-task-id
+    const el = document.createElement('button');
+    el.setAttribute('data-task-id', 't1');
+
+    // Call action
+    // Needs try/catch or mocking ReviewDialog if ReviewDialog constructor throws or tries to render something we didn't mock properly, 
+    // but ReviewDialog is not mocked. Let's see if it errors.
+    try {
+        await openReviewAction(null, el);
+    } catch (e) {
+        // Ignored for this test scope, we just care about state
+    }
+
+    // Should be removed
+    expect((view as any).pendingReviews).toEqual(['t2']);
+  });
+});
