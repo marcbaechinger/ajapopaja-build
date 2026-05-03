@@ -294,6 +294,9 @@ class BaseBotSession(ABC):
         try:
             if isinstance(args, str):
                 args = json.loads(args)
+            else:
+                # Work on a copy to avoid side effects on history (e.g. injecting 'session')
+                args = args.copy()
 
             # Inject pipeline_id and task_id if the tool expects them
             sig = inspect.signature(tool_def.func)
