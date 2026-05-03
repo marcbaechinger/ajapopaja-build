@@ -14,23 +14,22 @@
 
 import json
 import re
-from pathlib import Path
 from typing import Optional
 
 import git
 
 from api.assistant.decorators import register_tool
-from core.utils import git_utils, path_utils
+from core.utils import git_utils
+
+from .shared_utils import sanitize_and_resolve_path
 
 # Tool Categories
 READ_ONLY = "read_only"
 
 
 def _sanitize_path(workspace: str, rel_path: str) -> Optional[str]:
-    try:
-        return str(path_utils.safe_join(Path(workspace), rel_path))
-    except Exception:
-        return None
+    path = sanitize_and_resolve_path(workspace, rel_path)
+    return str(path) if path else None
 
 
 @register_tool(tool_type=READ_ONLY)

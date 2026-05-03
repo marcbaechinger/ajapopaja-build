@@ -20,7 +20,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from api.assistant.tools.search_tools import (
-    _python_tree,
     find,
     grep,
     head,
@@ -28,6 +27,7 @@ from api.assistant.tools.search_tools import (
     tail,
     tree,
 )
+from api.assistant.tools.shared_utils import python_tree_impl as _python_tree
 from core.models.models import Pipeline
 
 ...
