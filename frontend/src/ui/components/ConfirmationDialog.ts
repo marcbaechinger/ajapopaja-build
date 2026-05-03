@@ -27,11 +27,11 @@ export class ConfirmationDialog extends BaseDialog<boolean> {
     confirmLabel: string = 'Confirm',
     cancelLabel: string = 'Cancel'
   ) {
-    super({ title });
+    super({ title, canOpenAsChildDialog: true });
     this.message = message;
     this.confirmLabel = confirmLabel;
     this.cancelLabel = cancelLabel;
-    
+
     // Re-render layout because we need labels
     this.updateContent();
   }
@@ -39,7 +39,7 @@ export class ConfirmationDialog extends BaseDialog<boolean> {
   private updateContent() {
     const bodyContainer = this.dialog.querySelector('#dialog-body-container') as HTMLElement;
     bodyContainer.innerHTML = this.renderBody() as string;
-    
+
     const footerContainer = this.dialog.querySelector('#dialog-footer-container') as HTMLElement;
     footerContainer.innerHTML = this.renderFooter() as string;
 

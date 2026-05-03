@@ -14,34 +14,37 @@
  * limitations under the License.
  */
 
+
 export interface DialogOptions {
   maxWidth?: string;
   maxHeight?: string;
   title: string;
   iconSvg?: string;
+  canOpenAsChildDialog?: boolean;
 }
 
 export abstract class BaseDialog<T = void> {
   private static currentOpenDialog: BaseDialog<any> | null = null;
   protected dialog: HTMLDialogElement;
   private resolveRef: ((value: T | null) => void) | null = null;
+  private canOpenAsChildDialog: boolean = false;
 
   constructor(options: DialogOptions) {
     this.dialog = document.createElement('dialog');
-    
+
     // Apply common classes and layout
     const maxWidth = options.maxWidth || 'max-w-md';
     const maxHeight = options.maxHeight || 'max-h-[80vh]';
-    
+
     this.dialog.className = `p-0 m-0 border-none bg-transparent backdrop:bg-transparent fixed inset-0 z-50 w-full h-full max-w-none max-h-none overflow-hidden flex flex-col pointer-events-none dialog-closed`;
-    
+    this.canOpenAsChildDialog = options.canOpenAsChildDialog || false;
     this.renderLayout(options, maxWidth, maxHeight);
     this.attachEventListeners();
   }
 
   private renderLayout(options: DialogOptions, maxWidth: string, maxHeight: string) {
     const iconHtml = options.iconSvg ? `<span class="text-app-accent-2">${options.iconSvg}</span>` : '';
-    
+
     this.dialog.innerHTML = `
       <div class="dialog-backdrop pointer-events-auto"></div>
       <div class="dialog-panel">
@@ -108,7 +111,7 @@ export abstract class BaseDialog<T = void> {
 
   // Unified show method returning a promise
   public async show(): Promise<T | null> {
-    if (BaseDialog.currentOpenDialog) {
+    if (BaseDialog.currentOpenDialog && !this.canOpenAsChildDialog) {
       // Don't open a new one, just shake the existing one
       const content = BaseDialog.currentOpenDialog.dialog.querySelector('.dialog-content') as HTMLElement;
       if (content) {
@@ -122,7 +125,7 @@ export abstract class BaseDialog<T = void> {
 
     document.body.appendChild(this.dialog);
     this.dialog.showModal();
-    
+
     // Trigger transition
     requestAnimationFrame(() => {
       this.dialog.classList.remove('dialog-closed');
