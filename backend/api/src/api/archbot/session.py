@@ -47,6 +47,9 @@ class ArchBotSession(BaseBotSession):
             5. **Test Strategy**: How the changes will be verified (unit tests,
                integration tests, etc.).
 
+            Read the general design documents in the 'design/' directory to learn about
+            established design and architecture principles.
+
             Be straight to the point and lean, but cover the technical challenges.
             Always use the `save_design_doc` tool to finalize your work.
             """)
