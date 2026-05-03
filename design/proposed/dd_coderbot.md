@@ -59,7 +59,7 @@ CoderBot will operate in a temporary directory.
 
 ### 4.2. Tool Parameter Validation
 **Challenge**: LLMs might provide incorrect paths or malformed strings.
-**Decision**: Strict validation in tool functions. Paths must be relative to the sandbox root and cannot escape it.
+**Decision**: Strict validation in tool functions. Paths must be relative to the sandbox root and cannot escape it. We use a `safe_join` utility that resolves paths and verifies they remain within the assigned sandbox directory, explicitly rejecting directory traversal (`..`) and absolute paths.
 
 ### 4.3. Pull Request Creation
 **Challenge**: How to bridge the gap between the sandbox branch and the main repo?

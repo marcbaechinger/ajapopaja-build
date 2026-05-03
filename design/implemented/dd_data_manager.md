@@ -8,15 +8,15 @@ The Data Manager acts as a single source of truth for all domain entities expose
 - **Subscription**: Maintains a map of listeners keyed by a query string (e.g., `pipeline:123`, `task:456`).  Callers register callbacks via `on(query, callback)` and receive notifications when the corresponding data changes.
 - **WebSocket Integration**: Subscribes to real‑time events (`TASK_UPDATED`, `PIPELINE_UPDATED`, `DESIGN_DOC_UPDATED`, bot and process status events).  Upon receiving a message, it updates the cache and triggers the relevant listeners.
 - **Optimistic Updates**: Exposes `updateTask` and `updatePipeline` helpers that mutate the cache immediately and notify listeners, allowing components to reflect changes before server confirmation.
-- **Removal**: Handles deletion of tasks via `removeTask` and propagates deletions to listeners.
-- **Data Conversion**: Wraps raw payloads in domain model instances (`new Task(data)`, `new Pipeline(data)`), ensuring type safety and normalizing fields such as `_id` → `id`.
+- **Removal**: Handles deletion of tasks via `removeTask` and propagates deletions to listeners.  Listeners receive a payload of shape `{ id: string, deleted: true }` which indicates the task has been removed from the cache.
+- **Data Conversion**: Wraps raw payloads in domain model instances (`new Task(data)`, `new Pipeline(data)`), ensuring type safety and normalizing fields such as `_id` ➜ `id`.
 
 ## Integration Points
 - **AppContext**: Instantiated in `AppContext.ts` and exposed as `context.dataManager`.  All views and components import the context to register listeners.
 - **Views**: Replace direct WebSocket handling with `dataManager.on(...)`.  Example:
   ```ts
   this.unsubs.push(this.context.dataManager.on(`pipeline:tasks:${this.pipelineId}`, (taskOrDeleted) => {
-    if (taskOrDeleted.deleted) { ... } else { this.updateSingleTask(taskOrDeleted); }
+    if (taskOrDeleted.deleted) { /* handle deletion */ } else { this.updateSingleTask(taskOrDeleted); }
   }));
   ```
 - **Backend**: No change to API; the Data Manager simply consumes the same WebSocket protocol already defined in the architecture.

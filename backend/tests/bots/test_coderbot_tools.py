@@ -71,3 +71,23 @@ async def test_task_completed_tool(init_mock_db, tmp_path, monkeypatch):
         assert pr.summary == "Done!"
         assert pr.patch == "fake patch"
         mock_helper.cleanup.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_path_validation_invalid_paths(tmp_path, monkeypatch):
+    monkeypatch.setattr("core.config.SANDBOX_ROOT", tmp_path)
+    task_id = "task4"
+
+    # Absolute path
+    res = await tools.write_file("p1", task_id, "/etc/passwd", "evil")
+    assert "Security error" in res
+
+    # Directory traversal
+    res = await tools.write_file("p1", task_id, "../outside.txt", "evil")
+    assert "Security error" in res
+
+    # Valid path should work
+    res = await tools.write_file("p1", task_id, "subdir/ok.txt", "good")
+    assert "Successfully wrote to subdir/ok.txt" in res
+    sandbox_path = (tmp_path / task_id).resolve()
+    assert (sandbox_path / "subdir/ok.txt").exists()

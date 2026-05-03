@@ -26,21 +26,29 @@ from api.assistant.tools.search_tools import (
 from api.websocket_manager import WSMessage, manager as ws_manager
 from core import config
 from core.models.models import Pipeline, PullRequest, PullRequestStatus
+from core.utils.path_utils import safe_join
 
 from .git_helper import SandboxGitHelper
 from .registry import coderbot_registry
 
 
 def _get_sandbox_path(task_id: str) -> Path:
-    return config.SANDBOX_ROOT / task_id
+    sandbox_root = (config.SANDBOX_ROOT / task_id).resolve()
+    # Ensure sandbox root exists
+    sandbox_root.mkdir(parents=True, exist_ok=True)
+    return sandbox_root
 
 
 def _validate_path(task_id: str, relative_path: str) -> Path:
+    """
+    Validates that the path is within the sandbox for the given task.
+    Rejects directory traversal (..) and absolute paths.
+    """
     sandbox_root = _get_sandbox_path(task_id)
-    target_path = (sandbox_root / relative_path).resolve()
-    if not str(target_path).startswith(str(sandbox_root)):
-        raise ValueError(f"Path {relative_path} is outside the sandbox.")
-    return target_path
+    try:
+        return safe_join(sandbox_root, relative_path)
+    except ValueError as e:
+        raise ValueError(f"Security error: {str(e)}")
 
 
 async def write_file(pipeline_id: str, task_id: str, path: str, content: str):
@@ -200,10 +208,10 @@ async def tree(
         depth: Maximum display depth of the directory tree.
         follow_symlinks: If True, follow symbolic links.
     """
-    sandbox_root = _get_sandbox_path(task_id)
-    full_path = (sandbox_root / path).resolve()
-    if not str(full_path).startswith(str(sandbox_root)):
-        return "Error: Invalid path."
+    try:
+        full_path = _validate_path(task_id, path)
+    except ValueError as e:
+        return str(e)
 
     if not os.path.isdir(full_path):
         return f"Error: Directory not found: {path}"

@@ -21,9 +21,7 @@ WORKSPACES_ROOT = Path(
 ).resolve()
 
 # Root directory for bot sandboxes
-SANDBOX_ROOT = Path(
-    os.getenv("SANDBOX_ROOT", "/home/marc-baechinger/.ajapopaja/sandboxes")
-).resolve()
+SANDBOX_ROOT = Path(os.getenv("SANDBOX_ROOT", "/data/ajapopaja/sandboxes")).resolve()
 
 if not WORKSPACES_ROOT.is_dir():
     raise RuntimeError(
