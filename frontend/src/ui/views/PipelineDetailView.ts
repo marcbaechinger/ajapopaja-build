@@ -205,7 +205,7 @@ export class PipelineDetailView extends View {
         const result = p.result;
         if (result?.status === 'no_update_needed') {
           this.docbotState = { status: 'noUpdate', taskId: p.task_id, reason: result.reason };
-        } else {
+        } else if (this.docbotState.status !== 'ready') {
           this.docbotState = { status: 'none', taskId: null };
         }
       },

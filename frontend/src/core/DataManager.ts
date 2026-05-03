@@ -73,14 +73,14 @@ export class DataManager {
   updateTask(task: Task | any): Task | undefined {
     const taskObj = task instanceof Task ? task : new Task(task);
     if (!taskObj.id) return undefined;
-    
+
     this.tasks.set(taskObj.id, taskObj);
     this.notify(`task:${taskObj.id}`, taskObj);
     this.notify(`pipeline:tasks:${taskObj.pipeline_id}`, taskObj);
-    
+
     if (taskObj.design_doc) this.notify(`task:design:${taskObj.id}`, taskObj.design_doc);
     if (taskObj.review_md) this.notify(`task:review:${taskObj.id}`, taskObj.review_md);
-    
+
     return taskObj;
   }
 
@@ -90,7 +90,7 @@ export class DataManager {
   updatePipeline(pipeline: Pipeline | any): Pipeline | undefined {
     const pipelineObj = pipeline instanceof Pipeline ? pipeline : new Pipeline(pipeline);
     if (!pipelineObj.id) return undefined;
-    
+
     this.pipelines.set(pipelineObj.id, pipelineObj);
     this.notify(`pipeline:${pipelineObj.id}`, pipelineObj);
     return pipelineObj;
@@ -161,7 +161,7 @@ export class DataManager {
     });
 
     this.wsClient.on('PIPELINE_UPDATED', msg => this.updatePipeline(msg.payload));
-    
+
     // Process status updates
     const processEvents = [
       'GEMINI_PROCESS_STARTED', 'GEMINI_PROCESS_STOPPED',
@@ -186,21 +186,21 @@ export class DataManager {
 
     // Design doc specific updates
     this.wsClient.on('DESIGN_DOC_UPDATED', msg => {
-       const doc = new DesignDocHistory(msg.payload);
-       if (doc.id) {
-         this.designDocs.set(doc.id, doc);
-         this.notify(`design:${doc.id}`);
-       }
-       if (doc.task_id) {
-         this.notify(`task:design_history:${doc.task_id}`);
-       }
+      const doc = new DesignDocHistory(msg.payload);
+      if (doc.id) {
+        this.designDocs.set(doc.id, doc);
+        this.notify(`design:${doc.id}`);
+      }
+      if (doc.task_id) {
+        this.notify(`task:design_history:${doc.task_id}`);
+      }
     });
-    
+
     // Other bot related updates that should trigger task refresh
     this.wsClient.on('DOCBOT_REVIEW_READY', msg => {
       if (msg.payload?.task_id) this.notify(`task:docbot:${msg.payload.task_id}`);
     });
-    
+
     this.wsClient.on('REVIEWBOT_REVIEW_READY', msg => {
       if (msg.payload?.task_id) this.notify(`task:review:${msg.payload.task_id}`);
     });
@@ -211,7 +211,7 @@ export class DataManager {
       if (msg.payload?.id && msg.payload?.pipeline_id) {
         const task = this.updateTask(msg.payload);
         if (task) {
-           this.notify(`pipeline:tasks:${task.pipeline_id}`, task);
+          this.notify(`pipeline:tasks:${task.pipeline_id}`, task);
         }
       } else if (msg.payload?.task_id) {
         this.notify(`task:design:${msg.payload.task_id}`);
