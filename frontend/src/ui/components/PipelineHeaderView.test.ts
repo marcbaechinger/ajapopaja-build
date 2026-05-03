@@ -37,7 +37,8 @@ describe('PipelineHeaderView', () => {
     docbotState: { status: 'none', taskId: null },
     reviewbotState: { status: 'none', taskId: null },
     user: { username: 'testuser' },
-    allTasks: []
+    allTasks: [],
+    isTwoColumnLayout: false
   };
 
   it('renders pipeline name and status', () => {

@@ -41,11 +41,12 @@ export interface PipelineHeaderViewProps {
   user: any;
   allTasks: Task[];
   gitStatus?: GitStatus;
+  isTwoColumnLayout: boolean;
 }
 
 export class PipelineHeaderView {
   static render(props: PipelineHeaderViewProps): string {
-    const { pipeline, pipelineId, docbotState, reviewbotState, user, allTasks, gitStatus } = props;
+    const { pipeline, pipelineId, docbotState, reviewbotState, user, allTasks, gitStatus, isTwoColumnLayout } = props;
 
     let docbotBannerHtml = '';
     if (docbotState.status === 'inProgress') {
@@ -135,7 +136,7 @@ export class PipelineHeaderView {
         </div>
 
         <div class="flex items-center gap-4">
-          ${HeaderDialogButtons.render(pipelineId)}
+          ${HeaderDialogButtons.render(pipelineId, isTwoColumnLayout)}
           ${UserProfileBadge.render(user)}
         </div>
       </header>

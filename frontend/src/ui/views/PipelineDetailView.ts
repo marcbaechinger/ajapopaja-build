@@ -1154,7 +1154,7 @@ export class PipelineDetailView extends View {
       `;
     }
     return PipelineHeaderView.render({
-      pipeline: this.pipeline,
+      pipeline: this.pipeline!,
       pipelineId: this.pipelineId,
       geminiStatus: this.geminiStatus,
       vibeStatus: this.vibeStatus,
@@ -1162,8 +1162,10 @@ export class PipelineDetailView extends View {
       reviewbotState: this.reviewbotState,
       user: this.context.authService.getUser(),
       allTasks: this.allLoadedTasks,
-      gitStatus: this.gitStatus
+      gitStatus: this.gitStatus,
+      isTwoColumnLayout: this.isTwoColumnLayout
     });
+
   }
 
   private renderPrepColumn(): string {
@@ -1216,28 +1218,11 @@ export class PipelineDetailView extends View {
     `;
   }
 
-  private renderLayoutSwitch(): string {
-    return `
-      <div class="flex items-center bg-app-surface/50 rounded-xl border border-app-border p-1 gap-1">
-        <button data-action-click="toggle_layout" class="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer ${!this.isTwoColumnLayout ? 'bg-app-accent-1 text-white shadow-lg' : 'text-app-muted hover:text-app-text'}" title="Switch to 3-Column Layout">
-          3 Cols
-        </button>
-        <button data-action-click="toggle_layout" class="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer ${this.isTwoColumnLayout ? 'bg-app-accent-1 text-white shadow-lg' : 'text-app-muted hover:text-app-text'}" title="Switch to 2-Column Layout">
-          2 Cols
-        </button>
-      </div>
-    `;
-  }
-
   render() {
     return `
       <div class="max-w-[1800px] mx-auto px-6 py-8 flex flex-col gap-8 min-h-screen">
         <div id="pipeline-header-container">
           ${this.renderHeader()}
-        </div>
-
-        <div class="flex justify-end -mb-4">
-          ${this.renderLayoutSwitch()}
         </div>
 
         <div class="grid grid-cols-1 ${this.isTwoColumnLayout ? 'lg:grid-cols-2' : 'lg:grid-cols-3'} gap-8 items-start flex-grow w-full">

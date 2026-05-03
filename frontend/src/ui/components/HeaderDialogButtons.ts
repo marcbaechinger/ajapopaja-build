@@ -17,7 +17,7 @@
 import { ButtonComponent } from './ButtonComponent.ts';
 
 export class HeaderDialogButtons {
-  static render(pipelineId: string): string {
+  static render(pipelineId: string, isTwoColumnLayout: boolean): string {
     return `
       <div class="flex items-center gap-2">
          ${ButtonComponent.render({
@@ -40,6 +40,13 @@ export class HeaderDialogButtons {
            action: 'open_history',
            icon: '<svg class="w-4 h-4 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>',
            title: 'History (H)'
+         })}
+         <div class="w-px h-4 bg-app-border mx-1"></div>
+         ${ButtonComponent.render({
+           action: 'toggle_layout',
+           className: isTwoColumnLayout ? "bg-app-accent-1/20 border-app-accent-1/50 text-app-accent-1" : "",
+           icon: '<svg class="w-4 h-4 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path></svg>',
+           title: isTwoColumnLayout ? 'Switch to 3-Column Layout' : 'Switch to 2-Column Layout'
          })}
       </div>
     `;
