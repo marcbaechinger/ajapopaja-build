@@ -52,8 +52,6 @@ async def save_review(
     a comprehensive technical assessment of the implemented changes.
 
     Args:
-        pipeline_id: The ID of the pipeline.
-        task_id: The ID of the task being reviewed.
         review_md: The complete review in Markdown format.
     """
     logger.info(f"save_review: Saving review for task {task_id}")

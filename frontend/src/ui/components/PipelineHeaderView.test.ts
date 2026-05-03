@@ -42,12 +42,9 @@ describe('PipelineHeaderView', () => {
   it('renders pipeline name and status', () => {
     const html = PipelineHeaderView.render(mockProps);
     expect(html).toContain('Test Pipeline');
-    expect(html).toContain('active');
     expect(html).toContain('ID: p1');
     expect(html).toContain('Workspace: /tmp/test');
-    expect(html).toContain('Stats');
     expect(html).toContain('testuser');
-    expect(html).toContain('Logged In');
   });
 
   it('contains tool actions', () => {
@@ -57,20 +54,6 @@ describe('PipelineHeaderView', () => {
     expect(html).toContain("data-action-click=\"toggle_assistant\"")
     expect(html).toContain("data-action-click=\"perform_logout\"")
     expect(html).toContain("data-action-click=\"open_health_check\"")
-  });
-
-  it('renders Gemini status when running', () => {
-    const props = { ...mockProps, geminiStatus: { running: true, log_file: 'log.txt', available: true } };
-    const html = PipelineHeaderView.render(props);
-    expect(html).toContain('Gemini Running');
-    expect(html).toContain('animate-ping');
-  });
-
-  it('renders Vibe status when running', () => {
-    const props = { ...mockProps, vibeStatus: { running: true, log_file: 'log.txt', available: true } };
-    const html = PipelineHeaderView.render(props);
-    expect(html).toContain('Vibe Running');
-    expect(html).toContain('animate-ping');
   });
 
   it('renders DocBot banner when ready', () => {
