@@ -23,7 +23,14 @@ from pymongo import AsyncMongoClient
 
 from api.main import app
 from core import config
-from core.models.models import DesignDocHistory, Pipeline, Task, User, UserChat
+from core.models.models import (
+    DesignDocHistory,
+    Pipeline,
+    PullRequest,
+    Task,
+    User,
+    UserChat,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -38,7 +45,8 @@ async def init_mock_db():
     client = AsyncMongoClient(mongodb_uri)
     db = client[test_db_name]
     await init_beanie(
-        database=db, document_models=[Pipeline, Task, DesignDocHistory, User, UserChat]
+        database=db,
+        document_models=[Pipeline, Task, DesignDocHistory, User, UserChat, PullRequest],
     )
     yield test_db_name
     await client.drop_database(test_db_name)

@@ -22,6 +22,8 @@ import { SystemClient } from './clients/SystemClient';
 import { DocBotClient } from './clients/DocBotClient';
 import { ReviewBotClient } from './clients/ReviewBotClient';
 import { ArchBotClient } from './clients/ArchBotClient';
+import { CoderBotClient } from './clients/CoderBotClient';
+import { PullRequestClient } from './clients/PullRequestClient';
 import { EditorClient } from './clients/EditorClient';
 import { WebSocketClient } from './WebSocketClient.ts';
 import { DataManager } from './DataManager.ts';
@@ -45,6 +47,8 @@ export class AppContext {
   public readonly docBotClient: DocBotClient;
   public readonly reviewBotClient: ReviewBotClient;
   public readonly archBotClient: ArchBotClient;
+  public readonly coderBotClient: CoderBotClient;
+  public readonly pullRequestClient: PullRequestClient;
   public readonly editorClient: EditorClient;
   public readonly wsClient: WebSocketClient;
   public readonly dataManager: DataManager;
@@ -62,6 +66,8 @@ export class AppContext {
     this.docBotClient = new DocBotClient(apiBaseUrl, this.authService);
     this.reviewBotClient = new ReviewBotClient(apiBaseUrl, this.authService);
     this.archBotClient = new ArchBotClient(apiBaseUrl, this.authService);
+    this.coderBotClient = new CoderBotClient(this.authService);
+    this.pullRequestClient = new PullRequestClient(this.authService);
     this.editorClient = new EditorClient(apiBaseUrl, this.authService);
     this.wsClient = new WebSocketClient(apiBaseUrl, this.authService);
     this.dataManager = new DataManager(this.wsClient);

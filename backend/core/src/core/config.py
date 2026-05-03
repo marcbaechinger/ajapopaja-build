@@ -20,6 +20,11 @@ WORKSPACES_ROOT = Path(
     os.getenv("WORKSPACES_ROOT", "/home/marc-baechinger/monolit/code")
 ).resolve()
 
+# Root directory for bot sandboxes
+SANDBOX_ROOT = Path(
+    os.getenv("SANDBOX_ROOT", "/home/marc-baechinger/.ajapopaja/sandboxes")
+).resolve()
+
 if not WORKSPACES_ROOT.is_dir():
     raise RuntimeError(
         f"WORKSPACES_ROOT '{WORKSPACES_ROOT}' does not exist or is not a directory. "

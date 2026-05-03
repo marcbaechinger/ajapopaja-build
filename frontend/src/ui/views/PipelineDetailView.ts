@@ -30,6 +30,7 @@ import { PipelineStatsView } from '../components/PipelineStatsView.ts';
 import { PaginationControl } from '../components/PaginationControl.ts';
 import { LogViewerDialog } from '../components/LogViewerDialog.ts';
 import { DocBotDialog } from '../components/DocBotDialog.ts';
+import { PullRequestSection } from '../components/PullRequestSection.ts';
 import type { DocBotDialogProps } from '../components/DocBotDialog.ts';
 import { PipelineEditDialog } from '../components/PipelineEditDialog.ts';
 import { ReviewDialog } from '../components/ReviewDialog.ts';
@@ -74,6 +75,13 @@ export class PipelineDetailView extends View {
     status: 'none',
     taskId: null,
   };
+
+  private coderbotState: { status: 'none' | 'inProgress', taskId: string | null } = {
+    status: 'none',
+    taskId: null,
+  };
+
+  private pullRequests: any[] = [];
 
 
   private columnMetadata: Record<string, { title: string, emptyMessage: string }> = {
@@ -227,6 +235,9 @@ export class PipelineDetailView extends View {
 
       'ARCHBOT_STARTED': (p) => { this.archbotState = { status: 'inProgress', taskId: p.task_id }; },
       'ARCHBOT_COMPLETED': () => { this.archbotState = { status: 'none', taskId: null }; },
+      'CODERBOT_STARTED': (p) => { this.coderbotState = { status: 'inProgress', taskId: p.task_id }; },
+      'CODERBOT_COMPLETED': () => { this.coderbotState = { status: 'none', taskId: null }; },
+      'PULL_REQUEST_CREATED': () => { this.fetchPullRequests(); },
     };
 
     Object.entries(eventHandlers).forEach(([event, handler]) => {
@@ -238,6 +249,15 @@ export class PipelineDetailView extends View {
   }
 
   private docbotPreviewData: any = null;
+
+  private async fetchPullRequests() {
+    try {
+      this.pullRequests = await this.context.pullRequestClient.getPullRequestsByPipeline(this.pipelineId);
+      this.refreshTasks(); // PRs are rendered in the preparation column
+    } catch (error) {
+      console.error('Failed to fetch pull requests:', error);
+    }
+  }
 
   private async fetchDocBotPreview(taskId: string) {
     try {
@@ -328,6 +348,44 @@ export class PipelineDetailView extends View {
       } catch (error) {
         console.error('Trigger ArchBot error:', error);
         alert('Failed to trigger ArchitectureBot');
+      }
+    });
+
+    this.context.actionRegistry.register('trigger_coderbot', async (_e, el) => {
+      const taskId = el.getAttribute('data-task-id');
+      if (!taskId) return;
+
+      try {
+        await this.context.coderBotClient.triggerCoderBot(taskId);
+        this.coderbotState = { status: 'inProgress', taskId };
+        this.updateHeader();
+      } catch (error) {
+        console.error('Trigger CoderBot error:', error);
+        alert('Failed to trigger CoderBot');
+      }
+    });
+
+    this.context.actionRegistry.register('accept_pr', async (_e, el) => {
+      const prId = el.getAttribute('data-pr-id');
+      if (!prId) return;
+
+      try {
+        await this.context.pullRequestClient.acceptPullRequest(prId);
+        this.fetchPullRequests();
+      } catch (error) {
+        alert('Failed to accept Pull Request');
+      }
+    });
+
+    this.context.actionRegistry.register('reject_pr', async (_e, el) => {
+      const prId = el.getAttribute('data-pr-id');
+      if (!prId) return;
+
+      try {
+        await this.context.pullRequestClient.rejectPullRequest(prId);
+        this.fetchPullRequests();
+      } catch (error) {
+        alert('Failed to reject Pull Request');
       }
     });
 
@@ -930,6 +988,7 @@ export class PipelineDetailView extends View {
       }
       this.geminiStatus = await this.context.pipelineClient.getGeminiStatus(this.pipelineId);
       this.vibeStatus = await this.context.pipelineClient.getVibeStatus(this.pipelineId);
+      this.fetchPullRequests();
       this.scheduleRefreshGitStatus();
       this.updateHeader();
     } catch (error) {
@@ -1014,6 +1073,7 @@ export class PipelineDetailView extends View {
 
       // 1. Render Preparation Column
       prepContainer.innerHTML = `
+        ${PullRequestSection.render(this.pullRequests)}
         ${TaskColumn.render({
         id: 'proposed',
         title: 'Proposed',

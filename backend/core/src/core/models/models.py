@@ -166,3 +166,23 @@ class UserChat(Document):
 
     class Settings:
         name = "assistant_chats"
+
+
+class PullRequestStatus(str, Enum):
+    OPEN = "open"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+
+
+class PullRequest(Document):
+    pipeline_id: str
+    task_id: str
+    summary: str
+    branch_name: str
+    patch: str  # The git diff output
+    status: PullRequestStatus = PullRequestStatus.OPEN
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    class Settings:
+        name = "pull_requests"

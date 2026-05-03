@@ -96,6 +96,11 @@ export class TaskItem {
                      ${Icon.render('quickfix', { size: 14, className: 'group-hover/quickfix:scale-110 transition-transform' })}
                   </button>
                 ` : ''}
+                ${canUnschedule ? `
+                  <button data-action-click="trigger_coderbot" data-task-id="${taskId}" class="p-1 hover:bg-app-surface text-app-muted hover:text-green-500 rounded transition-all cursor-pointer group/coderbot" title="Trigger CoderBot">
+                     ${Icon.render('lightning', { size: 12, className: 'group-hover/coderbot:scale-110 transition-transform' })}
+                  </button>
+                ` : ''}
                 ${isImplemented ? (
         task.review_md
           ? `

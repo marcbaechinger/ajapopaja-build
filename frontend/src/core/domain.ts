@@ -157,6 +157,41 @@ export class Pipeline {
   }
 }
 
+export const PullRequestStatus = {
+  OPEN: "open",
+  ACCEPTED: "accepted",
+  REJECTED: "rejected",
+} as const;
+
+export type PullRequestStatus = typeof PullRequestStatus[keyof typeof PullRequestStatus];
+
+export class PullRequest {
+  id?: string;
+  pipeline_id: string = '';
+  task_id: string = '';
+  summary: string = '';
+  branch_name: string = '';
+  patch: string = '';
+  status: PullRequestStatus = PullRequestStatus.OPEN;
+  created_at?: string;
+  updated_at?: string;
+
+  constructor(json: any) {
+    if (!json) return;
+    if (json._id) this.id = json._id;
+    if (json.id) this.id = json.id;
+    if (json.pipeline_id !== undefined) this.pipeline_id = String(json.pipeline_id);
+    if (json.task_id !== undefined) this.task_id = String(json.task_id);
+    if (json.summary !== undefined) this.summary = String(json.summary);
+    if (json.branch_name !== undefined) this.branch_name = String(json.branch_name);
+    if (json.patch !== undefined) this.patch = String(json.patch);
+    if (json.status !== undefined) this.status = json.status as PullRequestStatus;
+    if (json.created_at !== undefined) this.created_at = String(json.created_at);
+    if (json.updated_at !== undefined) this.updated_at = String(json.updated_at);
+  }
+}
+
+
 export interface User {
   id?: string;
   username: string;
