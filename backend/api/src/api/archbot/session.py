@@ -82,6 +82,12 @@ class ArchBotSession(BaseBotSession):
                 )
             )
         elif event_name == "bot_completed":
-            # COMPLETED is also sent by save_design_doc, but we ensure it's sent here if not already.
-            # Actually save_design_doc sends it. But if max_iterations is reached, we should know.
-            pass
+            # Broadcast completion to clear banners/status in UI.
+            # Note: save_design_doc also broadcasts this, but we do it here as a safety measure
+            # to ensure the UI is notified even if the tool wasn't called or failed.
+            await manager.broadcast(
+                WSMessage(
+                    type="ARCHBOT_COMPLETED",
+                    payload={"pipeline_id": self.pipeline_id, "task_id": self.task_id},
+                )
+            )

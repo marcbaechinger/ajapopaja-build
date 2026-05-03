@@ -49,3 +49,27 @@ async def test_archbot_session_tools(init_mock_db):
     assert "save_design_doc" in tool_names
     assert "grep" in tool_names
     assert "read_source_file" in tool_names
+
+
+@pytest.mark.asyncio
+async def test_archbot_session_events(init_mock_db):
+    from unittest.mock import AsyncMock, patch
+
+    session = ArchBotSession(pipeline_id="p1", task_id="t1")
+
+    with patch(
+        "api.archbot.session.manager.broadcast", new_callable=AsyncMock
+    ) as mock_broadcast:
+        # Test bot_started
+        await session.on_event("bot_started")
+        mock_broadcast.assert_called_once()
+        msg = mock_broadcast.call_args[0][0]
+        assert msg.type == "ARCHBOT_STARTED"
+
+        mock_broadcast.reset_mock()
+
+        # Test bot_completed
+        await session.on_event("bot_completed")
+        mock_broadcast.assert_called_once()
+        msg = mock_broadcast.call_args[0][0]
+        assert msg.type == "ARCHBOT_COMPLETED"
