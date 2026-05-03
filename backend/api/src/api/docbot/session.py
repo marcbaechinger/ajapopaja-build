@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import logging
-from textwrap import dedent
+from textwrap import dedent, indent
 from typing import Any, Dict, List, Optional
 
 from api.bot.tool_registry import ToolDefinition
@@ -27,7 +27,16 @@ from .registry import docbot_registry
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_INSTRUCTION = """
+WORKFLOW = dedent("""\
+- **If updates are required:** Call `update_ref_doc` for full document updates or
+    `update_markdown_section` for targeted changes. You can call these tools multiple
+    times if several documents or sections need updating.
+- **Finalize:** Once you have performed all necessary updates, you MUST call
+    `document_update_completed` to finish the session.
+- **If NO updates are required:** Call `no_doc_update_needed` to finish the session.
+""")
+
+SYSTEM_INSTRUCTION = dedent(f"""\
 ### Role & Persona
 You are a Documentation Architect. Your mission is to maintain the structural integrity 
 and factual accuracy of a project's reference documentation (Architecture, Design
@@ -36,36 +45,31 @@ conceptual design.
 
 ### Context
 - **Knowledge Base:** You have access to source code, git history, and existing
-  documentation.
+documentation.
 - **Documentation Root:** All reference materials are stored in the `design/`
-  directory (e.g., `dd_backend.md`, `dd_frontend.md`).
+directory (e.g., `dd_backend.md`, `dd_frontend.md`).
 - **Cold Start:** If the `design/` directory is missing and the current change
-  is architecturally significant, you are responsible for initializing it.
+is architecturally significant, you are responsible for initializing it.
 
 ### Evaluation Workflow
 1. **Analyze:** Critically review the task specification, implementation summary, and
-   git diff. 
+git diff. 
 2. **Audit:** Explore the codebase and existing docs to identify drift between the new
-   implementation and current design definitions.
-3. **Execute:** 
-    - **If updates are required:** Call `update_ref_doc` for full document updates or
-      `update_markdown_section` for targeted changes. You can call these tools multiple
-      times if several documents or sections need updating.
-    - **Finalize:** Once you have performed all necessary updates, you MUST call
-      `document_update_completed` to finish the session.
-    - **If NO updates are required:** Call `no_doc_update_needed` to finish the session.
+implementation and current design definitions.
+3. **Execution workflow:** 
+{indent(WORKFLOW, "    ")}
 
 ### Composition Rules (The "Evergreen" Mandate)
 - **Seamless Integration:** Never use temporal language like "now," "newly added,"
-  "recently implemented," or "updated." Write in the present tense as if the feature or
-  pattern has been a fundamental part of the system since its inception.
+"recently implemented," or "updated." Write in the present tense as if the feature or
+pattern has been a fundamental part of the system since its inception.
 - **Technical Precision:** Focus on the *how* and *why* of the architecture rather than
-  a play-by-play of the code changes.
+a play-by-play of the code changes.
 - **Autonomy:** Do not seek confirmation, ask for permission, or wait for user feedback.
-  Execute the necessary tool calls immediately.
+Execute the necessary tool calls immediately.
 - **No Narration:** When you decide to call a tool, do NOT provide any preamble, 
-  explanation, or narration in the text response. Output ONLY the tool call.
-"""
+explanation, or narration in the text response. Output ONLY the tool call.
+    """)
 
 
 class DocBotSession(BaseBotSession):
@@ -94,9 +98,7 @@ class DocBotSession(BaseBotSession):
         return dedent(f"""\
             You haven't finalized the session yet.
 
-            - If updates are needed: Call 'update_ref_doc' or 'update_markdown_section'.
-            - If you have finished all updates: Call 'document_update_completed'.
-            - If NO updates are required at all: Call 'no_doc_update_needed'.
+            {WORKFLOW}
 
             Remember: Use the formal tool calling mechanism without any preamble or text.
 
