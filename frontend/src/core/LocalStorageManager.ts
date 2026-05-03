@@ -20,7 +20,11 @@ export class LocalStorageManager {
   private prefix: string;
 
   private constructor(prefix: string) {
-    this.prefix = prefix;
+    const trimmedPrefix = prefix.trim();
+    if (!trimmedPrefix) {
+      throw new Error('LocalStorageManager: prefix cannot be empty.');
+    }
+    this.prefix = trimmedPrefix;
     if (typeof window !== 'undefined' && window.localStorage) {
       this.storage = window.localStorage;
     } else {
@@ -33,10 +37,15 @@ export class LocalStorageManager {
   }
 
   static getInstance(prefix: string = 'app'): LocalStorageManager {
-    if (!this.instances.has(prefix)) {
-      this.instances.set(prefix, new LocalStorageManager(prefix));
+    const trimmedPrefix = prefix.trim();
+    if (!trimmedPrefix) {
+      throw new Error('LocalStorageManager: prefix cannot be empty.');
     }
-    return this.instances.get(prefix)!;
+
+    if (!this.instances.has(trimmedPrefix)) {
+      this.instances.set(trimmedPrefix, new LocalStorageManager(trimmedPrefix));
+    }
+    return this.instances.get(trimmedPrefix)!;
   }
 
   static resetInstances(): void {

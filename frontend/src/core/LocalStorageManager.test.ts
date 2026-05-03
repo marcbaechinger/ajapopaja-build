@@ -91,4 +91,17 @@ describe('LocalStorageManager', () => {
     // Restore
     vi.unstubAllGlobals();
   });
+
+  it('should throw error for empty or whitespace-only prefix', () => {
+    expect(() => LocalStorageManager.getInstance('')).toThrow('LocalStorageManager: prefix cannot be empty.');
+    expect(() => LocalStorageManager.getInstance('   ')).toThrow('LocalStorageManager: prefix cannot be empty.');
+  });
+
+  it('should trim prefix during instantiation', () => {
+    const manager = LocalStorageManager.getInstance('  trimmed  ');
+    manager.put('foo', 123);
+    
+    // Key should be 'trimmed:foo' not '  trimmed  :foo'
+    expect(localStorage.getItem('trimmed:foo')).toBe('123');
+  });
 });
