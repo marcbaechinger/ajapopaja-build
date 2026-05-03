@@ -90,6 +90,25 @@ class BaseBotSession(ABC):
             Current task ID: {task_id}
             """)
 
+    def get_turn_warning(self, remaining: int) -> Optional[str]:
+        """
+        Return a warning message when the number of remaining turns is low.
+
+        Args:
+            remaining: How many turns are left after the current iteration.
+
+        Returns:
+            A warning string for 5 or 1 turns left, otherwise None.
+        """
+        if remaining == 5:
+            return "Only 5 calls left. Please call the terminating tool asap."
+        if remaining == 1:
+            return (
+                "Only 1 call left. Call the terminating tool NOW or the loop "
+                "will end without a result."
+            )
+        return None
+
     async def on_event(self, event_name: str, payload: Optional[Dict[str, Any]] = None):
         """Lifecycle event hook."""
         pass
@@ -232,6 +251,13 @@ class BaseBotSession(ABC):
                             f"{self.__class__.__name__} finished with terminal call."
                         )
                         return
+
+                    remaining_turns = max_iterations - (i + 1)
+                    if remaining_turns > 0:
+                        warning = self.get_turn_warning(remaining_turns)
+                        if warning:
+                            # Inject as a user message so the LLM can react
+                            self.history.append({"role": "user", "content": warning})
 
                 except Exception as e:
                     logger.error(f"Ollama chat error: {e}")

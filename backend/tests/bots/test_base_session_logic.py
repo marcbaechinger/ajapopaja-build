@@ -13,10 +13,11 @@
 # limitations under the License.
 
 import json
-from typing import List
+from typing import List, Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from ollama import Message
 
 from api.bot.base_session import BaseBotSession
 from api.bot.tool_registry import ToolDefinition, ToolRegistry
@@ -26,11 +27,16 @@ class ConcreteBotSession(BaseBotSession):
     """A concrete implementation of BaseBotSession for testing."""
 
     def __init__(
-        self, pipeline_id: str, task_id: str, use_custom_feedback: bool = False
+        self,
+        pipeline_id: str,
+        task_id: str,
+        use_custom_feedback: bool = False,
+        use_custom_step_warnings: bool = False,
     ):
         super().__init__(pipeline_id, task_id)
         self.pipeline_and_task_id_args = []
         self.use_custom_feedback = use_custom_feedback
+        self.user_custom_step_warning = use_custom_step_warnings
 
     def get_system_instruction(self) -> str:
         return "Test instruction"
@@ -74,6 +80,13 @@ class ConcreteBotSession(BaseBotSession):
             "Custom feedback"
             if self.use_custom_feedback
             else super().get_default_feedback(pipeline_id, task_id, assistant_message)
+        )
+
+    def get_turn_warning(self, remaining: int) -> Optional[str]:
+        return (
+            "Custom step warning"
+            if self.user_custom_step_warning
+            else super().get_turn_warning(remaining=remaining)
         )
 
 
@@ -252,6 +265,70 @@ async def test_base_session_execute_tool():
 
         result = await session._execute_tool("test_tool", {"param1": "x"})
         assert "Error: ValueError - Test crash" in result
+
+
+@pytest.mark.asyncio
+async def test_base_session_iteration_limit_warnings():
+    session = ConcreteBotSession("p1", "t1")
+
+    mock_response = MagicMock()
+    mock_response.message.content = None
+    mock_response.message.tool_calls = [
+        Message.ToolCall(
+            function=Message.ToolCall.Function(
+                name="test_tool", arguments={"param1": "zurich"}
+            )
+        ),
+    ]
+
+    with patch.object(session.client, "chat") as mock_chat:
+        mock_chat.side_effect = lambda *args, **kwargs: AsyncIter([mock_response])
+
+        await session.run(max_iterations=20)
+
+        assert mock_chat.call_count == 20
+        first_call = mock_chat.call_args_list[-1]
+        messages_sent_to_chat = first_call.kwargs["messages"]
+        left_5_found = False
+        last_found = False
+        for msg in messages_sent_to_chat:
+            if "Only 5 calls left" in msg["content"]:
+                left_5_found = True
+            elif "Only 1 call left" in msg["content"]:
+                last_found = True
+
+        assert left_5_found
+        assert last_found
+
+
+@pytest.mark.asyncio
+async def test_base_session_iteration_limit_custom_warnings():
+    session = ConcreteBotSession("p1", "t1", use_custom_step_warnings=True)
+
+    mock_response = MagicMock()
+    mock_response.message.content = None
+    mock_response.message.tool_calls = [
+        Message.ToolCall(
+            function=Message.ToolCall.Function(
+                name="test_tool", arguments={"param1": "zurich"}
+            )
+        ),
+    ]
+
+    with patch.object(session.client, "chat") as mock_chat:
+        mock_chat.side_effect = lambda *args, **kwargs: AsyncIter([mock_response])
+
+        await session.run(max_iterations=20)
+
+        assert mock_chat.call_count == 20
+        first_call = mock_chat.call_args_list[-1]
+        messages_sent_to_chat = first_call.kwargs["messages"]
+        custom_warning_found = False
+        for msg in messages_sent_to_chat:
+            if "Custom step warning" in msg["content"]:
+                custom_warning_found = True
+
+        assert custom_warning_found
 
 
 @pytest.mark.asyncio
