@@ -16,7 +16,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DataManager } from './DataManager';
-import { Task, Pipeline } from './domain';
+import { Task } from './domain';
 
 describe('DataManager Robustness & Complex Events', () => {
   let wsClient: any;
