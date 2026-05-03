@@ -21,6 +21,7 @@ from api.assistant.tools.file_tools import (
     read_source_file_by_range,
 )
 from api.assistant.tools.search_tools import grep, find, tree
+from api.websocket_manager import WSMessage, manager
 from core.queries import task as task_queries
 
 from .registry import archbot_registry
@@ -79,6 +80,13 @@ async def save_design_doc(
                 "task_id": task_id,
             }
 
+        # WebSocket notification
+        await manager.broadcast(
+            WSMessage(
+                type="ARCHBOT_COMPLETED",
+                payload={"pipeline_id": pipeline_id, "task_id": task_id},
+            )
+        )
         logger.info(f"save_design_doc: Design doc saved and notified for {task_id}")
         return f"Successfully saved design document for task {task_id}."
     except Exception as e:
