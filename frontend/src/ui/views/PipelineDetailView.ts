@@ -55,7 +55,10 @@ export class PipelineDetailView extends View {
   private completedPageSize: number = 5;
   private keydownHandler: ((e: KeyboardEvent) => void) | null = null;
   private gitStatus: GitStatus | undefined = undefined;
-  
+  private gitStatusRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private gitStatusRefreshInProgress: boolean = false;
+  private gitStatusRefreshPending: boolean = false;
+
   private docbotState: DocbotState = {
     status: 'none',
     taskId: null,
@@ -185,7 +188,7 @@ export class PipelineDetailView extends View {
         const task = taskOrDeleted as Task;
         this.updateSingleTask(task);
         if (task.status === TaskStatus.IMPLEMENTED) {
-          this.refreshGitStatus();
+          this.scheduleRefreshGitStatus();
         }
       }
       this.updateHeader();
@@ -883,7 +886,7 @@ export class PipelineDetailView extends View {
       const btn = el as HTMLElement;
       btn.classList.add('animate-pulse', 'border-app-accent-2');
       try {
-        await this.refreshGitStatus();
+        this.scheduleRefreshGitStatus();
       } finally {
         setTimeout(() => btn.classList.remove('animate-pulse', 'border-app-accent-2'), 500);
       }
@@ -912,20 +915,41 @@ export class PipelineDetailView extends View {
       }
       this.geminiStatus = await this.context.pipelineClient.getGeminiStatus(this.pipelineId);
       this.vibeStatus = await this.context.pipelineClient.getVibeStatus(this.pipelineId);
-      this.refreshGitStatus();
+      this.scheduleRefreshGitStatus();
       this.updateHeader();
     } catch (error) {
       console.error('Error loading pipeline:', error);
     }
   }
 
-  private async refreshGitStatus() {
-     try {
-        this.gitStatus = await this.context.systemClient.getGitStatus(this.pipelineId);
-        this.updateHeader();
-     } catch (error) {
-        console.error('Failed to refresh git status:', error);
-     }
+  private scheduleRefreshGitStatus() {
+    if (this.gitStatusRefreshInProgress) {
+      this.gitStatusRefreshPending = true;
+      return;
+    }
+    if (this.gitStatusRefreshTimer) {
+      return; // Already scheduled
+    }
+    this.gitStatusRefreshTimer = setTimeout(() => {
+      this.gitStatusRefreshTimer = null;
+      this.refreshGitStatusInternal();
+    }, 500);
+  }
+
+  private async refreshGitStatusInternal() {
+    this.gitStatusRefreshInProgress = true;
+    try {
+      this.gitStatus = await this.context.systemClient.getGitStatus(this.pipelineId);
+      this.updateHeader();
+    } catch (error) {
+      console.error('Failed to refresh git status:', error);
+    } finally {
+      this.gitStatusRefreshInProgress = false;
+      if (this.gitStatusRefreshPending) {
+        this.gitStatusRefreshPending = false;
+        this.scheduleRefreshGitStatus();
+      }
+    }
   }
 
   async refreshTasks() {
