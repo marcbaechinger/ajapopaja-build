@@ -76,19 +76,27 @@ describe('LocalStorageManager', () => {
     expect(otherManager.exists('k3')).toBe(true);
   });
 
-  it('should fallback to Map if localStorage is unavailable', () => {
-    // Save original localStorage
-    const originalLocalStorage = window.localStorage;
-    
-    // Mock window.localStorage to be undefined
+  it('should fallback to Map if localStorage is unavailable (Exhaustive)', () => {
+    // 1. Reset state
+    LocalStorageManager.resetInstances();
+    localStorage.clear();
+
+    // 2. Stub environment (simulate no localStorage)
     vi.stubGlobal('localStorage', undefined);
     
-    // Create a new instance (since it's singleton based on prefix, we use a new prefix)
-    const manager = LocalStorageManager.getInstance('fallback');
-    manager.put('foo', 'bar');
-    expect(manager.get('foo')).toBe('bar');
+    // 3. Instantiate with a unique prefix
+    const manager = LocalStorageManager.getInstance('fallback-exhaustive');
     
-    // Restore
+    // 4. Exercise API
+    manager.put('test-key', { data: 'passed' });
+    expect(manager.get('test-key')).toEqual({ data: 'passed' });
+    expect(manager.exists('test-key')).toBe(true);
+    
+    manager.remove('test-key');
+    expect(manager.exists('test-key')).toBe(false);
+    expect(manager.get('test-key')).toBeNull();
+
+    // 5. Verify cleanup
     vi.unstubAllGlobals();
   });
 
