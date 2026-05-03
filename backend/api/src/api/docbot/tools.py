@@ -355,12 +355,14 @@ class MarkdownEditor:
             new_section_lines[-1] += "\n"
 
         # Check if new section starts with a same-level header
-        first_line_match = (
-            re.match(r"^(#+)\s+", new_section_lines[0]) if new_section_lines else None
-        )
-        if not (first_line_match and len(first_line_match.group(1)) == level):
-            # Prepend the heading
-            new_section_lines.insert(0, heading + "\n")
+        if new_section_lines:
+            first_line_match = re.match(r"^(#+)\s+", new_section_lines[0])
+            if first_line_match and len(first_line_match.group(1)) == level:
+                # Strip the header line from the supplied section
+                new_section_lines.pop(0)
+
+        # Always prepend the definitive heading
+        new_section_lines.insert(0, heading + "\n")
 
         # Perform the replacement
         self.lines = self.lines[:start_idx] + new_section_lines + self.lines[end_idx:]
@@ -390,8 +392,9 @@ async def update_markdown_section(
         markdown_heading: The exact header of the section to replace (e.g.,
                           '## 2. File structure'). Must match a heading in the doc.
         markdown_section: The new content for this section. If it starts with a
-                          heading of the same level, it is used as is. If not,
-                          'markdown_heading' is prepended.
+                          heading of the same level, that heading is stripped and
+                          'markdown_heading' is used instead. If it does not start
+                          with a heading, 'markdown_heading' is prepended.
         reason: A concise technical explanation for this specific section update.
     """
     fname = filename or kwargs.get("path")
