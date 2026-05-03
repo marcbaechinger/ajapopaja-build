@@ -57,6 +57,7 @@ export class TaskItem {
     const specHtml = renderSpecSection(task, isSpecExpanded);
     const designDocHtml = renderDesignDocSection(task, isProposed);
 
+    const titleEditAttributes: Record<string, string> = isEditableTitle ? { "data-action-click": "edit_title" } : {};
     return `
       <div class="bg-app-bg p-4 rounded-lg border border-app-border flex flex-col gap-3 transition-all hover:border-app-accent-1/30 ${isSystem ? 'border-l-4 border-l-red-500' : ''} ${isProposed ? 'border-purple-500/50 shadow-lg shadow-purple-500/10' : ''}" 
            data-view-type="task" data-view-id="${taskId}">
@@ -66,10 +67,9 @@ export class TaskItem {
               ${Icon.render('chevronRight', { size: 16, className: `transform transition-transform ${isCollapsed ? '' : 'rotate-90'}` })}
             </div>
             <div class="title-container flex flex-col" data-task-id="${taskId}" data-version="${task.version}">
-              <div class="title-view flex items-center gap-2 ${isEditableTitle ? 'cursor-pointer group/title' : ''}" 
-                   ${isEditableTitle ? 'data-action-click="edit_title"' : ''}>
+              <div class="title-view flex items-center gap-2 ${isEditableTitle ? 'cursor-pointer group/title' : ''}">
                 <span class="font-medium text-app-text text-lg">${task.title}</span>
-                ${isEditableTitle ? Icon.render('edit', { size: 12, className: 'text-app-muted opacity-0 group-hover/title:opacity-100 transition-opacity' }) : ''}
+                ${isEditableTitle ? Icon.render('edit', { size: 12, dataAttrs: titleEditAttributes, className: 'text-app-muted opacity-0 group-hover/title:opacity-100 transition-opacity' }) : ''}
               </div>
               ${isEditableTitle ? `
                 <div class="title-edit hidden flex flex-col gap-2 mt-1">
@@ -97,8 +97,8 @@ export class TaskItem {
                   </button>
                 ` : ''}
                 ${isImplemented ? (
-                  task.review_md 
-                    ? `
+        task.review_md
+          ? `
                       <button data-action-click="open_review_dialog" data-task-id="${taskId}" class="p-1 hover:bg-app-surface text-app-accent-2 hover:text-app-accent-2/80 rounded transition-all cursor-pointer group/review relative" title="View Technical Review">
                         ${Icon.render('documentation', { size: 12, className: 'group-hover/review:scale-110 transition-transform' })}
                         <span class="absolute -top-1 -right-1 flex h-1.5 w-1.5">
@@ -107,12 +107,12 @@ export class TaskItem {
                         </span>
                       </button>
                     `
-                    : `
+          : `
                       <button data-action-click="trigger_reviewbot" data-task-id="${taskId}" class="p-1 hover:bg-app-surface text-app-muted hover:text-app-accent-2 rounded transition-all cursor-pointer group/review" title="Trigger Technical Review">
                         ${Icon.render('check', { size: 12, className: 'group-hover/review:scale-110 transition-transform' })}
                       </button>
                     `
-                ) : ''}
+      ) : ''}
                 ${isImplemented ? '' : `
                   <span class="text-[10px] text-app-muted font-bold uppercase tracking-wider ml-1">Order: ${task.order} ${isSystem ? '• System Task' : ''}</span>
                 `}
