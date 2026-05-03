@@ -82,7 +82,9 @@ class BaseBotSession(ABC):
         if remaining == 1:
             return (
                 "Only 1 call left. Call the terminating tool NOW or the "
-                "execution loop ends without a result."
+                "execution loop ends without a result.\n\n"
+                f"pipeline ID: {self.pipeline_id}\n"
+                f"task ID: {self.task_id}\n"
             )
         return None
 
@@ -109,25 +111,6 @@ class BaseBotSession(ABC):
             Current pipeline ID: {pipeline_id}
             Current task ID: {task_id}
             """)
-
-    def get_turn_warning(self, remaining: int) -> Optional[str]:
-        """
-        Return a warning message when the number of remaining turns is low.
-
-        Args:
-            remaining: How many turns are left after the current iteration.
-
-        Returns:
-            A warning string for 5 or 1 turns left, otherwise None.
-        """
-        if remaining == 5:
-            return "Only 5 calls left. Please call the terminating tool asap."
-        if remaining == 1:
-            return (
-                "Only 1 call left. Call the terminating tool NOW or the loop "
-                "will end without a result."
-            )
-        return None
 
     async def on_event(self, event_name: str, payload: Optional[Dict[str, Any]] = None):
         """Lifecycle event hook."""

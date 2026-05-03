@@ -95,7 +95,8 @@ class ConcreteBotSession(BaseBotSession):
         """
         if remaining == 5:
             return (
-                "Only 5 custom warning"
+                f"Only 5 custom warning.\npipeline ID: "
+                f"{self.pipeline_id}\ntask ID: {self.task_id}"
                 if self.use_custom_turn_warning
                 else super().get_turn_warning(remaining)
             )
@@ -270,7 +271,7 @@ async def test_base_session_custom_text_reponse():
             if msg["role"] == "user":
                 if turns == 0:
                     assert msg["content"] == "Test prompt"
-                else:
+                elif turns == 1:
                     assert msg["content"] == "Custom feedback"
                 turns += 1
 
@@ -381,7 +382,7 @@ async def test_base_session_iteration_limit_warnings():
 
 @pytest.mark.asyncio
 async def test_base_session_iteration_limit_custom_warnings():
-    session = ConcreteBotSession("p1", "t1", use_custom_step_warnings=True)
+    session = ConcreteBotSession("p1", "t1", use_custom_turn_warning=True)
 
     mock_response = MagicMock()
     mock_response.message.content = None
@@ -403,7 +404,7 @@ async def test_base_session_iteration_limit_custom_warnings():
         messages_sent_to_chat = first_call.kwargs["messages"]
         custom_warning_found = False
         for msg in messages_sent_to_chat:
-            if "Custom step warning" in msg["content"]:
+            if "custom warning" in msg["content"]:
                 custom_warning_found = True
 
         assert custom_warning_found
