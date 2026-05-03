@@ -74,15 +74,17 @@ describe('DataManager', () => {
     expect(callback).toHaveBeenCalled();
   });
 
-  it('should handle task removal', () => {
+  it('should handle task removal and pass deletion info', () => {
     dataManager.updateTask({ id: '789', pipeline_id: 'p1' });
     const callback = vi.fn();
     dataManager.on('task:789', callback);
+    dataManager.on('pipeline:tasks:p1', callback);
 
     dataManager.removeTask('789');
 
     expect(dataManager.getTask('789')).toBeUndefined();
-    expect(callback).toHaveBeenCalled();
+    expect(callback).toHaveBeenCalledWith({ id: '789', deleted: true });
+    expect(callback).toHaveBeenCalledTimes(2);
   });
 
   it('should handle pipeline updates', () => {

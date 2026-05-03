@@ -190,6 +190,8 @@ export class PipelineDetailView extends View {
 
     // Listen for task updates (created, updated, moved, deleted)
     this.unsubs.push(dm.on(`pipeline:tasks:${this.pipelineId}`, (taskOrDeleted: any) => {
+      if (!taskOrDeleted) return;
+
       if (taskOrDeleted.deleted) {
         this.removeTaskFromDOM(taskOrDeleted.id);
         this.allLoadedTasks = this.allLoadedTasks.filter(t => t.id !== taskOrDeleted.id);

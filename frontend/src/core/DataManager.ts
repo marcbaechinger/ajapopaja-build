@@ -103,8 +103,9 @@ export class DataManager {
     const task = this.tasks.get(taskId);
     if (task) {
       this.tasks.delete(taskId);
-      this.notify(`task:${taskId}`);
-      this.notify(`pipeline:tasks:${task.pipeline_id}`);
+      const deletionInfo = { id: taskId, deleted: true };
+      this.notify(`task:${taskId}`, deletionInfo);
+      this.notify(`pipeline:tasks:${task.pipeline_id}`, deletionInfo);
     }
   }
 

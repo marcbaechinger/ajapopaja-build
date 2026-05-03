@@ -113,7 +113,7 @@ describe('DataManager Robustness & Complex Events', () => {
     emit('TASK_DELETED', { task_id: 't1', pipeline_id: 'p1' });
 
     expect(dataManager.getTask('t1')).toBeUndefined();
-    expect(taskCb).toHaveBeenCalledWith(undefined);
+    expect(taskCb).toHaveBeenCalledWith({ id: 't1', deleted: true });
     expect(pipeTasksCb).toHaveBeenCalledWith({ id: 't1', deleted: true });
   });
 
