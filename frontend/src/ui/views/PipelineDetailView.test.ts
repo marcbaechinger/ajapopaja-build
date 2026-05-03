@@ -175,8 +175,8 @@ describe('PipelineDetailView Review Notifications', () => {
     expect(wsHandler).toBeDefined();
 
     // Trigger two events
-    wsHandler({ task_id: 't1' });
-    wsHandler({ task_id: 't2' });
+    wsHandler({ id: 't1', pipeline_id: 'p1' });
+    wsHandler({ id: 't2', pipeline_id: 'p1' });
 
     // Internal state should have them
     expect((view as any).pendingReviews).toEqual(['t1', 't2']);

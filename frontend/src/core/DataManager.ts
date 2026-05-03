@@ -202,7 +202,15 @@ export class DataManager {
     });
 
     this.wsClient.on('REVIEWBOT_REVIEW_READY', msg => {
-      if (msg.payload?.task_id) this.notify(`task:review:${msg.payload.task_id}`);
+      // If payload is a full task object (has id and pipeline_id), update it.
+      if (msg.payload?.id && msg.payload?.pipeline_id) {
+        const task = this.updateTask(msg.payload);
+        if (task) {
+          this.notify(`pipeline:tasks:${task.pipeline_id}`, task);
+        }
+      } else if (msg.payload?.task_id) {
+        this.notify(`task:review:${msg.payload.task_id}`);
+      }
     });
 
     this.wsClient.on('ARCHBOT_COMPLETED', msg => {

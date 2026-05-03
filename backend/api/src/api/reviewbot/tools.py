@@ -81,7 +81,7 @@ async def save_review(
         await manager.broadcast(
             WSMessage(
                 type="REVIEWBOT_REVIEW_READY",
-                payload={"pipeline_id": pipeline_id, "task_id": task_id},
+                payload=task.model_dump(mode="json"),
             )
         )
         logger.info(f"save_review: Review saved and notified for {task_id}")

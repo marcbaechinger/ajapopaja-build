@@ -219,8 +219,9 @@ export class PipelineDetailView extends View {
       'REVIEWBOT_COMPLETED': () => { this.reviewbotState = { status: 'none', taskId: null }; },
       'REVIEWBOT_REVIEW_READY': (p) => {
         this.reviewbotState = { status: 'none', taskId: null };
-        if (p.task_id && !this.pendingReviews.includes(p.task_id)) {
-          this.pendingReviews.push(p.task_id);
+        const taskId = p.id || p._id || p.task_id;
+        if (taskId && !this.pendingReviews.includes(taskId)) {
+          this.pendingReviews.push(taskId);
         }
       },
 
@@ -239,52 +240,52 @@ export class PipelineDetailView extends View {
   private docbotPreviewData: any = null;
 
   private async fetchDocBotPreview(taskId: string) {
-     try {
-        const response = await fetch(`/api/pipelines/${this.pipelineId}/docbot/preview/${taskId}`, {
-          headers: {
-            'Authorization': `Bearer ${this.context.authService.getAccessToken()}`
-          }
-        });
-        
-        if (response.ok) {
-           const data = await response.json();
-           this.docbotPreviewData = data;
-           this.docbotState = {
-             status: 'ready',
-             taskId: data.task_id,
-           };
-           this.updateHeader();
+    try {
+      const response = await fetch(`/api/pipelines/${this.pipelineId}/docbot/preview/${taskId}`, {
+        headers: {
+          'Authorization': `Bearer ${this.context.authService.getAccessToken()}`
         }
-     } catch (error) {
-        console.error('Failed to fetch DocBot preview:', error);
-     }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        this.docbotPreviewData = data;
+        this.docbotState = {
+          status: 'ready',
+          taskId: data.task_id,
+        };
+        this.updateHeader();
+      }
+    } catch (error) {
+      console.error('Failed to fetch DocBot preview:', error);
+    }
   }
 
   private openDocBotDialog() {
-     const dialogContainer = this.container?.querySelector('#docbot-dialog-container') as HTMLElement;
-     if (!dialogContainer || !this.docbotState.taskId || !this.docbotPreviewData) return;
-     
-     const props: DocBotDialogProps = {
-        taskId: this.docbotState.taskId,
-        pipelineId: this.pipelineId,
-        diff: this.docbotPreviewData.diff,
-        commitMsg: this.docbotPreviewData.commit_msg,
-        filename: this.docbotPreviewData.filename,
-        context: this.context,
-        onClose: () => {
-          dialogContainer.innerHTML = '';
-        },
-        onSuccess: () => {
-          this.docbotState = {
-            status: 'none',
-            taskId: null,
-          };
-          this.docbotPreviewData = null;
-          this.updateHeader();
-        }
-     };
-     
-     new DocBotDialog(dialogContainer, props);
+    const dialogContainer = this.container?.querySelector('#docbot-dialog-container') as HTMLElement;
+    if (!dialogContainer || !this.docbotState.taskId || !this.docbotPreviewData) return;
+
+    const props: DocBotDialogProps = {
+      taskId: this.docbotState.taskId,
+      pipelineId: this.pipelineId,
+      diff: this.docbotPreviewData.diff,
+      commitMsg: this.docbotPreviewData.commit_msg,
+      filename: this.docbotPreviewData.filename,
+      context: this.context,
+      onClose: () => {
+        dialogContainer.innerHTML = '';
+      },
+      onSuccess: () => {
+        this.docbotState = {
+          status: 'none',
+          taskId: null,
+        };
+        this.docbotPreviewData = null;
+        this.updateHeader();
+      }
+    };
+
+    new DocBotDialog(dialogContainer, props);
   }
 
   private registerActions() {
@@ -307,7 +308,7 @@ export class PipelineDetailView extends View {
 
       try {
         await this.context.reviewBotClient.trigger(this.pipelineId, taskId);
-        
+
         this.reviewbotState = { status: 'inProgress', taskId };
         this.updateHeader();
       } catch (error) {
@@ -340,6 +341,7 @@ export class PipelineDetailView extends View {
       const task = this.allLoadedTasks.find(t => t.id === taskId);
       if (!task) return;
 
+      console.log("open_review_dialog: " + task?.review_md);
       const dialog = new ReviewDialog({
         task,
         pipelineId: this.pipelineId,
@@ -977,7 +979,7 @@ export class PipelineDetailView extends View {
 
     try {
       this.allLoadedTasks = await this.context.taskClient.listByPipeline(this.pipelineId, true);
-      
+
       // Update DataManager cache
       this.allLoadedTasks.forEach(task => this.context.dataManager.updateTask(task));
 
@@ -1229,21 +1231,21 @@ export class PipelineDetailView extends View {
           <!-- Column 1: Preparation & Review -->
           ${this.renderPrepColumn()}
 
-          ${this.isTwoColumnLayout ? 
-            `
+          ${this.isTwoColumnLayout ?
+        `
             <!-- Column 2: Merged Active and History for 2-col layout -->
             <div class="flex flex-col gap-8 min-w-0">
                ${this.renderActiveColumn()}
                ${this.renderHistoryColumn()}
             </div>
-            ` : 
-            `
+            ` :
+        `
             <!-- Column 2: Active Execution -->
             ${this.renderActiveColumn()}
             <!-- Column 3: History & Analytics -->
             ${this.renderHistoryColumn()}
             `
-          }
+      }
         </div>
       </div>
       <div id="docbot-dialog-container"></div>

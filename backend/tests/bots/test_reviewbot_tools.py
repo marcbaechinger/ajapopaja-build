@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -28,6 +28,9 @@ async def test_save_review_success():
     mock_task = AsyncMock()
     mock_task.id = task_id
     mock_task.save = AsyncMock()
+    mock_task.model_dump = MagicMock(
+        return_value={"id": task_id, "pipeline_id": pipeline_id, "review_md": review_md}
+    )
 
     with (
         patch(
@@ -47,7 +50,7 @@ async def test_save_review_success():
         # Verify websocket message
         call_args = mock_broadcast.call_args[0][0]
         assert call_args.type == "REVIEWBOT_REVIEW_READY"
-        assert call_args.payload["task_id"] == task_id
+        assert call_args.payload["id"] == task_id
 
 
 @pytest.mark.asyncio
