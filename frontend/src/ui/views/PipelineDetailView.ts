@@ -61,6 +61,21 @@ export class PipelineDetailView extends View {
   private gitStatusRefreshPending: boolean = false;
   private pendingReviews: string[] = [];
 
+  private loadPendingReviews() {
+    const stored = localStorage.getItem(`pending_reviews:${this.pipelineId}`);
+    if (stored) {
+      try {
+        this.pendingReviews = JSON.parse(stored);
+      } catch (e) {
+        console.error('Failed to parse pending reviews from localStorage', e);
+      }
+    }
+  }
+
+  private savePendingReviews() {
+    localStorage.setItem(`pending_reviews:${this.pipelineId}`, JSON.stringify(this.pendingReviews));
+  }
+
   private docbotState: DocbotState = {
     status: 'none',
     taskId: null,
@@ -96,6 +111,7 @@ export class PipelineDetailView extends View {
     super();
     this.context = context;
     this.pipelineId = params.id;
+    this.loadPendingReviews();
     this.registerActions();
     this.setupDataManagerSubscriptions();
     this.setupKeyboardShortcuts();
@@ -232,6 +248,7 @@ export class PipelineDetailView extends View {
         const taskId = p.id || p._id || p.task_id;
         if (taskId && !this.pendingReviews.includes(taskId)) {
           this.pendingReviews.push(taskId);
+          this.savePendingReviews();
         }
       },
 
@@ -396,6 +413,7 @@ export class PipelineDetailView extends View {
       if (!taskId) return;
 
       this.pendingReviews = this.pendingReviews.filter(id => id !== taskId);
+      this.savePendingReviews();
       this.updateHeader();
 
       const task = this.allLoadedTasks.find(t => t.id === taskId);
@@ -1215,19 +1233,21 @@ export class PipelineDetailView extends View {
       `;
     }
     return PipelineHeaderView.render({
-      pipeline: this.pipeline!,
+      pipeline: this.pipeline,
       pipelineId: this.pipelineId,
       geminiStatus: this.geminiStatus,
       vibeStatus: this.vibeStatus,
       docbotState: this.docbotState,
       reviewbotState: this.reviewbotState,
       archbotState: this.archbotState,
+      coderbotState: this.coderbotState,
       user: this.context.authService.getUser(),
       allTasks: this.allLoadedTasks,
       gitStatus: this.gitStatus,
-      isTwoColumnLayout: this.isTwoColumnLayout,
-      pendingReviews: this.pendingReviews,
+      isTwoColumnLayout: false,
+      pendingReviews: this.pendingReviews
     });
+
 
   }
 
