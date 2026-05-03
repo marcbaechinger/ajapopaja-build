@@ -66,6 +66,11 @@ export class PipelineDetailView extends View {
     taskId: null,
   };
 
+  private archbotState: { status: 'none' | 'inProgress', taskId: string | null } = {
+    status: 'none',
+    taskId: null,
+  };
+
 
   private columnMetadata: Record<string, { title: string, emptyMessage: string }> = {
     'proposed': { title: 'Proposed', emptyMessage: 'No proposed designs.' },
@@ -281,6 +286,19 @@ export class PipelineDetailView extends View {
           this.updateHeader();
        }
     }));
+    this.unsubs.push(this.context.wsClient.on('ARCHBOT_STARTED', (message: any) => {
+       if (message.payload?.pipeline_id === this.pipelineId) {
+          this.archbotState = { status: 'inProgress', taskId: message.payload.task_id };
+          this.updateHeader();
+       }
+    }));
+    this.unsubs.push(this.context.wsClient.on('ARCHBOT_COMPLETED', async (message: any) => {
+       if (message.payload?.pipeline_id === this.pipelineId) {
+          this.archbotState = { status: 'none', taskId: null };
+          await this.refreshTasks();
+          this.updateHeader();
+       }
+    }));
   }
 
   private docbotPreviewData: any = null;
@@ -360,6 +378,20 @@ export class PipelineDetailView extends View {
       } catch (error) {
         console.error('Trigger ReviewBot error:', error);
         alert('Failed to trigger ReviewBot');
+      }
+    });
+
+    this.context.actionRegistry.register('trigger_archbot', async (_e, el) => {
+      const taskId = el.getAttribute('data-task-id');
+      if (!taskId) return;
+
+      try {
+        await this.context.archBotClient.trigger(this.pipelineId, taskId);
+        this.archbotState = { status: 'inProgress', taskId };
+        this.updateHeader();
+      } catch (error) {
+        console.error('Trigger ArchBot error:', error);
+        alert('Failed to trigger ArchitectureBot');
       }
     });
 
@@ -1160,6 +1192,7 @@ export class PipelineDetailView extends View {
       vibeStatus: this.vibeStatus,
       docbotState: this.docbotState,
       reviewbotState: this.reviewbotState,
+      archbotState: this.archbotState,
       user: this.context.authService.getUser(),
       allTasks: this.allLoadedTasks,
       gitStatus: this.gitStatus,

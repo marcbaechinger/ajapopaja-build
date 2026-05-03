@@ -21,6 +21,7 @@ import { TaskClient } from './clients/TaskClient';
 import { SystemClient } from './clients/SystemClient';
 import { DocBotClient } from './clients/DocBotClient';
 import { ReviewBotClient } from './clients/ReviewBotClient';
+import { ArchBotClient } from './clients/ArchBotClient';
 import { EditorClient } from './clients/EditorClient';
 import { WebSocketClient } from './WebSocketClient';
 import { AuthService } from './AuthService';
@@ -41,6 +42,7 @@ export class AppContext {
   public readonly systemClient: SystemClient;
   public readonly docBotClient: DocBotClient;
   public readonly reviewBotClient: ReviewBotClient;
+  public readonly archBotClient: ArchBotClient;
   public readonly editorClient: EditorClient;
   public readonly wsClient: WebSocketClient;
   public readonly authService: AuthService;
@@ -56,6 +58,7 @@ export class AppContext {
     this.systemClient = new SystemClient(this.authService);
     this.docBotClient = new DocBotClient(apiBaseUrl, this.authService);
     this.reviewBotClient = new ReviewBotClient(apiBaseUrl, this.authService);
+    this.archBotClient = new ArchBotClient(apiBaseUrl, this.authService);
     this.editorClient = new EditorClient(apiBaseUrl, this.authService);
     this.wsClient = new WebSocketClient(apiBaseUrl, this.authService);
     this.assistantService = new AssistantService(this.wsClient, this.authService);

@@ -41,6 +41,7 @@ from api.routes.auth import router as auth_router
 from api.routes.docbot import router as docbot_router
 from api.routes.editor_commands import router as editor_router
 from api.reviewbot.router import router as reviewbot_router
+from api.archbot.router import router as archbot_router
 from api.routes.pipeline import router as pipeline_router
 from api.routes.system import router as system_router
 from api.routes.task import pipeline_task_router, task_router
@@ -262,6 +263,7 @@ api_router.include_router(system_router)
 api_router.include_router(docbot_router)
 api_router.include_router(editor_router)
 api_router.include_router(reviewbot_router)
+api_router.include_router(archbot_router)
 
 app.include_router(api_router)
 

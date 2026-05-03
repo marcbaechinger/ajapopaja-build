@@ -31,6 +31,11 @@ export interface ReviewbotState {
   taskId: string | null;
 }
 
+export interface ArchbotState {
+  status: 'none' | 'inProgress';
+  taskId: string | null;
+}
+
 export interface PipelineHeaderViewProps {
   pipeline: Pipeline;
   pipelineId: string;
@@ -38,6 +43,7 @@ export interface PipelineHeaderViewProps {
   vibeStatus: { running: boolean; log_file: string | null; available: boolean };
   docbotState: DocbotState;
   reviewbotState: ReviewbotState;
+  archbotState?: ArchbotState;
   user: any;
   allTasks: Task[];
   gitStatus?: GitStatus;
@@ -46,7 +52,7 @@ export interface PipelineHeaderViewProps {
 
 export class PipelineHeaderView {
   static render(props: PipelineHeaderViewProps): string {
-    const { pipeline, pipelineId, docbotState, reviewbotState, user, allTasks, gitStatus, isTwoColumnLayout } = props;
+    const { pipeline, pipelineId, docbotState, reviewbotState, archbotState, user, allTasks, gitStatus, isTwoColumnLayout } = props;
 
     let docbotBannerHtml = '';
     if (docbotState.status === 'inProgress') {
@@ -95,6 +101,19 @@ export class PipelineHeaderView {
       `;
     }
 
+    let archbotBannerHtml = '';
+    if (archbotState && archbotState.status === 'inProgress') {
+      archbotBannerHtml = `
+        <div class="inline-flex bg-purple-500/10 border border-purple-500/30 text-purple-400 rounded-full px-3 py-1 text-[10px] shadow-sm items-center gap-2">
+          <span class="relative flex h-2 w-2">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-purple-500"></span>
+          </span>
+          <span class="font-bold tracking-wide uppercase">ArchBot Designing...</span>
+        </div>
+      `;
+    }
+
     return `
       <header class="flex justify-between items-center bg-app-surface px-6 py-4 rounded-2xl shadow-lg border border-app-border shrink-0">
         <div class="flex gap-4 items-center overflow-hidden">
@@ -116,6 +135,7 @@ export class PipelineHeaderView {
               <div id="docbot-banner-container" class="flex items-center gap-2">
                 ${docbotBannerHtml}
                 ${reviewbotBannerHtml}
+                ${archbotBannerHtml}
               </div>
             </div>
             
