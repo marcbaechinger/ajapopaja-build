@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import shutil
 from pathlib import Path
 
@@ -44,12 +45,41 @@ class SandboxGitHelper:
     def get_repo(self) -> git.Repo:
         return git.Repo(str(self.sandbox_path))
 
-    def get_patch(self) -> str:
-        """Returns the diff between main (or default branch) and current branch."""
+    def get_default_branch(self) -> str:
+        """Determines the default branch of the repository."""
+        # 1. Configuration fallback
+        configured_default = os.getenv("DEFAULT_GIT_BRANCH")
+        if configured_default:
+            return configured_default
+
+        # 2. Query the source repository's active branch
+        try:
+            source_repo = git.Repo(str(self.source_repo_path))
+            return source_repo.active_branch.name
+        except Exception:
+            pass
+
         repo = self.get_repo()
-        # Assume 'main' is the base. In a real scenario, we might want to detect this.
-        # git diff main...coderbot/task_id
-        return repo.git.diff("main")
+
+        # 3. Look for standard remote HEAD
+        try:
+            origin_head = repo.remotes.origin.refs.HEAD
+            return origin_head.reference.name.split("/")[-1]
+        except Exception:
+            pass
+
+        # 4. Fallback to common branch names
+        for branch in ["main", "master", "develop", "trunk"]:
+            if f"origin/{branch}" in [ref.name for ref in repo.remotes.origin.refs]:
+                return branch
+
+        return "main"
+
+    def get_patch(self) -> str:
+        """Returns the diff between the default branch and current branch."""
+        repo = self.get_repo()
+        default_branch = self.get_default_branch()
+        return repo.git.diff(default_branch)
 
     def cleanup(self):
         """Removes the sandbox directory."""
