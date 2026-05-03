@@ -68,7 +68,7 @@ class ArchBotSession(BaseBotSession):
             """)
 
     def get_tools(self) -> List[ToolDefinition]:
-        return archbot_registry.list_tools()
+        return archbot_registry.list_tools()[:]
 
     def is_terminal_tool(self, tool_name: str) -> bool:
         return tool_name == "save_design_doc"
