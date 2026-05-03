@@ -55,6 +55,11 @@ describe('PipelineDetailView Layout', () => {
       wsClient: {
         on: vi.fn().mockReturnValue(() => {}),
       },
+      dataManager: {
+        on: vi.fn().mockReturnValue(() => {}),
+        updateTask: vi.fn(),
+        updatePipeline: vi.fn(),
+      },
       authService: {
         getUser: vi.fn().mockReturnValue({ username: 'testuser' }),
         getAccessToken: vi.fn().mockReturnValue('token'),

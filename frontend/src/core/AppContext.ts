@@ -23,8 +23,10 @@ import { DocBotClient } from './clients/DocBotClient';
 import { ReviewBotClient } from './clients/ReviewBotClient';
 import { ArchBotClient } from './clients/ArchBotClient';
 import { EditorClient } from './clients/EditorClient';
-import { WebSocketClient } from './WebSocketClient';
-import { AuthService } from './AuthService';
+import { WebSocketClient } from './WebSocketClient.ts';
+import { DataManager } from './DataManager.ts';
+import { AuthService } from './AuthService.ts';
+
 import { AssistantService } from './AssistantService';
 import { SearchDialog } from '../ui/components/SearchDialog';
 import { AssistantPanel } from '../ui/components/AssistantPanel';
@@ -45,6 +47,7 @@ export class AppContext {
   public readonly archBotClient: ArchBotClient;
   public readonly editorClient: EditorClient;
   public readonly wsClient: WebSocketClient;
+  public readonly dataManager: DataManager;
   public readonly authService: AuthService;
   public readonly assistantService: AssistantService;
   private state: AppState;
@@ -61,6 +64,7 @@ export class AppContext {
     this.archBotClient = new ArchBotClient(apiBaseUrl, this.authService);
     this.editorClient = new EditorClient(apiBaseUrl, this.authService);
     this.wsClient = new WebSocketClient(apiBaseUrl, this.authService);
+    this.dataManager = new DataManager(this.wsClient);
     this.assistantService = new AssistantService(this.wsClient, this.authService);
     
     // Initialize singleton components

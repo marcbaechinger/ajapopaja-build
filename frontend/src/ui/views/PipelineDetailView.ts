@@ -85,7 +85,7 @@ export class PipelineDetailView extends View {
     this.context = context;
     this.pipelineId = params.id;
     this.registerActions();
-    this.setupWebSocket();
+    this.setupDataManagerSubscriptions();
     this.setupKeyboardShortcuts();
   }
 
@@ -167,138 +167,59 @@ export class PipelineDetailView extends View {
     document.addEventListener('keydown', this.keydownHandler);
   }
 
-  private setupWebSocket() {
-    const handleUpdate = (message: any) => {
-      // Refresh if the updated task belongs to this pipeline
-      if (message.payload?.pipeline_id === this.pipelineId) {
-        const task = new Task(message.payload);
+  private setupDataManagerSubscriptions() {
+    const dm = this.context.dataManager;
+
+    // Listen for pipeline metadata updates
+    this.unsubs.push(dm.on(`pipeline:${this.pipelineId}`, (pipeline: Pipeline) => {
+      this.pipeline = pipeline;
+      this.updateHeader();
+    }));
+
+    // Listen for task updates (created, updated, moved, deleted)
+    this.unsubs.push(dm.on(`pipeline:tasks:${this.pipelineId}`, (taskOrDeleted: any) => {
+      if (taskOrDeleted.deleted) {
+        this.removeTaskFromDOM(taskOrDeleted.id);
+        this.allLoadedTasks = this.allLoadedTasks.filter(t => t.id !== taskOrDeleted.id);
+      } else {
+        const task = taskOrDeleted as Task;
         this.updateSingleTask(task);
-        
-        // Refresh git status if task was implemented
         if (task.status === TaskStatus.IMPLEMENTED) {
-           this.refreshGitStatus();
+          this.refreshGitStatus();
         }
       }
-    };
+      this.updateHeader();
+    }));
 
-    const handleCreate = (message: any) => {
-      if (message.payload?.pipeline_id === this.pipelineId) {
-        const task = new Task(message.payload);
-        const taskId = task.id;
-        // Only append if it doesn't exist yet
-        if (this.container?.querySelector(`[data-view-id="${taskId}"]`)) return;
-
-        // Update local cache
-        const index = this.allLoadedTasks.findIndex(t => t.id === taskId);
-        if (index === -1) {
-          this.allLoadedTasks.push(task);
+    // Listen for process and bot status updates via specific WS event queries
+    const eventHandlers: Record<string, (payload: any) => void> = {
+      'GEMINI_PROCESS_STARTED': () => { this.geminiStatus.running = true; },
+      'GEMINI_PROCESS_STOPPED': () => { this.geminiStatus.running = false; },
+      'VIBE_PROCESS_STARTED': () => { this.vibeStatus.running = true; },
+      'VIBE_PROCESS_STOPPED': () => { this.vibeStatus.running = false; },
+      'DOCBOT_STARTED': (p) => { this.docbotState = { status: 'inProgress', taskId: p.task_id }; },
+      'DOCBOT_COMPLETED': (p) => {
+        const result = p.result;
+        if (result?.status === 'no_update_needed') {
+          this.docbotState = { status: 'noUpdate', taskId: p.task_id, reason: result.reason };
+        } else {
+          this.docbotState = { status: 'none', taskId: null };
         }
-
-        this.insertTaskIntoDOM(task);
-      }
+      },
+      'DOCBOT_PREVIEW_READY': (p) => { this.fetchDocBotPreview(p.task_id); },
+      'REVIEWBOT_STARTED': (p) => { this.reviewbotState = { status: 'inProgress', taskId: p.task_id }; },
+      'REVIEWBOT_COMPLETED': () => { this.reviewbotState = { status: 'none', taskId: null }; },
+      'REVIEWBOT_REVIEW_READY': () => { this.reviewbotState = { status: 'none', taskId: null }; },
+      'ARCHBOT_STARTED': (p) => { this.archbotState = { status: 'inProgress', taskId: p.task_id }; },
+      'ARCHBOT_COMPLETED': () => { this.archbotState = { status: 'none', taskId: null }; },
     };
 
-    this.unsubs.push(this.context.wsClient.on('PIPELINE_UPDATED', (message: any) => {
-      if (message.payload?.id === this.pipelineId || message.payload?._id === this.pipelineId) {
-        this.pipeline = new Pipeline(message.payload);
+    Object.entries(eventHandlers).forEach(([event, handler]) => {
+      this.unsubs.push(dm.on(`ws:${event}:${this.pipelineId}`, (payload) => {
+        handler(payload);
         this.updateHeader();
-      }
-    }));
-    this.unsubs.push(this.context.wsClient.on('TASK_CREATED', handleCreate));
-    this.unsubs.push(this.context.wsClient.on('TASK_UPDATED', handleUpdate));
-    this.unsubs.push(this.context.wsClient.on('TASK_STATUS_UPDATED', handleUpdate));
-    this.unsubs.push(this.context.wsClient.on('TASK_COMPLETED', handleUpdate));
-    this.unsubs.push(this.context.wsClient.on('TASK_DELETED', (message: any) => {
-      if (message.payload?.pipeline_id === this.pipelineId) {
-        const taskId = message.payload.task_id;
-        // Update local cache
-        this.allLoadedTasks = this.allLoadedTasks.filter(t => t.id !== taskId);
-        this.removeTaskFromDOM(taskId);
-      }
-    }));
-    this.unsubs.push(this.context.wsClient.on('GEMINI_PROCESS_STARTED', (message: any) => {
-      if (message.payload?.pipeline_id === this.pipelineId) {
-        this.geminiStatus.running = true;
-        this.updateHeader();
-      }
-    }));
-    this.unsubs.push(this.context.wsClient.on('GEMINI_PROCESS_STOPPED', (message: any) => {
-      if (message.payload?.pipeline_id === this.pipelineId) {
-        this.geminiStatus.running = false;
-        this.updateHeader();
-      }
-    }));
-    this.unsubs.push(this.context.wsClient.on('VIBE_PROCESS_STARTED', (message: any) => {
-      if (message.payload?.pipeline_id === this.pipelineId) {
-        this.vibeStatus.running = true;
-        this.updateHeader();
-      }
-    }));
-    this.unsubs.push(this.context.wsClient.on('VIBE_PROCESS_STOPPED', (message: any) => {
-      if (message.payload?.pipeline_id === this.pipelineId) {
-        this.vibeStatus.running = false;
-        this.updateHeader();
-      }
-    }));
-    this.unsubs.push(this.context.wsClient.on('DOCBOT_STARTED', (message: any) => {
-       if (message.payload?.pipeline_id === this.pipelineId) {
-          this.docbotState = { status: 'inProgress', taskId: message.payload.task_id };
-          this.updateHeader();
-       }
-    }));
-    this.unsubs.push(this.context.wsClient.on('DOCBOT_COMPLETED', (message: any) => {
-       if (message.payload?.pipeline_id === this.pipelineId) {
-          const result = message.payload.result;
-          if (result && result.status === 'no_update_needed') {
-            this.docbotState = { status: 'noUpdate', taskId: message.payload.task_id, reason: result.reason };
-            this.updateHeader();
-          } else if (result && result.status === 'update_needed') {
-            // We rely on DOCBOT_PREVIEW_READY to fetch the diff, so do nothing here for success yet
-          } else {
-             // Fallback or error
-             this.docbotState = { status: 'none', taskId: null };
-             this.updateHeader();
-          }
-       }
-    }));
-    this.unsubs.push(this.context.wsClient.on('DOCBOT_PREVIEW_READY', (message: any) => {
-       if (message.payload?.task_id) {
-          this.fetchDocBotPreview(message.payload.task_id);
-       }
-    }));
-    this.unsubs.push(this.context.wsClient.on('REVIEWBOT_STARTED', (message: any) => {
-       if (message.payload?.pipeline_id === this.pipelineId) {
-          this.reviewbotState = { status: 'inProgress', taskId: message.payload.task_id };
-          this.updateHeader();
-       }
-    }));
-    this.unsubs.push(this.context.wsClient.on('REVIEWBOT_COMPLETED', async (message: any) => {
-       if (message.payload?.pipeline_id === this.pipelineId) {
-          this.reviewbotState = { status: 'none', taskId: null };
-          await this.refreshTasks();
-          this.updateHeader();
-       }
-    }));
-    this.unsubs.push(this.context.wsClient.on('REVIEWBOT_REVIEW_READY', async (message: any) => {
-       if (message.payload?.pipeline_id === this.pipelineId) {
-          this.reviewbotState = { status: 'none', taskId: null };
-          await this.refreshTasks();
-          this.updateHeader();
-       }
-    }));
-    this.unsubs.push(this.context.wsClient.on('ARCHBOT_STARTED', (message: any) => {
-       if (message.payload?.pipeline_id === this.pipelineId) {
-          this.archbotState = { status: 'inProgress', taskId: message.payload.task_id };
-          this.updateHeader();
-       }
-    }));
-    this.unsubs.push(this.context.wsClient.on('ARCHBOT_COMPLETED', async (message: any) => {
-       if (message.payload?.pipeline_id === this.pipelineId) {
-          this.archbotState = { status: 'none', taskId: null };
-          await this.refreshTasks();
-          this.updateHeader();
-       }
-    }));
+      }));
+    });
   }
 
   private docbotPreviewData: any = null;
@@ -986,6 +907,9 @@ export class PipelineDetailView extends View {
   async loadPipeline() {
     try {
       this.pipeline = await this.context.pipelineClient.get(this.pipelineId);
+      if (this.pipeline) {
+        this.context.dataManager.updatePipeline(this.pipeline);
+      }
       this.geminiStatus = await this.context.pipelineClient.getGeminiStatus(this.pipelineId);
       this.vibeStatus = await this.context.pipelineClient.getVibeStatus(this.pipelineId);
       this.refreshGitStatus();
@@ -1015,6 +939,10 @@ export class PipelineDetailView extends View {
 
     try {
       this.allLoadedTasks = await this.context.taskClient.listByPipeline(this.pipelineId, true);
+      
+      // Update DataManager cache
+      this.allLoadedTasks.forEach(task => this.context.dataManager.updateTask(task));
+
       this.updateHeader();
       const allTasks = this.allLoadedTasks;
 
