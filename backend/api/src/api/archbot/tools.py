@@ -21,9 +21,9 @@ from api.assistant.tools.file_tools import (
     read_source_file_by_range,
 )
 from api.assistant.tools.search_tools import grep, find, tree
-from api.websocket_manager import WSMessage, manager
 from core.queries import task as task_queries
 
+from .markdown_validator import MarkdownValidator
 from .registry import archbot_registry
 
 logger = logging.getLogger(__name__)
@@ -61,13 +61,20 @@ async def save_design_doc(
     if not design_doc_md.strip():
         return "Error: design_doc_md cannot be empty or only whitespace."
 
+    # Validate Markdown content
+    if not MarkdownValidator.has_top_level_heading(design_doc_md):
+        return "Error: design_doc_md must contain at least one top-level heading (# Heading)."
+
+    # Sanitize content
+    sanitized_md = MarkdownValidator.sanitize(design_doc_md)
+
     try:
         task = await task_queries.get_task_by_id(task_id)
         if not task:
             return f"Error: Task {task_id} not found."
 
         # Update the task with the design doc
-        task.design_doc = design_doc_md
+        task.design_doc = sanitized_md
         # If the task was CREATED, moving it to PROPOSED seems logical if it now has a design doc
         # but the spec says "only be started from the TaskItem when in state CREATED".
         # In ajapopaja, usually adding a design doc moves it to 'proposed' if want_design_doc is True.
@@ -80,14 +87,7 @@ async def save_design_doc(
                 "task_id": task_id,
             }
 
-        # WebSocket notification
-        await manager.broadcast(
-            WSMessage(
-                type="ARCHBOT_COMPLETED",
-                payload={"pipeline_id": pipeline_id, "task_id": task_id},
-            )
-        )
-        logger.info(f"save_design_doc: Design doc saved and notified for {task_id}")
+        logger.info(f"save_design_doc: Design doc saved for {task_id}")
         return f"Successfully saved design document for task {task_id}."
     except Exception as e:
         logger.error(f"save_design_doc: Failed to save design doc for {task_id}: {e}")

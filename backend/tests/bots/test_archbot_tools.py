@@ -43,17 +43,14 @@ async def test_save_design_doc_success(init_mock_db):
         updated_task = await Task.get(task.id)
         assert updated_task.design_doc == design_doc
 
-        # Verify WebSocket message
-        mock_broadcast.assert_called_once()
-        msg = mock_broadcast.call_args[0][0]
-        assert msg.type == "ARCHBOT_COMPLETED"
-        assert msg.payload["task_id"] == task_id
+        # Verify WebSocket message is NOT called (moved to session completion)
+        mock_broadcast.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_save_design_doc_task_not_found(init_mock_db):
     result = await save_design_doc(
-        "pipeline_id", "69f6bc17f62e0871e8903596", "Design doc"
+        "pipeline_id", "69f6bc17f62e0871e8903596", "# Design doc\n\nContent"
     )
     assert "Task with ID 69f6bc17f62e0871e8903596 not found" in result
 
