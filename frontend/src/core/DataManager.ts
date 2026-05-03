@@ -29,8 +29,10 @@ export class DataManager {
   private designDocs = new Map<string, DesignDocHistory>();
 
   private listeners = new Map<string, Set<Listener>>();
+  private wsClient: WebSocketClient;
 
-  constructor(private wsClient: WebSocketClient) {
+  constructor(wsClient: WebSocketClient) {
+    this.wsClient = wsClient;
     this.initializeWebSocket();
   }
 
