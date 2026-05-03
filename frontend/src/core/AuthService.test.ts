@@ -34,8 +34,8 @@ describe('AuthService', () => {
 
   it('should initialize from storage data', () => {
     const user = { username: 'testuser' };
-    localStorage.setItem('auth_user', JSON.stringify(user));
-    localStorage.setItem('auth_token', 'token123');
+    localStorage.setItem('auth:user', JSON.stringify(user));
+    localStorage.setItem('auth:token', JSON.stringify('token123'));
     
     const newService = new AuthService();
     expect(newService.isAuthenticated()).toBe(true);
@@ -47,8 +47,8 @@ describe('AuthService', () => {
     const user = { username: 'testuser' } as any;
     service.setAuth(user, 'token123');
     
-    expect(localStorage.getItem('auth_user')).toBe(JSON.stringify(user));
-    expect(localStorage.getItem('auth_token')).toBe('token123');
+    expect(localStorage.getItem('auth:user')).toBe(JSON.stringify(user));
+    expect(localStorage.getItem('auth:token')).toBe(JSON.stringify('token123'));
     expect(service.isAuthenticated()).toBe(true);
   });
 
@@ -56,8 +56,8 @@ describe('AuthService', () => {
     service.setAuth({ username: 'user' } as any, 'token');
     service.clear();
     
-    expect(localStorage.getItem('auth_user')).toBe(null);
-    expect(localStorage.getItem('auth_token')).toBe(null);
+    expect(localStorage.getItem('auth:user')).toBe(null);
+    expect(localStorage.getItem('auth:token')).toBe(null);
     expect(service.isAuthenticated()).toBe(false);
   });
 

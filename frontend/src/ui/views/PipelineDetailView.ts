@@ -36,14 +36,16 @@ import { PipelineEditDialog } from '../components/PipelineEditDialog.ts';
 import { ReviewDialog } from '../components/ReviewDialog.ts';
 import { PipelineHeaderView, type DocbotState, type ReviewbotState } from '../components/PipelineHeaderView.ts';
 import EasyMDE from 'easymde';
+import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
 
 export class PipelineDetailView extends View {
+  private storage = LocalStorageManager.getInstance('pipeline');
   private container: HTMLElement | null = null;
   private pipelineId: string;
   private pipeline: Pipeline | null = null;
   private geminiStatus: { running: boolean, log_file: string | null, available: boolean } = { running: false, log_file: null, available: true };
   private vibeStatus: { running: boolean, log_file: string | null, available: boolean } = { running: false, log_file: null, available: true };
-  private isTwoColumnLayout: boolean = localStorage.getItem('pipeline-layout') === '2-col';
+  private isTwoColumnLayout: boolean = this.storage.get('layout') === '2-col';
   private context: AppContext;
   private unsubs: (() => void)[] = [];
   private activeEditors: Map<string, EasyMDE> = new Map();
@@ -62,18 +64,11 @@ export class PipelineDetailView extends View {
   private pendingReviews: string[] = [];
 
   private loadPendingReviews() {
-    const stored = localStorage.getItem(`pending_reviews:${this.pipelineId}`);
-    if (stored) {
-      try {
-        this.pendingReviews = JSON.parse(stored);
-      } catch (e) {
-        console.error('Failed to parse pending reviews from localStorage', e);
-      }
-    }
+    this.pendingReviews = this.storage.get<string[]>(`pending_reviews:${this.pipelineId}`, []) || [];
   }
 
   private savePendingReviews() {
-    localStorage.setItem(`pending_reviews:${this.pipelineId}`, JSON.stringify(this.pendingReviews));
+    this.storage.put(`pending_reviews:${this.pipelineId}`, this.pendingReviews);
   }
 
   private docbotState: DocbotState = {
@@ -987,7 +982,7 @@ export class PipelineDetailView extends View {
 
     this.context.actionRegistry.register('toggle_layout', () => {
       this.isTwoColumnLayout = !this.isTwoColumnLayout;
-      localStorage.setItem('pipeline-layout', this.isTwoColumnLayout ? '2-col' : '3-col');
+      this.storage.put('layout', this.isTwoColumnLayout ? '2-col' : '3-col');
       this.reRenderAll();
     });
   }

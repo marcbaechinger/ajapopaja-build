@@ -19,6 +19,7 @@ import type { AssistantResponse } from '../../core/AssistantService.ts';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { Icon } from './Icon.ts';
+import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
 
 // Configure marked to wrap tables in a scrollable div
 marked.use({
@@ -72,6 +73,7 @@ export class AssistantPanel {
   private hasLoadedHistory: boolean = false;
   private currentAssistantMessage: HTMLElement | null = null;
   private messageContainer: HTMLElement | null = null;
+  private storage = LocalStorageManager.getInstance('assistant');
   private settings: PanelSettings = {
     position: 'center',
     size: 'normal'
@@ -87,17 +89,14 @@ export class AssistantPanel {
   }
 
   private loadSettings() {
-    const saved = localStorage.getItem('assistant-panel-settings');
+    const saved = this.storage.get<PanelSettings>('panel-settings');
     if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        this.settings = { ...this.settings, ...parsed };
-      } catch (e) { }
+      this.settings = { ...this.settings, ...saved };
     }
   }
 
   private saveSettings() {
-    localStorage.setItem('assistant-panel-settings', JSON.stringify(this.settings));
+    this.storage.put('panel-settings', this.settings);
     this.applySettings();
   }
 

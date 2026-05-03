@@ -15,6 +15,7 @@
  */
 
 import type { User } from './domain.ts';
+import { LocalStorageManager } from './LocalStorageManager.ts';
 
 export interface AuthState {
   user: User | null;
@@ -30,40 +31,37 @@ export class AuthService {
   };
 
   private listeners: ((state: AuthState) => void)[] = [];
+  private storage = LocalStorageManager.getInstance('auth');
 
   constructor() {
     this.loadFromStorage();
   }
 
   private loadFromStorage() {
-    const savedUser = localStorage.getItem('auth_user');
-    const savedToken = localStorage.getItem('auth_token');
-    
+    const savedUser = this.storage.get<User>('user');
+    const savedToken = this.storage.get<string>('token');
+
     if (savedUser && savedToken) {
-      try {
-        this.state = {
-          user: JSON.parse(savedUser),
-          accessToken: savedToken,
-          isAuthenticated: true,
-        };
-      } catch (e) {
-        this.clear();
-      }
+      this.state = {
+        user: savedUser,
+        accessToken: savedToken,
+        isAuthenticated: true,
+      };
     }
   }
 
   private saveToStorage() {
     if (this.state.user && this.state.accessToken) {
-      localStorage.setItem('auth_user', JSON.stringify(this.state.user));
-      localStorage.setItem('auth_token', this.state.accessToken);
+      this.storage.put('user', this.state.user);
+      this.storage.put('token', this.state.accessToken);
     } else {
       this.clear();
     }
   }
 
   public clear() {
-    localStorage.removeItem('auth_user');
-    localStorage.removeItem('auth_token');
+    this.storage.remove('user');
+    this.storage.remove('token');
     this.state = {
       user: null,
       accessToken: null,

@@ -16,6 +16,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PipelineDetailView } from './PipelineDetailView.ts';
+import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
 
 // Mock components to avoid deep rendering issues in unit tests
 vi.mock('../components/TaskColumn.ts', () => ({
@@ -47,6 +48,7 @@ describe('PipelineDetailView Layout', () => {
     container = document.createElement('div');
     document.body.appendChild(container);
     storage = {};
+    LocalStorageManager.resetInstances();
 
     mockContext = {
       actionRegistry: {
@@ -73,6 +75,9 @@ describe('PipelineDetailView Layout', () => {
         listByPipeline: vi.fn().mockResolvedValue([]),
         listCompletedByPipeline: vi.fn().mockResolvedValue({ tasks: [], total_count: 0 }),
       },
+      pullRequestClient: {
+        getPullRequestsByPipeline: vi.fn().mockResolvedValue([]),
+      },
       systemClient: {
         getGitStatus: vi.fn().mockResolvedValue({}),
         isOllamaAvailable: vi.fn().mockResolvedValue(true),
@@ -94,7 +99,7 @@ describe('PipelineDetailView Layout', () => {
   });
 
   it('should initialize with 2-column layout if saved in localStorage', () => {
-    storage['pipeline-layout'] = '2-col';
+    storage['pipeline:layout'] = JSON.stringify('2-col');
     const view = new PipelineDetailView(mockContext, { id: 'p1' });
     container.innerHTML = view.render() as string;
 
@@ -110,12 +115,12 @@ describe('PipelineDetailView Layout', () => {
     
     // Switch to 2 cols
     toggleAction();
-    expect(localStorage.setItem).toHaveBeenCalledWith('pipeline-layout', '2-col');
+    expect(localStorage.setItem).toHaveBeenCalledWith('pipeline:layout', JSON.stringify('2-col'));
     expect(container.innerHTML).toContain('lg:grid-cols-2');
 
     // Switch back to 3 cols
     toggleAction();
-    expect(localStorage.setItem).toHaveBeenCalledWith('pipeline-layout', '3-col');
+    expect(localStorage.setItem).toHaveBeenCalledWith('pipeline:layout', JSON.stringify('3-col'));
     expect(container.innerHTML).toContain('lg:grid-cols-3');
   });
 });
@@ -130,6 +135,7 @@ describe('PipelineDetailView Review Notifications', () => {
     container = document.createElement('div');
     document.body.appendChild(container);
     dataManagerHandlers = {};
+    LocalStorageManager.resetInstances();
 
     mockContext = {
       actionRegistry: {
@@ -159,6 +165,9 @@ describe('PipelineDetailView Review Notifications', () => {
         listByPipeline: vi.fn().mockResolvedValue([]),
         listCompletedByPipeline: vi.fn().mockResolvedValue({ tasks: [], total_count: 0 }),
       },
+      pullRequestClient: {
+        getPullRequestsByPipeline: vi.fn().mockResolvedValue([]),
+      },
       systemClient: {
         getGitStatus: vi.fn().mockResolvedValue({}),
         isOllamaAvailable: vi.fn().mockResolvedValue(true),
@@ -180,9 +189,10 @@ describe('PipelineDetailView Review Notifications', () => {
 
     // Internal state should have them
     expect((view as any).pendingReviews).toEqual(['t1', 't2']);
+    expect(localStorage.setItem).toHaveBeenCalledWith('pipeline:pending_reviews:p1', JSON.stringify(['t1', 't2']));
   });
 
-  it('should remove pending review when open_review_dialog is triggered', async () => {
+  it('should remove pending review and update localStorage when open_review_dialog is triggered', async () => {
     const view = new PipelineDetailView(mockContext, { id: 'p1' });
     view.mount(container);
 
@@ -201,15 +211,12 @@ describe('PipelineDetailView Review Notifications', () => {
     el.setAttribute('data-task-id', 't1');
 
     // Call action
-    // Needs try/catch or mocking ReviewDialog if ReviewDialog constructor throws or tries to render something we didn't mock properly, 
-    // but ReviewDialog is not mocked. Let's see if it errors.
     try {
         await openReviewAction(null, el);
-    } catch (e) {
-        // Ignored for this test scope, we just care about state
-    }
+    } catch (e) {}
 
     // Should be removed
     expect((view as any).pendingReviews).toEqual(['t2']);
+    expect(localStorage.setItem).toHaveBeenCalledWith('pipeline:pending_reviews:p1', JSON.stringify(['t2']));
   });
 });
