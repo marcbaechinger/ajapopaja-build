@@ -16,7 +16,6 @@ This document defines the architecture and design principles for the Ajapopaja B
 - **Domain Models**: `frontend/src/core/domain.ts`
 
 ## 3. Application Lifecycle & Context
-
 ### `AppContext`
 
 - Initialized when the page loads.
@@ -24,9 +23,9 @@ This document defines the architecture and design principles for the Ajapopaja B
 - Holds the global state (current user, active pipeline, theme status).
 - Manages instances of collaborators (Backend Clients, Action Registry, Navigator).
 - Handles global keyboard shortcuts (e.g., `Ctrl+K` for global search).
+- **DataManager**: Provides a single source of truth for domain entities.  The `DataManager` instance is created with the `WebSocketClient` and exposed as `dataManager`.  Components use this instance to register listeners (`on`) and to read cached data.
 
 - **File Path**: `frontend/src/core/AppContext.ts`
-
 ## 4. Backend Communication
 
 ### Dedicated Clients

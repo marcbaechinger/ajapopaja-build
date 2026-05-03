@@ -85,12 +85,24 @@ class ArchBotSession(BaseBotSession):
                 )
             )
         elif event_name == "bot_completed":
-            # Broadcast completion to clear banners/status in UI.
-            # Note: save_design_doc also broadcasts this, but we do it here as a safety measure
-            # to ensure the UI is notified even if the tool wasn't called or failed.
-            await manager.broadcast(
-                WSMessage(
-                    type="ARCHBOT_COMPLETED",
-                    payload={"pipeline_id": self.pipeline_id, "task_id": self.task_id},
+            # Broadcast completion to clear banners/status in UI and update the task data.
+            # We fetch the latest task from DB to ensure the frontend gets the new design_doc.
+            task = await task_queries.get_task_by_id(self.task_id)
+            if task:
+                await manager.broadcast(
+                    WSMessage(
+                        type="ARCHBOT_COMPLETED",
+                        payload=task.model_dump(mode="json"),
+                    )
                 )
-            )
+            else:
+                # Fallback if task not found (shouldn't happen)
+                await manager.broadcast(
+                    WSMessage(
+                        type="ARCHBOT_COMPLETED",
+                        payload={
+                            "pipeline_id": self.pipeline_id,
+                            "task_id": self.task_id,
+                        },
+                    )
+                )

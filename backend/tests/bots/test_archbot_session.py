@@ -55,7 +55,12 @@ async def test_archbot_session_tools(init_mock_db):
 async def test_archbot_session_events(init_mock_db):
     from unittest.mock import AsyncMock, patch
 
-    session = ArchBotSession(pipeline_id="p1", task_id="t1")
+    pipeline = Pipeline(name="Test Pipeline")
+    await pipeline.save()
+    task = Task(title="Test Task", pipeline_id=str(pipeline.id))
+    await task.save()
+
+    session = ArchBotSession(pipeline_id=str(pipeline.id), task_id=str(task.id))
 
     with patch(
         "api.archbot.session.manager.broadcast", new_callable=AsyncMock
@@ -73,3 +78,5 @@ async def test_archbot_session_events(init_mock_db):
         mock_broadcast.assert_called_once()
         msg = mock_broadcast.call_args[0][0]
         assert msg.type == "ARCHBOT_COMPLETED"
+        # Now it should contain the task object (or at least have 'id')
+        assert "id" in msg.payload or "task_id" in msg.payload

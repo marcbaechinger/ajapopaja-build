@@ -206,7 +206,16 @@ export class DataManager {
     });
 
     this.wsClient.on('ARCHBOT_COMPLETED', msg => {
-      if (msg.payload?.task_id) this.notify(`task:design:${msg.payload.task_id}`);
+      // If payload is a full task object (has id and pipeline_id), update it.
+      // This ensures the design_doc is updated in the cache.
+      if (msg.payload?.id && msg.payload?.pipeline_id) {
+        const task = this.updateTask(msg.payload);
+        if (task) {
+           this.notify(`pipeline:tasks:${task.pipeline_id}`, task);
+        }
+      } else if (msg.payload?.task_id) {
+        this.notify(`task:design:${msg.payload.task_id}`);
+      }
     });
   }
 }
