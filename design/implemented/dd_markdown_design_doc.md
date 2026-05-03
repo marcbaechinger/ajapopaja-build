@@ -65,13 +65,13 @@ Modify the `edit_design_doc` and `save_design_doc` actions to initialize and des
 2.  **On Save/Cancel**: Retrieve the value via `editor.value()`, then call `editor.toTextArea()` to clean up the UI before switching back to the view state.
 
 ## 5. Security Considerations
-To prevent Cross-Site Scripting (XSS) when rendering user-provided Markdown:
--   **Sanitization**: Use a library like `dompurify` in conjunction with `marked` to ensure any potentially malicious HTML (e.g., `<script>` tags) injected via Markdown is stripped out before rendering.
 
-```bash
-npm install dompurify
-npm install -D @types/dompurify
-```
+To prevent Cross‑Site Scripting (XSS) when rendering user‑provided Markdown, the backend now validates that the document contains a top‑level heading (`# …`) and sanitizes the content by stripping raw HTML tags before persisting. In addition to XSS protection, these checks ensure that design documents are well‑formed and start with a clear title.
 
+- **Top‑Level Heading Validation**: The `MarkdownValidator.has_top_level_heading` method confirms that the first non‑empty line starts with `# `.
+- **HTML Sanitization**: The `MarkdownValidator.sanitize` method removes all raw HTML tags, leaving only pure Markdown. The sanitized string is stored in the database.
+- **XSS Safeguard**: When rendering, the markdown is processed with `marked` and optionally further sanitized with `dompurify` to strip any unexpected HTML remnants.
+
+These measures collectively maintain document integrity and protect the front‑end from injected scripts.
 ## 6. Migration Plan
 Since the `design_doc` field is already a string, no backend changes or database migrations are required. Existing plain-text design documents will render as standard text in Markdown (since plain text is valid Markdown).
