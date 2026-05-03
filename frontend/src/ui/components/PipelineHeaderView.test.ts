@@ -52,6 +52,7 @@ describe('PipelineHeaderView', () => {
     const html = PipelineHeaderView.render(mockProps);
     expect(html).toContain("data-action-click=\"open_search\"")
     expect(html).toContain("data-action-click=\"open_stats\"")
+    expect(html).toContain("data-action-click=\"open_history\"")
     expect(html).toContain("data-action-click=\"toggle_assistant\"")
     expect(html).toContain("data-action-click=\"perform_logout\"")
     expect(html).toContain("data-action-click=\"open_health_check\"")

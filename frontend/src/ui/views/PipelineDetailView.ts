@@ -425,6 +425,10 @@ export class PipelineDetailView extends View {
       new StatsDialog(this.allLoadedTasks, this.pipelineId, this.context.pipelineClient).show();
     });
 
+    this.context.actionRegistry.register('open_history', () => {
+      new HistoryDialog(this.allLoadedTasks).show();
+    });
+
     this.context.actionRegistry.register('change_sort_order', async (_e, el) => {
       this.currentSortOrder = (el as HTMLSelectElement).value as any;
       this.refreshTasks();
