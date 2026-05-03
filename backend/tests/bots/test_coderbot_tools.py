@@ -91,3 +91,36 @@ async def test_path_validation_invalid_paths(tmp_path, monkeypatch):
     assert "Successfully wrote to subdir/ok.txt" in res
     sandbox_path = (tmp_path / task_id).resolve()
     assert (sandbox_path / "subdir/ok.txt").exists()
+
+
+@pytest.mark.asyncio
+async def test_path_validation_exhaustive(tmp_path, monkeypatch):
+    monkeypatch.setattr("core.config.SANDBOX_ROOT", tmp_path)
+    task_id = "task_edge"
+
+    # Leading slash
+    res = await tools.write_file("p1", task_id, "/root_file.txt", "content")
+    assert "Security error" in res
+
+    # Empty string path
+    res = await tools.write_file("p1", task_id, "", "content")
+    assert "Relative path cannot be empty or root." in res
+
+    # Dot path
+    res = await tools.write_file("p1", task_id, ".", "content")
+    assert "Relative path cannot be empty or root." in res
+
+    # Extremely long path component
+    long_name = "a" * 300
+    res = await tools.write_file("p1", task_id, long_name, "content")
+    assert ("Error writing file" in res) or ("Security error" in res)
+
+    # Complex traversal
+    res = await tools.write_file_partially(
+        "p1", task_id, "a/../../etc/passwd", "old", "new"
+    )
+    assert "Security error" in res
+
+    # Re-testing partially with invalid path
+    res = await tools.write_file_partially("p1", task_id, "/abs/path", "old", "new")
+    assert "Security error" in res

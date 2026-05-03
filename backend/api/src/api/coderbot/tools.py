@@ -39,11 +39,16 @@ def _get_sandbox_path(task_id: str) -> Path:
     return sandbox_root
 
 
-def _validate_path(task_id: str, relative_path: str) -> Path:
+def _validate_path(task_id: str, relative_path: str, allow_root: bool = False) -> Path:
     """
     Validates that the path is within the sandbox for the given task.
-    Rejects directory traversal (..) and absolute paths.
+    Rejects directory traversal (..), absolute paths, and empty paths (unless allow_root is True).
     """
+    if not relative_path or relative_path.strip() in ("", ".", "./"):
+        if not allow_root:
+            raise ValueError("Relative path cannot be empty or root.")
+        relative_path = "."
+
     sandbox_root = _get_sandbox_path(task_id)
     try:
         return safe_join(sandbox_root, relative_path)
@@ -54,6 +59,8 @@ def _validate_path(task_id: str, relative_path: str) -> Path:
 async def write_file(pipeline_id: str, task_id: str, path: str, content: str):
     """
     Writes the full content to a file in the sandbox. Overwrites if exists.
+    The path must be relative to the sandbox root and cannot escape it.
+    Empty paths or root access are not allowed for this tool.
 
     Args:
         path: The relative path to the file.
@@ -73,6 +80,8 @@ async def write_file_partially(
 ):
     """
     Replaces exactly one occurrence of old_string with new_string in a file.
+    The path must be relative to the sandbox root and cannot escape it.
+    Empty paths or root access are not allowed for this tool.
 
     Args:
         path: The relative path to the file.
@@ -202,6 +211,7 @@ async def tree(
 ) -> str:
     """
     Produce a tree view of the directory structure in the sandbox.
+    The path must be relative to the sandbox root and cannot escape it.
 
     Args:
         path: Relative path to the directory to tree (optional, defaults to root).
@@ -209,7 +219,7 @@ async def tree(
         follow_symlinks: If True, follow symbolic links.
     """
     try:
-        full_path = _validate_path(task_id, path)
+        full_path = _validate_path(task_id, path, allow_root=True)
     except ValueError as e:
         return str(e)
 
@@ -236,6 +246,7 @@ async def tree(
 async def read_source_file(pipeline_id: str, task_id: str, path: str) -> str:
     """
     Reads the content of a source file from the sandbox.
+    The path must be relative to the sandbox root and cannot escape it.
 
     Args:
         path: Relative path to the file from the project root.
