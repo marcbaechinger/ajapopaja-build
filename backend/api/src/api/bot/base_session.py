@@ -299,7 +299,7 @@ class BaseBotSession(ABC):
                         turn_id += 1
                     else:
                         # Process tool calls
-                        terminal_call = False
+                        terminal_call_in_turn = False
                         for tool_call in tool_calls:
                             tool_name = tool_call.function.name
                             args = tool_call.function.arguments
@@ -309,8 +309,11 @@ class BaseBotSession(ABC):
                                 f"Calling tool '{tool_name}'"
                             )
 
-                            if self.is_terminal_tool(tool_name):
-                                terminal_call = True
+                            is_terminal = self.is_terminal_tool(tool_name)
+                            if is_terminal:
+                                # Set before execution so that the tool itself (e.g. save_review)
+                                # sees the "finished" status in its execution report.
+                                self.finished_via_terminal_tool = True
 
                             result = await self._execute_tool(tool_name, args)
                             success = not self._is_tool_error(result)
@@ -336,17 +339,17 @@ class BaseBotSession(ABC):
                             )
                             turn_id += 1
 
-                            if terminal_call:
-                                if self._is_tool_error(result):
+                            if is_terminal:
+                                if not success:
                                     logger.warning(
                                         f"Terminal tool '{tool_name}' failed. Forcing retry."
                                     )
-                                    terminal_call = False
+                                    self.finished_via_terminal_tool = False
                                 else:
-                                    self.finished_via_terminal_tool = True
+                                    terminal_call_in_turn = True
 
                         # Inject warning AFTER processing tool results if not terminal
-                        if not terminal_call:
+                        if not terminal_call_in_turn:
                             remaining = max_iterations - (i + 1)
                             warning = self.get_turn_warning(remaining)
                             if warning:

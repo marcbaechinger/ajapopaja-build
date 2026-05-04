@@ -433,3 +433,41 @@ async def test_base_session_is_tool_error():
     assert session._is_tool_error({"error": "broken"}) is True
     assert session._is_tool_error("Success") is False
     assert session._is_tool_error({"status": "ok"}) is False
+
+
+@pytest.mark.asyncio
+async def test_terminal_status_flag_during_execution():
+    """Verifies that finished_via_terminal_tool is set BEFORE tool execution."""
+    config = BaseBotSessionConfig(max_iterations=5)
+
+    class StatusTrackingBot(ConcreteBotSession):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.captured_terminal_status = None
+
+        def get_tools(self) -> List[ToolDefinition]:
+            async def terminal_tool(pipeline_id: str, task_id: str):
+                self.captured_terminal_status = self.finished_via_terminal_tool
+                return {"status": "finished"}
+
+            registry = ToolRegistry()
+            registry.register_tool(terminal_tool)
+            return registry.list_tools()
+
+    session = StatusTrackingBot("p1", "t1", session_config=config)
+
+    mock_response = MagicMock()
+    mock_response.message.content = ""
+    mock_tool_call = MagicMock()
+    mock_tool_call.function.name = "terminal_tool"
+    mock_tool_call.function.arguments = "{}"
+    mock_response.message.tool_calls = [mock_tool_call]
+
+    with patch.object(session.client, "chat") as mock_chat:
+        mock_chat.return_value = AsyncIter([mock_response])
+        await session.run()
+
+    # The flag MUST be True during execution for the report to be correct
+    assert session.captured_terminal_status is True
+    # And it should remain True after successful execution
+    assert session.finished_via_terminal_tool is True
