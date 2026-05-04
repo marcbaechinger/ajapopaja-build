@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional
 from api.bot.base_session import BaseBotSession
 from api.bot.tool_registry import ToolDefinition
 from core.models.models import Pipeline, Task
+from core import config
 from api.websocket_manager import WSMessage, manager as ws_manager
 
 from .registry import coderbot_registry
@@ -83,3 +84,6 @@ class CoderBotSession(BaseBotSession):
 
     def is_terminal_tool(self, tool_name: str) -> bool:
         return tool_name == "task_completed"
+
+    def get_log_directory(self) -> Optional[str]:
+        return str(config.SANDBOX_ROOT / self.task_id)

@@ -54,3 +54,6 @@ OLLAMA_MODEL = os.getenv(
 MCP_AUTHENTICATION_ENABLED = (
     os.getenv("MCP_AUTHENTICATION_ENABLED", "false").lower() == "true"
 )
+
+# Bot Logging
+BASEBOT_LOG_ENABLED = os.getenv("BASEBOT_LOG_ENABLED", "false").lower() == "true"

@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional
 
 import ollama
 
+from api.bot.conversation import ConversationTurn, create_log_turn
 from api.bot.tool_registry import ToolDefinition
 from core import config
 
@@ -45,6 +46,7 @@ class BaseBotSession(ABC):
         self.history: List[Dict[str, Any]] = [
             {"role": "system", "content": self.get_system_instruction()}
         ]
+        self.conversation_log: List[ConversationTurn] = []
 
     @abstractmethod
     def get_system_instruction(self) -> str:
@@ -116,15 +118,63 @@ class BaseBotSession(ABC):
         """Lifecycle event hook."""
         pass
 
+    def get_log_directory(self) -> Optional[str]:
+        """Returns the directory where logs should be saved. Subclasses can override."""
+        return str(config.SANDBOX_ROOT / "logs" / self.task_id)
+
+    def _log_turn(self, turn: ConversationTurn):
+        """Appends a turn to the conversation log and persists if enabled."""
+        self.conversation_log.append(turn)
+        if config.BASEBOT_LOG_ENABLED:
+            log_dir = self.get_log_directory()
+            if log_dir:
+                try:
+                    from pathlib import Path
+
+                    log_path = Path(log_dir) / "__log.json"
+                    log_path.parent.mkdir(parents=True, exist_ok=True)
+
+                    # Serialize the whole log
+                    with open(log_path, "w") as f:
+                        # Convert turns to dicts
+                        from dataclasses import asdict
+
+                        serializable_log = [
+                            {**asdict(t), "timestamp": t.timestamp.isoformat()}
+                            for t in self.conversation_log
+                        ]
+                        json.dump(serializable_log, f, indent=2)
+                except Exception as e:
+                    logger.error(f"Failed to persist conversation log: {e}")
+
+    def get_summary_stats(self) -> Dict[str, Any]:
+        """Returns aggregate metrics of the conversation."""
+        total_turns = len(self.conversation_log)
+        tool_calls = [t for t in self.conversation_log if t.role == "tool"]
+        num_tool_calls = len(tool_calls)
+        successful_tools = [t for t in tool_calls if t.success]
+        success_rate = (
+            len(successful_tools) / num_tool_calls if num_tool_calls > 0 else 0
+        )
+
+        return {
+            "total_turns": total_turns,
+            "num_tool_calls": num_tool_calls,
+            "success_rate": success_rate,
+        }
+
     async def run(self, max_iterations: int = 50):
         """
         Runs the autonomous loop until a terminal tool is called or
         max_iterations is reached.
         """
         await self.on_event("bot_started")
+        turn_id = 1
         try:
             initial_prompt = await self.get_initial_prompt()
             self.history.append({"role": "user", "content": initial_prompt})
+            self._log_turn(create_log_turn(turn_id, "user", initial_prompt))
+            turn_id += 1
 
             for i in range(max_iterations):
                 logger.info(
@@ -199,6 +249,17 @@ class BaseBotSession(ABC):
                             for tc in tool_calls
                         ]
                     self.history.append(assistant_msg)
+                    self._log_turn(
+                        create_log_turn(
+                            turn_id,
+                            "assistant",
+                            full_content,
+                            tool_name=",".join([tc.function.name for tc in tool_calls])
+                            if tool_calls
+                            else None,
+                        )
+                    )
+                    turn_id += 1
 
                     if not tool_calls:
                         logger.info(
@@ -215,6 +276,8 @@ class BaseBotSession(ABC):
                             self.pipeline_id, self.task_id, full_content
                         )
                         self.history.append({"role": "user", "content": feedback})
+                        self._log_turn(create_log_turn(turn_id, "user", feedback))
+                        turn_id += 1
                     else:
                         # Process tool calls
                         terminal_call = False
@@ -231,6 +294,7 @@ class BaseBotSession(ABC):
                                 terminal_call = True
 
                             result = await self._execute_tool(tool_name, args)
+                            success = not self._is_tool_error(result)
 
                             # Append tool result to history
                             self.history.append(
@@ -240,6 +304,18 @@ class BaseBotSession(ABC):
                                     "name": tool_name,
                                 }
                             )
+                            self._log_turn(
+                                create_log_turn(
+                                    turn_id,
+                                    "tool",
+                                    json.dumps(result),
+                                    tool_name=tool_name,
+                                    tool_args=args,
+                                    tool_result=result,
+                                    success=success,
+                                )
+                            )
+                            turn_id += 1
 
                             if terminal_call:
                                 if self._is_tool_error(result):
@@ -257,18 +333,15 @@ class BaseBotSession(ABC):
                                 self.history.append(
                                     {"role": "user", "content": warning}
                                 )
+                                self._log_turn(
+                                    create_log_turn(turn_id, "user", warning)
+                                )
+                                turn_id += 1
                         else:
                             logger.info(
                                 f"{self.__class__.__name__} finished with terminal call."
                             )
                             return
-
-                    remaining_turns = max_iterations - (i + 1)
-                    if remaining_turns > 0:
-                        warning = self.get_turn_warning(remaining_turns)
-                        if warning:
-                            # Inject as a user message so the LLM can react
-                            self.history.append({"role": "user", "content": warning})
 
                 except Exception as e:
                     logger.error(f"Ollama chat error: {e}")
