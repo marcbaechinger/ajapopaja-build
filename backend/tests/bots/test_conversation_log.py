@@ -145,13 +145,20 @@ async def test_conversation_log_persistence(tmp_path, monkeypatch):
     # Manually log a turn
     from api.bot.conversation import create_log_turn
 
-    session._log_turn(create_log_turn(1, "user", "test content"))
+    session._log_turn(create_log_turn(1, "user", "test content 1"))
+    session._log_turn(create_log_turn(2, "assistant", "test content 2"))
 
-    log_file = tmp_path / "logs" / "t1" / "__log.json"
+    log_file = tmp_path / "logs" / "t1" / "__log.jsonl"
     assert log_file.exists()
 
     with open(log_file, "r") as f:
-        data = json.load(f)
-        assert len(data) == 1
-        assert data[0]["role"] == "user"
-        assert data[0]["content"] == "test content"
+        lines = f.readlines()
+        assert len(lines) == 2
+
+        data1 = json.loads(lines[0])
+        assert data1["role"] == "user"
+        assert data1["content"] == "test content 1"
+
+        data2 = json.loads(lines[1])
+        assert data2["role"] == "assistant"
+        assert data2["content"] == "test content 2"

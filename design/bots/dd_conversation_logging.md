@@ -45,7 +45,7 @@ These rules are implemented by `shorten_content` and `prune_value`.
 
 * `self.conversation_log: List[ConversationTurn]` – an in‑memory list.
 * `_log_turn(turn: ConversationTurn)` – appends to the list and, if
-  `BASEBOT_LOG_ENABLED`, serialises the entire log to `logs/<task_id>/__log.json`.
+  `BASEBOT_LOG_ENABLED`, appends the turn to `logs/<task_id>/__log.jsonl` in JSONL format.
 * `get_summary_stats()` – returns aggregate metrics:
   ```json
   {
@@ -64,7 +64,7 @@ Logging points are inserted:
 
 ## 4. Persistence
 
-When the configuration flag `BASEBOT_LOG_ENABLED` is `true`, every call to `_log_turn` writes the full log to disk. The log file is JSON‑serialised; `datetime` objects are converted to ISO‑8601 strings. The directory structure is `logs/<task_id>/__log.json` under the sandbox root (`SANDBOX_ROOT`). Errors during persistence are logged but never abort the session.
+When the configuration flag `BASEBOT_LOG_ENABLED` is `true`, every call to `_log_turn` appends the current turn to disk. The log file uses **JSON Lines (JSONL)** format, where each line is a valid JSON object. This ensures efficient $O(1)$ persistence per turn. `datetime` objects are converted to ISO‑8601 strings. The directory structure is `logs/<task_id>/__log.jsonl` under the sandbox root (`SANDBOX_ROOT`). Errors during persistence are logged but never abort the session.
 
 ## 5. Benefits
 

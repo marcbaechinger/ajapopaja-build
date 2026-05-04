@@ -143,19 +143,19 @@ class BaseBotSession(ABC):
                 try:
                     from pathlib import Path
 
-                    log_path = Path(log_dir) / "__log.json"
+                    log_path = Path(log_dir) / "__log.jsonl"
                     log_path.parent.mkdir(parents=True, exist_ok=True)
 
-                    # Serialize the whole log
-                    with open(log_path, "w") as f:
-                        # Convert turns to dicts
-                        from dataclasses import asdict
+                    from dataclasses import asdict
 
-                        serializable_log = [
-                            {**asdict(t), "timestamp": t.timestamp.isoformat()}
-                            for t in self.conversation_log
-                        ]
-                        json.dump(serializable_log, f, indent=2)
+                    serializable_turn = {
+                        **asdict(turn),
+                        "timestamp": turn.timestamp.isoformat(),
+                    }
+
+                    # Append the turn to the log file in JSONL format
+                    with open(log_path, "a") as f:
+                        f.write(json.dumps(serializable_turn) + "\n")
                 except Exception as e:
                     logger.error(f"Failed to persist conversation log: {e}")
 
