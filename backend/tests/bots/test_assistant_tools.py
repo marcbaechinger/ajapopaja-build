@@ -21,7 +21,6 @@ import pytest
 from api.assistant.tools.file_tools import (
     list_project_structure,
     read_source_file,
-    read_source_file_by_range,
 )
 from core.models.models import Pipeline
 
@@ -110,7 +109,7 @@ async def test_list_project_structure_sanitization(init_mock_db):
 
 
 @pytest.mark.asyncio
-async def test_read_source_file_by_range(init_mock_db):
+async def test_read_source_file_with_range(init_mock_db):
     with tempfile.TemporaryDirectory() as tmp_dir:
         file_name = "range_test.txt"
         file_path = os.path.join(tmp_dir, file_name)
@@ -123,25 +122,35 @@ async def test_read_source_file_by_range(init_mock_db):
         pipeline_id = str(pipeline.id)
 
         # Valid range
-        result = await read_source_file_by_range(pipeline_id, file_name, 3, 5)
+        result = await read_source_file(pipeline_id, file_name, 3, 5)
         assert result == "Line 3\nLine 4\nLine 5"
 
         # Single line
-        result = await read_source_file_by_range(pipeline_id, file_name, 1, 1)
+        result = await read_source_file(pipeline_id, file_name, 1, 1)
         assert result == "Line 1"
 
         # Range exceeds file bounds (partially)
-        result = await read_source_file_by_range(pipeline_id, file_name, 9, 15)
+        result = await read_source_file(pipeline_id, file_name, 9, 15)
         assert result == "Line 9\nLine 10"
 
         # Range exceeds file bounds (completely)
-        result = await read_source_file_by_range(pipeline_id, file_name, 11, 20)
+        result = await read_source_file(pipeline_id, file_name, 11, 20)
         assert result == ""
 
         # start_line > end_line
-        result = await read_source_file_by_range(pipeline_id, file_name, 5, 3)
+        result = await read_source_file(pipeline_id, file_name, 5, 3)
         assert result == ""
 
+        # Default (full file)
+        result = await read_source_file(pipeline_id, file_name)
+        assert result.startswith("Line 1")
+        assert result.endswith("Line 10")
+        assert len(result.split("\n")) == 10
+
+        # Test start_line=0 (should be same as 1)
+        result = await read_source_file(pipeline_id, file_name, 0, 2)
+        assert result == "Line 1\nLine 2"
+
         # File not found
-        result = await read_source_file_by_range(pipeline_id, "nonexistent.txt", 1, 5)
+        result = await read_source_file(pipeline_id, "nonexistent.txt", 1, 5)
         assert "Error: File 'nonexistent.txt' does not exist." in result

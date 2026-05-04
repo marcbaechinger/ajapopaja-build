@@ -18,7 +18,6 @@ from typing import Any, Optional
 from api.assistant.tools.file_tools import (
     list_project_structure,
     read_source_file,
-    read_source_file_by_range,
 )
 from api.assistant.tools.search_tools import grep, find, tree
 from core.queries import task as task_queries
@@ -33,7 +32,6 @@ logger = logging.getLogger(__name__)
 archbot_registry.register_tool(list_project_structure)
 archbot_registry.register_tool(tree)
 archbot_registry.register_tool(read_source_file)
-archbot_registry.register_tool(read_source_file_by_range)
 archbot_registry.register_tool(grep)
 archbot_registry.register_tool(find)
 

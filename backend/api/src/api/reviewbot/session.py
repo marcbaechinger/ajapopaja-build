@@ -47,8 +47,7 @@ architecture and design patterns.
 - **Feature Implementations:** Detailed design documents for specific features are 
   located in `design/implemented/`.
 - **Exploration:** Use tools like `list_project_structure`, `tree`, `grep`, and `find` 
-  to discover relevant design documents. Use `read_source_file` or 
-  `read_source_file_by_range` to study them.
+  to discover relevant design documents. Use `read_source_file` to study them.
 
 ### Review Criteria
 Your review MUST evaluate the following aspects:
