@@ -25,6 +25,7 @@ from api.assistant.tools.search_tools import grep, find, tree
 from api.websocket_manager import WSMessage, manager
 from core.queries import task as task_queries
 
+from api.bot.utils import generate_execution_report
 from .registry import reviewbot_registry
 
 logger = logging.getLogger(__name__)
@@ -61,6 +62,11 @@ async def save_review(
 
     if not review_md.strip():
         return "Error: review_md cannot be empty or only whitespace."
+
+    # Append execution report if session is available
+    if session:
+        report = generate_execution_report(session)
+        review_md += report
 
     try:
         task = await task_queries.get_task_by_id(task_id)

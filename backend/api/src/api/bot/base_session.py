@@ -56,6 +56,8 @@ class BaseBotSession(ABC):
             {"role": "system", "content": self.get_system_instruction()}
         ]
         self.conversation_log: List[ConversationTurn] = []
+        self.finished_via_terminal_tool: bool = False
+        self.reached_turn_warning: bool = False
 
     @abstractmethod
     def get_system_instruction(self) -> str:
@@ -170,6 +172,8 @@ class BaseBotSession(ABC):
             "total_turns": total_turns,
             "num_tool_calls": num_tool_calls,
             "success_rate": success_rate,
+            "finished_via_terminal_tool": self.finished_via_terminal_tool,
+            "reached_turn_warning": self.reached_turn_warning,
         }
 
     async def run(self, max_iterations: Optional[int] = None):
@@ -334,6 +338,8 @@ class BaseBotSession(ABC):
                                         f"Terminal tool '{tool_name}' failed. Forcing retry."
                                     )
                                     terminal_call = False
+                                else:
+                                    self.finished_via_terminal_tool = True
 
                         # Inject warning AFTER processing tool results if not terminal
                         if not terminal_call:
@@ -341,6 +347,7 @@ class BaseBotSession(ABC):
                             warning = self.get_turn_warning(remaining)
                             if warning:
                                 logger.warning(f"Injecting turn warning: {warning}")
+                                self.reached_turn_warning = True
                                 self.history.append(
                                     {"role": "user", "content": warning}
                                 )

@@ -23,6 +23,7 @@ from api.assistant.tools.file_tools import (
 from api.assistant.tools.search_tools import grep, find, tree
 from core.queries import task as task_queries
 
+from api.bot.utils import generate_execution_report
 from .markdown_validator import MarkdownValidator
 from .registry import archbot_registry
 
@@ -67,6 +68,11 @@ async def save_design_doc(
 
     # Sanitize content
     sanitized_md = MarkdownValidator.sanitize(design_doc_md)
+
+    # Append execution report if session is available
+    if session:
+        report = generate_execution_report(session)
+        sanitized_md += report
 
     try:
         task = await task_queries.get_task_by_id(task_id)

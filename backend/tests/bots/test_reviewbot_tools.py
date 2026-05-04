@@ -16,6 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from api.bot.conversation import ConversationTurn
 from api.reviewbot.tools import save_review
 
 
@@ -73,3 +74,53 @@ async def test_save_review_invalid_payload():
     # Test whitespace string
     result = await save_review("p1", "t1", "   ")
     assert "Error: review_md cannot be empty" in result
+
+
+@pytest.mark.asyncio
+async def test_save_review_with_execution_report():
+    pipeline_id = "test_pipeline"
+    task_id = "test_task"
+    review_md = "# Technical Review\n\nExcellent work."
+
+    mock_task = AsyncMock()
+    mock_task.id = task_id
+    mock_task.save = AsyncMock()
+    mock_task.model_dump = MagicMock(
+        return_value={"id": task_id, "pipeline_id": pipeline_id, "review_md": review_md}
+    )
+
+    # Mock session
+    mock_session = MagicMock()
+    mock_session.get_summary_stats.return_value = {
+        "total_turns": 15,
+        "num_tool_calls": 8,
+        "success_rate": 1.0,
+        "finished_via_terminal_tool": True,
+        "reached_turn_warning": True,
+    }
+    mock_session.conversation_log = [
+        ConversationTurn(
+            turn_id=1,
+            role="tool",
+            content="{}",
+            tool_name="git_show_commit",
+            success=True,
+        )
+    ]
+
+    with (
+        patch(
+            "api.reviewbot.tools.task_queries.get_task_by_id", return_value=mock_task
+        ),
+        patch("api.reviewbot.tools.manager.broadcast", new_callable=AsyncMock),
+    ):
+        result = await save_review(
+            pipeline_id, task_id, review_md, session=mock_session
+        )
+
+        assert "Successfully saved review" in result
+        assert review_md in mock_task.review_md
+        assert "### 🤖 Execution Report" in mock_task.review_md
+        assert "- **Status**: ⚠️ Complete (Forced)" in mock_task.review_md
+        assert "- **Turns**: 15" in mock_task.review_md
+        assert "- **Tool Success Rate**: 100%" in mock_task.review_md
