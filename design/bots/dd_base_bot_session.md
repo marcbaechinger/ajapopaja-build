@@ -129,7 +129,36 @@ class CodeBotSession(BaseBotSession):
     def is_terminal_tool(self, name):
         return name == "commit_code"
 
-# Run
+# Run without a custom configuration
 session = CodeBotSession(pipeline_id="123", task_id="456")
 await session.run("Please review the following code change…")
+
+# Run with a custom configuration
+config = BaseBotSessionConfig(max_iterations=30)
+session = CodeBotSession(pipeline_id="123", task_id="456", session_config=config)
+await session.run("Please review the following code change…")
 ```
+
+### 3.1 Constructor Signatures
+
+```python
+# BaseBotSession
+def __init__(self, pipeline_id: str, task_id: str, session_config: Optional[BaseBotSessionConfig] = None)
+```
+
+The `session_config` argument is optional; when omitted, the default configuration defined by `BaseBotSessionConfig` is used.
+
+---
+
+### 3.2 BaseBotSessionConfig
+
+```python
+@dataclass
+class BaseBotSessionConfig:
+    model: str = config.OLLAMA_MODEL
+    host: str = config.OLLAMA_HOST
+    api_key: Optional[str] = config.OLLAMA_API_KEY
+    max_iterations: int = 50
+```
+
+The configuration dataclass centralises all adjustable parameters of the autonomous loop, making it easier to customise behaviour per bot without subclassing the base class.
