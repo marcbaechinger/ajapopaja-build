@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional
 import ollama
 
 from api.bot.conversation import ConversationTurn, create_log_turn
+from api.bot.session_config import BaseBotSessionConfig
 from api.bot.tool_registry import ToolDefinition
 from core import config
 
@@ -36,13 +37,21 @@ class BaseBotSession(ABC):
     and tool execution infrastructure.
     """
 
-    def __init__(self, pipeline_id: str, task_id: str):
+    def __init__(
+        self,
+        pipeline_id: str,
+        task_id: str,
+        session_config: Optional[BaseBotSessionConfig] = None,
+    ):
         self.pipeline_id = pipeline_id
         self.task_id = task_id
+        self.config = session_config or BaseBotSessionConfig()
+
         headers = {}
-        if config.OLLAMA_API_KEY:
-            headers["Authorization"] = f"Bearer {config.OLLAMA_API_KEY}"
-        self.client = ollama.AsyncClient(host=config.OLLAMA_HOST, headers=headers)
+        if self.config.api_key:
+            headers["Authorization"] = f"Bearer {self.config.api_key}"
+
+        self.client = ollama.AsyncClient(host=self.config.host, headers=headers)
         self.history: List[Dict[str, Any]] = [
             {"role": "system", "content": self.get_system_instruction()}
         ]
@@ -163,12 +172,14 @@ class BaseBotSession(ABC):
             "success_rate": success_rate,
         }
 
-    async def run(self, max_iterations: int = 50):
+    async def run(self, max_iterations: Optional[int] = None):
         """
         Runs the autonomous loop until a terminal tool is called or
         max_iterations is reached.
         """
         await self.on_event("bot_started")
+        if max_iterations is None:
+            max_iterations = self.config.max_iterations
         turn_id = 1
         try:
             initial_prompt = await self.get_initial_prompt()
@@ -186,7 +197,7 @@ class BaseBotSession(ABC):
 
                 try:
                     response = await self.client.chat(
-                        model=config.OLLAMA_MODEL,
+                        model=self.config.model,
                         messages=self.history,
                         tools=ollama_tools,
                         stream=True,

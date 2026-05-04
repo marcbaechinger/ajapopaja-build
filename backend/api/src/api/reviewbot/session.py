@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional
 
 from api.bot.tool_registry import ToolDefinition
 from api.bot.base_session import BaseBotSession
+from api.bot.session_config import BaseBotSessionConfig
 from api.websocket_manager import WSMessage, manager
 from core.queries import pipeline as pipeline_queries
 from core.queries import task as task_queries
@@ -90,8 +91,13 @@ class ReviewBotSession(BaseBotSession):
     Specialized assistant agent for performing technical code reviews.
     """
 
-    def __init__(self, pipeline_id: str, task_id: str):
-        super().__init__(pipeline_id, task_id)
+    def __init__(
+        self,
+        pipeline_id: str,
+        task_id: str,
+        session_config: Optional[BaseBotSessionConfig] = None,
+    ):
+        super().__init__(pipeline_id, task_id, session_config)
         self.session_result: Optional[Dict[str, Any]] = None
 
     def get_system_instruction(self) -> str:

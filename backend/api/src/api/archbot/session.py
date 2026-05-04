@@ -14,7 +14,7 @@
 
 import logging
 from textwrap import dedent
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
 from api.bot.base_session import BaseBotSession
 from api.bot.tool_registry import ToolDefinition

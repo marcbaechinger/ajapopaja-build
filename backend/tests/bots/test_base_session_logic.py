@@ -20,6 +20,7 @@ import pytest
 from ollama import Message
 
 from api.bot.base_session import BaseBotSession
+from api.bot.session_config import BaseBotSessionConfig
 from api.bot.tool_registry import ToolDefinition, ToolRegistry
 
 
@@ -30,10 +31,11 @@ class ConcreteBotSession(BaseBotSession):
         self,
         pipeline_id: str,
         task_id: str,
+        session_config: Optional[BaseBotSessionConfig] = None,
         use_custom_feedback: bool = False,
         use_custom_turn_warning: bool = False,
     ):
-        super().__init__(pipeline_id, task_id)
+        super().__init__(pipeline_id, task_id, session_config)
         self.pipeline_and_task_id_args = []
         self.use_custom_feedback = use_custom_feedback
         self.use_custom_turn_warning = use_custom_turn_warning
@@ -124,7 +126,8 @@ class AsyncIter:
 
 @pytest.mark.asyncio
 async def test_base_session_run_loop():
-    session = ConcreteBotSession("p1", "t1")
+    config = BaseBotSessionConfig(max_iterations=5)
+    session = ConcreteBotSession("p1", "t1", session_config=config)
     session.on_event = AsyncMock()
 
     # Mock Ollama response
@@ -149,7 +152,7 @@ async def test_base_session_run_loop():
             AsyncIter([mock_response_2]),
         ]
 
-        await session.run(max_iterations=5)
+        await session.run()
 
         assert mock_chat.call_count == 2
         assert session.on_event.call_args_list[0][0][0] == "bot_started"
@@ -167,7 +170,8 @@ async def test_base_session_run_loop():
 
 @pytest.mark.asyncio
 async def test_base_session_end_of_turns_warnings():
-    session = ConcreteBotSession("p1", "t1")
+    config = BaseBotSessionConfig(max_iterations=20)
+    session = ConcreteBotSession("p1", "t1", session_config=config)
     session.on_event = AsyncMock()
 
     # Mock Ollama tool call response
@@ -181,7 +185,7 @@ async def test_base_session_end_of_turns_warnings():
     with patch.object(session.client, "chat") as mock_chat:
         mock_chat.side_effect = lambda *args, **kwargs: AsyncIter([mock_response_1])
 
-        await session.run(max_iterations=20)
+        await session.run()
 
         five_warning = False
         last_warning = False
@@ -197,7 +201,10 @@ async def test_base_session_end_of_turns_warnings():
 
 @pytest.mark.asyncio
 async def test_base_session_end_of_turns_custom_warnings():
-    session = ConcreteBotSession("p1", "t1", use_custom_turn_warning=True)
+    config = BaseBotSessionConfig(max_iterations=20)
+    session = ConcreteBotSession(
+        "p1", "t1", session_config=config, use_custom_turn_warning=True
+    )
     session.on_event = AsyncMock()
 
     # Mock Ollama tool call response
@@ -211,7 +218,7 @@ async def test_base_session_end_of_turns_custom_warnings():
     with patch.object(session.client, "chat") as mock_chat:
         mock_chat.side_effect = lambda *args, **kwargs: AsyncIter([mock_response_1])
 
-        await session.run(max_iterations=20)
+        await session.run()
 
         five_warning = False
         last_warning = False
@@ -227,7 +234,8 @@ async def test_base_session_end_of_turns_custom_warnings():
 
 @pytest.mark.asyncio
 async def test_base_session_default_text_reponse():
-    session = ConcreteBotSession("p1", "t1")
+    config = BaseBotSessionConfig(max_iterations=4)
+    session = ConcreteBotSession("p1", "t1", session_config=config)
     mock_response = MagicMock()
     mock_response.message.content = "What should I do?"
     mock_response.message.tool_calls = None
@@ -235,7 +243,7 @@ async def test_base_session_default_text_reponse():
     with patch.object(session.client, "chat") as mock_chat:
         mock_chat.return_value = AsyncIter([mock_response])
 
-        await session.run(max_iterations=4)
+        await session.run()
 
         assert mock_chat.call_count == 4
         first_call = mock_chat.call_args_list[-1]
@@ -253,7 +261,10 @@ async def test_base_session_default_text_reponse():
 
 @pytest.mark.asyncio
 async def test_base_session_custom_text_reponse():
-    session = ConcreteBotSession("p1", "t1", use_custom_feedback=True)
+    config = BaseBotSessionConfig(max_iterations=4)
+    session = ConcreteBotSession(
+        "p1", "t1", session_config=config, use_custom_feedback=True
+    )
     mock_response = MagicMock()
     mock_response.message.content = "What should I do?"
     mock_response.message.tool_calls = None
@@ -261,7 +272,7 @@ async def test_base_session_custom_text_reponse():
     with patch.object(session.client, "chat") as mock_chat:
         mock_chat.return_value = AsyncIter([mock_response])
 
-        await session.run(max_iterations=4)
+        await session.run()
 
         assert mock_chat.call_count == 4
         first_call = mock_chat.call_args_list[-1]
@@ -278,7 +289,8 @@ async def test_base_session_custom_text_reponse():
 
 @pytest.mark.asyncio
 async def test_base_session_iteration_limit():
-    session = ConcreteBotSession("p1", "t1")
+    config = BaseBotSessionConfig(max_iterations=2)
+    session = ConcreteBotSession("p1", "t1", session_config=config)
 
     mock_response = MagicMock()
     mock_response.message.content = "Thinking..."
@@ -288,7 +300,7 @@ async def test_base_session_iteration_limit():
         mock_chat.return_value = AsyncIter([mock_response])
 
         # Should stop after 2 iterations
-        await session.run(max_iterations=2)
+        await session.run()
 
         assert mock_chat.call_count == 2
 
@@ -348,7 +360,8 @@ async def test_base_session_execute_tool():
 
 @pytest.mark.asyncio
 async def test_base_session_iteration_limit_warnings():
-    session = ConcreteBotSession("p1", "t1")
+    config = BaseBotSessionConfig(max_iterations=20)
+    session = ConcreteBotSession("p1", "t1", session_config=config)
 
     mock_response = MagicMock()
     mock_response.message.content = None
@@ -363,7 +376,7 @@ async def test_base_session_iteration_limit_warnings():
     with patch.object(session.client, "chat") as mock_chat:
         mock_chat.side_effect = lambda *args, **kwargs: AsyncIter([mock_response])
 
-        await session.run(max_iterations=20)
+        await session.run()
 
         assert mock_chat.call_count == 20
         first_call = mock_chat.call_args_list[-1]
@@ -382,7 +395,10 @@ async def test_base_session_iteration_limit_warnings():
 
 @pytest.mark.asyncio
 async def test_base_session_iteration_limit_custom_warnings():
-    session = ConcreteBotSession("p1", "t1", use_custom_turn_warning=True)
+    config = BaseBotSessionConfig(max_iterations=20)
+    session = ConcreteBotSession(
+        "p1", "t1", session_config=config, use_custom_turn_warning=True
+    )
 
     mock_response = MagicMock()
     mock_response.message.content = None
@@ -397,7 +413,7 @@ async def test_base_session_iteration_limit_custom_warnings():
     with patch.object(session.client, "chat") as mock_chat:
         mock_chat.side_effect = lambda *args, **kwargs: AsyncIter([mock_response])
 
-        await session.run(max_iterations=20)
+        await session.run()
 
         assert mock_chat.call_count == 20
         first_call = mock_chat.call_args_list[-1]
