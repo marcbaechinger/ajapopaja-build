@@ -60,6 +60,13 @@ class BaseBotSession(ABC):
         self.reached_turn_warning: bool = False
         self.iterations_used: int = 0
 
+        # Unique log filename for this session
+        from datetime import datetime, UTC
+
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+        bot_name = self.__class__.__name__.lower()
+        self.log_filename = f"{bot_name}_{timestamp}.jsonl"
+
     @abstractmethod
     def get_system_instruction(self) -> str:
         """Returns the system instruction for this agent."""
@@ -143,7 +150,7 @@ class BaseBotSession(ABC):
                 try:
                     from pathlib import Path
 
-                    log_path = Path(log_dir) / "__log.jsonl"
+                    log_path = Path(log_dir) / self.log_filename
                     log_path.parent.mkdir(parents=True, exist_ok=True)
 
                     from dataclasses import asdict

@@ -148,7 +148,11 @@ async def test_conversation_log_persistence(tmp_path, monkeypatch):
     session._log_turn(create_log_turn(1, "user", "test content 1"))
     session._log_turn(create_log_turn(2, "assistant", "test content 2"))
 
-    log_file = tmp_path / "logs" / "t1" / "__log.jsonl"
+    log_dir = tmp_path / "logs" / "t1"
+    # Find the log file with the pattern mockbotsession_*.jsonl
+    log_files = list(log_dir.glob("mockbotsession_*.jsonl"))
+    assert len(log_files) == 1
+    log_file = log_files[0]
     assert log_file.exists()
 
     with open(log_file, "r") as f:
