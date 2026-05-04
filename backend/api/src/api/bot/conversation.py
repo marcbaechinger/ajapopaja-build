@@ -26,7 +26,7 @@ class ConversationTurn:
     tool_name: Optional[str] = None
     tool_args: Optional[Dict[str, Any]] = None
     tool_result: Optional[Any] = None
-    success: Optional[bool] = None
+    success: bool = True
 
 
 def shorten_content(text: str, limit: int = 120) -> str:
@@ -69,7 +69,7 @@ def create_log_turn(
     tool_name: Optional[str] = None,
     tool_args: Optional[Dict[str, Any]] = None,
     tool_result: Optional[Any] = None,
-    success: Optional[bool] = None,
+    success: bool = True,
 ) -> ConversationTurn:
     return ConversationTurn(
         turn_id=turn_id,
@@ -77,7 +77,7 @@ def create_log_turn(
         role=role,
         content=shorten_content(content),
         tool_name=tool_name,
-        tool_args=prune_value(tool_args) if tool_args else None,
+        tool_args=prune_value(tool_args) if tool_args is not None else None,
         tool_result=prune_value(tool_result) if tool_result is not None else None,
         success=success,
     )

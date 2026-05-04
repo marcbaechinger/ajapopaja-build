@@ -276,6 +276,9 @@ class BaseBotSession(ABC):
                             tool_name=",".join([tc.function.name for tc in tool_calls])
                             if tool_calls
                             else None,
+                            tool_args=tool_calls[0].function.arguments
+                            if len(tool_calls) == 1
+                            else None,
                         )
                     )
                     turn_id += 1

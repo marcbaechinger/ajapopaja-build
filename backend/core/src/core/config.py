@@ -56,4 +56,4 @@ MCP_AUTHENTICATION_ENABLED = (
 )
 
 # Bot Logging
-BASEBOT_LOG_ENABLED = os.getenv("BASEBOT_LOG_ENABLED", "false").lower() == "true"
+BASEBOT_LOG_ENABLED = os.getenv("BASEBOT_LOG_ENABLED", "true").lower() == "true"
