@@ -48,14 +48,16 @@ async def grep(
     Args:
         pipeline_id: The ID of the pipeline.
         pattern: The regex pattern to search for.
-        file_extension: Only search in files matching this extension (e.g., "*.ts").
+        file_extension: Only search in files matching this extension (e.g., "ts", ".ts", "*.ts").
         ignore_case: If True, perform case-insensitive search.
         context_lines: Number of lines of context to include before and after matches.
     """
-    if file_extension and not file_extension.startswith("*."):
-        return {
-            "error": "file_extension must be in the format '*.extension' (e.g., '*.ts')"
-        }
+    if file_extension:
+        # Normalize the extension by stripping '*.' or '.' prefixes
+        if file_extension.startswith("*."):
+            file_extension = file_extension[2:]
+        elif file_extension.startswith("."):
+            file_extension = file_extension[1:]
 
     pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
     if not pipeline or not pipeline.workspace_abs_path:
@@ -68,7 +70,7 @@ async def grep(
         args.append(f"-C{context_lines}")
 
     if file_extension:
-        args.append(f"--include={file_extension}")
+        args.append(f"--include=*.{file_extension}")
 
     # Ignore common dirs like .git, node_modules, .venv, __pycache__
     for ignore_dir in IGNORED_DIRECTORIES:
