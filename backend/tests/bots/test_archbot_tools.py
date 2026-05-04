@@ -80,6 +80,8 @@ async def test_save_design_doc_with_execution_report(init_mock_db):
         "success_rate": 0.8,
         "finished_via_terminal_tool": True,
         "reached_turn_warning": False,
+        "iterations_used": 5,
+        "max_iterations": 50,
     }
     mock_session.conversation_log = [
         ConversationTurn(
@@ -102,5 +104,5 @@ async def test_save_design_doc_with_execution_report(init_mock_db):
     assert design_doc in updated_task.design_doc
     assert "### 🤖 Execution Report" in updated_task.design_doc
     assert "- **Status**: ✅ Complete" in updated_task.design_doc
-    assert "- **Turns**: 10" in updated_task.design_doc
+    assert "- **Turns**: 5 / 50" in updated_task.design_doc
     assert "- **Tool Success Rate**: 80%" in updated_task.design_doc

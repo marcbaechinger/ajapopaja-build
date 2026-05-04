@@ -58,6 +58,7 @@ class BaseBotSession(ABC):
         self.conversation_log: List[ConversationTurn] = []
         self.finished_via_terminal_tool: bool = False
         self.reached_turn_warning: bool = False
+        self.iterations_used: int = 0
 
     @abstractmethod
     def get_system_instruction(self) -> str:
@@ -174,6 +175,8 @@ class BaseBotSession(ABC):
             "success_rate": success_rate,
             "finished_via_terminal_tool": self.finished_via_terminal_tool,
             "reached_turn_warning": self.reached_turn_warning,
+            "iterations_used": self.iterations_used,
+            "max_iterations": self.config.max_iterations,
         }
 
     async def run(self, max_iterations: Optional[int] = None):
@@ -192,6 +195,7 @@ class BaseBotSession(ABC):
             turn_id += 1
 
             for i in range(max_iterations):
+                self.iterations_used = i + 1
                 logger.info(
                     f"{self.__class__.__name__} iteration {i + 1}/{max_iterations}"
                 )

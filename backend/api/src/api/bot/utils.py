@@ -43,14 +43,15 @@ def generate_execution_report(session: BaseBotSession) -> str:
         activity_log = "- No tool calls recorded.\n"
 
     report = f"""
----
+    ---
 
-### 🤖 Execution Report
-- **Status**: {status}
-- **Turns**: {stats["total_turns"]}
-- **Tool Success Rate**: {success_rate}
+    ### 🤖 Execution Report
+    - **Status**: {status}
+    - **Turns**: {stats["iterations_used"]} / {stats["max_iterations"]}
+    - **Tool Success Rate**: {success_rate}
 
-#### Activity Log (Last 5)
-{activity_log}
-"""
+    #### Activity Log (Last 5)
+    {activity_log}
+    """
+
     return report

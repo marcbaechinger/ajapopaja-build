@@ -97,6 +97,8 @@ async def test_save_review_with_execution_report():
         "success_rate": 1.0,
         "finished_via_terminal_tool": True,
         "reached_turn_warning": True,
+        "iterations_used": 8,
+        "max_iterations": 50,
     }
     mock_session.conversation_log = [
         ConversationTurn(
@@ -122,5 +124,5 @@ async def test_save_review_with_execution_report():
         assert review_md in mock_task.review_md
         assert "### 🤖 Execution Report" in mock_task.review_md
         assert "- **Status**: ⚠️ Complete (Forced)" in mock_task.review_md
-        assert "- **Turns**: 15" in mock_task.review_md
+        assert "- **Turns**: 8 / 50" in mock_task.review_md
         assert "- **Tool Success Rate**: 100%" in mock_task.review_md
