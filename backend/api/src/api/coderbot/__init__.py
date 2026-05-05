@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from . import registry as registry
-from . import tools as tools
-
-__all__ = ["registry", "tools"]
+from . import manager as manager
+from . import router as router
+from . import session as session

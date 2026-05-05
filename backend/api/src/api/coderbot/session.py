@@ -12,83 +12,206 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, List, Optional
+import asyncio
+import json
+import logging
+from typing import Optional
 
-from api.bot.base_session import BaseBotSession
-from api.bot.tool_registry import ToolDefinition
 from api.websocket_manager import WSMessage, manager as ws_manager
-from core import config
-from core.models.models import Pipeline, Task
+from core.models.models import Pipeline, PullRequest, PullRequestStatus, Task
 
-from .registry import coderbot_registry
 from .git_helper import SandboxGitHelper
 
+logger = logging.getLogger(__name__)
 
-class CoderBotSession(BaseBotSession):
-    @property
-    def use_sandbox(self) -> bool:
-        return True
 
-    async def on_event(self, event_name: str, payload: Optional[Dict[str, Any]] = None):
-        if event_name == "bot_started":
+class CoderBotSession:
+    """
+    Orchestrates the Pi coding agent via its headless RPC mode.
+    """
+
+    def __init__(
+        self,
+        pipeline_id: str,
+        task_id: str,
+    ):
+        self.pipeline_id = pipeline_id
+        self.task_id = task_id
+        self.process: Optional[asyncio.subprocess.Process] = None
+        self.helper: Optional[SandboxGitHelper] = None
+
+    async def get_initial_prompt(self, task: Task) -> str:
+        design_doc = task.design_doc or "No design document provided."
+        spec = task.spec or "No specification provided."
+
+        return (
+            f"Please implement the following task.\n\n"
+            f"### Task: {task.title}\n\n"
+            f"### Design Document\n{design_doc}\n\n"
+            f"### Specification\n{spec}"
+        )
+
+    async def _handle_agent_end(self, messages: list):
+        """Called when Pi finishes the task."""
+        if not self.helper:
+            return
+
+        try:
+            # Look for completion summary in assistant messages
+            summary = "Task completed by Pi."
+            for msg in reversed(messages):
+                if msg.get("role") == "assistant":
+                    content = msg.get("content", [])
+                    # Just grab the last text chunk
+                    for block in reversed(content):
+                        if block.get("type") == "text":
+                            summary = block.get("text", summary)[:200]
+                            break
+                    break
+
+            repo = self.helper.get_repo()
+            repo.git.add(A=True)
+            try:
+                repo.git.commit("-m", f"CoderBot (Pi): {summary}")
+            except Exception:
+                pass  # Nothing to commit
+
+            patch = self.helper.get_patch()
+
+            pr = PullRequest(
+                pipeline_id=self.pipeline_id,
+                task_id=self.task_id,
+                summary=summary,
+                branch_name=self.helper.branch_name,
+                patch=patch,
+                status=PullRequestStatus.OPEN,
+            )
+            await pr.insert()
+
             await ws_manager.broadcast(
                 WSMessage(
-                    type="CODERBOT_STARTED",
-                    payload={"pipeline_id": self.pipeline_id, "task_id": self.task_id},
+                    type="PULL_REQUEST_CREATED",
+                    payload={
+                        "id": str(pr.id),
+                        "pipeline_id": self.pipeline_id,
+                        "task_id": self.task_id,
+                        "summary": summary,
+                    },
                 )
             )
-        elif event_name == "bot_completed":
+        except Exception as e:
+            logger.error(f"Error creating PR: {e}")
+        finally:
+            self.helper.cleanup()
+
+    async def run(self):
+        """Runs the Pi subprocess and manages the RPC communication."""
+        await ws_manager.broadcast(
+            WSMessage(
+                type="CODERBOT_STARTED",
+                payload={"pipeline_id": self.pipeline_id, "task_id": self.task_id},
+            )
+        )
+
+        task = await Task.get(self.task_id)
+        if not task:
+            logger.error(f"Task {self.task_id} not found.")
+            return
+
+        pipeline = await Pipeline.get(self.pipeline_id)
+        if not pipeline or not pipeline.workspace_abs_path:
+            logger.error("Pipeline or workspace path not found.")
+            return
+
+        self.helper = SandboxGitHelper(self.task_id, pipeline.workspace_abs_path)
+        self.helper.setup_sandbox()
+
+        initial_prompt = await self.get_initial_prompt(task)
+
+        # Spawn Pi
+        try:
+            self.process = await asyncio.create_subprocess_exec(
+                "pi",
+                "--mode",
+                "rpc",
+                "--no-session",
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=str(self.helper.sandbox_path),
+            )
+
+            # Send prompt
+            prompt_cmd = (
+                json.dumps({"id": "req-1", "type": "prompt", "message": initial_prompt})
+                + "\n"
+            )
+
+            if not self.process.stdin:
+                logger.error("Failed to open stdin to Pi.")
+                return
+
+            self.process.stdin.write(prompt_cmd.encode("utf-8"))
+            await self.process.stdin.drain()
+
+            if not self.process.stdout:
+                logger.error("Failed to open stdout from Pi.")
+                return
+
+            # Read events
+            async for line in self.process.stdout:
+                try:
+                    event = json.loads(line.decode("utf-8").strip())
+                    event_type = event.get("type")
+
+                    if event_type == "message_update":
+                        delta = event.get("assistantMessageEvent", {})
+                        delta_type = delta.get("type")
+
+                        # Route text/thinking to assistant stream
+                        if delta_type in ["text_delta", "thinking_delta"]:
+                            await ws_manager.broadcast(
+                                WSMessage(
+                                    type="ASSISTANT_STREAM",
+                                    payload={
+                                        "content": delta.get("delta", ""),
+                                        "task_id": self.task_id,
+                                        "pipeline_id": self.pipeline_id,
+                                    },
+                                )
+                            )
+                        elif delta_type == "toolcall_start":
+                            tool_call = delta.get("partial", {}).get("toolCall", {})
+                            name = tool_call.get("name", "tool")
+                            await ws_manager.broadcast(
+                                WSMessage(
+                                    type="ASSISTANT_STREAM",
+                                    payload={
+                                        "content": f"\n\n> Calling {name}...\n",
+                                        "task_id": self.task_id,
+                                        "pipeline_id": self.pipeline_id,
+                                    },
+                                )
+                            )
+
+                    elif event_type == "agent_end":
+                        await self._handle_agent_end(event.get("messages", []))
+                        break
+
+                except json.JSONDecodeError:
+                    continue
+
+            # Wait for exit
+            await self.process.wait()
+
+        except Exception as e:
+            logger.error(f"Error running Pi: {e}")
+            if self.helper:
+                self.helper.cleanup()
+        finally:
             await ws_manager.broadcast(
                 WSMessage(
                     type="CODERBOT_COMPLETED",
                     payload={"pipeline_id": self.pipeline_id, "task_id": self.task_id},
                 )
             )
-
-    def get_system_instruction(self) -> str:
-        return (
-            "You are CoderBot, a Senior Software Engineer autonomous agent. "
-            "Your goal is to implement the coding task described in the design document and specification.\n\n"
-            "OPERATIONAL GUIDELINES:\n"
-            "1. EXPLORE: Use 'tree', 'read_source_file', and 'grep' to understand the existing code and architecture.\n"
-            "2. PLAN: Think through the implementation steps. Use the 'think' capability if available.\n"
-            "3. IMPLEMENT: Use 'write_file' or 'write_file_partially' to apply changes. Follow the project's coding style and conventions.\n"
-            "4. VERIFY: Always run 'lint' and 'test' after your changes to ensure quality and prevent regressions.\n"
-            "5. FINALIZE: Once you are confident in your solution and all tests pass, call 'task_completed' with a clear summary of your work.\n\n"
-            "IMPORTANT:\n"
-            "- You are working in a SANDBOX. Changes are local to this sandbox until you call 'task_completed'.\n"
-            "- Do not invent files or folders; use the exploration tools to find where to make changes.\n"
-            "- If tests fail, analyze the output and fix your implementation."
-        )
-
-    async def get_initial_prompt(self) -> str:
-        task = await Task.get(self.task_id)
-        if not task:
-            return "Task not found."
-
-        pipeline = await Pipeline.get(self.pipeline_id)
-        if not pipeline or not pipeline.workspace_abs_path:
-            return "Pipeline or workspace path not found."
-
-        # Initialize sandbox
-        helper = SandboxGitHelper(self.task_id, pipeline.workspace_abs_path)
-        helper.setup_sandbox()
-
-        design_doc = task.design_doc or "No design document provided."
-        spec = task.spec or "No specification provided."
-
-        return (
-            f"Please implement the following task in the sandbox.\n\n"
-            f"### Task: {task.title}\n\n"
-            f"### Design Document\n{design_doc}\n\n"
-            f"### Specification\n{spec}"
-        )
-
-    def get_tools(self) -> List[ToolDefinition]:
-        return coderbot_registry.list_tools()
-
-    def is_terminal_tool(self, tool_name: str) -> bool:
-        return tool_name == "task_completed"
-
-    def get_log_directory(self) -> Optional[str]:
-        return str(config.SANDBOX_ROOT / self.task_id)

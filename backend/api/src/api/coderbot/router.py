@@ -13,8 +13,10 @@
 # limitations under the License.
 
 from fastapi import APIRouter, HTTPException
+
 from core.models.models import Task
-from .manager import CoderBotManager
+
+from .manager import coderbot_manager
 
 router = APIRouter(prefix="/coderbot", tags=["coderbot"])
 
@@ -25,5 +27,5 @@ async def trigger_coderbot(task_id: str):
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    await CoderBotManager.process_task(task)
+    await coderbot_manager.process_task(task)
     return {"status": "success", "message": "CoderBot enqueued"}
