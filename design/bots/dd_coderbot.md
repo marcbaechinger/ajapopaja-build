@@ -47,6 +47,29 @@ The CoderBot session forwards `message_update` events (especially `text_delta` a
 
 All tooling (file editing, linting, testing) is performed by Pi. CoderBot does **not** expose its own tool registry; it simply forwards Pi’s events to the frontend. The Pi process uses its built‑in tools such as `write_file`, `write_file_partially`, `lint`, `test`, and `task_completed`.
 
+### 3.4. Front‑end Streaming
+
+The CoderBot session streams Pi events to the frontend in real time. Events of type `message_update` are mapped to WebSocket `ASSISTANT_STREAM` messages, ensuring the user sees incremental progress.
+
+### 3.5. Structured Session Logging
+
+CoderBot sessions persist all Pi interactions to a task‑specific JSON Lines file. Logs are written under the sandbox’s `logs` folder:
+
+```
+<SANDBOX_ROOT>/logs/<task_id>/coderbot_YYYYMMDD_HHMMSS.jsonl
+```
+
+Each line records an event with an ISO‑8601 timestamp. Supported event types:
+
+| Type | Payload | Description |
+|------|---------|-------------|
+| `session_start` | `pipeline_id`, `task_id` | Session initialized |
+| `pi_rpc_event` | `event` (raw Pi JSON) | Raw event from Pi stdout |
+| `session_end` | `success`, `error` (optional) | Session completed |
+| `error` | `message` | Any error encountered during the session |
+
+Logging is controlled by `config.BASEBOT_LOG_ENABLED`. When enabled, the session ensures the directory exists before appending, providing auditability and easy replay for debugging.
+
 ## 4. Design Decisions & Challenges
 
 ### 4.1. Decoupling from BaseBotSession
