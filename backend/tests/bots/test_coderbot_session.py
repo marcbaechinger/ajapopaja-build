@@ -104,3 +104,66 @@ async def test_coderbot_run_spawns_pi(init_mock_db):
         written_data = mock_proc.stdin.write.call_args[0][0].decode("utf-8")
         assert "prompt" in written_data
         assert "Test Task" in written_data
+
+
+@pytest.mark.asyncio
+async def test_coderbot_run_logs_events(init_mock_db):
+    pipeline = Pipeline(
+        name="Test Pipeline", workspace_path="test", workspace_abs_path="/tmp"
+    )
+    await pipeline.insert()
+
+    task = Task(
+        title="Test Task",
+        pipeline_id=str(pipeline.id),
+        design_doc="Design",
+        spec="Spec",
+    )
+    await task.insert()
+
+    session = CoderBotSession(pipeline_id=str(pipeline.id), task_id=str(task.id))
+
+    with (
+        patch("api.coderbot.session.SandboxGitHelper") as mock_helper_cls,
+        patch("api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock),
+        patch("api.coderbot.session.asyncio.create_subprocess_exec") as mock_exec,
+        patch("builtins.open", new_callable=MagicMock) as mock_open,
+        patch("pathlib.Path.mkdir"),
+    ):
+        mock_helper = MagicMock()
+        mock_helper_cls.return_value = mock_helper
+
+        mock_proc = AsyncMock()
+        mock_proc.stdin = MagicMock()
+        mock_proc.stdin.write = MagicMock()
+        mock_proc.stdin.drain = AsyncMock()
+
+        # Simulate stdout returning one event
+        async def mock_stdout_stream():
+            yield json.dumps({"type": "agent_start"}).encode("utf-8") + b"\n"
+            yield (
+                json.dumps({"type": "agent_end", "messages": []}).encode("utf-8")
+                + b"\n"
+            )
+
+        mock_proc.stdout.__aiter__.side_effect = lambda: mock_stdout_stream()
+        mock_proc.wait = AsyncMock()
+        mock_exec.return_value = mock_proc
+
+        await session.run()
+
+        # Verify log file was opened multiple times (start, events, end)
+        assert mock_open.call_count >= 4  # start, agent_start, agent_end, session_end
+
+        # Check content of one of the writes
+        written_lines = []
+        for call in mock_open.return_value.__enter__.return_value.write.call_args_list:
+            written_lines.append(json.loads(call[0][0].strip()))
+
+        assert any(record["type"] == "session_start" for record in written_lines)
+        assert any(
+            record["type"] == "pi_rpc_event"
+            and record["event"]["type"] == "agent_start"
+            for record in written_lines
+        )
+        assert any(record["type"] == "session_end" for record in written_lines)

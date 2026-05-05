@@ -15,9 +15,11 @@
 import asyncio
 import json
 import logging
-from typing import Optional
+from datetime import UTC, datetime
+from typing import Any, Dict, Optional
 
 from api.websocket_manager import WSMessage, manager as ws_manager
+from core import config
 from core.models.models import (
     Pipeline,
     PullRequest,
@@ -45,6 +47,29 @@ class CoderBotSession:
         self.task_id = task_id
         self.process: Optional[asyncio.subprocess.Process] = None
         self.helper: Optional[SandboxGitHelper] = None
+
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+        self.log_filename = f"coderbot_{timestamp}.jsonl"
+        self.log_dir = config.SANDBOX_ROOT / "logs" / task_id
+
+    def _log_event(self, data: Dict[str, Any]):
+        """Persists a structured event to the session log file."""
+        if not config.BASEBOT_LOG_ENABLED:
+            return
+
+        try:
+            self.log_dir.mkdir(parents=True, exist_ok=True)
+            log_path = self.log_dir / self.log_filename
+
+            event = {
+                "timestamp": datetime.now(UTC).isoformat(),
+                **data,
+            }
+
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(event) + "\n")
+        except Exception as e:
+            logger.error(f"Failed to log CoderBot event: {e}")
 
     async def get_initial_prompt(self, task: Task) -> str:
         design_doc = task.design_doc or "No design document provided."
@@ -118,6 +143,14 @@ class CoderBotSession:
 
     async def run(self):
         """Runs the Pi subprocess and manages the RPC communication."""
+        self._log_event(
+            {
+                "type": "session_start",
+                "pipeline_id": self.pipeline_id,
+                "task_id": self.task_id,
+            }
+        )
+
         await ws_manager.broadcast(
             WSMessage(
                 type="CODERBOT_STARTED",
@@ -127,12 +160,16 @@ class CoderBotSession:
 
         task = await Task.get(self.task_id)
         if not task:
-            logger.error(f"Task {self.task_id} not found.")
+            error_msg = f"Task {self.task_id} not found."
+            logger.error(error_msg)
+            self._log_event({"type": "error", "message": error_msg})
             return
 
         pipeline = await Pipeline.get(self.pipeline_id)
         if not pipeline or not pipeline.workspace_abs_path:
-            logger.error("Pipeline or workspace path not found.")
+            error_msg = "Pipeline or workspace path not found."
+            logger.error(error_msg)
+            self._log_event({"type": "error", "message": error_msg})
             return
 
         self.helper = SandboxGitHelper(self.task_id, pipeline.workspace_abs_path)
@@ -160,20 +197,28 @@ class CoderBotSession:
             )
 
             if not self.process.stdin:
-                logger.error("Failed to open stdin to Pi.")
+                error_msg = "Failed to open stdin to Pi."
+                logger.error(error_msg)
+                self._log_event({"type": "error", "message": error_msg})
                 return
 
             self.process.stdin.write(prompt_cmd.encode("utf-8"))
             await self.process.stdin.drain()
 
             if not self.process.stdout:
-                logger.error("Failed to open stdout from Pi.")
+                error_msg = "Failed to open stdout from Pi."
+                logger.error(error_msg)
+                self._log_event({"type": "error", "message": error_msg})
                 return
 
             # Read events
             async for line in self.process.stdout:
                 try:
-                    event = json.loads(line.decode("utf-8").strip())
+                    raw_line = line.decode("utf-8").strip()
+                    if not raw_line:
+                        continue
+                    event = json.loads(raw_line)
+                    self._log_event({"type": "pi_rpc_event", "event": event})
                     event_type = event.get("type")
 
                     if event_type == "message_update":
@@ -217,10 +262,13 @@ class CoderBotSession:
             await self.process.wait()
 
         except Exception as e:
-            logger.error(f"Error running Pi: {e}")
+            error_msg = f"Error running Pi: {e}"
+            logger.error(error_msg)
+            self._log_event({"type": "error", "message": error_msg})
             if self.helper:
                 self.helper.cleanup()
         finally:
+            self._log_event({"type": "session_end"})
             await ws_manager.broadcast(
                 WSMessage(
                     type="CODERBOT_COMPLETED",
