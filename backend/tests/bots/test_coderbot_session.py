@@ -23,7 +23,7 @@ from core.models.models import Pipeline, Task
 
 
 @pytest.mark.asyncio
-async def test_coderbot_session_initialization():
+async def test_coderbot_session_initialization(init_mock_db):
     task = Task(
         title="Test Task",
         pipeline_id="some_id",
@@ -66,7 +66,9 @@ async def test_coderbot_run_spawns_pi(init_mock_db):
         mock_helper_cls.return_value = mock_helper
 
         mock_proc = AsyncMock()
-        mock_proc.stdin = AsyncMock()
+        mock_proc.stdin = MagicMock()
+        mock_proc.stdin.write = MagicMock()
+        mock_proc.stdin.drain = AsyncMock()
 
         # Simulate stdout returning a single 'agent_end' event
         async def mock_stdout_stream():
