@@ -12,16 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, Optional
 
-from api.assistant.tools.shared_utils import (
-    get_match_context,
-    python_tree_impl,
-    run_command_in_dir,
-)
+from api.assistant.tools.git_tools import git_diff, git_status
+from api.assistant.tools.search_tools import grep, read_file as read_source_file, tree
 from api.websocket_manager import WSMessage, manager as ws_manager
 from core import config
 from core.models.models import Pipeline, PullRequest, PullRequestStatus
@@ -198,163 +193,6 @@ async def task_completed(pipeline_id: str, task_id: str, summary: str):
         if helper:
             # Cleanup sandbox after PR creation (or failure)
             helper.cleanup()
-
-
-async def tree(
-    pipeline_id: str,
-    task_id: str,
-    path: str = ".",
-    depth: Optional[int] = None,
-    follow_symlinks: bool = False,
-) -> str:
-    """
-    Produce a tree view of the directory structure in the sandbox.
-    The path must be relative to the sandbox root and cannot escape it.
-
-    Args:
-        path: Relative path to the directory to tree (optional, defaults to root).
-        depth: Maximum display depth of the directory tree.
-        follow_symlinks: If True, follow symbolic links.
-    """
-    try:
-        full_path = _validate_path(task_id, path, allow_root=True)
-    except ValueError as e:
-        return str(e)
-
-    if not os.path.isdir(full_path):
-        return f"Error: Directory not found: {path}"
-
-    ignore_pattern = "|".join(config.IGNORED_DIRECTORIES)
-    args = ["tree", "--noreport", "-I", ignore_pattern]
-    if depth is not None:
-        args.extend(["-L", str(depth)])
-    if follow_symlinks:
-        args.append("-l")
-
-    args.append(".")
-
-    try:
-        subprocess.run(["tree", "--version"], capture_output=True, check=True)
-        result = await run_command_in_dir(str(full_path), args)
-        return result[:10000]
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return python_tree_impl(str(full_path), depth)
-
-
-async def read_source_file(pipeline_id: str, task_id: str, path: str) -> str:
-    """
-    Reads the content of a source file from the sandbox.
-    The path must be relative to the sandbox root and cannot escape it.
-
-    Args:
-        path: Relative path to the file from the project root.
-    """
-    try:
-        target_path = _validate_path(task_id, path)
-        with open(target_path, "r") as f:
-            return f.read()
-    except Exception as e:
-        return f"Error reading file: {str(e)}"
-
-
-async def grep(
-    pipeline_id: str,
-    task_id: str,
-    pattern: str,
-    file_extension: Optional[str] = None,
-    ignore_case: bool = False,
-    context_lines: Optional[int] = None,
-) -> Dict[str, Any]:
-    """
-    Run a recursive grep in the sandbox.
-
-    Args:
-        pattern: The regex pattern to search for.
-        file_extension: Only search in files matching this extension (e.g., "*.ts").
-        ignore_case: If True, perform case-insensitive search.
-        context_lines: Number of lines of context to include before and after matches.
-    """
-    sandbox_root = _get_sandbox_path(task_id)
-    args = ["grep", "-rnI"]
-    if ignore_case:
-        args.append("-i")
-    if context_lines is not None and int(context_lines) > 0:
-        args.append(f"-C{context_lines}")
-
-    if file_extension:
-        args.append(f"--include={file_extension}")
-
-    for ignore_dir in config.IGNORED_DIRECTORIES:
-        args.append(f"--exclude-dir={ignore_dir}")
-
-    args.append("-E")
-    args.append(pattern)
-    args.append(".")
-
-    result = await run_command_in_dir(str(sandbox_root), args)
-
-    if result.startswith("Error:"):
-        return {"error": result}
-
-    if result == "No results found.":
-        return {"matches": [], "total_matches": 0, "truncated": False}
-
-    all_matches = []
-    for line in result.splitlines():
-        parts = line.split(":", 2)
-        if len(parts) >= 3:
-            try:
-                path = parts[0]
-                line_num = int(parts[1])
-                text = parts[2]
-                clean_path = path[2:] if path.startswith("./") else path
-                all_matches.append(
-                    {
-                        "path": clean_path,
-                        "line": line_num,
-                        "match": get_match_context(text, pattern, ignore_case),
-                    }
-                )
-            except (ValueError, IndexError):
-                continue
-        if len(all_matches) >= 1000:
-            break
-
-    total_matches = len(all_matches)
-    matches = all_matches[:10]
-    truncated = total_matches > 10
-
-    return {
-        "matches": matches,
-        "total_matches": total_matches,
-        "truncated": truncated,
-    }
-
-
-async def git_status(pipeline_id: str, task_id: str) -> str:
-    """
-    Shows the working-tree status in the sandbox.
-    """
-    try:
-        pipeline = await Pipeline.get(pipeline_id)
-        helper = SandboxGitHelper(task_id, pipeline.workspace_abs_path)
-        repo = helper.get_repo()
-        return repo.git.status()
-    except Exception as e:
-        return f"Error: {str(e)}"
-
-
-async def git_diff(pipeline_id: str, task_id: str) -> str:
-    """
-    Shows the diff in the sandbox.
-    """
-    try:
-        pipeline = await Pipeline.get(pipeline_id)
-        helper = SandboxGitHelper(task_id, pipeline.workspace_abs_path)
-        repo = helper.get_repo()
-        return repo.git.diff()
-    except Exception as e:
-        return f"Error: {str(e)}"
 
 
 coderbot_registry.register_tool(tree)

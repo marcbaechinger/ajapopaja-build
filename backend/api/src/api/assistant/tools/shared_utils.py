@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from core.config import IGNORED_DIRECTORIES
-from core.utils.path_utils import safe_join
+from core.utils.path_utils import get_workspace_path, safe_join
 
 logger = logging.getLogger(__name__)
 
@@ -103,10 +103,14 @@ def python_tree_impl(
     return "\n".join(output)
 
 
-def sanitize_and_resolve_path(
-    workspace_path: str, relative_path: str
+async def sanitize_and_resolve_path(
+    pipeline_id: str,
+    relative_path: str,
+    task_id: Optional[str] = None,
+    use_sandbox: bool = False,
 ) -> Optional[Path]:
     try:
-        return safe_join(Path(workspace_path), relative_path)
+        workspace_path = await get_workspace_path(pipeline_id, task_id, use_sandbox)
+        return safe_join(workspace_path, relative_path)
     except Exception:
         return None

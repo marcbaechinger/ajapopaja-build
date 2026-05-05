@@ -25,6 +25,10 @@ from .git_helper import SandboxGitHelper
 
 
 class CoderBotSession(BaseBotSession):
+    @property
+    def use_sandbox(self) -> bool:
+        return True
+
     async def on_event(self, event_name: str, payload: Optional[Dict[str, Any]] = None):
         if event_name == "bot_started":
             await ws_manager.broadcast(

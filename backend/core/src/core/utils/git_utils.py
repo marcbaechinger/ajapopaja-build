@@ -20,6 +20,7 @@ from core.exceptions import EntityNotFoundError
 from core.models.models import Pipeline
 from core.queries import pipeline as pipeline_queries
 from core.queries import task as task_queries
+from core.utils.path_utils import get_workspace_path
 
 
 def get_repo(workspace_abs_path: str) -> git.Repo:
@@ -27,16 +28,20 @@ def get_repo(workspace_abs_path: str) -> git.Repo:
     return git.Repo(workspace_abs_path)
 
 
-async def get_repo_for_pipeline(pipeline_id: str) -> git.Repo:
+async def get_repo_for_pipeline(
+    pipeline_id: str, task_id: str | None = None, use_sandbox: bool = False
+) -> git.Repo:
     """
     Fetches the pipeline and returns a git.Repo instance for its workspace.
     Raises EntityNotFoundError if pipeline or workspace path is missing.
     """
-    _, repo = await get_pipeline_and_repo(pipeline_id)
+    _, repo = await get_pipeline_and_repo(pipeline_id, task_id, use_sandbox)
     return repo
 
 
-async def get_pipeline_and_repo(pipeline_id: str) -> Tuple[Pipeline, git.Repo]:
+async def get_pipeline_and_repo(
+    pipeline_id: str, task_id: str | None = None, use_sandbox: bool = False
+) -> Tuple[Pipeline, git.Repo]:
     """
     Fetches the pipeline and returns both the pipeline and a git.Repo instance.
     Raises EntityNotFoundError if pipeline or workspace path is missing.
@@ -46,7 +51,11 @@ async def get_pipeline_and_repo(pipeline_id: str) -> Tuple[Pipeline, git.Repo]:
         raise EntityNotFoundError(
             f"Workspace path not found for pipeline {pipeline_id}"
         )
-    return pipeline, get_repo(pipeline.workspace_abs_path)
+
+    workspace_path = await get_workspace_path(
+        pipeline_id, task_id, use_sandbox, pipeline=pipeline
+    )
+    return pipeline, get_repo(str(workspace_path))
 
 
 async def get_repo_for_pipeline_by_task(task_id: str) -> git.Repo:

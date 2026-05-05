@@ -186,6 +186,11 @@ class BaseBotSession(ABC):
             "max_iterations": self.config.max_iterations,
         }
 
+    @property
+    def use_sandbox(self) -> bool:
+        """Returns True if this session should operate in a sandbox."""
+        return False
+
     async def run(self, max_iterations: Optional[int] = None):
         """
         Runs the autonomous loop until a terminal tool is called or
@@ -405,7 +410,7 @@ class BaseBotSession(ABC):
             properties = parameters.get("properties", {}).copy()
 
             # Injectable params that we handle automatically
-            injected_params = ["pipeline_id", "task_id"]
+            injected_params = ["pipeline_id", "task_id", "use_sandbox"]
             for p in injected_params:
                 if p in properties:
                     del properties[p]
@@ -449,6 +454,8 @@ class BaseBotSession(ABC):
                 args["pipeline_id"] = self.pipeline_id
             if "task_id" in sig.parameters:
                 args["task_id"] = self.task_id
+            if "use_sandbox" in sig.parameters:
+                args["use_sandbox"] = self.use_sandbox
             if "session" in sig.parameters:
                 args["session"] = self
 

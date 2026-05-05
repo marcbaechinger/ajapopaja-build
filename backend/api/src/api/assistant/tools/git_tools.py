@@ -27,14 +27,11 @@ from .shared_utils import sanitize_and_resolve_path
 READ_ONLY = "read_only"
 
 
-def _sanitize_path(workspace: str, rel_path: str) -> Optional[str]:
-    path = sanitize_and_resolve_path(workspace, rel_path)
-    return str(path) if path else None
-
-
 @register_tool(tool_type=READ_ONLY)
 async def git_log(
     pipeline_id: str,
+    task_id: Optional[str] = None,
+    use_sandbox: bool = False,
     author: Optional[str] = None,
     since: Optional[str] = None,
     until: Optional[str] = None,
@@ -45,13 +42,15 @@ async def git_log(
 
     Args:
         pipeline_id: The ID of the pipeline to which the project belongs.
+        task_id: The ID of the task (optional, used for sandbox).
+        use_sandbox: If True, operate in the task's sandbox.
         author: Filter by author name or email.
         since: Show commits more recent than a specific date.
         until: Show commits older than a specific date.
         limit: Maximum number of commits to return (default: 20).
     """
     try:
-        repo = await git_utils.get_repo_for_pipeline(pipeline_id)
+        repo = await git_utils.get_repo_for_pipeline(pipeline_id, task_id, use_sandbox)
         kwargs = {}
         if author:
             kwargs["author"] = author
@@ -77,16 +76,23 @@ async def git_log(
 
 
 @register_tool(tool_type=READ_ONLY)
-async def git_show_commit(pipeline_id: str, commit_sha: str) -> str:
+async def git_show_commit(
+    pipeline_id: str,
+    commit_sha: str,
+    task_id: Optional[str] = None,
+    use_sandbox: bool = False,
+) -> str:
     """
     Returns the diff, metadata, and file list for a single commit.
 
     Args:
         pipeline_id: The ID of the pipeline to which the project belongs.
         commit_sha: The SHA of the commit to show.
+        task_id: The ID of the task (optional, used for sandbox).
+        use_sandbox: If True, operate in the task's sandbox.
     """
     try:
-        repo = await git_utils.get_repo_for_pipeline(pipeline_id)
+        repo = await git_utils.get_repo_for_pipeline(pipeline_id, task_id, use_sandbox)
         return repo.git.show("--stat", commit_sha)
     except git.exc.GitCommandError as e:
         return f"Error executing git command: {e}"
@@ -135,10 +141,15 @@ def _parse_patch_to_hunks(patch_text: str) -> list[dict]:
     return hunks
 
 
-async def _get_repo_hunks(pipeline_id: str, diff_args: list) -> str:
+async def _get_repo_hunks(
+    pipeline_id: str,
+    diff_args: list,
+    task_id: Optional[str] = None,
+    use_sandbox: bool = False,
+) -> str:
     """Internal helper to fetch repo and parse requested diff."""
     try:
-        repo = await git_utils.get_repo_for_pipeline(pipeline_id)
+        repo = await git_utils.get_repo_for_pipeline(pipeline_id, task_id, use_sandbox)
         # unified=0: no context; format="": no metadata
         patch_text = repo.git.diff(*diff_args, unified=0)
         hunks = _parse_patch_to_hunks(patch_text)
@@ -148,7 +159,9 @@ async def _get_repo_hunks(pipeline_id: str, diff_args: list) -> str:
 
 
 @register_tool(tool_type=READ_ONLY)
-async def git_staged_hunks(pipeline_id: str) -> str:
+async def git_staged_hunks(
+    pipeline_id: str, task_id: Optional[str] = None, use_sandbox: bool = False
+) -> str:
     """
     Retrieves the specific line ranges (hunks) of changes that have been added to the
     Git index (staged) but not yet committed.
@@ -157,6 +170,8 @@ async def git_staged_hunks(pipeline_id: str) -> str:
 
     Args:
         pipeline_id: The unique identifier of the pipeline/project workspace.
+        task_id: The ID of the task (optional, used for sandbox).
+        use_sandbox: If True, operate in the task's sandbox.
 
     Returns:
         A JSON string list of objects. Each object contains:
@@ -165,11 +180,13 @@ async def git_staged_hunks(pipeline_id: str) -> str:
         - "last_line": The ending line number of the change in the new version.
         - "type": The nature of the change ('addition', 'deletion', or 'change').
     """
-    return await _get_repo_hunks(pipeline_id, ["--cached"])
+    return await _get_repo_hunks(pipeline_id, ["--cached"], task_id, use_sandbox)
 
 
 @register_tool(tool_type=READ_ONLY)
-async def git_unstaged_hunks(pipeline_id: str) -> str:
+async def git_unstaged_hunks(
+    pipeline_id: str, task_id: Optional[str] = None, use_sandbox: bool = False
+) -> str:
     """
     Retrieves the specific line ranges (hunks) of modifications in the working directory
     that have NOT yet been staged (git add) or committed.
@@ -179,16 +196,23 @@ async def git_unstaged_hunks(pipeline_id: str) -> str:
 
     Args:
         pipeline_id: The unique identifier of the pipeline/project workspace.
+        task_id: The ID of the task (optional, used for sandbox).
+        use_sandbox: If True, operate in the task's sandbox.
 
     Returns:
         A JSON string list of objects (hunks). Each hunk identifies the file,
         the line range affected, and the type of modification.
     """
-    return await _get_repo_hunks(pipeline_id, [])
+    return await _get_repo_hunks(pipeline_id, [], task_id, use_sandbox)
 
 
 @register_tool(tool_type=READ_ONLY)
-async def git_commit_hunks(pipeline_id: str, commit_sha: str) -> str:
+async def git_commit_hunks(
+    pipeline_id: str,
+    commit_sha: str,
+    task_id: Optional[str] = None,
+    use_sandbox: bool = False,
+) -> str:
     """
     Retrieves the line-level changes (hunks) introduced by a specific historical commit.
 
@@ -198,6 +222,8 @@ async def git_commit_hunks(pipeline_id: str, commit_sha: str) -> str:
     Args:
         pipeline_id: The unique identifier of the pipeline/project workspace.
         commit_sha: The full or short SHA-1 hash of the git commit to inspect.
+        task_id: The ID of the task (optional, used for sandbox).
+        use_sandbox: If True, operate in the task's sandbox.
 
     Returns:
         A JSON string list of objects. For deletions, 'first_line' and 'last_line'
@@ -205,7 +231,7 @@ async def git_commit_hunks(pipeline_id: str, commit_sha: str) -> str:
         and changes, they represent the range in the resulting file.
     """
     try:
-        repo = await git_utils.get_repo_for_pipeline(pipeline_id)
+        repo = await git_utils.get_repo_for_pipeline(pipeline_id, task_id, use_sandbox)
         # unified=0 removes context lines; format="" removes commit metadata
         patch_text = repo.git.show(commit_sha, unified=0, format="")
         return json.dumps(_parse_patch_to_hunks(patch_text))
@@ -215,7 +241,11 @@ async def git_commit_hunks(pipeline_id: str, commit_sha: str) -> str:
 
 @register_tool(tool_type=READ_ONLY)
 async def git_blame(
-    pipeline_id: str, file_path: str, line_number: Optional[int] = None
+    pipeline_id: str,
+    file_path: str,
+    task_id: Optional[str] = None,
+    use_sandbox: bool = False,
+    line_number: Optional[int] = None,
 ) -> str:
     """
     Returns blame info (author, date, commit) for a line or file.
@@ -223,18 +253,24 @@ async def git_blame(
     Args:
         pipeline_id: The ID of the pipeline to which the project belongs.
         file_path: Relative path to the file.
+        task_id: The ID of the task (optional, used for sandbox).
+        use_sandbox: If True, operate in the task's sandbox.
         line_number: Specific line number to blame (optional).
     """
     try:
-        pipeline, repo = await git_utils.get_pipeline_and_repo(pipeline_id)
-        full_path = _sanitize_path(str(pipeline.workspace_abs_path), file_path)
+        pipeline, repo = await git_utils.get_pipeline_and_repo(
+            pipeline_id, task_id, use_sandbox
+        )
+        full_path = await sanitize_and_resolve_path(
+            pipeline_id, file_path, task_id, use_sandbox
+        )
         if not full_path:
             return "Error: Invalid file path. Must be relative and within workspace."
 
         args = []
         if line_number:
             args.extend(["-L", f"{line_number},{line_number}"])
-        args.append(full_path)
+        args.append(str(full_path))
         return repo.git.blame(*args)
     except git.exc.GitCommandError as e:
         return f"Error executing git command: {e}"
@@ -243,15 +279,19 @@ async def git_blame(
 
 
 @register_tool(tool_type=READ_ONLY)
-async def git_status(pipeline_id: str) -> str:
+async def git_status(
+    pipeline_id: str, task_id: Optional[str] = None, use_sandbox: bool = False
+) -> str:
     """
     Shows the working-tree status (modified, added, deleted, staged).
 
     Args:
         pipeline_id: The ID of the pipeline to which the project belongs.
+        task_id: The ID of the task (optional, used for sandbox).
+        use_sandbox: If True, operate in the task's sandbox.
     """
     try:
-        repo = await git_utils.get_repo_for_pipeline(pipeline_id)
+        repo = await git_utils.get_repo_for_pipeline(pipeline_id, task_id, use_sandbox)
         return repo.git.status()
     except git.exc.GitCommandError as e:
         return f"Error executing git command: {e}"
@@ -260,15 +300,19 @@ async def git_status(pipeline_id: str) -> str:
 
 
 @register_tool(tool_type=READ_ONLY)
-async def git_branch_list(pipeline_id: str) -> str:
+async def git_branch_list(
+    pipeline_id: str, task_id: Optional[str] = None, use_sandbox: bool = False
+) -> str:
     """
     Lists all local and remote branches.
 
     Args:
         pipeline_id: The ID of the pipeline to which the project belongs.
+        task_id: The ID of the task (optional, used for sandbox).
+        use_sandbox: If True, operate in the task's sandbox.
     """
     try:
-        repo = await git_utils.get_repo_for_pipeline(pipeline_id)
+        repo = await git_utils.get_repo_for_pipeline(pipeline_id, task_id, use_sandbox)
         return repo.git.branch("-a")
     except git.exc.GitCommandError as e:
         return f"Error executing git command: {e}"
@@ -279,6 +323,8 @@ async def git_branch_list(pipeline_id: str) -> str:
 @register_tool(tool_type=READ_ONLY)
 async def git_diff(
     pipeline_id: str,
+    task_id: Optional[str] = None,
+    use_sandbox: bool = False,
     commit_a: Optional[str] = None,
     commit_b: Optional[str] = None,
     file_path: Optional[str] = None,
@@ -288,12 +334,16 @@ async def git_diff(
 
     Args:
         pipeline_id: The ID of the pipeline to which the project belongs.
+        task_id: The ID of the task (optional, used for sandbox).
+        use_sandbox: If True, operate in the task's sandbox.
         commit_a: Base ref (optional).
         commit_b: Target ref (optional).
         file_path: Specific file to diff (optional).
     """
     try:
-        pipeline, repo = await git_utils.get_pipeline_and_repo(pipeline_id)
+        pipeline, repo = await git_utils.get_pipeline_and_repo(
+            pipeline_id, task_id, use_sandbox
+        )
         args = []
         if commit_a:
             if commit_b:
@@ -302,12 +352,14 @@ async def git_diff(
                 args.append(commit_a)
 
         if file_path:
-            full_path = _sanitize_path(str(pipeline.workspace_abs_path), file_path)
+            full_path = await sanitize_and_resolve_path(
+                pipeline_id, file_path, task_id, use_sandbox
+            )
             if not full_path:
                 return (
                     "Error: Invalid file path. Must be relative and within workspace."
                 )
-            args.extend(["--", full_path])
+            args.extend(["--", str(full_path)])
 
         return repo.git.diff(*args)
     except git.exc.GitCommandError as e:

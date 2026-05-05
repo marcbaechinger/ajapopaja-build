@@ -20,10 +20,10 @@ from typing import Any, Dict, Optional
 
 from api.assistant.decorators import register_tool
 from core.config import IGNORED_DIRECTORIES
-from core.queries import pipeline as pipeline_queries
 
 from .shared_utils import (
     get_match_context,
+    get_workspace_path,
     python_tree_impl,
     run_command_in_dir,
     sanitize_and_resolve_path,
@@ -38,6 +38,8 @@ READ_ONLY = "read_only"
 async def grep(
     pipeline_id: str,
     pattern: str,
+    task_id: Optional[str] = None,
+    use_sandbox: bool = False,
     file_extension: Optional[str] = None,
     ignore_case: bool = False,
     context_lines: Optional[int] = None,
@@ -48,6 +50,8 @@ async def grep(
     Args:
         pipeline_id: The ID of the pipeline.
         pattern: The regex pattern to search for.
+        task_id: The ID of the task (optional, used for sandbox).
+        use_sandbox: If True, operate in the task's sandbox.
         file_extension: Only search in files matching this extension (e.g., "ts", ".ts", "*.ts").
         ignore_case: If True, perform case-insensitive search.
         context_lines: Number of lines of context to include before and after matches.
@@ -59,9 +63,10 @@ async def grep(
         elif file_extension.startswith("."):
             file_extension = file_extension[1:]
 
-    pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
-    if not pipeline or not pipeline.workspace_abs_path:
-        return {"error": "Workspace path not found."}
+    try:
+        workspace_path = await get_workspace_path(pipeline_id, task_id, use_sandbox)
+    except ValueError as e:
+        return {"error": str(e)}
 
     args = ["grep", "-rnI"]
     if ignore_case:
@@ -82,7 +87,7 @@ async def grep(
 
     logger.info(f"grep with {args}")
 
-    result = await run_command_in_dir(str(pipeline.workspace_abs_path), args)
+    result = await run_command_in_dir(str(workspace_path), args)
 
     if result.startswith("Error:"):
         logger.warning(f"grep with error: {result}")
@@ -137,6 +142,8 @@ async def grep(
 async def find(
     pipeline_id: str,
     name_pattern: str,
+    task_id: Optional[str] = None,
+    use_sandbox: bool = False,
     type: Optional[str] = None,
 ) -> str:
     """
@@ -145,11 +152,14 @@ async def find(
     Args:
         pipeline_id: The ID of the pipeline.
         name_pattern: Pattern to match against filename (e.g., "*.txt", "config*").
+        task_id: The ID of the task (optional, used for sandbox).
+        use_sandbox: If True, operate in the task's sandbox.
         type: 'f' for file, 'd' for directory. Optional.
     """
-    pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
-    if not pipeline or not pipeline.workspace_abs_path:
-        return "Error: Workspace path not found."
+    try:
+        workspace_path = await get_workspace_path(pipeline_id, task_id, use_sandbox)
+    except ValueError as e:
+        return str(e)
 
     # Let's simplify find to avoid complex subprocess escaping issues with -prune
     args_simple = ["find", ".", "-name", name_pattern]
@@ -161,7 +171,7 @@ async def find(
     try:
         result = subprocess.run(
             args_simple,
-            cwd=str(pipeline.workspace_abs_path),
+            cwd=str(workspace_path),
             capture_output=True,
             text=True,
             check=False,
@@ -182,6 +192,8 @@ async def find(
 async def tree(
     pipeline_id: str,
     path: str = ".",
+    task_id: Optional[str] = None,
+    use_sandbox: bool = False,
     depth: Optional[int] = None,
     follow_symlinks: bool = False,
 ) -> str:
@@ -191,14 +203,12 @@ async def tree(
     Args:
         pipeline_id: The ID of the pipeline.
         path: Relative path to the directory to tree (optional, defaults to root).
+        task_id: The ID of the task (optional, used for sandbox).
+        use_sandbox: If True, operate in the task's sandbox.
         depth: Maximum display depth of the directory tree.
         follow_symlinks: If True, follow symbolic links.
     """
-    pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
-    if not pipeline or not pipeline.workspace_abs_path:
-        return "Error: Workspace path not found."
-
-    full_path = sanitize_and_resolve_path(str(pipeline.workspace_abs_path), path)
+    full_path = await sanitize_and_resolve_path(pipeline_id, path, task_id, use_sandbox)
     if not full_path:
         return "Error: Invalid path. Path must be relative and within workspace."
 
@@ -225,20 +235,57 @@ async def tree(
 
 
 @register_tool(tool_type=READ_ONLY)
-async def head(pipeline_id: str, file_path: str, lines: int = 10) -> str:
+async def read_file(
+    pipeline_id: str,
+    file_path: str,
+    task_id: Optional[str] = None,
+    use_sandbox: bool = False,
+) -> str:
+    """
+    Reads the content of a file.
+
+    Args:
+        pipeline_id: The ID of the pipeline.
+        file_path: Relative path to the file.
+        task_id: The ID of the task (optional, used for sandbox).
+        use_sandbox: If True, operate in the task's sandbox.
+    """
+    full_path = await sanitize_and_resolve_path(
+        pipeline_id, file_path, task_id, use_sandbox
+    )
+    if not full_path:
+        return "Error: Invalid path. Path must be relative and within workspace."
+
+    if not os.path.isfile(full_path):
+        return f"Error: File not found: {file_path}"
+
+    try:
+        return full_path.read_text(encoding="utf-8")
+    except Exception as e:
+        return f"Error reading file: {str(e)}"
+
+
+@register_tool(tool_type=READ_ONLY)
+async def head(
+    pipeline_id: str,
+    file_path: str,
+    task_id: Optional[str] = None,
+    use_sandbox: bool = False,
+    lines: int = 10,
+) -> str:
     """
     Return the first N lines of a file.
 
     Args:
         pipeline_id: The ID of the pipeline.
         file_path: Relative path to the file.
+        task_id: The ID of the task (optional, used for sandbox).
+        use_sandbox: If True, operate in the task's sandbox.
         lines: Number of lines to return.
     """
-    pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
-    if not pipeline or not pipeline.workspace_abs_path:
-        return "Error: Workspace path not found."
-
-    full_path = sanitize_and_resolve_path(str(pipeline.workspace_abs_path), file_path)
+    full_path = await sanitize_and_resolve_path(
+        pipeline_id, file_path, task_id, use_sandbox
+    )
     if not full_path:
         return "Error: Invalid path. Path must be relative and within workspace."
 
@@ -259,20 +306,31 @@ async def head(pipeline_id: str, file_path: str, lines: int = 10) -> str:
 
 
 @register_tool(tool_type=READ_ONLY)
-async def tail(pipeline_id: str, file_path: str, lines: int = 10) -> str:
+async def tail(
+    pipeline_id: str,
+    file_path: str,
+    task_id: Optional[str] = None,
+    use_sandbox: bool = False,
+    lines: int = 10,
+) -> str:
     """
     Return the last N lines of a file.
 
     Args:
         pipeline_id: The ID of the pipeline.
         file_path: Relative path to the file.
+        task_id: The ID of the task (optional, used for sandbox).
+        use_sandbox: If True, operate in the task's sandbox.
         lines: Number of lines to return.
     """
-    pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
-    if not pipeline or not pipeline.workspace_abs_path:
-        return "Error: Workspace path not found."
+    try:
+        workspace_path = await get_workspace_path(pipeline_id, task_id, use_sandbox)
+    except ValueError as e:
+        return str(e)
 
-    full_path = sanitize_and_resolve_path(str(pipeline.workspace_abs_path), file_path)
+    full_path = await sanitize_and_resolve_path(
+        pipeline_id, file_path, task_id, use_sandbox
+    )
     if not full_path:
         return "Error: Invalid path. Path must be relative and within workspace."
 
@@ -280,11 +338,17 @@ async def tail(pipeline_id: str, file_path: str, lines: int = 10) -> str:
         return f"Error: File not found: {file_path}"
 
     args = ["tail", "-n", str(lines), str(full_path)]
-    return await run_command_in_dir(str(pipeline.workspace_abs_path), args)
+    return await run_command_in_dir(str(workspace_path), args)
 
 
 @register_tool(tool_type=READ_ONLY)
-async def search_file_content(pipeline_id: str, file_path: str, pattern: str) -> str:
+async def search_file_content(
+    pipeline_id: str,
+    file_path: str,
+    pattern: str,
+    task_id: Optional[str] = None,
+    use_sandbox: bool = False,
+) -> str:
     """
     Search a single file for a regex pattern.
 
@@ -292,12 +356,12 @@ async def search_file_content(pipeline_id: str, file_path: str, pattern: str) ->
         pipeline_id: The ID of the pipeline.
         file_path: Relative path to the file to search.
         pattern: The regex pattern to search for.
+        task_id: The ID of the task (optional, used for sandbox).
+        use_sandbox: If True, operate in the task's sandbox.
     """
-    pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
-    if not pipeline or not pipeline.workspace_abs_path:
-        return "Error: Workspace path not found."
-
-    full_path = sanitize_and_resolve_path(str(pipeline.workspace_abs_path), file_path)
+    full_path = await sanitize_and_resolve_path(
+        pipeline_id, file_path, task_id, use_sandbox
+    )
     if not full_path:
         return "Error: Invalid path. Path must be relative and within workspace."
 
