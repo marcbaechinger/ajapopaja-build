@@ -188,6 +188,7 @@ class CoderBotSession:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=str(self.helper.sandbox_path),
+                limit=10 * 1024 * 1024,  # 10MB buffer limit
             )
 
             # Send prompt

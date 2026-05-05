@@ -63,6 +63,8 @@ async def test_coderbot_run_spawns_pi(init_mock_db):
         patch("api.coderbot.session.asyncio.create_subprocess_exec") as mock_exec,
     ):
         mock_helper = MagicMock()
+        mock_helper.branch_name = "test-branch"
+        mock_helper.get_patch.return_value = "test-patch"
         mock_helper_cls.return_value = mock_helper
 
         mock_proc = AsyncMock()
@@ -87,7 +89,7 @@ async def test_coderbot_run_spawns_pi(init_mock_db):
         mock_helper_cls.assert_called_once()
         mock_helper.setup_sandbox.assert_called_once()
 
-        # Check subprocess was created with 'pi'
+        # Check subprocess was created with 'pi' and the 10MB limit
         mock_exec.assert_called_once_with(
             "pi",
             "--mode",
@@ -97,6 +99,7 @@ async def test_coderbot_run_spawns_pi(init_mock_db):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=str(mock_helper.sandbox_path),
+            limit=10 * 1024 * 1024,
         )
 
         # Verify stdin was written to
