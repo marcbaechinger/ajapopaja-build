@@ -34,6 +34,7 @@ import { PullRequestSection } from '../components/PullRequestSection.ts';
 import type { DocBotDialogProps } from '../components/DocBotDialog.ts';
 import { PipelineEditDialog } from '../components/PipelineEditDialog.ts';
 import { ReviewDialog } from '../components/ReviewDialog.ts';
+import { PullRequestDialog } from '../components/PullRequestDialog.ts';
 import { PipelineHeaderView, type DocbotState, type ReviewbotState } from '../components/PipelineHeaderView.ts';
 import EasyMDE from 'easymde';
 import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
@@ -420,6 +421,24 @@ export class PipelineDetailView extends View {
         context: this.context,
         onDelete: () => {
           // Task will be updated via websocket
+        }
+      });
+      await dialog.show();
+    });
+
+    this.context.actionRegistry.register('open_pr_dialog', async (_e, el) => {
+      const taskId = el.getAttribute('data-task-id');
+      if (!taskId) return;
+
+      const dialog = new PullRequestDialog({
+        taskId,
+        pipelineId: this.pipelineId,
+        context: this.context,
+        onAccept: () => {
+          this.fetchPullRequests();
+        },
+        onReject: () => {
+          this.fetchPullRequests();
         }
       });
       await dialog.show();

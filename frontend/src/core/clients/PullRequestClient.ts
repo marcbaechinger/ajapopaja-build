@@ -24,6 +24,13 @@ export class PullRequestClient extends BaseClient {
     return data.map((pr: any) => new PullRequest(pr));
   }
 
+  async getPullRequestByTask(taskId: string): Promise<PullRequest | null> {
+    const response = await this.fetch(`/api/pull_requests/task/${taskId}`);
+    if (response.status === 404) return null;
+    const data = await response.json();
+    return data ? new PullRequest(data) : null;
+  }
+
   async acceptPullRequest(prId: string): Promise<void> {
     await this.fetch(`/api/pull_requests/${prId}/accept`, {
       method: 'POST',

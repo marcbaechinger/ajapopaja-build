@@ -18,7 +18,13 @@ import logging
 from typing import Optional
 
 from api.websocket_manager import WSMessage, manager as ws_manager
-from core.models.models import Pipeline, PullRequest, PullRequestStatus, Task
+from core.models.models import (
+    Pipeline,
+    PullRequest,
+    PullRequestStatus,
+    Task,
+    TaskStatus,
+)
 
 from .git_helper import SandboxGitHelper
 
@@ -87,6 +93,12 @@ class CoderBotSession:
                 status=PullRequestStatus.OPEN,
             )
             await pr.insert()
+
+            # Update task status
+            task = await Task.get(self.task_id)
+            if task:
+                task.status = TaskStatus.PULL_REQUEST_AVAILABLE
+                await task.save()
 
             await ws_manager.broadcast(
                 WSMessage(

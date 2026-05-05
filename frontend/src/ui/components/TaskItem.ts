@@ -39,6 +39,7 @@ export class TaskItem {
       [TaskStatus.PROPOSED]: 'bg-purple-600 text-white',
       [TaskStatus.INPROGRESS]: 'bg-amber-600 text-white',
       [TaskStatus.IMPLEMENTED]: 'bg-green-600 text-white',
+      [TaskStatus.PULL_REQUEST_AVAILABLE]: 'bg-cyan-600 text-white',
       [TaskStatus.FAILED]: 'bg-red-600 text-white',
       [TaskStatus.DISCARDED]: 'bg-slate-800 text-slate-500',
     };
@@ -99,6 +100,16 @@ export class TaskItem {
                 ${canUnschedule ? `
                   <button data-action-click="trigger_coderbot" data-task-id="${taskId}" class="p-1 hover:bg-app-surface text-app-muted hover:text-green-500 rounded transition-all cursor-pointer group/coderbot" title="Trigger CoderBot">
                      ${Icon.render('lightning', { size: 12, className: 'group-hover/coderbot:scale-110 transition-transform' })}
+                  </button>
+                ` : ''}
+                ${task.status === TaskStatus.CREATED ? `
+                  <button data-action-click="trigger_coderbot" data-task-id="${taskId}" class="p-1 hover:bg-app-surface text-app-muted hover:text-green-500 rounded transition-all cursor-pointer group/coderbot" title="Trigger CoderBot">
+                     ${Icon.render('lightning', { size: 12, className: 'group-hover/coderbot:scale-110 transition-transform' })}
+                  </button>
+                ` : ''}
+                ${task.status === TaskStatus.PULL_REQUEST_AVAILABLE ? `
+                  <button data-action-click="open_pr_dialog" data-task-id="${taskId}" class="p-1 hover:bg-app-surface text-cyan-400 hover:text-cyan-300 rounded transition-all cursor-pointer group/pr" title="View Pull Request">
+                     ${Icon.render('git-pull-request', { size: 14, className: 'group-hover/pr:scale-110 transition-transform' })}
                   </button>
                 ` : ''}
                 ${isImplemented ? (

@@ -20,6 +20,7 @@ export const TaskStatus = {
   PROPOSED: "proposed",
   INPROGRESS: "inprogress",
   IMPLEMENTED: "implemented",
+  PULL_REQUEST_AVAILABLE: "pull_request_available",
   DISCARDED: "discarded",
   FAILED: "failed",
 } as const;

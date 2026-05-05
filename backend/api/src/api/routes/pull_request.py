@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from core.models.models import (
     PullRequest,
@@ -29,6 +29,11 @@ router = APIRouter(prefix="/pull_requests", tags=["pull_requests"])
 @router.get("/pipeline/{pipeline_id}", response_model=List[PullRequest])
 async def get_pipeline_pull_requests(pipeline_id: str):
     return await PullRequest.find(PullRequest.pipeline_id == pipeline_id).to_list()
+
+
+@router.get("/task/{task_id}", response_model=Optional[PullRequest])
+async def get_task_pull_request(task_id: str):
+    return await PullRequest.find_one(PullRequest.task_id == task_id)
 
 
 @router.post("/{pr_id}/accept")
