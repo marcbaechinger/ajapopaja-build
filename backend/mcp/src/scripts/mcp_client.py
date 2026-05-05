@@ -21,8 +21,8 @@ class MCPHttpClient:
         # FastMCP uses the root of the mounted path
         self.endpoint = (
             f"{self.base_url}/mcp/"
-            if not self.base_url.endswith("/mcp")
-            else f"{self.base_url}/"
+            if not self.base_url.endswith("/mcp/")
+            else self.base_url
         )
         self.session_id = None
         self.client = httpx.AsyncClient(timeout=30.0)
@@ -151,6 +151,27 @@ async def run_get_task_details(client: MCPHttpClient, task_id: str):
     await client.call_tool("get_task_details", {"task_id": task_id})
 
 
+async def run_search_tasks(
+    client: MCPHttpClient,
+    keywords: Optional[str],
+    statuses: Optional[list[str]],
+    pipeline_id: Optional[str],
+    page: int,
+    limit: int,
+):
+    logger.info("--- Action: Search Tasks ---")
+    args = {}
+    if keywords:
+        args["keywords"] = keywords
+    if statuses:
+        args["statuses"] = statuses
+    if pipeline_id:
+        args["pipeline_id"] = pipeline_id
+    args["page"] = page
+    args["limit"] = limit
+    await client.call_tool("search_tasks", args)
+
+
 async def run_complete_task(
     client: MCPHttpClient,
     task_id: str,
@@ -166,6 +187,21 @@ async def run_complete_task(
         "version": version,
     }
     await client.call_tool("complete_task", args)
+
+
+async def run_update_task_design_doc(
+    client: MCPHttpClient,
+    task_id: str,
+    design_doc: str,
+    version: int,
+):
+    logger.info(f"--- Action: Update Task Design Doc (ID: {task_id}) ---")
+    args = {
+        "task_id": task_id,
+        "design_doc": design_doc,
+        "version": version,
+    }
+    await client.call_tool("update_task_design_doc", args)
 
 
 async def main():
@@ -190,6 +226,13 @@ async def main():
     )
     get_parser.add_argument("task_id", help="The 24-char hex task ID")
 
+    search_parser = subparsers.add_parser("search-tasks", help="Search for tasks")
+    search_parser.add_argument("--keywords", help="Search keywords")
+    search_parser.add_argument("--statuses", nargs="+", help="Status filters")
+    search_parser.add_argument("--pipeline", help="Pipeline ID filter")
+    search_parser.add_argument("--page", type=int, default=0, help="Page number")
+    search_parser.add_argument("--limit", type=int, default=10, help="Results limit")
+
     complete_parser = subparsers.add_parser(
         "complete-task", help="Mark a task as completed"
     )
@@ -197,6 +240,17 @@ async def main():
     complete_parser.add_argument("--commit", required=True, help="Git commit hash")
     complete_parser.add_argument("--info", required=True, help="Completion summary")
     complete_parser.add_argument(
+        "--version", type=int, required=True, help="Current task version for OCC"
+    )
+
+    design_parser = subparsers.add_parser(
+        "update-design-doc", help="Update the design document for a task"
+    )
+    design_parser.add_argument("task_id", help="The 24-char hex task ID")
+    design_parser.add_argument(
+        "--design-doc", required=True, help="Markdown-formatted design document"
+    )
+    design_parser.add_argument(
         "--version", type=int, required=True, help="Current task version for OCC"
     )
 
@@ -220,9 +274,17 @@ async def main():
         await run_get_task_details(client, args.task_id)
     elif args.command == "get-task":
         await run_get_next_task(client, args.pipeline_id)
+    elif args.command == "search-tasks":
+        await run_search_tasks(
+            client, args.keywords, args.statuses, args.pipeline, args.page, args.limit
+        )
     elif args.command == "complete-task":
         await run_complete_task(
             client, args.task_id, args.commit, args.info, args.version
+        )
+    elif args.command == "update-design-doc":
+        await run_update_task_design_doc(
+            client, args.task_id, args.design_doc, args.version
         )
 
     await client.close()
