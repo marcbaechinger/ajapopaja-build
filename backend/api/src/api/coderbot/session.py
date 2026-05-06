@@ -113,7 +113,7 @@ class CoderBotSession:
                 # Use show --patch to get the exact changes from the last commit
                 patch = repo.git.show("HEAD", patch=True, unified=3)
                 # Filter out commit metadata to get a clean patch
-                patch_lines = patch.splitlines()
+                patch_lines = patch.splitlines(keepends=True)
                 clean_patch_lines = []
                 in_diff = False
                 for line in patch_lines:
@@ -121,7 +121,7 @@ class CoderBotSession:
                         in_diff = True
                     if in_diff:
                         clean_patch_lines.append(line)
-                patch = "\n".join(clean_patch_lines)
+                patch = "".join(clean_patch_lines)
             else:
                 patch = self.helper.get_patch()
 
