@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import asyncio
 import logging
 import os
 import tempfile
@@ -128,6 +129,27 @@ async def accept_pull_request(
             # Use --3way to handle minor context mismatches if possible
             repo.git.apply("--3way", patch_path)
             logger.info(f"Successfully applied patch for PR {pr_id}")
+
+            # 2.5 Format with ruff
+            try:
+                logger.info(f"Formatting workspace with ruff: {workspace_path}")
+                for ruff_cmd in [["format", "."], ["check", "--fix", "."]]:
+                    proc = await asyncio.create_subprocess_exec(
+                        "uv",
+                        "run",
+                        "ruff",
+                        *ruff_cmd,
+                        cwd=workspace_path,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                    )
+                    stdout, stderr = await proc.communicate()
+                    if proc.returncode != 0:
+                        logger.warning(
+                            f"Ruff {ruff_cmd[0]} returned {proc.returncode}: {stderr.decode()}"
+                        )
+            except Exception as e:
+                logger.warning(f"Failed to run ruff formatting: {e}")
 
             # 3. Commit the changes
             commit_message = (request.commit_message if request else None) or pr.summary
