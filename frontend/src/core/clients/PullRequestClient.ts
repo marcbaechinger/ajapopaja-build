@@ -38,9 +38,13 @@ export class PullRequestClient extends BaseClient {
     return data ? new PullRequest(data) : null;
   }
 
-  async acceptPullRequest(prId: string): Promise<void> {
+  async acceptPullRequest(prId: string, commitMessage?: string): Promise<void> {
     await this.fetch(`/api/pull_requests/${prId}/accept`, {
       method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ commit_message: commitMessage }),
     });
   }
 

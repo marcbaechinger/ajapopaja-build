@@ -100,7 +100,11 @@ export class PullRequestDialog extends BaseDialog<void> {
               Branch: ${this.pr.branch_name}
             </span>
           </div>
-          <h3 class="text-xl font-bold text-app-text">${this.pr.summary}</h3>
+          <div class="relative group">
+            <textarea id="pr-summary-input" class="w-full bg-transparent text-xl font-bold text-app-text border-none focus:ring-0 resize-none p-0 overflow-hidden min-h-[1.5em]" rows="1">${this.pr.summary}</textarea>
+            <div class="absolute -bottom-1 left-0 w-full h-px bg-app-accent-2/30 scale-x-0 group-focus-within:scale-x-100 transition-transform duration-300"></div>
+          </div>
+          <p class="text-[10px] font-bold text-app-muted uppercase tracking-widest mt-1">Commit Message</p>
         </div>
         
         <div class="flex-grow overflow-auto p-0 bg-slate-950">
@@ -136,16 +140,30 @@ export class PullRequestDialog extends BaseDialog<void> {
     this.dialog.querySelector('#pr-close-fallback-btn')?.addEventListener('click', () => this.close());
     this.dialog.querySelector('#pr-accept-btn')?.addEventListener('click', () => this.handleAccept());
     this.dialog.querySelector('#pr-reject-btn')?.addEventListener('click', () => this.handleReject());
+
+    const summaryInput = this.dialog.querySelector('#pr-summary-input') as HTMLTextAreaElement;
+    if (summaryInput) {
+      summaryInput.addEventListener('input', () => {
+        summaryInput.style.height = 'auto';
+        summaryInput.style.height = summaryInput.scrollHeight + 'px';
+      });
+      // Trigger once to set initial height
+      summaryInput.style.height = 'auto';
+      summaryInput.style.height = summaryInput.scrollHeight + 'px';
+    }
   }
 
   private async handleAccept() {
     if (!this.pr) return;
     const acceptBtn = this.dialog.querySelector('#pr-accept-btn') as HTMLButtonElement;
+    const summaryInput = this.dialog.querySelector('#pr-summary-input') as HTMLTextAreaElement;
+    const commitMessage = summaryInput?.value || this.pr.summary;
+
     acceptBtn.disabled = true;
     acceptBtn.textContent = 'Applying...';
 
     try {
-      await this.props.context.pullRequestClient.acceptPullRequest(this.pr.id!);
+      await this.props.context.pullRequestClient.acceptPullRequest(this.pr.id!, commitMessage);
       if (this.props.onAccept) this.props.onAccept();
       this.close();
     } catch (error: any) {

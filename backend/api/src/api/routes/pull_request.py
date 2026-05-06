@@ -19,6 +19,7 @@ from typing import List, Optional
 
 import git
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 from core.models.models import (
     Pipeline,
@@ -32,6 +33,10 @@ from core.utils import git_utils
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/pull_requests", tags=["pull_requests"])
+
+
+class AcceptPullRequestRequest(BaseModel):
+    commit_message: Optional[str] = None
 
 
 @router.get("/pipeline/{pipeline_id}", response_model=List[PullRequest])
@@ -70,7 +75,9 @@ async def get_pull_request(pr_id: str):
 
 
 @router.post("/{pr_id}/accept")
-async def accept_pull_request(pr_id: str):
+async def accept_pull_request(
+    pr_id: str, request: Optional[AcceptPullRequestRequest] = None
+):
     logger.info(f"Accepting Pull Request {pr_id}")
     pr = await PullRequest.get(pr_id)
     if not pr:
@@ -98,6 +105,14 @@ async def accept_pull_request(pr_id: str):
         logger.info(f"Applying patch to workspace: {workspace_path}")
         repo = git_utils.get_repo(workspace_path)
 
+        # 1. Check if repo is clean
+        if repo.is_dirty(untracked_files=True):
+            logger.warning(f"Workspace {workspace_path} is not clean. Aborting patch.")
+            raise HTTPException(
+                status_code=400,
+                detail="Workspace has unstaged or untracked changes. Please clean it before accepting.",
+            )
+
         patch_content = pr.patch
         if not patch_content.endswith("\n"):
             patch_content += "\n"
@@ -112,12 +127,23 @@ async def accept_pull_request(pr_id: str):
             # Use --3way to handle minor context mismatches if possible
             repo.git.apply("--3way", patch_path)
             logger.info(f"Successfully applied patch for PR {pr_id}")
+
+            # 3. Commit the changes
+            commit_message = (request.commit_message if request else None) or pr.summary
+            repo.git.add(A=True)
+            repo.git.commit("-m", commit_message)
+            logger.info(f"Successfully committed changes for PR {pr_id}")
+
         except git.exc.GitCommandError as e:
-            logger.error(f"Git apply failed for PR {pr_id}: {e.stderr}", exc_info=True)
-            raise HTTPException(status_code=500, detail=f"Git apply failed: {e.stderr}")
+            logger.error(
+                f"Git operation failed for PR {pr_id}: {e.stderr}", exc_info=True
+            )
+            raise HTTPException(
+                status_code=500, detail=f"Git operation failed: {e.stderr}"
+            )
         except Exception as e:
             logger.error(
-                f"Unexpected error in git apply for PR {pr_id}: {e}", exc_info=True
+                f"Unexpected error in git operation for PR {pr_id}: {e}", exc_info=True
             )
             raise
         finally:
@@ -135,7 +161,10 @@ async def accept_pull_request(pr_id: str):
             task.completion_info = pr.summary
             await task.save()
 
-        return {"status": "success", "message": "Pull Request accepted and applied"}
+        return {
+            "status": "success",
+            "message": "Pull Request accepted, applied, and committed",
+        }
     except Exception as e:
         logger.error(
             f"Unexpected error in accept_pull_request for PR {pr_id}: {e}",
