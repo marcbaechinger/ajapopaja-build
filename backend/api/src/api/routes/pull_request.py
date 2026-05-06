@@ -121,6 +121,7 @@ async def accept_pull_request(
             f.write(patch_content)
             patch_path = f.name
 
+        new_commit_hash = None
         try:
             logger.info(f"Patch length: {len(pr.patch)} characters")
             logger.debug(f"Executing git apply with patch at {patch_path}")
@@ -132,7 +133,10 @@ async def accept_pull_request(
             commit_message = (request.commit_message if request else None) or pr.summary
             repo.git.add(A=True)
             repo.git.commit("-m", commit_message)
-            logger.info(f"Successfully committed changes for PR {pr_id}")
+            new_commit_hash = repo.head.commit.hexsha
+            logger.info(
+                f"Successfully committed changes for PR {pr_id} (hash: {new_commit_hash})"
+            )
 
         except git.exc.GitCommandError as e:
             logger.error(
@@ -159,6 +163,7 @@ async def accept_pull_request(
             logger.info(f"Updating status for task {pr.task_id} to IMPLEMENTED")
             task.status = TaskStatus.IMPLEMENTED
             task.completion_info = pr.summary
+            task.commit_hash = new_commit_hash
             await task.save()
 
         return {
@@ -181,4 +186,10 @@ async def reject_pull_request(pr_id: str):
 
     pr.status = PullRequestStatus.REJECTED
     await pr.save()
+
+    task = await Task.get(pr.task_id)
+    if task:
+        logger.info(f"Updating status for task {pr.task_id} to CREATED")
+        task.status = TaskStatus.CREATED
+        await task.save()
     return {"status": "success", "message": "Pull Request rejected"}
