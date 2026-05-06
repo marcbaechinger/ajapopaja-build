@@ -19,7 +19,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from api.coderbot.session import CoderBotSession
+from core import config
 from core.models.models import Pipeline, Task
+
+
+@pytest.fixture(autouse=True)
+def enable_logging():
+    original = config.BASEBOT_LOG_ENABLED
+    config.BASEBOT_LOG_ENABLED = True
+    yield
+    config.BASEBOT_LOG_ENABLED = original
 
 
 @pytest.mark.asyncio
@@ -55,12 +64,12 @@ async def test_coderbot_run_spawns_pi(init_mock_db):
     )
     await task.insert()
 
-    session = CoderBotSession(pipeline_id=str(pipeline.id), task_id=str(task.id))
-
     with (
         patch("api.coderbot.session.SandboxGitHelper") as mock_helper_cls,
         patch("api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock),
         patch("api.coderbot.session.asyncio.create_subprocess_exec") as mock_exec,
+        patch("builtins.open", MagicMock()),
+        patch("pathlib.Path.mkdir"),
     ):
         mock_helper = MagicMock()
         mock_helper.branch_name = "test-branch"
@@ -70,6 +79,8 @@ async def test_coderbot_run_spawns_pi(init_mock_db):
         mock_repo.git.show.return_value = "diff --git a/file b/file\n+new line"
         mock_helper.get_repo.return_value = mock_repo
         mock_helper_cls.return_value = mock_helper
+
+        session = CoderBotSession(pipeline_id=str(pipeline.id), task_id=str(task.id))
 
         mock_proc = AsyncMock()
         mock_proc.stdin = MagicMock()
@@ -133,8 +144,6 @@ async def test_coderbot_run_logs_events(init_mock_db):
     )
     await task.insert()
 
-    session = CoderBotSession(pipeline_id=str(pipeline.id), task_id=str(task.id))
-
     with (
         patch("api.coderbot.session.SandboxGitHelper") as mock_helper_cls,
         patch("api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock),
@@ -143,7 +152,15 @@ async def test_coderbot_run_logs_events(init_mock_db):
         patch("pathlib.Path.mkdir"),
     ):
         mock_helper = MagicMock()
+        mock_helper.branch_name = "test-branch"
+        mock_helper.get_patch.return_value = "test-patch"
+        mock_repo = MagicMock()
+        mock_repo.git.diff.return_value = "test-patch"
+        mock_repo.git.show.return_value = "diff --git a/file b/file\n+new line"
+        mock_helper.get_repo.return_value = mock_repo
         mock_helper_cls.return_value = mock_helper
+
+        session = CoderBotSession(pipeline_id=str(pipeline.id), task_id=str(task.id))
 
         mock_proc = AsyncMock()
         mock_proc.stdin = MagicMock()
@@ -164,12 +181,12 @@ async def test_coderbot_run_logs_events(init_mock_db):
 
         await session.run()
 
-        # Verify log file was opened multiple times (start, events, end)
-        assert mock_open.call_count >= 4  # start, agent_start, agent_end, session_end
+        # Verify log file was opened (initialization)
+        assert mock_open.call_count >= 1
 
-        # Check content of one of the writes
+        # Check content of writes
         written_lines = []
-        for call in mock_open.return_value.__enter__.return_value.write.call_args_list:
+        for call in mock_open.return_value.write.call_args_list:
             written_lines.append(json.loads(call[0][0].strip()))
 
         assert any(record["type"] == "session_start" for record in written_lines)
@@ -197,8 +214,6 @@ async def test_coderbot_run_logs_error_with_traceback(init_mock_db):
     )
     await task.insert()
 
-    session = CoderBotSession(pipeline_id=str(pipeline.id), task_id=str(task.id))
-
     with (
         patch("api.coderbot.session.SandboxGitHelper") as mock_helper_cls,
         patch("api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock),
@@ -209,6 +224,8 @@ async def test_coderbot_run_logs_error_with_traceback(init_mock_db):
         mock_helper = MagicMock()
         mock_helper_cls.return_value = mock_helper
 
+        session = CoderBotSession(pipeline_id=str(pipeline.id), task_id=str(task.id))
+
         # Make subprocess creation raise an exception
         mock_exec.side_effect = RuntimeError("Failed to spawn subprocess")
 
@@ -216,7 +233,7 @@ async def test_coderbot_run_logs_error_with_traceback(init_mock_db):
 
         # Check content of writes for error events
         written_lines = []
-        for call in mock_open.return_value.__enter__.return_value.write.call_args_list:
+        for call in mock_open.return_value.write.call_args_list:
             written_lines.append(json.loads(call[0][0].strip()))
 
         # Find the error event

@@ -106,27 +106,33 @@ class CoderBotSession:
             logger.error(f"Failed to open log file: {e}")
             self.log_file = None
 
-    async def _write_log_event(self, event: Dict[str, Any]):
-        """Writes an event to the log file with async locking."""
+    def _log_event(self, data: Dict[str, Any]):
+        """Persists a structured event to the session log file (synchronous)."""
         if not config.BASEBOT_LOG_ENABLED or not self.log_file:
             return
 
         try:
-            async with self._log_lock:
-                log_line = json.dumps(event) + "\n"
-                self.log_file.write(log_line)
-                self.log_file.flush()
+            event = {
+                "timestamp": datetime.now(UTC).isoformat(),
+                **data,
+            }
+            log_line = json.dumps(event) + "\n"
+            self.log_file.write(log_line)
+            self.log_file.flush()
         except Exception as e:
             logger.error(f"Failed to write log event: {e}")
 
-    def _log_event(self, data: Dict[str, Any]):
-        """Persists a structured event to the session log file (synchronous caller)."""
-        event = {
-            "timestamp": datetime.now(UTC).isoformat(),
-            **data,
-        }
-        # Run the async write in a separate task
-        asyncio.create_task(self._write_log_event(event))
+    async def _close_log_file(self):
+        """Closes the log file."""
+        if not self.log_file:
+            return
+
+        try:
+            if not self.log_file.closed:
+                self.log_file.close()
+                self.log_file = None
+        except Exception as e:
+            logger.error(f"Failed to close log file: {e}")
 
     async def get_initial_prompt(self, task: Task) -> str:
         design_doc = task.design_doc or "No design document provided."
@@ -377,9 +383,8 @@ class CoderBotSession:
                 self.helper.cleanup()
         finally:
             logger.info(f"Finalizing session for task {self.task_id}")
-            await self._write_log_event({"type": "session_end"})
-            if self.log_file:
-                self.log_file.close()
+            self._log_event({"type": "session_end"})
+            await self._close_log_file()
             await ws_manager.broadcast(
                 WSMessage(
                     type="CODERBOT_COMPLETED",
