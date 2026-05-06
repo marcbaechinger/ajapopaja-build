@@ -41,7 +41,32 @@ async def get_pipeline_pull_requests(pipeline_id: str):
 
 @router.get("/task/{task_id}", response_model=Optional[PullRequest])
 async def get_task_pull_request(task_id: str):
-    return await PullRequest.find_one(PullRequest.task_id == task_id)
+    # Try to find the most recent OPEN pull request
+    pr = (
+        await PullRequest.find(
+            PullRequest.task_id == task_id, PullRequest.status == PullRequestStatus.OPEN
+        )
+        .sort("-created_at")
+        .first_or_none()
+    )
+
+    if not pr:
+        # Fallback to the most recent PR of any status
+        pr = (
+            await PullRequest.find(PullRequest.task_id == task_id)
+            .sort("-created_at")
+            .first_or_none()
+        )
+
+    return pr
+
+
+@router.get("/{pr_id}", response_model=PullRequest)
+async def get_pull_request(pr_id: str):
+    pr = await PullRequest.get(pr_id)
+    if not pr:
+        raise HTTPException(status_code=404, detail="Pull Request not found")
+    return pr
 
 
 @router.post("/{pr_id}/accept")

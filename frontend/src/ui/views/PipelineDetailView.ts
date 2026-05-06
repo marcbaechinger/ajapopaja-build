@@ -404,10 +404,12 @@ export class PipelineDetailView extends View {
 
     this.context.actionRegistry.register('open_pr_dialog', async (_e, el) => {
       const taskId = el.getAttribute('data-task-id');
+      const prId = el.getAttribute('data-pr-id');
       if (!taskId) return;
 
       const dialog = new PullRequestDialog({
         taskId,
+        prId: prId || undefined,
         pipelineId: this.pipelineId,
         context: this.context,
         onAccept: () => {

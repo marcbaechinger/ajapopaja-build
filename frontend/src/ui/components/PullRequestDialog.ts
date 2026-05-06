@@ -22,6 +22,7 @@ import { Icon } from './Icon.ts';
 export interface PullRequestDialogProps {
   taskId: string;
   pipelineId: string;
+  prId?: string;
   context: AppContext;
   onAccept?: () => void;
   onReject?: () => void;
@@ -47,7 +48,11 @@ export class PullRequestDialog extends BaseDialog<void> {
     this.loading = true;
     this.reRender();
     try {
-      this.pr = await this.props.context.pullRequestClient.getPullRequestByTask(this.props.taskId);
+      if (this.props.prId) {
+        this.pr = await this.props.context.pullRequestClient.getPullRequest(this.props.prId);
+      } else {
+        this.pr = await this.props.context.pullRequestClient.getPullRequestByTask(this.props.taskId);
+      }
     } catch (error) {
       console.error('Load PR error:', error);
     } finally {
