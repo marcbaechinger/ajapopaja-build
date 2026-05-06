@@ -65,12 +65,18 @@ async def test_coderbot_run_spawns_pi(init_mock_db):
         mock_helper = MagicMock()
         mock_helper.branch_name = "test-branch"
         mock_helper.get_patch.return_value = "test-patch"
+        mock_repo = MagicMock()
+        mock_repo.git.diff.return_value = "test-patch"
+        mock_repo.git.show.return_value = "diff --git a/file b/file\n+new line"
+        mock_helper.get_repo.return_value = mock_repo
         mock_helper_cls.return_value = mock_helper
 
         mock_proc = AsyncMock()
         mock_proc.stdin = MagicMock()
         mock_proc.stdin.write = MagicMock()
         mock_proc.stdin.drain = AsyncMock()
+        mock_proc.stdin.can_write_eof.return_value = True
+        mock_proc.stdin.write_eof = MagicMock()
 
         # Simulate stdout returning a single 'agent_end' event
         async def mock_stdout_stream():
@@ -89,7 +95,7 @@ async def test_coderbot_run_spawns_pi(init_mock_db):
         mock_helper_cls.assert_called_once()
         mock_helper.setup_sandbox.assert_called_once()
 
-        # Check subprocess was created with 'pi' and the 10MB limit
+        # Check subprocess was created with 'pi', 10MB limit and stderr redirect
         mock_exec.assert_called_once_with(
             "pi",
             "--mode",
@@ -97,7 +103,7 @@ async def test_coderbot_run_spawns_pi(init_mock_db):
             "--no-session",
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
             cwd=str(mock_helper.sandbox_path),
             limit=10 * 1024 * 1024,
         )
@@ -107,6 +113,9 @@ async def test_coderbot_run_spawns_pi(init_mock_db):
         written_data = mock_proc.stdin.write.call_args[0][0].decode("utf-8")
         assert "prompt" in written_data
         assert "Test Task" in written_data
+
+        # Verify EOF was signaled
+        mock_proc.stdin.write_eof.assert_called_once()
 
 
 @pytest.mark.asyncio

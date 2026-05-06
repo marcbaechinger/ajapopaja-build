@@ -84,7 +84,9 @@ class CoderBotSession:
 
     async def _handle_agent_end(self, messages: list):
         """Called when Pi finishes the task."""
+        logger.info(f"Handling agent_end for task {self.task_id}")
         if not self.helper:
+            logger.warning("No helper found in _handle_agent_end")
             return
 
         try:
@@ -100,20 +102,27 @@ class CoderBotSession:
                             break
                     break
 
+            logger.info(f"Summary extracted: {summary[:50]}...")
             repo = self.helper.get_repo()
             repo.git.add(A=True)
             commit_made = False
             try:
                 repo.git.commit("-m", f"CoderBot (Pi): {summary[:200]}")
                 commit_made = True
-            except Exception:
-                pass  # Nothing to commit
+                logger.info("Git commit created in sandbox.")
+            except Exception as e:
+                logger.info(f"Nothing to commit or commit failed: {e}")
 
             if commit_made:
                 # Use git diff to get a clean, structural patch without commit metadata
                 patch = repo.git.diff("HEAD~1", "HEAD")
+                logger.info(f"Generated patch from commit. Length: {len(patch)}")
             else:
                 patch = self.helper.get_patch()
+                logger.info(f"Generated patch from diff. Length: {len(patch)}")
+
+            if not patch:
+                logger.warning("Generated patch is empty.")
 
             pr = PullRequest(
                 pipeline_id=self.pipeline_id,
@@ -124,12 +133,16 @@ class CoderBotSession:
                 status=PullRequestStatus.OPEN,
             )
             await pr.insert()
+            logger.info(f"PullRequest {pr.id} created in DB.")
 
             # Update task status
             task = await Task.get(self.task_id)
             if task:
                 task.status = TaskStatus.PULL_REQUEST_AVAILABLE
                 await task.save()
+                logger.info(
+                    f"Task {self.task_id} status updated to PULL_REQUEST_AVAILABLE."
+                )
 
             await ws_manager.broadcast(
                 WSMessage(
@@ -143,12 +156,14 @@ class CoderBotSession:
                 )
             )
         except Exception as e:
-            logger.error(f"Error creating PR: {e}")
+            logger.error(f"Error creating PR: {e}", exc_info=True)
         finally:
+            logger.info("Cleaning up sandbox.")
             self.helper.cleanup()
 
     async def run(self):
         """Runs the Pi subprocess and manages the RPC communication."""
+        logger.info(f"Starting run() for task {self.task_id}")
         self._log_event(
             {
                 "type": "session_start",
@@ -178,6 +193,7 @@ class CoderBotSession:
             self._log_event({"type": "error", "message": error_msg})
             return
 
+        logger.info(f"Setting up sandbox for task {self.task_id}")
         self.helper = SandboxGitHelper(self.task_id, pipeline.workspace_abs_path)
         self.helper.setup_sandbox()
 
@@ -185,6 +201,7 @@ class CoderBotSession:
 
         # Spawn Pi
         try:
+            logger.info("Spawning 'pi' subprocess...")
             self.process = await asyncio.create_subprocess_exec(
                 "pi",
                 "--mode",
@@ -209,6 +226,7 @@ class CoderBotSession:
                 self._log_event({"type": "error", "message": error_msg})
                 return
 
+            logger.info("Sending initial prompt to Pi...")
             self.process.stdin.write(prompt_cmd.encode("utf-8"))
             await self.process.stdin.drain()
 
@@ -220,6 +238,7 @@ class CoderBotSession:
 
             # Read events
             agent_end_event = None
+            logger.info("Entering RPC event loop...")
             async for line in self.process.stdout:
                 try:
                     raw_line = line.decode("utf-8").strip()
@@ -228,6 +247,8 @@ class CoderBotSession:
                     event = json.loads(raw_line)
                     self._log_event({"type": "pi_rpc_event", "event": event})
                     event_type = event.get("type")
+
+                    logger.debug(f"Received event: {event_type}")
 
                     if event_type == "message_update":
                         delta = event.get("assistantMessageEvent", {})
@@ -260,24 +281,36 @@ class CoderBotSession:
                             )
 
                     elif event_type == "agent_end":
+                        logger.info(
+                            "Received 'agent_end' from Pi. Signaling EOF to stdin."
+                        )
                         agent_end_event = event
+                        # Signal Pi to exit by closing stdin
+                        if self.process.stdin.can_write_eof():
+                            self.process.stdin.write_eof()
 
                 except json.JSONDecodeError:
+                    logger.debug(f"Non-JSON line from Pi: {line}")
                     continue
 
+            logger.info("Subprocess stdout stream closed. Waiting for process exit...")
             # Wait for exit
-            await self.process.wait()
+            exit_code = await self.process.wait()
+            logger.info(f"Pi process exited with code {exit_code}")
 
             if agent_end_event:
                 await self._handle_agent_end(agent_end_event.get("messages", []))
+            else:
+                logger.warning("Process exited without receiving 'agent_end' event.")
 
         except Exception as e:
             error_msg = f"Error running Pi: {e}"
-            logger.error(error_msg)
+            logger.error(error_msg, exc_info=True)
             self._log_event({"type": "error", "message": error_msg})
             if self.helper:
                 self.helper.cleanup()
         finally:
+            logger.info(f"Finalizing session for task {self.task_id}")
             self._log_event({"type": "session_end"})
             await ws_manager.broadcast(
                 WSMessage(
