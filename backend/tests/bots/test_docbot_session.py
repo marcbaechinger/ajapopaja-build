@@ -20,6 +20,22 @@ from api.docbot.registry import docbot_registry
 from api.docbot.session import DocBotSession
 
 
+@pytest.fixture(autouse=True)
+def mock_sandbox_dependencies():
+    with (
+        patch("api.bot.base_session.pipeline_queries.get_pipeline_by_id") as mock_get_p,
+        patch("api.bot.base_session.SandboxGitHelper") as mock_helper_cls,
+    ):
+        mock_pipeline = MagicMock()
+        mock_pipeline.workspace_abs_path = "/tmp/fake/workspace"
+        mock_get_p.return_value = mock_pipeline
+
+        mock_helper = MagicMock()
+        mock_helper_cls.return_value = mock_helper
+
+        yield mock_get_p, mock_helper
+
+
 async def make_async_iter(items):
     for item in items:
         yield item

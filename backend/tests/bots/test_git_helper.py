@@ -15,20 +15,20 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from api.coderbot.git_helper import SandboxGitHelper
+from api.bot.git_helper import SandboxGitHelper
 
 
 def test_get_default_branch_from_env(monkeypatch):
     monkeypatch.setenv("DEFAULT_GIT_BRANCH", "custom-main")
-    helper = SandboxGitHelper("task_id", Path("/fake/path"))
+    helper = SandboxGitHelper("coderbot", "task_id", Path("/fake/path"))
     assert helper.get_default_branch() == "custom-main"
 
 
 def test_get_default_branch_from_source_repo(monkeypatch):
     monkeypatch.delenv("DEFAULT_GIT_BRANCH", raising=False)
-    helper = SandboxGitHelper("task_id", Path("/fake/path"))
+    helper = SandboxGitHelper("coderbot", "task_id", Path("/fake/path"))
 
-    with patch("api.coderbot.git_helper.git.Repo") as mock_repo_cls:
+    with patch("api.bot.git_helper.git.Repo") as mock_repo_cls:
         mock_repo = MagicMock()
         mock_repo.active_branch.name = "source-main"
         mock_repo_cls.return_value = mock_repo
@@ -39,10 +39,10 @@ def test_get_default_branch_from_source_repo(monkeypatch):
 
 def test_get_default_branch_from_origin_head(monkeypatch):
     monkeypatch.delenv("DEFAULT_GIT_BRANCH", raising=False)
-    helper = SandboxGitHelper("task_id", Path("/fake/path"))
+    helper = SandboxGitHelper("coderbot", "task_id", Path("/fake/path"))
 
     with (
-        patch("api.coderbot.git_helper.git.Repo") as mock_repo_cls,
+        patch("api.bot.git_helper.git.Repo") as mock_repo_cls,
         patch.object(SandboxGitHelper, "get_repo") as mock_get_repo,
     ):
         # Make source repo fail
@@ -60,10 +60,10 @@ def test_get_default_branch_from_origin_head(monkeypatch):
 
 def test_get_default_branch_fallback_common_names(monkeypatch):
     monkeypatch.delenv("DEFAULT_GIT_BRANCH", raising=False)
-    helper = SandboxGitHelper("task_id", Path("/fake/path"))
+    helper = SandboxGitHelper("coderbot", "task_id", Path("/fake/path"))
 
     with (
-        patch("api.coderbot.git_helper.git.Repo") as mock_repo_cls,
+        patch("api.bot.git_helper.git.Repo") as mock_repo_cls,
         patch.object(SandboxGitHelper, "get_repo") as mock_get_repo,
     ):
         mock_repo_cls.side_effect = Exception("No source repo")
@@ -86,10 +86,10 @@ def test_get_default_branch_fallback_common_names(monkeypatch):
 
 def test_get_default_branch_ultimate_fallback(monkeypatch):
     monkeypatch.delenv("DEFAULT_GIT_BRANCH", raising=False)
-    helper = SandboxGitHelper("task_id", Path("/fake/path"))
+    helper = SandboxGitHelper("coderbot", "task_id", Path("/fake/path"))
 
     with (
-        patch("api.coderbot.git_helper.git.Repo") as mock_repo_cls,
+        patch("api.bot.git_helper.git.Repo") as mock_repo_cls,
         patch.object(SandboxGitHelper, "get_repo") as mock_get_repo,
     ):
         mock_repo_cls.side_effect = Exception("No source repo")
