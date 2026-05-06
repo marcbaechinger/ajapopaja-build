@@ -57,11 +57,9 @@ export class PullRequestSection {
             </p>
           </div>
           <div class="flex gap-2 shrink-0">
-             <button data-action-click="reject_pr" data-pr-id="${pr.id}" class="p-2 text-app-muted hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-all border border-transparent hover:border-red-400/20 cursor-pointer" title="Reject">
-               ${Icon.render('close', { size: 16 })}
-             </button>
-             <button data-action-click="accept_pr" data-pr-id="${pr.id}" class="p-2 text-app-muted hover:text-green-400 hover:bg-green-400/10 rounded-xl transition-all border border-transparent hover:border-green-400/20 cursor-pointer" title="Accept & Apply">
-               ${Icon.render('check', { size: 16 })}
+             <button data-action-click="open_pr_dialog" data-task-id="${pr.task_id}" class="px-4 py-2 bg-app-accent-2 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-app-accent-2/80 transition-all shadow-lg shadow-app-accent-2/20 cursor-pointer flex items-center gap-2">
+               ${Icon.render('git-pull-request', { size: 14 })}
+               Review
              </button>
           </div>
         </div>

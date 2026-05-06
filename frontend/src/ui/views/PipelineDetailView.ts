@@ -380,30 +380,6 @@ export class PipelineDetailView extends View {
       }
     });
 
-    this.context.actionRegistry.register('accept_pr', async (_e, el) => {
-      const prId = el.getAttribute('data-pr-id');
-      if (!prId) return;
-
-      try {
-        await this.context.pullRequestClient.acceptPullRequest(prId);
-        this.fetchPullRequests();
-      } catch (error) {
-        alert('Failed to accept Pull Request');
-      }
-    });
-
-    this.context.actionRegistry.register('reject_pr', async (_e, el) => {
-      const prId = el.getAttribute('data-pr-id');
-      if (!prId) return;
-
-      try {
-        await this.context.pullRequestClient.rejectPullRequest(prId);
-        this.fetchPullRequests();
-      } catch (error) {
-        alert('Failed to reject Pull Request');
-      }
-    });
-
     this.context.actionRegistry.register('open_review_dialog', async (_e, el) => {
       const taskId = el.getAttribute('data-task-id');
       if (!taskId) return;
