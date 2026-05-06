@@ -22,9 +22,11 @@ from typing import Any, Dict, List, Optional
 import ollama
 
 from api.bot.conversation import ConversationTurn, create_log_turn
+from api.bot.git_helper import SandboxGitHelper
 from api.bot.session_config import BaseBotSessionConfig
 from api.bot.tool_registry import ToolDefinition
 from core import config
+from core.queries import pipeline as pipeline_queries
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +48,7 @@ class BaseBotSession(ABC):
         self.pipeline_id = pipeline_id
         self.task_id = task_id
         self.config = session_config or BaseBotSessionConfig()
+        self.helper: Optional[SandboxGitHelper] = None
 
         headers = {}
         if self.config.api_key:
@@ -187,6 +190,11 @@ class BaseBotSession(ABC):
         }
 
     @property
+    def bot_type(self) -> str:
+        """Returns the type of the bot (e.g., 'archbot', 'docbot')."""
+        return self.__class__.__name__.lower().replace("session", "")
+
+    @property
     def use_sandbox(self) -> bool:
         """Returns True if this session should operate in a sandbox."""
         return False
@@ -196,6 +204,20 @@ class BaseBotSession(ABC):
         Runs the autonomous loop until a terminal tool is called or
         max_iterations is reached.
         """
+        if self.use_sandbox:
+            pipeline = await pipeline_queries.get_pipeline_by_id(self.pipeline_id)
+            if not pipeline or not pipeline.workspace_abs_path:
+                logger.error(
+                    f"Sandbox setup failed: Pipeline {self.pipeline_id} "
+                    "or workspace path not found."
+                )
+                return
+
+            self.helper = SandboxGitHelper(
+                self.bot_type, self.task_id, pipeline.workspace_abs_path
+            )
+            self.helper.setup_sandbox()
+
         await self.on_event("bot_started")
         if max_iterations is None:
             max_iterations = self.config.max_iterations

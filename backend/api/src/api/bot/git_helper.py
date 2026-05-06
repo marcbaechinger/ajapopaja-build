@@ -22,11 +22,13 @@ from core import config
 
 
 class SandboxGitHelper:
-    def __init__(self, task_id: str, source_repo_path: Path):
+    def __init__(self, bot_type: str, task_id: str, source_repo_path: Path):
+        self.bot_type = bot_type
         self.task_id = task_id
         self.source_repo_path = source_repo_path
-        self.sandbox_path = config.SANDBOX_ROOT / task_id
-        self.branch_name = f"coderbot/{task_id}"
+        # Non-colliding paths: sandbox/coderbot/task_id vs sandbox/docbot/task_id
+        self.sandbox_path = config.SANDBOX_ROOT / bot_type / task_id
+        self.branch_name = f"{bot_type}/{task_id}"
 
     def setup_sandbox(self):
         """Clones the source repo and creates a branch."""

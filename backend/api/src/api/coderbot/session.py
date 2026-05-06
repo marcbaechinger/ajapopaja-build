@@ -30,7 +30,7 @@ from core.models.models import (
     TaskStatus,
 )
 
-from .git_helper import SandboxGitHelper
+from api.bot.git_helper import SandboxGitHelper
 
 logger = logging.getLogger(__name__)
 
@@ -259,7 +259,9 @@ class CoderBotSession:
             return
 
         logger.info(f"Setting up sandbox for task {self.task_id}")
-        self.helper = SandboxGitHelper(self.task_id, pipeline.workspace_abs_path)
+        self.helper = SandboxGitHelper(
+            "coderbot", self.task_id, pipeline.workspace_abs_path
+        )
         self.helper.setup_sandbox()
 
         initial_prompt = await self.get_initial_prompt(task)

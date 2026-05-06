@@ -24,6 +24,7 @@ from api.websocket_manager import WSMessage, manager
 from core.queries import pipeline as pipeline_queries
 from core.utils import git_utils
 from core.utils.path_utils import safe_join
+from pathlib import Path
 
 from .cache import DocBotPreview, set_preview
 from .registry import register_doc_tool
@@ -40,8 +41,17 @@ docbot_registry.register_tool(grep)
 DOC_DIR = "design"
 
 
+def get_effective_root(pipeline: Any, session: Optional[Any]) -> Path:
+    """Returns the sandbox path if available, otherwise the pipeline workspace root."""
+    if session and hasattr(session, "helper") and session.helper:
+        return session.helper.sandbox_path
+    return Path(pipeline.workspace_abs_path)
+
+
 @register_doc_tool()
-async def list_ref_docs(pipeline_id: str, **kwargs) -> List[str]:
+async def list_ref_docs(
+    pipeline_id: str, session: Optional[Any] = None, **kwargs
+) -> List[str]:
     """
     Lists all reference documentation files available in the 'design/' directory,
     including subdirectories.
@@ -65,7 +75,8 @@ async def list_ref_docs(pipeline_id: str, **kwargs) -> List[str]:
         )
         return ["Error: Workspace root missing."]
 
-    doc_path = safe_join(pipeline.workspace_abs_path, DOC_DIR)
+    effective_root = get_effective_root(pipeline, session)
+    doc_path = safe_join(effective_root, DOC_DIR)
     logger.info(f"list_ref_docs: Scanning directory: {doc_path}")
 
     if not os.path.isdir(doc_path):
@@ -91,7 +102,9 @@ async def list_ref_docs(pipeline_id: str, **kwargs) -> List[str]:
 
 
 @register_doc_tool()
-async def read_ref_doc(pipeline_id: str, filename: str, **kwargs) -> str:
+async def read_ref_doc(
+    pipeline_id: str, filename: str, session: Optional[Any] = None, **kwargs
+) -> str:
     """
     Reads the full content of a specific reference documentation file from the 'design/'
     directory.
@@ -138,7 +151,8 @@ async def read_ref_doc(pipeline_id: str, filename: str, **kwargs) -> str:
         return "Error: Workspace root missing."
 
     try:
-        doc_path = safe_join(pipeline.workspace_abs_path, DOC_DIR)
+        effective_root = get_effective_root(pipeline, session)
+        doc_path = safe_join(effective_root, DOC_DIR)
         file_path = safe_join(doc_path, fname)
         logger.info(f"read_ref_doc: Full file path: {file_path}")
     except ValueError as e:
@@ -233,7 +247,8 @@ async def update_ref_doc(
         return "Error: Workspace root missing."
 
     try:
-        doc_path = safe_join(pipeline.workspace_abs_path, DOC_DIR)
+        effective_root = get_effective_root(pipeline, session)
+        doc_path = safe_join(effective_root, DOC_DIR)
         file_path = safe_join(doc_path, fname)
         logger.info(f"update_ref_doc: Writing to {file_path}")
 
@@ -255,7 +270,8 @@ async def update_ref_doc(
         # Capture diff and cache preview if task_id is available
         if tid:
             try:
-                repo = git_utils.get_repo(pipeline.workspace_abs_path)
+                effective_root = get_effective_root(pipeline, session)
+                repo = git_utils.get_repo(str(effective_root))
 
                 # Intent-to-add so untracked files show up in diff
                 repo.git.add(file_path, N=True)
@@ -415,7 +431,8 @@ async def update_markdown_section(
         if not pipeline or not pipeline.workspace_abs_path:
             return "Error: Workspace root missing."
 
-        doc_path = safe_join(pipeline.workspace_abs_path, DOC_DIR)
+        effective_root = get_effective_root(pipeline, session)
+        doc_path = safe_join(effective_root, DOC_DIR)
         file_path = safe_join(doc_path, fname)
 
         if not os.path.isfile(file_path):
@@ -449,7 +466,8 @@ async def update_markdown_section(
 
         # Reuse update_ref_doc logic for preview if task_id exists
         if tid:
-            repo = git_utils.get_repo(pipeline.workspace_abs_path)
+            effective_root = get_effective_root(pipeline, session)
+            repo = git_utils.get_repo(str(effective_root))
             repo.git.add(file_path, N=True)
             diff = repo.git.diff("--unified=3", file_path)
             commit_msg = f"[doc] Update section '{heading}' in {fname}\n\n{resn}"

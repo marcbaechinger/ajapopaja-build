@@ -20,6 +20,7 @@ from api.bot.tool_registry import ToolDefinition
 from api.bot.base_session import BaseBotSession
 from api.bot.session_config import BaseBotSessionConfig
 from api.websocket_manager import WSMessage, manager
+from core.models.models import PullRequest, PullRequestStatus
 from core.queries import pipeline as pipeline_queries
 from core.queries import task as task_queries
 from core.utils import git_utils
@@ -97,6 +98,10 @@ class DocBotSession(BaseBotSession):
     def is_terminal_tool(self, tool_name: str) -> bool:
         return tool_name in ["document_update_completed", "no_doc_update_needed"]
 
+    @property
+    def use_sandbox(self) -> bool:
+        return True
+
     def get_default_feedback(
         self, pipeline_id: str, task_id: str, assistant_message: str
     ) -> str:
@@ -121,6 +126,7 @@ class DocBotSession(BaseBotSession):
                 )
             )
         elif event_name == "bot_completed":
+            await self._handle_bot_end()
             await manager.broadcast(
                 WSMessage(
                     type="DOCBOT_COMPLETED",
@@ -131,6 +137,65 @@ class DocBotSession(BaseBotSession):
                     },
                 )
             )
+
+    async def _handle_bot_end(self):
+        """Creates a Pull Request if documentation was updated."""
+        if not self.has_updates or not self.helper:
+            if self.helper:
+                self.helper.cleanup()
+            return
+
+        try:
+            summary = (
+                self.session_result.get("summary", "Documentation updated by DocBot.")
+                if self.session_result
+                else "Documentation updated by DocBot."
+            )
+            repo = self.helper.get_repo()
+            repo.git.add(A=True)
+
+            try:
+                repo.git.commit("-m", f"DocBot: {summary[:200]}")
+                # Use git diff to get a clean, structural patch without commit metadata
+                patch = repo.git.diff("HEAD~1", "HEAD")
+            except Exception as e:
+                logger.info(f"Nothing to commit or commit failed: {e}")
+                patch = self.helper.get_patch()
+
+            if not patch:
+                logger.warning("DocBot generated an empty patch.")
+                return
+
+            if not patch.endswith("\n"):
+                patch += "\n"
+
+            pr = PullRequest(
+                pipeline_id=self.pipeline_id,
+                task_id=self.task_id,
+                summary=summary,
+                branch_name=self.helper.branch_name,
+                patch=patch,
+                status=PullRequestStatus.OPEN,
+            )
+            await pr.insert()
+            logger.info(f"DocBot PullRequest {pr.id} created in DB.")
+
+            await manager.broadcast(
+                WSMessage(
+                    type="PULL_REQUEST_CREATED",
+                    payload={
+                        "id": str(pr.id),
+                        "pipeline_id": self.pipeline_id,
+                        "task_id": self.task_id,
+                        "summary": summary,
+                    },
+                )
+            )
+        except Exception as e:
+            logger.error(f"DocBot error creating PR: {e}", exc_info=True)
+        finally:
+            logger.info("Cleaning up DocBot sandbox.")
+            self.helper.cleanup()
 
     async def get_initial_prompt(self) -> str:
         task = await task_queries.get_task_by_id(self.task_id)
