@@ -15,6 +15,7 @@
 import asyncio
 import json
 import logging
+import traceback
 from datetime import UTC, datetime
 from typing import Any, Dict, Optional
 
@@ -307,8 +308,15 @@ class CoderBotSession:
 
         except Exception as e:
             error_msg = f"Error running Pi: {e}"
+            error_timestamp = datetime.now(UTC).isoformat()
             logger.error(error_msg, exc_info=True)
-            self._log_event({"type": "error", "message": error_msg})
+            self._log_event(
+                {
+                    "type": "error",
+                    "timestamp": error_timestamp,
+                    "error": traceback.format_exc(),
+                }
+            )
             if self.helper:
                 self.helper.cleanup()
         finally:

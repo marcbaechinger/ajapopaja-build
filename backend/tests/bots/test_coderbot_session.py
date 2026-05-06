@@ -179,3 +179,55 @@ async def test_coderbot_run_logs_events(init_mock_db):
             for record in written_lines
         )
         assert any(record["type"] == "session_end" for record in written_lines)
+
+
+@pytest.mark.asyncio
+async def test_coderbot_run_logs_error_with_traceback(init_mock_db):
+    """Test that errors in run() include full stack traces."""
+    pipeline = Pipeline(
+        name="Test Pipeline", workspace_path="test", workspace_abs_path="/tmp"
+    )
+    await pipeline.insert()
+
+    task = Task(
+        title="Test Task",
+        pipeline_id=str(pipeline.id),
+        design_doc="Design",
+        spec="Spec",
+    )
+    await task.insert()
+
+    session = CoderBotSession(pipeline_id=str(pipeline.id), task_id=str(task.id))
+
+    with (
+        patch("api.coderbot.session.SandboxGitHelper") as mock_helper_cls,
+        patch("api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock),
+        patch("api.coderbot.session.asyncio.create_subprocess_exec") as mock_exec,
+        patch("builtins.open", new_callable=MagicMock) as mock_open,
+        patch("pathlib.Path.mkdir"),
+    ):
+        mock_helper = MagicMock()
+        mock_helper_cls.return_value = mock_helper
+
+        # Make subprocess creation raise an exception
+        mock_exec.side_effect = RuntimeError("Failed to spawn subprocess")
+
+        await session.run()
+
+        # Check content of writes for error events
+        written_lines = []
+        for call in mock_open.return_value.__enter__.return_value.write.call_args_list:
+            written_lines.append(json.loads(call[0][0].strip()))
+
+        # Find the error event
+        error_events = [r for r in written_lines if r.get("type") == "error"]
+        assert len(error_events) >= 1
+
+        # Verify error event schema has both timestamp and error (stack trace) fields
+        error_event = error_events[0]
+        assert "timestamp" in error_event
+        assert "error" in error_event
+        # Verify the error field contains a stack trace
+        assert "Traceback" in error_event["error"]
+        assert "RuntimeError" in error_event["error"]
+        assert "Failed to spawn subprocess" in error_event["error"]
