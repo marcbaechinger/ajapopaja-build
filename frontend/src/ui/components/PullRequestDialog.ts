@@ -95,10 +95,19 @@ export class PullRequestDialog extends BaseDialog<void> {
     return `
       <div class="flex flex-col h-full overflow-hidden">
         <div class="p-6 border-b border-app-border bg-app-accent-2/5">
-          <div class="flex items-center gap-3 mb-2">
-            <span class="text-[10px] font-black uppercase tracking-widest bg-app-accent-2/20 text-app-accent-2 px-2 py-0.5 rounded border border-app-accent-2/30">
-              Branch: ${this.pr.branch_name}
-            </span>
+          <div class="flex items-center justify-between gap-3 mb-2">
+            <div class="flex items-center gap-3">
+              <span class="text-[10px] font-black uppercase tracking-widest bg-app-accent-2/20 text-app-accent-2 px-2 py-0.5 rounded border border-app-accent-2/30">
+                Branch: ${this.pr.branch_name}
+              </span>
+            </div>
+            <div class="flex items-center gap-2">
+              <label for="pr-failure-strategy" class="text-[10px] font-bold text-app-muted uppercase tracking-widest">Failure Handling:</label>
+              <select id="pr-failure-strategy" class="bg-app-bg text-[10px] text-app-text border border-app-border rounded-lg px-2 py-1 focus:ring-0 focus:border-app-accent-2/50 cursor-pointer outline-none">
+                <option value="revert" selected>Revert Changes (Safe)</option>
+                <option value="keep">Keep Changes (Manual Fix)</option>
+              </select>
+            </div>
           </div>
           <div class="relative group">
             <textarea id="pr-summary-input" class="w-full bg-transparent text-xl font-bold text-app-text border-none focus:ring-0 resize-none p-0 overflow-hidden min-h-[1.5em]" rows="1">${this.pr.summary}</textarea>
@@ -157,13 +166,16 @@ export class PullRequestDialog extends BaseDialog<void> {
     if (!this.pr) return;
     const acceptBtn = this.dialog.querySelector('#pr-accept-btn') as HTMLButtonElement;
     const summaryInput = this.dialog.querySelector('#pr-summary-input') as HTMLTextAreaElement;
+    const strategySelect = this.dialog.querySelector('#pr-failure-strategy') as HTMLSelectElement;
+    
     const commitMessage = summaryInput?.value || this.pr.summary;
+    const failureStrategy = strategySelect?.value || 'revert';
 
     acceptBtn.disabled = true;
     acceptBtn.textContent = 'Applying...';
 
     try {
-      await this.props.context.pullRequestClient.acceptPullRequest(this.pr.id!, commitMessage);
+      await this.props.context.pullRequestClient.acceptPullRequest(this.pr.id!, commitMessage, failureStrategy);
       if (this.props.onAccept) this.props.onAccept();
       this.close();
     } catch (error: any) {

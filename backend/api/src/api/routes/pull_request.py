@@ -20,6 +20,7 @@ from datetime import UTC, datetime
 from typing import List, Optional
 
 import git
+from enum import Enum
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -38,8 +39,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/pull_requests", tags=["pull_requests"])
 
 
+class FailureStrategy(str, Enum):
+    REVERT = "revert"
+    KEEP = "keep"
+
+
 class AcceptPullRequestRequest(BaseModel):
     commit_message: Optional[str] = None
+    failure_strategy: FailureStrategy = FailureStrategy.REVERT
 
 
 # =============================================================================
@@ -237,6 +244,7 @@ async def accept_pull_request(
 ):
     """Accept a pull request by validating inputs, applying changes, and updating records."""
     logger.info(f"Accepting Pull Request {pr_id}")
+    strategy = request.failure_strategy if request else FailureStrategy.REVERT
 
     try:
         # Step 1: Validate inputs
@@ -254,12 +262,32 @@ async def accept_pull_request(
         logger.info(f"Applying patch to workspace: {workspace_path}")
         repo = git_utils.get_repo(workspace_path)
         await validate_workspace_clean(repo, workspace_path)
-        await apply_patch(repo, pr)
-        await format_workspace(workspace_path)
 
-        # Step 3: Commit changes
-        commit_message = build_commit_message(request, pr)
-        new_commit_hash = commit_changes(repo, pr, commit_message)
+        try:
+            await apply_patch(repo, pr)
+            await format_workspace(workspace_path)
+
+            # Step 3: Commit changes
+            commit_message = build_commit_message(request, pr)
+            new_commit_hash = commit_changes(repo, pr, commit_message)
+
+        except Exception:
+            if strategy == FailureStrategy.REVERT:
+                logger.warning(
+                    f"Failure during PR acceptance for {pr_id}. Strategy is REVERT. "
+                    "Resetting workspace."
+                )
+                try:
+                    repo.git.reset("--hard", "HEAD")
+                    repo.git.clean("-fd")
+                except Exception as reset_err:
+                    logger.error(f"Failed to reset workspace: {reset_err}")
+            else:
+                logger.info(
+                    f"Failure during PR acceptance for {pr_id}. Strategy is KEEP. "
+                    "Leaving workspace as is."
+                )
+            raise
 
         # Step 4: Update records
         await update_pull_request_status(pr)
