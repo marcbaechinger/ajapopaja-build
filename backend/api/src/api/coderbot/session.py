@@ -192,7 +192,7 @@ class CoderBotSession:
                 "--no-session",
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
                 cwd=str(self.helper.sandbox_path),
                 limit=10 * 1024 * 1024,  # 10MB buffer limit
             )
