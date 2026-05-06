@@ -16,6 +16,7 @@ import asyncio
 import logging
 import os
 import tempfile
+from datetime import UTC, datetime
 from typing import List, Optional
 
 import git
@@ -26,6 +27,7 @@ from core.models.models import (
     Pipeline,
     PullRequest,
     PullRequestStatus,
+    StateTransition,
     Task,
     TaskStatus,
 )
@@ -183,9 +185,17 @@ async def accept_pull_request(
         task = await Task.get(pr.task_id)
         if task:
             logger.info(f"Updating status for task {pr.task_id} to IMPLEMENTED")
+            task.history.append(
+                StateTransition(
+                    from_status=task.status,
+                    to_status=TaskStatus.IMPLEMENTED,
+                    by="coder_bot",
+                )
+            )
             task.status = TaskStatus.IMPLEMENTED
             task.completion_info = pr.summary
             task.commit_hash = new_commit_hash
+            task.updated_at = datetime.now(UTC)
             await task.save()
 
         return {
