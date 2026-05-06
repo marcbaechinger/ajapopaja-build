@@ -219,6 +219,7 @@ class CoderBotSession:
                 return
 
             # Read events
+            agent_end_event = None
             async for line in self.process.stdout:
                 try:
                     raw_line = line.decode("utf-8").strip()
@@ -259,14 +260,16 @@ class CoderBotSession:
                             )
 
                     elif event_type == "agent_end":
-                        await self._handle_agent_end(event.get("messages", []))
-                        break
+                        agent_end_event = event
 
                 except json.JSONDecodeError:
                     continue
 
             # Wait for exit
             await self.process.wait()
+
+            if agent_end_event:
+                await self._handle_agent_end(agent_end_event.get("messages", []))
 
         except Exception as e:
             error_msg = f"Error running Pi: {e}"
