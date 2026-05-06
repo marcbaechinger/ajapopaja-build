@@ -73,8 +73,12 @@ async def accept_pull_request(pr_id: str):
         logger.info(f"Applying patch to workspace: {workspace_path}")
         repo = git_utils.get_repo(workspace_path)
 
+        patch_content = pr.patch
+        if not patch_content.endswith("\n"):
+            patch_content += "\n"
+
         with tempfile.NamedTemporaryFile(mode="w", suffix=".patch", delete=False) as f:
-            f.write(pr.patch)
+            f.write(patch_content)
             patch_path = f.name
 
         try:

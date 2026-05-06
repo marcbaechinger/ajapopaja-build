@@ -123,6 +123,8 @@ class CoderBotSession:
 
             if not patch:
                 logger.warning("Generated patch is empty.")
+            elif not patch.endswith("\n"):
+                patch += "\n"
 
             pr = PullRequest(
                 pipeline_id=self.pipeline_id,
