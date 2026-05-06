@@ -15,6 +15,7 @@
 import asyncio
 import json
 import logging
+import re
 import traceback
 from datetime import UTC, datetime
 from typing import Any, Dict, Optional, TextIO
@@ -32,6 +33,41 @@ from core.models.models import (
 from .git_helper import SandboxGitHelper
 
 logger = logging.getLogger(__name__)
+
+
+def slugify(task_id: str) -> str:
+    """Sanitize task_id for safe use in file paths.
+
+    Replaces invalid path characters with underscores, removes leading/trailing
+    whitespace and non-alphanumeric characters, and ensures the result is not
+    empty or a reserved name.
+
+    Args:
+        task_id: The original task identifier string.
+
+    Returns:
+        A sanitized string safe for use in file system paths.
+    """
+    if not task_id:
+        return "unknown_task"
+
+    # Replace common problematic characters with underscores
+    sanitized = re.sub(r"[^a-zA-Z0-9_-]", "_", str(task_id))
+
+    # Collapse multiple underscores
+    sanitized = re.sub(r"_+", "_", sanitized)
+
+    # Remove leading/trailing underscores
+    sanitized = sanitized.strip("_")
+
+    # Truncate to a reasonable length to avoid path issues
+    sanitized = sanitized[:100]
+
+    # Ensure we don't end up with an empty string
+    if not sanitized:
+        sanitized = "unknown_task"
+
+    return sanitized
 
 
 class CoderBotSession:
@@ -52,7 +88,7 @@ class CoderBotSession:
 
         timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         self.log_filename = f"coderbot_{timestamp}.jsonl"
-        self.log_dir = config.SANDBOX_ROOT / "logs" / task_id
+        self.log_dir = config.SANDBOX_ROOT / "logs" / slugify(task_id)
         self._log_lock = asyncio.Lock()
 
         self._open_log_file()
