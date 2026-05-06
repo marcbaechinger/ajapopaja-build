@@ -96,18 +96,34 @@ class CoderBotSession:
                     # Just grab the last text chunk
                     for block in reversed(content):
                         if block.get("type") == "text":
-                            summary = block.get("text", summary)[:200]
+                            summary = block.get("text", summary)[:2000]
                             break
                     break
 
             repo = self.helper.get_repo()
             repo.git.add(A=True)
+            commit_made = False
             try:
-                repo.git.commit("-m", f"CoderBot (Pi): {summary}")
+                repo.git.commit("-m", f"CoderBot (Pi): {summary[:200]}")
+                commit_made = True
             except Exception:
                 pass  # Nothing to commit
 
-            patch = self.helper.get_patch()
+            if commit_made:
+                # Use show --patch to get the exact changes from the last commit
+                patch = repo.git.show("HEAD", patch=True, unified=3)
+                # Filter out commit metadata to get a clean patch
+                patch_lines = patch.splitlines()
+                clean_patch_lines = []
+                in_diff = False
+                for line in patch_lines:
+                    if line.startswith("diff --git"):
+                        in_diff = True
+                    if in_diff:
+                        clean_patch_lines.append(line)
+                patch = "\n".join(clean_patch_lines)
+            else:
+                patch = self.helper.get_patch()
 
             pr = PullRequest(
                 pipeline_id=self.pipeline_id,

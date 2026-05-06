@@ -143,9 +143,9 @@ export class PullRequestDialog extends BaseDialog<void> {
       await this.props.context.pullRequestClient.acceptPullRequest(this.pr.id!);
       if (this.props.onAccept) this.props.onAccept();
       this.close();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Accept PR error:', error);
-      alert('Failed to accept Pull Request');
+      alert(`Failed to accept Pull Request: ${error.message}`);
       acceptBtn.disabled = false;
       acceptBtn.textContent = 'Accept & Apply';
     }
@@ -161,9 +161,9 @@ export class PullRequestDialog extends BaseDialog<void> {
       await this.props.context.pullRequestClient.rejectPullRequest(this.pr.id!);
       if (this.props.onReject) this.props.onReject();
       this.close();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Reject PR error:', error);
-      alert('Failed to reject Pull Request');
+      alert(`Failed to reject Pull Request: ${error.message}`);
       rejectBtn.disabled = false;
       rejectBtn.textContent = 'Reject';
     }
