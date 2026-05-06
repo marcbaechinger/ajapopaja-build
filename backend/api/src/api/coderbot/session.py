@@ -17,7 +17,7 @@ import json
 import logging
 import traceback
 from datetime import UTC, datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, TextIO
 
 from api.websocket_manager import WSMessage, manager as ws_manager
 from core import config
@@ -48,29 +48,49 @@ class CoderBotSession:
         self.task_id = task_id
         self.process: Optional[asyncio.subprocess.Process] = None
         self.helper: Optional[SandboxGitHelper] = None
+        self.log_file: Optional[TextIO] = None
 
         timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         self.log_filename = f"coderbot_{timestamp}.jsonl"
         self.log_dir = config.SANDBOX_ROOT / "logs" / task_id
+        self._log_lock = asyncio.Lock()
 
-    def _log_event(self, data: Dict[str, Any]):
-        """Persists a structured event to the session log file."""
+        self._open_log_file()
+
+    def _open_log_file(self):
+        """Opens the log file handle for the session."""
         if not config.BASEBOT_LOG_ENABLED:
             return
 
         try:
             self.log_dir.mkdir(parents=True, exist_ok=True)
             log_path = self.log_dir / self.log_filename
-
-            event = {
-                "timestamp": datetime.now(UTC).isoformat(),
-                **data,
-            }
-
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(json.dumps(event) + "\n")
+            self.log_file = open(log_path, "a", encoding="utf-8")
         except Exception as e:
-            logger.error(f"Failed to log CoderBot event: {e}")
+            logger.error(f"Failed to open log file: {e}")
+            self.log_file = None
+
+    async def _write_log_event(self, event: Dict[str, Any]):
+        """Writes an event to the log file with async locking."""
+        if not config.BASEBOT_LOG_ENABLED or not self.log_file:
+            return
+
+        try:
+            async with self._log_lock:
+                log_line = json.dumps(event) + "\n"
+                self.log_file.write(log_line)
+                self.log_file.flush()
+        except Exception as e:
+            logger.error(f"Failed to write log event: {e}")
+
+    def _log_event(self, data: Dict[str, Any]):
+        """Persists a structured event to the session log file (synchronous caller)."""
+        event = {
+            "timestamp": datetime.now(UTC).isoformat(),
+            **data,
+        }
+        # Run the async write in a separate task
+        asyncio.create_task(self._write_log_event(event))
 
     async def get_initial_prompt(self, task: Task) -> str:
         design_doc = task.design_doc or "No design document provided."
@@ -321,7 +341,9 @@ class CoderBotSession:
                 self.helper.cleanup()
         finally:
             logger.info(f"Finalizing session for task {self.task_id}")
-            self._log_event({"type": "session_end"})
+            await self._write_log_event({"type": "session_end"})
+            if self.log_file:
+                self.log_file.close()
             await ws_manager.broadcast(
                 WSMessage(
                     type="CODERBOT_COMPLETED",
