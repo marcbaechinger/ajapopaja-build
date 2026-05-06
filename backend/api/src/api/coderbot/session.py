@@ -79,8 +79,8 @@ class CoderBotSession:
         return (
             f"Please implement the following task.\n\n"
             f"### Task: {task.title}\n\n"
-            f"### Design Document\n{design_doc}\n\n"
-            f"### Specification\n{spec}"
+            f"### Specification\n{spec}\n\n"
+            f"### Design Document\n{design_doc}"
         )
 
     async def _handle_agent_end(self, messages: list):
