@@ -111,17 +111,13 @@ class CoderBotSession:
 
             if commit_made:
                 # Use show --patch to get the exact changes from the last commit
-                patch = repo.git.show("HEAD", patch=True, unified=3)
-                # Filter out commit metadata to get a clean patch
-                patch_lines = patch.splitlines(keepends=True)
-                clean_patch_lines = []
-                in_diff = False
-                for line in patch_lines:
-                    if line.startswith("diff --git"):
-                        in_diff = True
-                    if in_diff:
-                        clean_patch_lines.append(line)
-                patch = "".join(clean_patch_lines)
+                raw_show = repo.git.show("HEAD", patch=True, unified=3)
+                # Find where the diff actually starts to skip commit metadata
+                diff_start = raw_show.find("diff --git")
+                if diff_start != -1:
+                    patch = raw_show[diff_start:]
+                else:
+                    patch = raw_show
             else:
                 patch = self.helper.get_patch()
 
