@@ -110,14 +110,8 @@ class CoderBotSession:
                 pass  # Nothing to commit
 
             if commit_made:
-                # Use show --patch to get the exact changes from the last commit
-                raw_show = repo.git.show("HEAD", patch=True, unified=3)
-                # Find where the diff actually starts to skip commit metadata
-                diff_start = raw_show.find("diff --git")
-                if diff_start != -1:
-                    patch = raw_show[diff_start:]
-                else:
-                    patch = raw_show
+                # Use git diff to get a clean, structural patch without commit metadata
+                patch = repo.git.diff("HEAD~1", "HEAD")
             else:
                 patch = self.helper.get_patch()
 
