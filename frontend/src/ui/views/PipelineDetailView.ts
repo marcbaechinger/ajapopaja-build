@@ -35,7 +35,8 @@ import type { DocBotDialogProps } from '../components/DocBotDialog.ts';
 import { PipelineEditDialog } from '../components/PipelineEditDialog.ts';
 import { ReviewDialog } from '../components/ReviewDialog.ts';
 import { PullRequestDialog } from '../components/PullRequestDialog.ts';
-import { PipelineHeaderView, type DocbotState, type ReviewbotState } from '../components/PipelineHeaderView.ts';
+import { CoderBotDialog } from '../components/CoderBotDialog.ts';
+import { PipelineHeaderView, type DocbotState, type ReviewbotState, type CoderbotState } from '../components/PipelineHeaderView.ts';
 import EasyMDE from 'easymde';
 import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
 
@@ -87,7 +88,7 @@ export class PipelineDetailView extends View {
     taskId: null,
   };
 
-  private coderbotState: { status: 'none' | 'inProgress', taskId: string | null } = {
+  private coderbotState: CoderbotState = {
     status: 'none',
     taskId: null,
   };
@@ -251,7 +252,7 @@ export class PipelineDetailView extends View {
       'ARCHBOT_STARTED': (p) => { this.archbotState = { status: 'inProgress', taskId: p.task_id }; },
       'ARCHBOT_COMPLETED': () => { this.archbotState = { status: 'none', taskId: null }; },
       'CODERBOT_STARTED': (p) => { this.coderbotState = { status: 'inProgress', taskId: p.task_id }; },
-      'CODERBOT_COMPLETED': () => { this.coderbotState = { status: 'none', taskId: null }; },
+      'CODERBOT_COMPLETED': (p) => { this.coderbotState = { status: 'completed', taskId: p.task_id }; },
       'PULL_REQUEST_CREATED': () => { this.fetchPullRequests(); },
     };
 
@@ -460,6 +461,16 @@ export class PipelineDetailView extends View {
       e.preventDefault();
       const url = this.context.pipelineClient.getVibeLogsStreamUrl(this.pipelineId);
       new LogViewerDialog(url, this.context.authService).show();
+    });
+
+    this.context.actionRegistry.register('open_coderbot_dialog', (e) => {
+      e.preventDefault();
+      new CoderBotDialog(this.context.coderBotService).show();
+    });
+
+    this.context.actionRegistry.register('dismiss_coderbot_banner', () => {
+      this.coderbotState = { status: 'none', taskId: null };
+      this.updateHeader();
     });
 
     this.context.actionRegistry.register('open_stats', () => {

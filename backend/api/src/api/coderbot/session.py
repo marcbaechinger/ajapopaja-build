@@ -328,6 +328,7 @@ class CoderBotSession:
                                         "content": delta.get("delta", ""),
                                         "task_id": self.task_id,
                                         "pipeline_id": self.pipeline_id,
+                                        "bot_type": "coderbot",
                                     },
                                 )
                             )
@@ -341,6 +342,7 @@ class CoderBotSession:
                                         "content": f"\n\n> Calling {name}...\n",
                                         "task_id": self.task_id,
                                         "pipeline_id": self.pipeline_id,
+                                        "bot_type": "coderbot",
                                     },
                                 )
                             )

@@ -30,6 +30,7 @@ import { DataManager } from './DataManager.ts';
 import { AuthService } from './AuthService.ts';
 
 import { AssistantService } from './AssistantService';
+import { CoderBotService } from './CoderBotService.ts';
 import { SearchDialog } from '../ui/components/SearchDialog';
 import { AssistantPanel } from '../ui/components/AssistantPanel';
 import { HealthCheckDialog } from '../ui/components/HealthCheckDialog';
@@ -54,6 +55,7 @@ export class AppContext {
   public readonly dataManager: DataManager;
   public readonly authService: AuthService;
   public readonly assistantService: AssistantService;
+  public readonly coderBotService: CoderBotService;
   private state: AppState;
 
   constructor(containerId: string, apiBaseUrl: string) {
@@ -72,6 +74,7 @@ export class AppContext {
     this.wsClient = new WebSocketClient(apiBaseUrl, this.authService);
     this.dataManager = new DataManager(this.wsClient);
     this.assistantService = new AssistantService(this.wsClient, this.authService);
+    this.coderBotService = new CoderBotService(this.wsClient);
     
     // Initialize singleton components
     new AssistantPanel(this);
