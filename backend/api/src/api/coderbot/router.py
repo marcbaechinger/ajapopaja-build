@@ -12,13 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from api.auth import get_current_user
 from core.models.models import Task
 
 from .manager import coderbot_manager
 
-router = APIRouter(prefix="/coderbot", tags=["coderbot"])
+router = APIRouter(
+    prefix="/coderbot",
+    tags=["coderbot"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 @router.post("/trigger/{task_id}")
