@@ -14,6 +14,7 @@
 
 import asyncio
 import logging
+from typing import Optional
 
 from core.models.models import Task
 
@@ -31,6 +32,7 @@ class CoderBotManager:
     def __init__(self):
         self._queue = asyncio.Queue()
         self._worker_task = None
+        self._active_session: Optional[CoderBotSession] = None
 
     async def process_task(self, task: Task):
         """Enqueues a new CoderBotSession for the given task."""
@@ -45,10 +47,18 @@ class CoderBotManager:
         if self._worker_task is None or self._worker_task.done():
             self._worker_task = asyncio.create_task(self._process_queue())
 
+    def stop_session(self, task_id: str) -> bool:
+        """Stops the active session if it matches the task_id."""
+        if self._active_session and self._active_session.task_id == task_id:
+            self._active_session.stop()
+            return True
+        return False
+
     async def _process_queue(self):
         """Processes the CoderBot queue sequentially."""
         while not self._queue.empty():
             session = await self._queue.get()
+            self._active_session = session
             try:
                 logger.info(f"Starting CoderBot execution for task {session.task_id}.")
                 await session.run()
@@ -58,6 +68,7 @@ class CoderBotManager:
                     exc_info=True,
                 )
             finally:
+                self._active_session = None
                 self._queue.task_done()
                 logger.info(f"Completed CoderBot execution for task {session.task_id}.")
 

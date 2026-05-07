@@ -23,6 +23,7 @@ export class CoderBotDialog extends BaseDialog {
   private logContainer: HTMLElement | null = null;
   private isFollowMode = true;
   private unsubscribe: (() => void) | null = null;
+  private stateUnsubscribe: (() => void) | null = null;
 
   constructor(coderBotService: CoderBotService) {
     super({
@@ -50,6 +51,8 @@ export class CoderBotDialog extends BaseDialog {
           this.coderBotService.clearHistory();
         } else if (action === 'toggle-follow') {
           this.toggleFollow();
+        } else if (action === 'stop-bot') {
+          this.stopBot();
         }
       }
       
@@ -59,6 +62,7 @@ export class CoderBotDialog extends BaseDialog {
     });
 
     this.initLogDisplay();
+    this.initStateSync();
   }
 
   protected renderBody(): string {
@@ -80,6 +84,10 @@ export class CoderBotDialog extends BaseDialog {
           <button data-action="clear-logs" class="px-3 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer">
             ${Icon.render('trash', { size: 14 })}
             Clear
+          </button>
+          <button data-action="stop-bot" id="stop-bot-btn" class="px-3 py-1.5 rounded text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer hidden">
+            ${Icon.render('close', { size: 14 })}
+            Stop Bot
           </button>
         </div>
         <button id="dialog-footer-close-btn" class="px-4 py-1.5 rounded text-xs font-bold bg-app-bg border border-app-border text-app-text hover:bg-app-surface transition-colors cursor-pointer">
@@ -116,6 +124,49 @@ export class CoderBotDialog extends BaseDialog {
     });
   }
 
+  private initStateSync() {
+    // Initial state
+    this.updateStopButtonVisibility(this.coderBotService.isActive());
+
+    // Subscribe to state changes
+    this.stateUnsubscribe = this.coderBotService.onSessionStateChange((active) => {
+      this.updateStopButtonVisibility(active);
+    });
+  }
+
+  private updateStopButtonVisibility(active: boolean) {
+    const btn = this.dialog.querySelector('#stop-bot-btn');
+    if (btn) {
+      if (active) {
+        btn.classList.remove('hidden');
+      } else {
+        btn.classList.add('hidden');
+      }
+    }
+  }
+
+  private async stopBot() {
+    const taskId = this.coderBotService.getCurrentTaskId();
+    if (!taskId) return;
+
+    const btn = this.dialog.querySelector('#stop-bot-btn') as HTMLButtonElement;
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = `${Icon.render('refresh', { size: 14, className: 'animate-spin' })} Stopping...`;
+    }
+
+    try {
+      await this.coderBotService.stopSession(taskId);
+    } catch (e) {
+      console.error('Failed to stop CoderBot session:', e);
+      alert('Failed to stop CoderBot session. See console for details.');
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = `${Icon.render('close', { size: 14 })} Stop Bot`;
+      }
+    }
+  }
+
   private toggleFollow() {
     this.isFollowMode = !this.isFollowMode;
     const btn = this.dialog.querySelector('#follow-btn');
@@ -133,6 +184,9 @@ export class CoderBotDialog extends BaseDialog {
   protected close(result: any = null) {
     if (this.unsubscribe) {
       this.unsubscribe();
+    }
+    if (this.stateUnsubscribe) {
+      this.stateUnsubscribe();
     }
     super.close(result);
   }

@@ -134,6 +134,12 @@ class CoderBotSession:
         except Exception as e:
             logger.error(f"Failed to close log file: {e}")
 
+    def stop(self):
+        """Terminates the running Pi subprocess."""
+        if self.process and self.process.returncode is None:
+            self.process.terminate()
+            logger.info(f"Terminated CoderBot process for task {self.task_id}")
+
     async def get_initial_prompt(self, task: Task) -> str:
         design_doc = task.design_doc or "No design document provided."
         spec = task.spec or "No specification provided."

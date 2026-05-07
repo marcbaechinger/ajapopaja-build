@@ -15,6 +15,7 @@
  */
 
 import { WebSocketClient } from './WebSocketClient.ts';
+import { AuthService } from './AuthService.ts';
 
 export type CoderBotListener = (content: string) => void;
 
@@ -25,12 +26,16 @@ export type CoderBotListener = (content: string) => void;
  */
 export class CoderBotService {
   private wsClient: WebSocketClient;
+  private authService: AuthService;
   private messageHistory: string = '';
   private listeners: Set<CoderBotListener> = new Set();
+  private stateListeners: Set<(active: boolean) => void> = new Set();
   private currentTaskId: string | null = null;
+  private isSessionActive: boolean = false;
 
-  constructor(wsClient: WebSocketClient) {
+  constructor(wsClient: WebSocketClient, authService: AuthService) {
     this.wsClient = wsClient;
+    this.authService = authService;
     this.setupHandlers();
   }
 
@@ -41,6 +46,11 @@ export class CoderBotService {
         this.clearHistory();
         this.currentTaskId = taskId;
       }
+      this.setSessionActive(true);
+    });
+
+    this.wsClient.on('CODERBOT_COMPLETED', () => {
+      this.setSessionActive(false);
     });
 
     this.wsClient.on('ASSISTANT_STREAM', (msg) => {
@@ -56,6 +66,14 @@ export class CoderBotService {
     return this.messageHistory;
   }
 
+  public getCurrentTaskId(): string | null {
+    return this.currentTaskId;
+  }
+
+  public isActive(): boolean {
+    return this.isSessionActive;
+  }
+
   public clearHistory() {
     this.messageHistory = '';
     this.currentTaskId = null;
@@ -65,6 +83,31 @@ export class CoderBotService {
   public onMessage(listener: CoderBotListener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  public onSessionStateChange(listener: (active: boolean) => void): () => void {
+    this.stateListeners.add(listener);
+    return () => this.stateListeners.delete(listener);
+  }
+
+  public async stopSession(taskId: string): Promise<void> {
+    const token = this.authService.getAccessToken();
+    const response = await fetch(`/api/coderbot/stop/${taskId}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to stop CoderBot session');
+    }
+  }
+
+  private setSessionActive(active: boolean) {
+    this.isSessionActive = active;
+    this.stateListeners.forEach(l => l(active));
   }
 
   private notify(content: string) {

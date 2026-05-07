@@ -29,3 +29,13 @@ async def trigger_coderbot(task_id: str):
 
     await coderbot_manager.process_task(task)
     return {"status": "success", "message": "CoderBot enqueued"}
+
+
+@router.post("/stop/{task_id}")
+async def stop_coderbot(task_id: str):
+    stopped = coderbot_manager.stop_session(task_id)
+    if not stopped:
+        raise HTTPException(
+            status_code=404, detail="Active session not found for this task"
+        )
+    return {"status": "success", "message": "CoderBot termination signaled"}

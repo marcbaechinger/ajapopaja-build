@@ -74,7 +74,7 @@ export class AppContext {
     this.wsClient = new WebSocketClient(apiBaseUrl, this.authService);
     this.dataManager = new DataManager(this.wsClient);
     this.assistantService = new AssistantService(this.wsClient, this.authService);
-    this.coderBotService = new CoderBotService(this.wsClient);
+    this.coderBotService = new CoderBotService(this.wsClient, this.authService);
     
     // Initialize singleton components
     new AssistantPanel(this);
