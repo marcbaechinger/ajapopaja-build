@@ -21,9 +21,10 @@ from typing import List, Optional
 
 import git
 from enum import Enum
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from api.auth import get_current_user
 from core.models.models import (
     Pipeline,
     PullRequest,
@@ -36,7 +37,11 @@ from core.utils import git_utils
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/pull_requests", tags=["pull_requests"])
+router = APIRouter(
+    prefix="/pull_requests",
+    tags=["pull_requests"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 class FailureStrategy(str, Enum):
