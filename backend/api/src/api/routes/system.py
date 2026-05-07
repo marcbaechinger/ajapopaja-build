@@ -14,9 +14,11 @@
 import os
 from typing import Dict
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pymongo import AsyncMongoClient
 
+from api.auth import get_current_user
+from core.models.models import User
 from core.utils import git_utils
 
 from ..assistant.tools.nvim_tools import get_nvim_socket_path, is_nvim_available
@@ -80,7 +82,9 @@ async def health_check() -> Dict[str, dict]:
 
 
 @router.get("/git-status/{pipeline_id}")
-async def get_git_status(pipeline_id: str) -> Dict[str, int]:
+async def get_git_status(
+    pipeline_id: str, current_user: User = Depends(get_current_user)
+) -> Dict[str, int]:
     """
     Return a summary of the git status for the workspace associated with
      the given pipeline_id.
