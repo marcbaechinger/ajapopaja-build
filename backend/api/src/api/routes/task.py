@@ -18,7 +18,6 @@ from fastapi import APIRouter, Body, Depends, Query
 from pydantic import BaseModel
 
 from api.auth import get_current_user
-from api.gemini_executor import GeminiExecutor
 from api.websocket_manager import WSMessage, manager
 from core.models.models import DesignDocHistory, Task, TaskStatus, User
 from core.queries import task as task_queries
@@ -83,9 +82,6 @@ async def update_task_status(
         task_id, status, version, actor="user"
     )
 
-    if updated_task.status == TaskStatus.SCHEDULED:
-        await GeminiExecutor.ensure_running(updated_task.pipeline_id)
-
     await manager.broadcast(
         WSMessage(
             type="TASK_STATUS_UPDATED", payload=updated_task.model_dump(mode="json")
@@ -118,9 +114,6 @@ async def accept_design(
     current_user: User = Depends(get_current_user),
 ):
     updated_task = await task_queries.accept_design(task_id, version, actor="user")
-
-    if updated_task.status == TaskStatus.SCHEDULED:
-        await GeminiExecutor.ensure_running(updated_task.pipeline_id)
 
     await manager.broadcast(
         WSMessage(
@@ -242,9 +235,6 @@ async def create_task(
     pipeline_id: str, task: Task, current_user: User = Depends(get_current_user)
 ):
     new_task = await task_queries.create_task(pipeline_id, task, actor="user")
-
-    if new_task.status == TaskStatus.SCHEDULED:
-        await GeminiExecutor.ensure_running(new_task.pipeline_id)
 
     await manager.broadcast(
         WSMessage(type="TASK_CREATED", payload=new_task.model_dump(mode="json"))

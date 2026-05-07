@@ -50,7 +50,7 @@ export class PipelineClient extends BaseClient {
     return new Pipeline(await response.json());
   }
 
-  async update(id: string, version: number, partial: { name?: string, status?: PipelineStatus, workspace_path?: string | null, manage_gemini?: boolean, manage_vibe?: boolean }): Promise<Pipeline> {
+  async update(id: string, version: number, partial: { name?: string, status?: PipelineStatus, workspace_path?: string | null }): Promise<Pipeline> {
     try {
       const response = await this.fetch(`${this.baseUrl}/pipelines/${id}`, {
         method: 'PATCH',
@@ -75,23 +75,5 @@ export class PipelineClient extends BaseClient {
   async getDailyStats(id: string): Promise<any[]> {
     const response = await this.fetch(`${this.baseUrl}/pipelines/${id}/stats/daily`);
     return await response.json();
-  }
-
-  async getGeminiStatus(id: string): Promise<{ running: boolean, log_file: string | null, available: boolean }> {
-    const response = await this.fetch(`${this.baseUrl}/pipelines/${id}/gemini/status`);
-    return await response.json();
-  }
-
-  getGeminiLogsStreamUrl(id: string): string {
-    return `${this.baseUrl}/pipelines/${id}/gemini/logs/stream`;
-  }
-
-  async getVibeStatus(id: string): Promise<{ running: boolean, log_file: string | null, available: boolean }> {
-    const response = await this.fetch(`${this.baseUrl}/pipelines/${id}/vibe/status`);
-    return await response.json();
-  }
-
-  getVibeLogsStreamUrl(id: string): string {
-    return `${this.baseUrl}/pipelines/${id}/vibe/logs/stream`;
   }
 }

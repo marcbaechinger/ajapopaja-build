@@ -39,8 +39,6 @@ describe('PipelineEditDialog', () => {
         status: 'active',
         version: 1,
         workspace_path: '/tmp/test',
-        manage_gemini: true,
-        manage_vibe: false
       }),
       pipelineId: 'pipeline-1',
       context: {
@@ -61,14 +59,10 @@ describe('PipelineEditDialog', () => {
     const nameInput = document.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
     const statusSelect = document.querySelector('select[name="pipeline_status"]') as HTMLSelectElement;
     const workspaceInput = document.querySelector('input[name="workspace_path"]') as HTMLInputElement;
-    const geminiCheck = document.querySelector('input[name="manage_gemini"]') as HTMLInputElement;
-    const vibeCheck = document.querySelector('input[name="manage_vibe"]') as HTMLInputElement;
 
     expect(nameInput.value).toBe('Test Pipeline');
     expect(statusSelect.value).toBe('active');
     expect(workspaceInput.value).toBe('/tmp/test');
-    expect(geminiCheck.checked).toBe(true);
-    expect(vibeCheck.checked).toBe(false);
 
     // Cleanup
     document.querySelector('#pipeline-edit-cancel')?.dispatchEvent(new MouseEvent('click'));

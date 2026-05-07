@@ -78,17 +78,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
         <div>
           <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Workspace Path (Optional)</label>
           <input type="text" name="workspace_path" value="${pipeline.workspace_path || ''}" placeholder="Default Project Root" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1">
-        </div>
-        <div class="flex items-center gap-2 px-1">
-          <input type="checkbox" name="manage_gemini" id="manage_gemini_dlg" ${pipeline.manage_gemini ? 'checked' : ''} class="w-4 h-4 rounded border-app-border bg-app-bg text-app-accent-1 focus:ring-app-accent-1 cursor-pointer">
-          <label for="manage_gemini_dlg" class="text-[10px] font-bold uppercase tracking-wider text-app-text cursor-pointer">Manage Gemini CLI process</label>
-        </div>
-        <div class="flex col-span-2">
-          <div class="flex items-center gap-2 px-1">
-            <input type="checkbox" name="manage_vibe" id="manage_vibe_dlg" ${pipeline.manage_vibe ? 'checked' : ''} class="w-4 h-4 rounded border-app-border bg-app-bg text-app-accent-1 focus:ring-app-accent-1 cursor-pointer">
-            <label for="manage_vibe_dlg" class="text-[10px] font-bold uppercase tracking-wider text-app-text cursor-pointer">Manage Vibe CLI process</label>
-          </div>
-          <div class="ml-auto text-[10px] font-bold uppercase tracking-widest text-app-muted">ID: ${pipelineId}</div>
+        </div><div class="flex col-span-2"><div class="ml-auto text-[10px] font-bold uppercase tracking-widest text-app-muted">ID: ${pipelineId}</div>
         </div>
       </div>
     `;
@@ -115,8 +105,6 @@ export class PipelineEditDialog extends BaseDialog<void> {
     const nameInput = this.dialog.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
     const statusSelect = this.dialog.querySelector('select[name="pipeline_status"]') as HTMLSelectElement;
     const workspaceInput = this.dialog.querySelector('input[name="workspace_path"]') as HTMLInputElement;
-    const geminiCheck = this.dialog.querySelector('input[name="manage_gemini"]') as HTMLInputElement;
-    const vibeCheck = this.dialog.querySelector('input[name="manage_vibe"]') as HTMLInputElement;
 
     saveBtn.disabled = true;
     saveBtn.textContent = 'Saving...';
@@ -126,8 +114,6 @@ export class PipelineEditDialog extends BaseDialog<void> {
         name: nameInput.value.trim(),
         status: statusSelect.value as PipelineStatus,
         workspace_path: workspaceInput.value.trim() || undefined,
-        manage_gemini: geminiCheck.checked,
-        manage_vibe: vibeCheck.checked
       });
       this.close();
     } catch (error) {

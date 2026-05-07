@@ -36,7 +36,6 @@ from jose import JWTError, jwt
 from ajapopaja_mcp.server import mcp
 from api.assistant.ws_handler import register_assistant_handlers
 from api.auth import ALGORITHM, SECRET_KEY, get_current_user_from_token
-from api.gemini_executor import GeminiExecutor
 from api.routes.auth import router as auth_router
 from api.routes.docbot import router as docbot_router
 from api.routes.editor_commands import router as editor_router
@@ -96,8 +95,7 @@ async def lifespan(app: FastAPI):
     await init_db()
     register_assistant_handlers()
     yield
-    logger.info("Shutting down Gemini executors...")
-    GeminiExecutor.stop_all()
+    logger.info("Shutting down...")
 
 
 # Create MCP ASGI app
