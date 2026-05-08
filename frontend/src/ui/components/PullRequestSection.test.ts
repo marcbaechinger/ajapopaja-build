@@ -108,7 +108,7 @@ describe('PullRequestSection', () => {
     const prs = [
       createPr({ summary: 'PR with date', created_at: '2024-01-15T10:00:00Z' }),
       createPr({ summary: 'PR without date', created_at: undefined }),
-      createPr({ summary: 'PR with null date', created_at: null })
+      createPr({ summary: 'PR with null date', created_at: null as any })
     ];
     // Should not throw an error
     const html = PullRequestSection.render(prs);

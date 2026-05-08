@@ -29,7 +29,6 @@ describe('TaskStatusCounter', () => {
     new Task({ id: 't-failed', title: 'Failed Task', status: TaskStatus.FAILED }),
     new Task({ id: 't-discarded', title: 'Discarded Task', status: TaskStatus.DISCARDED }),
   ];
-  const pulledRequestTask = new Task({ id: 't-pull', title: 'Pull Request Task', status: TaskStatus.PULL_REQUEST_AVAILABLE });
   const deletedTask = new Task({ id: 't-deleted', title: 'Deleted Task', status: TaskStatus.CREATED, deleted: true });
 
   it('renders empty string when passed empty array', () => {

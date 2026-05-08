@@ -31,7 +31,8 @@ describe('TaskColumn', () => {
       order: 0,
       type: 'manual' as const,
       created_at: '2026-04-12T10:00:00Z',
-      history: []
+      history: [],
+      want_design_doc: false
     },
     {
       id: 'task-2',
@@ -44,7 +45,8 @@ describe('TaskColumn', () => {
       order: 1,
       type: 'manual' as const,
       created_at: '2026-04-12T10:00:00Z',
-      history: []
+      history: [],
+      want_design_doc: false
     }
   ];
 

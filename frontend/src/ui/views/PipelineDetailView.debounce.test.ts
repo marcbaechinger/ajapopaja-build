@@ -45,8 +45,6 @@ describe('PipelineDetailView Git Status Debounce', () => {
       },
       pipelineClient: {
         get: vi.fn().mockResolvedValue({ id: 'p1', name: 'Pipe 1' }),
-        getGeminiStatus: vi.fn().mockResolvedValue({}),
-        getVibeStatus: vi.fn().mockResolvedValue({}),
       },
       taskClient: {
         listByPipeline: vi.fn().mockResolvedValue([]),

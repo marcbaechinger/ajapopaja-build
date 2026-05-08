@@ -60,7 +60,7 @@ describe('LogViewerDialog', () => {
   });
 
   describe('Rendering', () => {
-    it('should create a dialog with the correct title', () => {
+    it('should create a dialog with the default title', () => {
       const dialog = new LogViewerDialog('/mock/stream/url', mockAuthService);
       const dialogElement = dialog['dialog'];
       
@@ -68,7 +68,15 @@ describe('LogViewerDialog', () => {
       expect(dialogElement.tagName.toLowerCase()).toBe('dialog');
       
       const title = dialogElement.querySelector('h3');
-      expect(title?.textContent).toContain('Gemini Engine Logs');
+      expect(title?.textContent).toContain('Engine Logs');
+    });
+
+    it('should create a dialog with a custom title', () => {
+      const dialog = new LogViewerDialog('/mock/stream/url', mockAuthService, 'Custom Log Title');
+      const dialogElement = dialog['dialog'];
+      
+      const title = dialogElement.querySelector('h3');
+      expect(title?.textContent).toContain('Custom Log Title');
     });
 
     it('should render the log content container with correct structure', () => {
@@ -167,14 +175,14 @@ describe('LogViewerDialog', () => {
       if (logLines) logLines.innerHTML = '<span>Test log line</span>';
       expect(logLines?.innerHTML).toBe('<span>Test log line</span>');
 
-      const clearBtn = dialogElement.querySelector('[data-action="clear-logs"]');
+      const clearBtn = dialogElement.querySelector('[data-action="clear-logs"]') as HTMLElement;
       clearBtn?.click();
 
       expect(logLines?.innerHTML).toBe('');
     });
 
     it('should have close method', () => {
-      const dialog = new LogViewerDialog('/mock/stream/url', mockAuthService);
+      const dialog = new LogViewerDialog('/mock/stream/url', mockAuthService) as any;
       expect(dialog.close).toBeDefined();
       expect(typeof dialog.close).toBe('function');
     });
@@ -328,7 +336,7 @@ describe('LogViewerDialog', () => {
       mockFetch.mockResolvedValue(mockResponse);
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       
-      const dialog = new LogViewerDialog('/mock/stream/url', mockAuthService);
+      new LogViewerDialog('/mock/stream/url', mockAuthService);
       await new Promise(resolve => setTimeout(resolve, 10));
 
       // AbortError should be caught and not logged as an error
@@ -352,7 +360,7 @@ describe('LogViewerDialog', () => {
       const dialogElement = dialog['dialog'];
       document.body.appendChild(dialogElement);
 
-      const followBtn = dialogElement.querySelector('#follow-btn');
+      const followBtn = dialogElement.querySelector('#follow-btn') as HTMLElement;
       
       // Initial state
       expect(followBtn?.textContent).toContain('Follow Mode: ON');
@@ -514,7 +522,7 @@ describe('LogViewerDialog', () => {
     });
 
     it('should handle stream with single byte chunks', async () => {
-      const chunks = [];
+      const chunks: Uint8Array[] = [];
       for (let i = 0; i < 10; i++) {
         chunks.push(new TextEncoder().encode(`A`));
       }

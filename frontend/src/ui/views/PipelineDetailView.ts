@@ -28,7 +28,6 @@ import { TaskColumn } from '../components/TaskColumn.ts';
 import { CompletedSection } from '../components/CompletedSection.ts';
 import { PipelineStatsView } from '../components/PipelineStatsView.ts';
 import { PaginationControl } from '../components/PaginationControl.ts';
-import { LogViewerDialog } from '../components/LogViewerDialog.ts';
 import { DocBotDialog } from '../components/DocBotDialog.ts';
 import { PullRequestSection } from '../components/PullRequestSection.ts';
 import type { DocBotDialogProps } from '../components/DocBotDialog.ts';
@@ -45,8 +44,6 @@ export class PipelineDetailView extends View {
   private container: HTMLElement | null = null;
   private pipelineId: string;
   private pipeline: Pipeline | null = null;
-  private geminiStatus: { running: boolean, log_file: string | null, available: boolean } = { running: false, log_file: null, available: true };
-  private vibeStatus: { running: boolean, log_file: string | null, available: boolean } = { running: false, log_file: null, available: true };
   private isTwoColumnLayout: boolean = this.storage.get('layout') === '2-col';
   private context: AppContext;
   private unsubs: (() => void)[] = [];
@@ -220,10 +217,6 @@ export class PipelineDetailView extends View {
 
     // Listen for process and bot status updates via specific WS event queries
     const eventHandlers: Record<string, (payload: any) => void> = {
-      'GEMINI_PROCESS_STARTED': () => { this.geminiStatus.running = true; },
-      'GEMINI_PROCESS_STOPPED': () => { this.geminiStatus.running = false; },
-      'VIBE_PROCESS_STARTED': () => { this.vibeStatus.running = true; },
-      'VIBE_PROCESS_STOPPED': () => { this.vibeStatus.running = false; },
       'DOCBOT_STARTED': (p) => { this.docbotState = { status: 'inProgress', taskId: p.task_id }; },
       'DOCBOT_COMPLETED': (p) => {
         const result = p.result;
@@ -449,18 +442,6 @@ export class PipelineDetailView extends View {
       } catch (err) {
         console.error('Failed to copy task ID:', err);
       }
-    });
-
-    this.context.actionRegistry.register('open_gemini_logs', (e) => {
-      e.preventDefault();
-      const url = this.context.pipelineClient.getGeminiLogsStreamUrl(this.pipelineId);
-      new LogViewerDialog(url, this.context.authService).show();
-    });
-
-    this.context.actionRegistry.register('open_vibe_logs', (e) => {
-      e.preventDefault();
-      const url = this.context.pipelineClient.getVibeLogsStreamUrl(this.pipelineId);
-      new LogViewerDialog(url, this.context.authService).show();
     });
 
     this.context.actionRegistry.register('open_coderbot_dialog', (e) => {
@@ -1009,8 +990,6 @@ export class PipelineDetailView extends View {
       if (this.pipeline) {
         this.context.dataManager.updatePipeline(this.pipeline);
       }
-      this.geminiStatus = await this.context.pipelineClient.getGeminiStatus(this.pipelineId);
-      this.vibeStatus = await this.context.pipelineClient.getVibeStatus(this.pipelineId);
       this.fetchPullRequests();
       this.scheduleRefreshGitStatus();
       this.updateHeader();
@@ -1238,8 +1217,6 @@ export class PipelineDetailView extends View {
     return PipelineHeaderView.render({
       pipeline: this.pipeline,
       pipelineId: this.pipelineId,
-      geminiStatus: this.geminiStatus,
-      vibeStatus: this.vibeStatus,
       docbotState: this.docbotState,
       reviewbotState: this.reviewbotState,
       archbotState: this.archbotState,

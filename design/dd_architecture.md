@@ -43,7 +43,7 @@ The system is composed of five primary interconnected components:
     * **Role**: Built‑in intelligence and autonomous execution processes within the backend.
     * **Responsibilities**:
         * Provide an interactive conversational AI Assistant (backed by `ollama.AsyncClient`) accessible via the SPA Frontend to answer queries and execute internal tools.
-        * Manage autonomous background workers (e.g., `gemini` or `vibe` CLI executors) directly from the API, enabling pipelines to run without requiring external terminal invocations.
+        * Manage autonomous background workers (e.g., bot executors) directly from the API, enabling pipelines to run without requiring external terminal invocations.
         * The assistant interface is conditionally rendered based on Ollama availability; if the Ollama service is unreachable, the system degrades gracefully by hiding assistant controls and skipping DocBot background sessions. Health checks are performed on the `/system/health` endpoint and used by both the backend and frontend to determine availability.
 
 ## 3. Component Interaction & Data Flow

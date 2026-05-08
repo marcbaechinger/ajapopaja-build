@@ -46,8 +46,6 @@ export interface CoderbotState {
 export interface PipelineHeaderViewProps {
   pipeline: Pipeline;
   pipelineId: string;
-  geminiStatus: { running: boolean; log_file: string | null; available: boolean };
-  vibeStatus: { running: boolean; log_file: string | null; available: boolean };
   docbotState: DocbotState;
   reviewbotState: ReviewbotState;
   archbotState?: ArchbotState;

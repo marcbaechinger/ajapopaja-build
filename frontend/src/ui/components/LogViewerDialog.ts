@@ -26,9 +26,9 @@ export class LogViewerDialog extends BaseDialog {
   private isFollowMode = true;
   private abortController: AbortController | null = null;
 
-  constructor(streamUrl: string, authService: AuthService) {
+  constructor(streamUrl: string, authService: AuthService, title: string = 'Engine Logs') {
     super({
-      title: 'Gemini Engine Logs',
+      title,
       maxWidth: 'max-w-4xl',
       maxHeight: 'max-h-[85vh]',
       iconSvg: Icon.render('documentation', { size: 20 })
