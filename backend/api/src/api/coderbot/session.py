@@ -176,7 +176,8 @@ class CoderBotSession:
             repo.git.add(A=True)
             commit_made = False
             try:
-                repo.git.commit("-m", f"CoderBot (Pi): {summary[:200]}")
+                # Use --no-verify to bypass pre-commit hooks in the sandbox environment
+                repo.git.commit("-m", f"CoderBot (Pi): {summary[:200]}", "--no-verify")
                 commit_made = True
                 logger.info("Git commit created in sandbox.")
             except Exception as e:

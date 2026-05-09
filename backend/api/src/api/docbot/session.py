@@ -155,7 +155,8 @@ class DocBotSession(BaseBotSession):
             repo.git.add(A=True)
 
             try:
-                repo.git.commit("-m", f"DocBot: {summary[:200]}")
+                # Use --no-verify to bypass pre-commit hooks that might fail in the server environment
+                repo.git.commit("-m", f"DocBot: {summary[:200]}", "--no-verify")
                 # Use git diff to get a clean, structural patch without commit metadata
                 patch = repo.git.diff("HEAD~1", "HEAD")
             except Exception as e:
