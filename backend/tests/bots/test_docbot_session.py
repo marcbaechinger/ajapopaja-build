@@ -268,3 +268,112 @@ async def test_docbot_session_custom_feedback():
     assert "no_doc_update_needed" in feedback
     assert "p1" in feedback
     assert "t1" in feedback
+
+
+@pytest.mark.asyncio
+async def test_handle_bot_end_empty_patch_skips_pr_creation():
+    """Test that an empty patch skips PR creation and logs a warning."""
+    session = DocBotSession(pipeline_id="test_pipeline", task_id="test_task")
+    session.has_updates = True
+
+    mock_repo = MagicMock()
+    mock_repo.git.commit = MagicMock()
+    mock_repo.git.diff = MagicMock(return_value="")
+
+    mock_helper = MagicMock()
+    mock_helper.get_repo = MagicMock(return_value=mock_repo)
+    mock_helper.branch_name = "test-branch"
+    mock_helper.cleanup = MagicMock()
+    session.helper = mock_helper
+    session.session_result = {"summary": "Test summary"}
+
+    with (
+        patch("api.docbot.session.PullRequest") as mock_pr_class,
+        patch("api.docbot.session.manager") as mock_manager,
+        patch("api.docbot.session.logger") as mock_logger,
+    ):
+        await session._handle_bot_end()
+
+        # Verify PR was NOT created
+        mock_pr_class.return_value.insert.assert_not_called()
+        mock_manager.broadcast.assert_not_called()
+
+        # Verify warning was logged
+        mock_logger.warning.assert_called_once_with(
+            "DocBot generated an empty or unchanged patch. Skipping PR creation."
+        )
+
+        # Verify cleanup was called
+        mock_helper.cleanup.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_handle_bot_end_whitespace_only_patch_skips_pr_creation():
+    """Test that a whitespace-only patch skips PR creation and logs a warning."""
+    session = DocBotSession(pipeline_id="test_pipeline", task_id="test_task")
+    session.has_updates = True
+
+    mock_repo = MagicMock()
+    mock_repo.git.commit = MagicMock()
+    mock_repo.git.diff = MagicMock(return_value="   \n\t  \n")
+
+    mock_helper = MagicMock()
+    mock_helper.get_repo = MagicMock(return_value=mock_repo)
+    mock_helper.branch_name = "test-branch"
+    mock_helper.cleanup = MagicMock()
+    session.helper = mock_helper
+    session.session_result = {"summary": "Test summary"}
+
+    with (
+        patch("api.docbot.session.PullRequest") as mock_pr_class,
+        patch("api.docbot.session.manager") as mock_manager,
+        patch("api.docbot.session.logger") as mock_logger,
+    ):
+        await session._handle_bot_end()
+
+        # Verify PR was NOT created
+        mock_pr_class.return_value.insert.assert_not_called()
+        mock_manager.broadcast.assert_not_called()
+
+        # Verify warning was logged
+        mock_logger.warning.assert_called_once_with(
+            "DocBot generated an empty or unchanged patch. Skipping PR creation."
+        )
+
+        # Verify cleanup was called
+        mock_helper.cleanup.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_handle_bot_end_no_helper(monkeypatch):
+    """Test that _handle_bot_end with no helper skips PR creation appropriately."""
+    session = DocBotSession(pipeline_id="test_pipeline", task_id="test_task")
+    session.has_updates = True
+    session.helper = None
+    session.session_result = {"summary": "Test summary"}
+
+    with patch("api.docbot.session.manager.broadcast") as mock_broadcast:
+        await session._handle_bot_end()
+
+        mock_broadcast.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_handle_bot_end_no_helper_doesnt_call_cleanup(monkeypatch):
+    """Test that cleanup() is NOT called when helper is None."""
+    session = DocBotSession(pipeline_id="test_pipeline", task_id="test_task")
+    session.has_updates = True
+    session.helper = None
+    session.session_result = {"summary": "Test summary"}
+
+    with (
+        patch("core.models.models.PullRequest.insert") as mock_pull_request_insert,
+        patch("api.docbot.session.manager.broadcast") as mock_broadcast,
+    ):
+        await session._handle_bot_end()
+
+        # Verify method completed without error
+        mock_broadcast.assert_not_called()
+        # This would fail if helper.cleanup() was called on None
+        assert session.helper is None
+        mock_pull_request_insert.assert_not_called()

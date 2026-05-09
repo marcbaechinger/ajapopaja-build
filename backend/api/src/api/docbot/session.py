@@ -163,8 +163,11 @@ class DocBotSession(BaseBotSession):
                 logger.info(f"Nothing to commit or commit failed: {e}")
                 patch = self.helper.get_patch()
 
-            if not patch:
-                logger.warning("DocBot generated an empty patch.")
+            # Skip PR creation if patch is empty or contains only whitespace
+            if not patch or not patch.strip():
+                logger.warning(
+                    "DocBot generated an empty or unchanged patch. Skipping PR creation."
+                )
                 return
 
             if not patch.endswith("\n"):
