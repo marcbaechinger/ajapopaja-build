@@ -41,6 +41,9 @@ IGNORED_DIRECTORIES = [
     ".logs",
 ]
 
+# Document directory used by DocBot for reference documentation
+DOC_ROOT = os.getenv("DOC_ROOT", "design")
+
 # Ollama configuration for the AI Assistant
 OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY")
 OLLAMA_HOST = os.getenv(
