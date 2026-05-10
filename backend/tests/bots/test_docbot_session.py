@@ -325,7 +325,7 @@ async def test_handle_bot_end_whitespace_only_patch_skips_pr_creation():
     session.session_result = {"summary": "Test summary"}
 
     with (
-        patch("api.docbot.session.PullRequest") as mock_pr_class,
+        patch("core.models.models.PullRequest") as mock_pr_class,
         patch("api.docbot.session.manager") as mock_manager,
         patch("api.docbot.session.logger") as mock_logger,
     ):
@@ -345,7 +345,7 @@ async def test_handle_bot_end_whitespace_only_patch_skips_pr_creation():
 
 
 @pytest.mark.asyncio
-async def test_handle_bot_end_no_helper(monkeypatch):
+async def test_handle_bot_end_no_helper():
     """Test that _handle_bot_end with no helper skips PR creation appropriately."""
     session = DocBotSession(pipeline_id="test_pipeline", task_id="test_task")
     session.has_updates = True
@@ -359,7 +359,7 @@ async def test_handle_bot_end_no_helper(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_handle_bot_end_no_helper_doesnt_call_cleanup(monkeypatch):
+async def test_handle_bot_end_no_helper_doesnt_call_cleanup():
     """Test that cleanup() is NOT called when helper is None."""
     session = DocBotSession(pipeline_id="test_pipeline", task_id="test_task")
     session.has_updates = True
