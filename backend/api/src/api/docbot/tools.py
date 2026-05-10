@@ -29,7 +29,6 @@ from pathlib import Path
 from .cache import DocBotPreview, set_preview
 from .registry import register_doc_tool
 from .registry import docbot_registry
-from core import config
 
 logger = logging.getLogger(__name__)
 
@@ -75,13 +74,13 @@ async def list_ref_docs(
         return ["Error: Workspace root missing."]
 
     effective_root = get_effective_root(pipeline, session)
-    doc_path = safe_join(effective_root, config.DOC_ROOT)
+    doc_path = safe_join(effective_root, pipeline.doc_root)
     logger.info(f"list_ref_docs: Scanning directory: {doc_path}")
 
     if not os.path.isdir(doc_path):
         msg = " ".join(
             [
-                f"Directory '{config.DOC_ROOT}/' does not exist yet. If this change requires"
+                f"Directory '{pipeline.doc_root}/' does not exist yet. If this change requires"
                 "new documentation, please create a new document using",
                 "'update_ref_doc'.",
             ]
@@ -129,16 +128,6 @@ async def read_ref_doc(
         )
         return "Error: filename is required."
 
-    # Strip 'design/' prefix if the agent provided one
-    if fname.startswith(f"{config.DOC_ROOT}/"):
-        fname = fname[len(config.DOC_ROOT) + 1 :]
-    elif fname.startswith(config.DOC_ROOT) and len(fname) == len(config.DOC_ROOT):
-        return f"Error: '{config.DOC_ROOT}' is a directory, please specify a file."
-
-    logger.info(
-        f"read_ref_doc: Attempting to read '{fname}' for pipeline {pipeline_id}"
-    )
-
     try:
         pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
     except Exception as e:
@@ -149,9 +138,19 @@ async def read_ref_doc(
         logger.error(f"read_ref_doc: Workspace root missing for pipeline {pipeline_id}")
         return "Error: Workspace root missing."
 
+    # Strip doc_root prefix if the agent provided one
+    if fname.startswith(f"{pipeline.doc_root}/"):
+        fname = fname[len(pipeline.doc_root) + 1 :]
+    elif fname.startswith(pipeline.doc_root) and len(fname) == len(pipeline.doc_root):
+        return f"Error: '{pipeline.doc_root}' is a directory, please specify a file."
+
+    logger.info(
+        f"read_ref_doc: Attempting to read '{fname}' for pipeline {pipeline_id}"
+    )
+
     try:
         effective_root = get_effective_root(pipeline, session)
-        doc_path = safe_join(effective_root, config.DOC_ROOT)
+        doc_path = safe_join(effective_root, pipeline.doc_root)
         file_path = safe_join(doc_path, fname)
         logger.info(f"read_ref_doc: Full file path: {file_path}")
     except ValueError as e:
@@ -160,7 +159,7 @@ async def read_ref_doc(
 
     if not os.path.isfile(file_path):
         logger.warning(f"read_ref_doc: Document '{fname}' not found at {file_path}")
-        return f"Error: Document '{fname}' not found in '{config.DOC_ROOT}/'."
+        return f"Error: Document '{fname}' not found in '{pipeline.doc_root}/'."
 
     try:
         with open(file_path, "r") as f:
@@ -229,10 +228,6 @@ async def update_ref_doc(
         logger.warning(f"update_ref_doc: Missing reason for {fname}. Using default.")
         resn = "No reason provided."
 
-    # Strip 'design/' prefix if the agent provided one
-    if fname.startswith(f"{config.DOC_ROOT}/"):
-        fname = fname[len(config.DOC_ROOT) + 1 :]
-
     try:
         pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
     except Exception as e:
@@ -245,9 +240,13 @@ async def update_ref_doc(
         )
         return "Error: Workspace root missing."
 
+    # Strip doc_root prefix if the agent provided one
+    if fname.startswith(f"{pipeline.doc_root}/"):
+        fname = fname[len(pipeline.doc_root) + 1 :]
+
     try:
         effective_root = get_effective_root(pipeline, session)
-        doc_path = safe_join(effective_root, config.DOC_ROOT)
+        doc_path = safe_join(effective_root, pipeline.doc_root)
         file_path = safe_join(doc_path, fname)
         logger.info(f"update_ref_doc: Writing to {file_path}")
 
@@ -309,7 +308,7 @@ async def update_ref_doc(
             except Exception as e:
                 logger.error(f"update_ref_doc: Failed to capture diff/notify: {e}")
 
-        return f"Successfully updated {config.DOC_ROOT}/{fname}."
+        return f"Successfully updated {pipeline.doc_root}/{fname}."
     except Exception as e:
         logger.error(f"update_ref_doc: Failed to write {file_path}: {e}")
         return f"Error writing file: {str(e)}"
@@ -421,17 +420,17 @@ async def update_markdown_section(
     if not fname or not heading or not section:
         return "Error: filename, markdown_heading, and markdown_section are required."
 
-    # Strip 'design/' prefix
-    if fname.startswith(f"{config.DOC_ROOT}/"):
-        fname = fname[len(config.DOC_ROOT) + 1 :]
-
     try:
         pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
         if not pipeline or not pipeline.workspace_abs_path:
             return "Error: Workspace root missing."
 
+        # Strip doc_root prefix
+        if fname.startswith(f"{pipeline.doc_root}/"):
+            fname = fname[len(pipeline.doc_root) + 1 :]
+
         effective_root = get_effective_root(pipeline, session)
-        doc_path = safe_join(effective_root, config.DOC_ROOT)
+        doc_path = safe_join(effective_root, pipeline.doc_root)
         file_path = safe_join(doc_path, fname)
 
         if not os.path.isfile(file_path):
@@ -492,7 +491,9 @@ async def update_markdown_section(
                 WSMessage(type="DOCBOT_PREVIEW_READY", payload={"task_id": tid})
             )
 
-        return f"Successfully updated section '{heading}' in {config.DOC_ROOT}/{fname}."
+        return (
+            f"Successfully updated section '{heading}' in {pipeline.doc_root}/{fname}."
+        )
 
     except Exception as e:
         logger.error(f"update_markdown_section: Failed: {e}")

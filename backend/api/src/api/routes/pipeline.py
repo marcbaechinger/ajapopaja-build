@@ -59,6 +59,7 @@ async def update_pipeline(
     name: Optional[str] = Body(None, embed=True),
     status: Optional[PipelineStatus] = Body(None, embed=True),
     workspace_path: Optional[str] = Body(None, embed=True),
+    doc_root: Optional[str] = Body(None, embed=True),
     current_user: User = Depends(get_current_user),
 ):
     updated_pipeline = await pipeline_queries.update_pipeline(
@@ -67,6 +68,7 @@ async def update_pipeline(
         name=name,
         status=status,
         workspace_path=workspace_path,
+        doc_root=doc_root,
     )
 
     await manager.broadcast(

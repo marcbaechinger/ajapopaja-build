@@ -75,10 +75,18 @@ export class PipelineEditDialog extends BaseDialog<void> {
             </select>
           </div>
         </div>
-        <div>
-          <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Workspace Path (Optional)</label>
-          <input type="text" name="workspace_path" value="${pipeline.workspace_path || ''}" placeholder="Default Project Root" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1">
-        </div><div class="flex col-span-2"><div class="ml-auto text-[10px] font-bold uppercase tracking-widest text-app-muted">ID: ${pipelineId}</div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Workspace Path (Optional)</label>
+            <input type="text" name="workspace_path" value="${pipeline.workspace_path || ''}" placeholder="Default Project Root" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1">
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Documentation Root</label>
+            <input type="text" name="doc_root" value="${pipeline.doc_root}" placeholder="design" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1">
+          </div>
+        </div>
+        <div class="flex col-span-2">
+          <div class="ml-auto text-[10px] font-bold uppercase tracking-widest text-app-muted">ID: ${pipelineId}</div>
         </div>
       </div>
     `;
@@ -105,6 +113,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
     const nameInput = this.dialog.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
     const statusSelect = this.dialog.querySelector('select[name="pipeline_status"]') as HTMLSelectElement;
     const workspaceInput = this.dialog.querySelector('input[name="workspace_path"]') as HTMLInputElement;
+    const docRootInput = this.dialog.querySelector('input[name="doc_root"]') as HTMLInputElement;
 
     saveBtn.disabled = true;
     saveBtn.textContent = 'Saving...';
@@ -114,6 +123,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
         name: nameInput.value.trim(),
         status: statusSelect.value as PipelineStatus,
         workspace_path: workspaceInput.value.trim() || undefined,
+        doc_root: docRootInput.value.trim() || 'design',
       });
       this.close();
     } catch (error) {

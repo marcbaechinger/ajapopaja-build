@@ -52,6 +52,7 @@ Deployment info.
 
         mock_pipeline = AsyncMock()
         mock_pipeline.workspace_abs_path = workspace
+        mock_pipeline.doc_root = "design"
 
         with patch(
             "api.docbot.tools.pipeline_queries.get_pipeline_by_id",
@@ -96,6 +97,7 @@ async def test_docbot_multi_update_workflow():
 
         mock_pipeline = AsyncMock()
         mock_pipeline.workspace_abs_path = workspace
+        mock_pipeline.doc_root = "design"
 
         with patch(
             "api.docbot.tools.pipeline_queries.get_pipeline_by_id",

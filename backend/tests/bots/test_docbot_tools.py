@@ -33,6 +33,7 @@ async def test_docbot_tools_flow():
         # Setup mock pipeline
         mock_pipeline = AsyncMock()
         mock_pipeline.workspace_abs_path = Path(tmp_dir)
+        mock_pipeline.doc_root = "design"
         pipeline_id = "test_pipeline"
 
         with patch(
@@ -109,6 +110,7 @@ async def test_docbot_tools_errors():
     with tempfile.TemporaryDirectory() as tmp_dir:
         mock_pipeline = AsyncMock()
         mock_pipeline.workspace_abs_path = Path(tmp_dir)
+        mock_pipeline.doc_root = "design"
         pipeline_id = "test_pipeline"
 
         with patch(
@@ -141,6 +143,7 @@ async def test_docbot_tools_recursive():
     with tempfile.TemporaryDirectory() as tmp_dir:
         mock_pipeline = AsyncMock()
         mock_pipeline.workspace_abs_path = Path(tmp_dir)
+        mock_pipeline.doc_root = "design"
         pipeline_id = "test_pipeline"
 
         with patch(

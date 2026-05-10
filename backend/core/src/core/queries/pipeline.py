@@ -50,6 +50,7 @@ async def update_pipeline(
     name: Optional[str] = None,
     status: Optional[PipelineStatus] = None,
     workspace_path: Optional[str] = None,
+    doc_root: Optional[str] = None,
 ) -> Pipeline:
     pipeline = await get_pipeline_by_id(pipeline_id)
 
@@ -65,6 +66,8 @@ async def update_pipeline(
         pipeline.status = status
     if workspace_path is not None:
         pipeline.workspace_path = workspace_path
+    if doc_root is not None:
+        pipeline.doc_root = doc_root
 
     pipeline.version += 1
     await pipeline.save()
