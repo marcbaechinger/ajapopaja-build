@@ -280,6 +280,8 @@ class CoderBotSession:
                 "pi",
                 "--mode",
                 "rpc",
+                "--model",
+                "deepseek-v4-flash:cloud",
                 "--no-session",
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
