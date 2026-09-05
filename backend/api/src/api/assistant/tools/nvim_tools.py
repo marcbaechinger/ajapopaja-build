@@ -92,7 +92,7 @@ def _nvim_client_call(method: str, params: list) -> Dict[str, Any]:
             s.connect(socket_path)
 
             # Use msgpack to pack the list into binary
-            s.sendall(msgpack.packb(payload))
+            s.sendall(bytes(msgpack.packb(payload)))  # type: ignore[arg-type]
 
             try:
                 response_data = s.recv(4096)
