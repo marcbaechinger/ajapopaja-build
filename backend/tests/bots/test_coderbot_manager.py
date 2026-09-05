@@ -13,11 +13,60 @@
 # limitations under the License.
 
 import asyncio
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from api.coderbot.manager import CoderBotManager
+
+
+@pytest.mark.asyncio
+async def test_manager_default_model_is_none():
+    manager = CoderBotManager()
+    assert manager._default_model is None
+
+
+@pytest.mark.asyncio
+async def test_manager_set_default_model():
+    manager = CoderBotManager()
+    manager.set_default_model("custom-model:cloud")
+    assert manager._default_model == "custom-model:cloud"
+
+    manager.set_default_model(None)
+    assert manager._default_model is None
+
+
+@pytest.mark.asyncio
+async def test_manager_process_task_passes_default_model():
+    manager = CoderBotManager()
+    manager.set_default_model("custom-model:cloud")
+
+    task = MagicMock()
+    task.pipeline_id = "p1"
+    task.id = "t1"
+
+    with patch("api.coderbot.manager.CoderBotSession") as mock_session_cls:
+        await manager.process_task(task)
+
+        mock_session_cls.assert_called_once_with(
+            pipeline_id="p1", task_id="t1", model="custom-model:cloud"
+        )
+
+
+@pytest.mark.asyncio
+async def test_manager_process_task_passes_none_model_by_default():
+    manager = CoderBotManager()
+
+    task = MagicMock()
+    task.pipeline_id = "p1"
+    task.id = "t1"
+
+    with patch("api.coderbot.manager.CoderBotSession") as mock_session_cls:
+        await manager.process_task(task)
+
+        mock_session_cls.assert_called_once_with(
+            pipeline_id="p1", task_id="t1", model=None
+        )
 
 
 @pytest.mark.asyncio

@@ -107,12 +107,11 @@ async def test_coderbot_run_spawns_pi(init_mock_db):
         mock_helper.setup_sandbox.assert_called_once()
 
         # Check subprocess was created with 'pi', 10MB limit and stderr redirect
+        # Default model is None, so --model flag is omitted
         mock_exec.assert_called_once_with(
             "pi",
             "--mode",
             "rpc",
-            "--model",
-            "deepseek-v4-flash:cloud",
             "--no-session",
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
@@ -129,6 +128,79 @@ async def test_coderbot_run_spawns_pi(init_mock_db):
 
         # Verify EOF was signaled
         mock_proc.stdin.write_eof.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_coderbot_run_with_model_includes_model_flag(init_mock_db):
+    pipeline = Pipeline(
+        name="Test Pipeline", workspace_path="test", workspace_abs_path="/tmp"
+    )
+    await pipeline.insert()
+
+    task = Task(
+        title="Test Task",
+        pipeline_id=str(pipeline.id),
+        design_doc="Design",
+        spec="Spec",
+    )
+    await task.insert()
+
+    with (
+        patch("api.coderbot.session.SandboxGitHelper") as mock_helper_cls,
+        patch("api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock),
+        patch("api.coderbot.session.asyncio.create_subprocess_exec") as mock_exec,
+        patch("builtins.open", MagicMock()),
+        patch("pathlib.Path.mkdir"),
+    ):
+        mock_helper = MagicMock()
+        mock_helper.branch_name = "test-branch"
+        mock_helper.get_patch.return_value = "test-patch"
+        mock_repo = MagicMock()
+        mock_repo.git.diff.return_value = "test-patch"
+        mock_repo.git.show.return_value = "diff --git a/file b/file\n+new line"
+        mock_helper.get_repo.return_value = mock_repo
+        mock_helper_cls.return_value = mock_helper
+
+        session = CoderBotSession(
+            pipeline_id=str(pipeline.id),
+            task_id=str(task.id),
+            model="custom-model:cloud",
+        )
+
+        mock_proc = AsyncMock()
+        mock_proc.stdin = MagicMock()
+        mock_proc.stdin.write = MagicMock()
+        mock_proc.stdin.drain = AsyncMock()
+        mock_proc.stdin.can_write_eof.return_value = True
+        mock_proc.stdin.write_eof = MagicMock()
+
+        async def mock_stdout_stream():
+            yield (
+                json.dumps({"type": "agent_end", "messages": []}).encode("utf-8")
+                + b"\n"
+            )
+
+        mock_proc.stdout.__aiter__.side_effect = lambda: mock_stdout_stream()
+        mock_proc.wait = AsyncMock()
+
+        mock_exec.return_value = mock_proc
+
+        await session.run()
+
+        # Check subprocess was created with the injected --model flag
+        mock_exec.assert_called_once_with(
+            "pi",
+            "--mode",
+            "rpc",
+            "--no-session",
+            "--model",
+            "custom-model:cloud",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            cwd=str(mock_helper.sandbox_path),
+            limit=10 * 1024 * 1024,
+        )
 
 
 @pytest.mark.asyncio

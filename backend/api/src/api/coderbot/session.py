@@ -79,9 +79,11 @@ class CoderBotSession:
         self,
         pipeline_id: str,
         task_id: str,
+        model: Optional[str] = None,
     ):
         self.pipeline_id = pipeline_id
         self.task_id = task_id
+        self.model = model
         self.process: Optional[asyncio.subprocess.Process] = None
         self.helper: Optional[SandboxGitHelper] = None
         self.log_file: Optional[TextIO] = None
@@ -276,13 +278,12 @@ class CoderBotSession:
         # Spawn Pi
         try:
             logger.info("Spawning 'pi' subprocess...")
+            cmd = ["pi", "--mode", "rpc", "--no-session"]
+            if self.model is not None:
+                cmd.extend(["--model", self.model])
+
             self.process = await asyncio.create_subprocess_exec(
-                "pi",
-                "--mode",
-                "rpc",
-                "--model",
-                "deepseek-v4-flash:cloud",
-                "--no-session",
+                *cmd,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,

@@ -33,11 +33,18 @@ class CoderBotManager:
         self._queue = asyncio.Queue()
         self._worker_task = None
         self._active_session: Optional[CoderBotSession] = None
+        self._default_model: Optional[str] = None
+
+    def set_default_model(self, model: Optional[str]) -> None:
+        """Updates the default model injected into session constructors."""
+        self._default_model = model
 
     async def process_task(self, task: Task):
         """Enqueues a new CoderBotSession for the given task."""
         session = CoderBotSession(
-            pipeline_id=str(task.pipeline_id), task_id=str(task.id)
+            pipeline_id=str(task.pipeline_id),
+            task_id=str(task.id),
+            model=self._default_model,
         )
         await self._queue.put(session)
         logger.info(
