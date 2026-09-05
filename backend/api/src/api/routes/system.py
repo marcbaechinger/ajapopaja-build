@@ -11,7 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import asyncio
 import os
+import shutil
 from typing import Dict
 
 from fastapi import APIRouter, Depends
@@ -27,6 +29,16 @@ from ..ollama_utils import is_ollama_available
 router = APIRouter(prefix="/system", tags=["system"])
 
 
+def is_pi_available() -> bool:
+    """Return True if the 'pi' CLI tool is available on the PATH."""
+    return shutil.which("pi") is not None
+
+
+async def check_pi_available() -> bool:
+    """Async wrapper around is_pi_available to keep the API async."""
+    return await asyncio.to_thread(is_pi_available)
+
+
 @router.get("/health")
 async def health_check() -> Dict[str, dict]:
     """
@@ -38,6 +50,7 @@ async def health_check() -> Dict[str, dict]:
       * ollama   – a simple ping to the Ollama HTTP endpoint.
       * nvim     – whether the Neovim socket defined by NVIM_SOCKET is
                     present and is a Unix domain socket.
+      * pi       – whether the 'pi' CLI tool is available on the PATH.
     """
     results: Dict[str, dict] = {}
 
@@ -77,6 +90,11 @@ async def health_check() -> Dict[str, dict]:
                 }
     except Exception as e:
         results["nvim"] = {"status": "error", "details": str(e)}
+
+    if await check_pi_available():
+        results["pi"] = {"status": "ok", "details": "pi is installed"}
+    else:
+        results["pi"] = {"status": "error", "details": "pi command not found"}
 
     return results
 

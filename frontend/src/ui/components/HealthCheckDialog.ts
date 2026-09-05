@@ -61,6 +61,7 @@ export class HealthCheckDialog extends BaseDialog {
           ${createRow('MongoDB', health.mongodb)}
           ${createRow('Ollama', health.ollama)}
           ${createRow('Neovim Socket', health.nvim)}
+          ${createRow('PI', health.pi)}
         </div>
       `;
     } catch (error) {

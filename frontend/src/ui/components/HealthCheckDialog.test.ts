@@ -24,7 +24,8 @@ describe('HealthCheckDialog', () => {
     mockGetHealth = vi.fn().mockResolvedValue({
       mongodb: { status: 'ok', details: 'MongoDB Connected' },
       ollama: { status: 'ok', details: 'Ollama Connected' },
-      nvim: { status: 'error', details: 'Socket not found' }
+      nvim: { status: 'error', details: 'Socket not found' },
+      pi: { status: 'ok', details: 'pi is installed' }
     } as HealthCheckResponse);
 
     mockAppContext = {
@@ -66,10 +67,12 @@ describe('HealthCheckDialog', () => {
     expect(textContent).toContain('MongoDB');
     expect(textContent).toContain('Ollama');
     expect(textContent).toContain('Neovim Socket');
+    expect(textContent).toContain('PI');
     
     // Check specific details from our mock
     expect(textContent).toContain('MongoDB Connected');
     expect(textContent).toContain('Ollama Connected');
     expect(textContent).toContain('Socket not found'); // From our mock nvim error
+    expect(textContent).toContain('pi is installed'); // From our mock pi status
   });
 });

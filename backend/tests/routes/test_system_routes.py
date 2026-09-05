@@ -38,13 +38,18 @@ async def test_health_check_all_ok(async_client, init_mock_db):
                 mock_nvim.return_value = True
                 with patch("api.routes.system.get_nvim_socket_path") as mock_socket:
                     mock_socket.return_value = "/tmp/nvim.sock"
+                    with patch(
+                        "api.routes.system.check_pi_available", new_callable=AsyncMock
+                    ) as mock_pi:
+                        mock_pi.return_value = True
 
-                    response = await async_client.get("/api/system/health")
-                    assert response.status_code == status.HTTP_200_OK
-                    data = response.json()
-                    assert data["mongodb"]["status"] == "ok"
-                    assert data["ollama"]["status"] == "ok"
-                    assert data["nvim"]["status"] == "ok"
+                        response = await async_client.get("/api/system/health")
+                        assert response.status_code == status.HTTP_200_OK
+                        data = response.json()
+                        assert data["mongodb"]["status"] == "ok"
+                        assert data["ollama"]["status"] == "ok"
+                        assert data["nvim"]["status"] == "ok"
+                        assert data["pi"]["status"] == "ok"
 
 
 @pytest.mark.asyncio
@@ -59,12 +64,18 @@ async def test_health_check_mixed_status(async_client, init_mock_db):
                 with patch("api.routes.system.get_nvim_socket_path") as mock_socket:
                     mock_socket.return_value = "/tmp/nvim.sock"
                     with patch("os.path.exists", return_value=False):
-                        response = await async_client.get("/api/system/health")
-                        assert response.status_code == status.HTTP_200_OK
-                        data = response.json()
-                        assert data["mongodb"]["status"] == "error"
-                        assert data["ollama"]["status"] == "error"
-                        assert data["nvim"]["status"] == "error"
+                        with patch(
+                            "api.routes.system.check_pi_available",
+                            new_callable=AsyncMock,
+                        ) as mock_pi:
+                            mock_pi.return_value = False
+                            response = await async_client.get("/api/system/health")
+                            assert response.status_code == status.HTTP_200_OK
+                            data = response.json()
+                            assert data["mongodb"]["status"] == "error"
+                            assert data["ollama"]["status"] == "error"
+                            assert data["nvim"]["status"] == "error"
+                            assert data["pi"]["status"] == "error"
 
 
 @pytest.mark.asyncio

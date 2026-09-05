@@ -22,6 +22,7 @@ export interface HealthCheckResponse {
   mongodb: { status: string; details: string };
   ollama: { status: string; details: string };
   nvim: { status: string; details: string };
+  pi: { status: string; details: string };
 }
 
 export class SystemClient extends BaseClient {
