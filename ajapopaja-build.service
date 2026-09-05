@@ -5,24 +5,19 @@ Requires=docker.service
 
 [Service]
 Restart=always
+# Loads variables for ${PORT} interpolation in docker-compose.yml.
+# All variables are forwarded to the container via env_file in the compose file.
 EnvironmentFile=/etc/ajapopaja-build.env
-ExecStartPre=-/usr/bin/docker stop ajapopaja-build
-ExecStartPre=-/usr/bin/docker rm ajapopaja-build
+WorkingDirectory=/data/ajapopaja
+ExecStartPre=-/usr/bin/docker compose down
+ExecStartPre=-/usr/bin/docker rm -f ajapopaja-build
 # Load the image in case it was updated or missing
 ExecStartPre=/usr/bin/docker load -i /data/ajapopaja/docker/ajapopaja-build.tar
-ExecStart=/usr/bin/docker run --name ajapopaja-build \
-  -p ${PORT}:${PORT} \
-  -v /home:/home \
-  -v /Users:/Users \
-  -v /tmp/nvimsocket:/tmp/nvimsocket \
-  --add-host=host.docker.internal:host-gateway \
-  -e MONGODB_URI=${MONGODB_URI} \
-  -e OLLAMA_HOST=${OLLAMA_HOST} \
-  -e DATABASE_NAME=${DATABASE_NAME} \
-  -e PORT=${PORT} \
-  -e WORKSPACES_ROOT=${WORKSPACES_ROOT} \
-  ajapopaja-build:latest
-ExecStop=/usr/bin/docker stop ajapopaja-build
+# Run compose in the foreground so the process stays alive as long as the
+# container runs. With `-d` the command exits immediately and Restart=always
+# would tear the container down and recreate it in an endless loop.
+ExecStart=/usr/bin/docker compose up
+ExecStop=/usr/bin/docker compose down
 
 [Install]
 WantedBy=multi-user.target

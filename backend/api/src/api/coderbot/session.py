@@ -280,6 +280,7 @@ class CoderBotSession:
             logger.info("Spawning 'pi' subprocess...")
             cmd = ["pi", "--mode", "rpc", "--no-session"]
             if self.model is not None:
+                logger.info(f"--model for pi coding agent: {self.model}")
                 cmd.extend(["--model", self.model])
 
             self.process = await asyncio.create_subprocess_exec(

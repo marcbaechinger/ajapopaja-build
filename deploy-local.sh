@@ -14,6 +14,10 @@ echo "1. Building Docker image..."
 echo "2. Ensuring destination directory $DEST_DIR exists..."
 sudo mkdir -p $DEST_DIR
 
+# Copy the docker-compose.yml to a stable location used by the systemd service
+echo "2b. Copying docker-compose.yml to /data/ajapopaja/..."
+sudo cp docker-compose.yml /data/ajapopaja/docker-compose.yml
+
 echo "3. Exporting image to $DEST_DIR/$IMAGE_NAME.tar..."
 docker save -o $DEST_DIR/$IMAGE_NAME.tar $IMAGE_NAME:$VERSION
 sudo chmod 644 $DEST_DIR/$IMAGE_NAME.tar
@@ -26,6 +30,7 @@ OLLAMA_HOST=http://host.docker.internal:11434
 DATABASE_NAME=ajapopaja_build_prod
 PORT=8081
 WORKSPACES_ROOT=/home/marc-baechinger/monolit/code
+CODERBOT_DEFAULT_MODEL=deepseek-v4-flash:cloud
 EOT"
   echo "Created default environment file."
 else

@@ -13,7 +13,26 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     tree \
+    curl \
     && rm -rf /var/lib/apt/lists/*
+
+# The container runs as root, but mounted workspaces (e.g. /home) may be owned
+# by a different host uid. Git's dubious-ownership safety check would then
+# refuse to read/operate on those repos. Trust all directories for git.
+RUN git config --global --add safe.directory '*'
+
+# Install Node.js (pi requires Node >= 22.19.0) and the pi coding agent
+ARG PI_VERSION=0.85.1
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && npm install -g --ignore-scripts @earendil-works/pi-coding-agent@${PI_VERSION} \
+    && rm -rf /var/lib/apt/lists/*
+
+# Provide pi's model configuration. The container runs as root, so pi reads
+# ~/.pi/agent/models.json from /root/.pi/agent/. Only the models listed in
+# docker/pi-agent/models.json (qwen3.6:27b, deepseek-v4-flash:cloud) are exposed.
+RUN mkdir -p /root/.pi/agent
+COPY docker/pi-agent/models.json /root/.pi/agent/models.json
 # Copy backend workspace definition
 COPY backend/pyproject.toml backend/uv.lock ./backend/
 COPY backend/api/pyproject.toml ./backend/api/

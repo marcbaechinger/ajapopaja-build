@@ -1,0 +1,17 @@
+services:
+  ajapopaja-build:
+    image: ajapopaja-build:latest
+    container_name: ajapopaja-build
+    restart: always
+    # Forward every variable from the env file into the container automatically.
+    # No need to list individual -e flags.
+    env_file:
+      - /etc/ajapopaja-build.env
+    ports:
+      - "${PORT:-8081}:${PORT:-8081}"
+    volumes:
+      - /home:/home
+      - /Users:/Users
+      - /tmp/nvimsocket:/tmp/nvimsocket
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

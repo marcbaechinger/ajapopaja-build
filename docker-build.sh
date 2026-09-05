@@ -10,5 +10,7 @@ echo "Building Docker image ${IMAGE_NAME}:${VERSION} (Commit: ${GIT_COMMIT})..."
 docker build --build-arg BUILD_VERSION=${GIT_COMMIT} -t ${IMAGE_NAME}:${VERSION} .
 
 echo "Build complete."
-echo "You can run the container with (adjust PORT as needed):"
+echo "To run the container with docker-compose (see docker-compose.yml):"
+echo "  docker compose up -d"
+echo "Or run directly (adjust PORT as needed):"
 echo "docker run -p 8000:8000 -v /home:/home -v /tmp/nvimsocket:/tmp/nvimsocket --add-host=host.docker.internal:host-gateway -e MONGODB_URI=mongodb://host.docker.internal:27017/ -e OLLAMA_HOST=http://host.docker.internal:11434 -e PORT=8000 ${IMAGE_NAME}:${VERSION}"
