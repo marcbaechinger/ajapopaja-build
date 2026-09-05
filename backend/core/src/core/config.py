@@ -14,6 +14,7 @@
 
 import os
 from pathlib import Path
+from typing import Optional
 
 # Default to a sensible path for the host user; allow override via env var
 WORKSPACES_ROOT = Path(
@@ -57,3 +58,7 @@ MCP_AUTHENTICATION_ENABLED = (
 
 # Bot Logging
 BASEBOT_LOG_ENABLED = os.getenv("BASEBOT_LOG_ENABLED", "true").lower() == "true"
+
+# Default model used by CoderBotManager when spawning Pi sessions.
+# If unset, no --model flag is passed to Pi (None).
+CODERBOT_DEFAULT_MODEL: Optional[str] = os.getenv("CODERBOT_DEFAULT_MODEL")

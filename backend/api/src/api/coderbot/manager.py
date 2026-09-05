@@ -16,6 +16,7 @@ import asyncio
 import logging
 from typing import Optional
 
+from core import config
 from core.models.models import Task
 
 from .session import CoderBotSession
@@ -33,7 +34,7 @@ class CoderBotManager:
         self._queue = asyncio.Queue()
         self._worker_task = None
         self._active_session: Optional[CoderBotSession] = None
-        self._default_model: Optional[str] = None
+        self._default_model: Optional[str] = config.CODERBOT_DEFAULT_MODEL
 
     def set_default_model(self, model: Optional[str]) -> None:
         """Updates the default model injected into session constructors."""

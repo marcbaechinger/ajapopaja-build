@@ -13,15 +13,41 @@
 # limitations under the License.
 
 import asyncio
+import importlib
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from api.coderbot.manager import CoderBotManager
+from core import config
 
 
 @pytest.mark.asyncio
-async def test_manager_default_model_is_none():
+async def test_config_default_model_none_when_unset(monkeypatch):
+    monkeypatch.delenv("CODERBOT_DEFAULT_MODEL", raising=False)
+    importlib.reload(config)
+    assert config.CODERBOT_DEFAULT_MODEL is None
+
+
+@pytest.mark.asyncio
+async def test_config_default_model_reflects_env(monkeypatch):
+    monkeypatch.setenv("CODERBOT_DEFAULT_MODEL", "env-model:cloud")
+    importlib.reload(config)
+    assert config.CODERBOT_DEFAULT_MODEL == "env-model:cloud"
+
+
+@pytest.mark.asyncio
+async def test_manager_initializes_with_config_default_model(monkeypatch):
+    monkeypatch.setenv("CODERBOT_DEFAULT_MODEL", "env-model:cloud")
+    importlib.reload(config)
+    manager = CoderBotManager()
+    assert manager._default_model == "env-model:cloud"
+
+
+@pytest.mark.asyncio
+async def test_manager_default_model_is_none(monkeypatch):
+    monkeypatch.delenv("CODERBOT_DEFAULT_MODEL", raising=False)
+    importlib.reload(config)
     manager = CoderBotManager()
     assert manager._default_model is None
 
@@ -54,7 +80,9 @@ async def test_manager_process_task_passes_default_model():
 
 
 @pytest.mark.asyncio
-async def test_manager_process_task_passes_none_model_by_default():
+async def test_manager_process_task_passes_none_model_by_default(monkeypatch):
+    monkeypatch.delenv("CODERBOT_DEFAULT_MODEL", raising=False)
+    importlib.reload(config)
     manager = CoderBotManager()
 
     task = MagicMock()
