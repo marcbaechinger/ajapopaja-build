@@ -111,6 +111,8 @@ async def test_coderbot_run_spawns_pi(init_mock_db):
             "pi",
             "--mode",
             "rpc",
+            "--model",
+            "deepseek-v4-flash:cloud",
             "--no-session",
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
