@@ -33,7 +33,7 @@ const mockPipelineResponse = (overrides = {}) => ({
 
 describe('PipelineClient', () => {
   let client: PipelineClient;
-  let mockAuthService: { getAccessToken: ReturnType<typeof vi.fn>; refreshToken: ReturnType<typeof vi.fn> };
+  let mockAuthService: any;
   const baseUrl = 'http://api.test';
 
   beforeEach(() => {
