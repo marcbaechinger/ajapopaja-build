@@ -263,7 +263,7 @@ class CoderBotSession:
             return
 
         # Move the task to INPROGRESS when CoderBot starts executing it.
-        if task.status == TaskStatus.SCHEDULED:
+        if task.status == TaskStatus.SCHEDULED or task.status == TaskStatus.CREATED:
             await task_queries.transition_task(
                 str(task.id), TaskStatus.INPROGRESS, actor="coderbot"
             )

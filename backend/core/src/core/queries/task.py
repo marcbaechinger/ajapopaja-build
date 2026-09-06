@@ -21,13 +21,23 @@ from core.models.models import DesignDocHistory, StateTransition, Task, TaskStat
 # Allowed state transitions for a Task. Used by transition_task() to validate
 # that a status change is legal before it is applied and recorded in history.
 ALLOWED_TRANSITIONS: Dict[TaskStatus, set] = {
-    TaskStatus.CREATED: {TaskStatus.SCHEDULED, TaskStatus.DISCARDED},
-    TaskStatus.SCHEDULED: {TaskStatus.INPROGRESS, TaskStatus.DISCARDED},
+    TaskStatus.CREATED: {
+        TaskStatus.SCHEDULED,
+        TaskStatus.INPROGRESS,
+        TaskStatus.DISCARDED,
+        TaskStatus.IMPLEMENTED,
+    },
+    TaskStatus.SCHEDULED: {
+        TaskStatus.INPROGRESS,
+        TaskStatus.DISCARDED,
+        TaskStatus.IMPLEMENTED,
+    },
     TaskStatus.PROPOSED: {TaskStatus.SCHEDULED, TaskStatus.DISCARDED},
     TaskStatus.INPROGRESS: {
         TaskStatus.PULL_REQUEST_AVAILABLE,
         TaskStatus.FAILED,
         TaskStatus.DISCARDED,
+        TaskStatus.IMPLEMENTED,
     },
     TaskStatus.PULL_REQUEST_AVAILABLE: {
         TaskStatus.IMPLEMENTED,

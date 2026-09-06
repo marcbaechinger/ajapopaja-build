@@ -232,8 +232,31 @@ async def test_transition_task_illegal_raises(init_mock_db):
     task = Task(title="Task 1", pipeline_id=str(pipeline.id), status=TaskStatus.CREATED)
     await task.insert()
 
+    # CREATED -> FAILED is not an allowed transition.
     with pytest.raises(ValueError, match="Illegal task transition"):
-        await task_queries.transition_task(str(task.id), TaskStatus.IMPLEMENTED)
+        await task_queries.transition_task(str(task.id), TaskStatus.FAILED)
+
+
+@pytest.mark.asyncio
+async def test_transition_to_implemented_allowed_from_active_states(init_mock_db):
+    """Accepting a PR finalizes a task as implemented from any active state."""
+    pipeline = Pipeline(name="Test Pipeline")
+    await pipeline.insert()
+
+    for status in [
+        TaskStatus.CREATED,
+        TaskStatus.SCHEDULED,
+        TaskStatus.INPROGRESS,
+        TaskStatus.PULL_REQUEST_AVAILABLE,
+    ]:
+        task = Task(title="Task 1", pipeline_id=str(pipeline.id), status=status)
+        await task.insert()
+
+        updated = await task_queries.transition_task(
+            str(task.id), TaskStatus.IMPLEMENTED, actor="user"
+        )
+        assert updated.status == TaskStatus.IMPLEMENTED
+        assert updated.history[-1].to_status == TaskStatus.IMPLEMENTED
 
 
 @pytest.mark.asyncio
