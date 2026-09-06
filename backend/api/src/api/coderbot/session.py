@@ -29,6 +29,7 @@ from core.models.models import (
     Task,
     TaskStatus,
 )
+from core.queries import task as task_queries
 
 from api.bot.git_helper import SandboxGitHelper
 
@@ -211,9 +212,10 @@ class CoderBotSession:
 
             # Update task status
             task = await Task.get(self.task_id)
-            if task:
-                task.status = TaskStatus.PULL_REQUEST_AVAILABLE
-                await task.save()
+            if task and task.status == TaskStatus.INPROGRESS:
+                await task_queries.transition_task(
+                    str(task.id), TaskStatus.PULL_REQUEST_AVAILABLE, actor="coderbot"
+                )
                 logger.info(
                     f"Task {self.task_id} status updated to PULL_REQUEST_AVAILABLE."
                 )
@@ -259,6 +261,12 @@ class CoderBotSession:
             logger.error(error_msg)
             self._log_event({"type": "error", "message": error_msg})
             return
+
+        # Move the task to INPROGRESS when CoderBot starts executing it.
+        if task.status == TaskStatus.SCHEDULED:
+            await task_queries.transition_task(
+                str(task.id), TaskStatus.INPROGRESS, actor="coderbot"
+            )
 
         pipeline = await Pipeline.get(self.pipeline_id)
         if not pipeline or not pipeline.workspace_abs_path:
@@ -394,6 +402,17 @@ class CoderBotSession:
                     "error": traceback.format_exc(),
                 }
             )
+            # Mark the task as FAILED if it was in progress.
+            try:
+                task = await Task.get(self.task_id)
+                if task and task.status == TaskStatus.INPROGRESS:
+                    await task_queries.transition_task(
+                        str(task.id), TaskStatus.FAILED, actor="coderbot"
+                    )
+            except Exception:
+                logger.warning(
+                    f"Failed to mark task {self.task_id} as FAILED", exc_info=True
+                )
             if self.helper:
                 self.helper.cleanup()
         finally:

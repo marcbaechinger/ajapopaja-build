@@ -204,6 +204,65 @@ async def test_transition_inprogress_to_scheduled(init_mock_db):
 
 
 @pytest.mark.asyncio
+async def test_transition_task_valid_appends_history(init_mock_db):
+    pipeline = Pipeline(name="Test Pipeline")
+    await pipeline.insert()
+
+    task = Task(
+        title="Task 1", pipeline_id=str(pipeline.id), status=TaskStatus.SCHEDULED
+    )
+    await task.insert()
+
+    updated_task = await task_queries.transition_task(
+        str(task.id), TaskStatus.INPROGRESS, actor="coderbot"
+    )
+
+    assert updated_task.status == TaskStatus.INPROGRESS
+    assert updated_task.version == 2
+    assert updated_task.history[-1].from_status == TaskStatus.SCHEDULED
+    assert updated_task.history[-1].to_status == TaskStatus.INPROGRESS
+    assert updated_task.history[-1].by == "coderbot"
+
+
+@pytest.mark.asyncio
+async def test_transition_task_illegal_raises(init_mock_db):
+    pipeline = Pipeline(name="Test Pipeline")
+    await pipeline.insert()
+
+    task = Task(title="Task 1", pipeline_id=str(pipeline.id), status=TaskStatus.CREATED)
+    await task.insert()
+
+    with pytest.raises(ValueError, match="Illegal task transition"):
+        await task_queries.transition_task(str(task.id), TaskStatus.IMPLEMENTED)
+
+
+@pytest.mark.asyncio
+async def test_transition_task_with_task_object_preserves_fields(init_mock_db):
+    pipeline = Pipeline(name="Test Pipeline")
+    await pipeline.insert()
+
+    task = Task(
+        title="Task 1",
+        pipeline_id=str(pipeline.id),
+        status=TaskStatus.PULL_REQUEST_AVAILABLE,
+    )
+    await task.insert()
+
+    # Set extra fields on the in-memory object and pass it directly.
+    task.commit_hash = "abc1234"
+    task.completion_info = "Done"
+    updated_task = await task_queries.transition_task(
+        str(task.id), TaskStatus.IMPLEMENTED, actor="user", task=task
+    )
+
+    assert updated_task.status == TaskStatus.IMPLEMENTED
+    assert updated_task.commit_hash == "abc1234"
+    assert updated_task.completion_info == "Done"
+    assert updated_task.history[-1].to_status == TaskStatus.IMPLEMENTED
+    assert updated_task.history[-1].by == "user"
+
+
+@pytest.mark.asyncio
 async def test_delete_task(init_mock_db):
     pipeline = Pipeline(name="Test Pipeline")
     await pipeline.insert()

@@ -16,7 +16,6 @@ import asyncio
 import logging
 import os
 import tempfile
-from datetime import UTC, datetime
 from typing import List, Optional
 
 import git
@@ -29,10 +28,10 @@ from core.models.models import (
     Pipeline,
     PullRequest,
     PullRequestStatus,
-    StateTransition,
     Task,
     TaskStatus,
 )
+from core.queries import task as task_queries
 from core.utils import git_utils
 
 logger = logging.getLogger(__name__)
@@ -181,18 +180,11 @@ async def update_task_status(
     """Update the task status to IMPLEMENTED with commit information."""
     if task:
         logger.info(f"Updating status for task {task.id} to IMPLEMENTED")
-        task.history.append(
-            StateTransition(
-                from_status=task.status,
-                to_status=TaskStatus.IMPLEMENTED,
-                by="coder_bot",
-            )
-        )
-        task.status = TaskStatus.IMPLEMENTED
-        task.completion_info = summary
         task.commit_hash = new_commit_hash
-        task.updated_at = datetime.now(UTC)
-        await task.save()
+        task.completion_info = summary
+        await task_queries.transition_task(
+            str(task.id), TaskStatus.IMPLEMENTED, actor="user", task=task
+        )
 
 
 # =============================================================================
@@ -327,8 +319,9 @@ async def reject_pull_request(pr_id: str):
     await pr.save()
 
     task = await Task.get(pr.task_id)
-    if task:
+    if task and task.status == TaskStatus.PULL_REQUEST_AVAILABLE:
         logger.info(f"Updating status for task {pr.task_id} to CREATED")
-        task.status = TaskStatus.CREATED
-        await task.save()
+        await task_queries.transition_task(
+            str(task.id), TaskStatus.CREATED, actor="user"
+        )
     return {"status": "success", "message": "Pull Request rejected"}

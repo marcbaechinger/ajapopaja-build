@@ -18,6 +18,27 @@ from typing import Any, Dict, List, Optional
 from core.exceptions import EntityNotFoundError, VersionMismatchError
 from core.models.models import DesignDocHistory, StateTransition, Task, TaskStatus
 
+# Allowed state transitions for a Task. Used by transition_task() to validate
+# that a status change is legal before it is applied and recorded in history.
+ALLOWED_TRANSITIONS: Dict[TaskStatus, set] = {
+    TaskStatus.CREATED: {TaskStatus.SCHEDULED, TaskStatus.DISCARDED},
+    TaskStatus.SCHEDULED: {TaskStatus.INPROGRESS, TaskStatus.DISCARDED},
+    TaskStatus.PROPOSED: {TaskStatus.SCHEDULED, TaskStatus.DISCARDED},
+    TaskStatus.INPROGRESS: {
+        TaskStatus.PULL_REQUEST_AVAILABLE,
+        TaskStatus.FAILED,
+        TaskStatus.DISCARDED,
+    },
+    TaskStatus.PULL_REQUEST_AVAILABLE: {
+        TaskStatus.IMPLEMENTED,
+        TaskStatus.CREATED,
+        TaskStatus.SCHEDULED,
+    },
+    TaskStatus.IMPLEMENTED: set(),
+    TaskStatus.DISCARDED: set(),
+    TaskStatus.FAILED: {TaskStatus.CREATED, TaskStatus.SCHEDULED},
+}
+
 
 async def get_tasks_by_pipeline(
     pipeline_id: str, include_deleted: bool = False
@@ -140,6 +161,38 @@ async def update_task_status(
     )
     task.status = status
     if status == TaskStatus.SCHEDULED:
+        task.scheduled_at = datetime.now(UTC)
+    task.version += 1
+    task.updated_at = datetime.now(UTC)
+    await task.save()
+    return task
+
+
+async def transition_task(
+    task_id: str,
+    to_status: TaskStatus,
+    actor: str = "user",
+    task: Optional[Task] = None,
+) -> Task:
+    """
+    Validate and apply a state transition, recording it in task.history.
+
+    Raises ValueError if the transition is not allowed by ALLOWED_TRANSITIONS.
+    If a task object is provided it is used directly (avoiding a re-fetch);
+    otherwise the task is loaded by id.
+    """
+    if task is None:
+        task = await get_task_by_id(task_id)
+
+    allowed = ALLOWED_TRANSITIONS.get(task.status, set())
+    if to_status not in allowed:
+        raise ValueError(f"Illegal task transition from {task.status} to {to_status}")
+
+    task.history.append(
+        StateTransition(from_status=task.status, to_status=to_status, by=actor)
+    )
+    task.status = to_status
+    if to_status == TaskStatus.SCHEDULED:
         task.scheduled_at = datetime.now(UTC)
     task.version += 1
     task.updated_at = datetime.now(UTC)

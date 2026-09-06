@@ -20,7 +20,7 @@ import pytest
 
 from api.coderbot.session import CoderBotSession
 from core import config
-from core.models.models import Pipeline, Task
+from core.models.models import Pipeline, Task, TaskStatus
 
 
 @pytest.fixture(autouse=True)
@@ -322,3 +322,68 @@ async def test_coderbot_run_logs_error_with_traceback(init_mock_db):
         assert "Traceback" in error_event["error"]
         assert "RuntimeError" in error_event["error"]
         assert "Failed to spawn subprocess" in error_event["error"]
+
+
+@pytest.mark.asyncio
+async def test_coderbot_run_transitions_task_state(init_mock_db):
+    pipeline = Pipeline(
+        name="Test Pipeline", workspace_path="test", workspace_abs_path="/tmp"
+    )
+    await pipeline.insert()
+
+    task = Task(
+        title="Test Task",
+        pipeline_id=str(pipeline.id),
+        design_doc="Design",
+        spec="Spec",
+        status=TaskStatus.SCHEDULED,
+    )
+    await task.insert()
+
+    with (
+        patch("api.coderbot.session.SandboxGitHelper") as mock_helper_cls,
+        patch("api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock),
+        patch("api.coderbot.session.asyncio.create_subprocess_exec") as mock_exec,
+        patch("builtins.open", MagicMock()),
+        patch("pathlib.Path.mkdir"),
+    ):
+        mock_helper = MagicMock()
+        mock_helper.branch_name = "test-branch"
+        mock_helper.get_patch.return_value = "test-patch"
+        mock_repo = MagicMock()
+        mock_repo.git.diff.return_value = "test-patch"
+        mock_repo.git.show.return_value = "diff --git a/file b/file\n+new line"
+        mock_helper.get_repo.return_value = mock_repo
+        mock_helper_cls.return_value = mock_helper
+
+        session = CoderBotSession(pipeline_id=str(pipeline.id), task_id=str(task.id))
+
+        mock_proc = AsyncMock()
+        mock_proc.stdin = MagicMock()
+        mock_proc.stdin.write = MagicMock()
+        mock_proc.stdin.drain = AsyncMock()
+        mock_proc.stdin.can_write_eof.return_value = True
+        mock_proc.stdin.write_eof = MagicMock()
+
+        async def mock_stdout_stream():
+            yield (
+                json.dumps({"type": "agent_end", "messages": []}).encode("utf-8")
+                + b"\n"
+            )
+
+        mock_proc.stdout.__aiter__.side_effect = lambda: mock_stdout_stream()
+        mock_proc.wait = AsyncMock()
+        mock_exec.return_value = mock_proc
+
+        await session.run()
+
+        # Reload the task and verify the state transitions were recorded.
+        updated = await Task.get(str(task.id))
+        assert updated.status == TaskStatus.PULL_REQUEST_AVAILABLE
+        transitions = [(t.from_status, t.to_status, t.by) for t in updated.history]
+        assert (TaskStatus.SCHEDULED, TaskStatus.INPROGRESS, "coderbot") in transitions
+        assert (
+            TaskStatus.INPROGRESS,
+            TaskStatus.PULL_REQUEST_AVAILABLE,
+            "coderbot",
+        ) in transitions
