@@ -20,14 +20,14 @@ Please be respectful and professional in all interactions within this project.
 ### 3. Submitting Pull Requests
 - Fork the repository.
 - Create a feature branch (`git checkout -b feature/my-new-feature`).
-- Follow the **Engineering Standards** defined in the `README.md`.
+- Follow the **Engineering Standards** defined in the `GEMINI.md`.
 - Ensure all tests pass (`uv run pytest` for backend, `npm run test` for frontend).
 - Add tests for any new functionality.
 - Submit a PR with a clear description of your changes.
 
 ## Development Setup
 
-See the [Developer Environment Setup](README.md#2-developer-environment-setup) section in the README for detailed instructions.
+See [INSTALL.md](INSTALL.md) for detailed installation and development setup instructions.
 
 ### Coding Style
 - **Python**: Follow PEP 8. Use `ruff` for linting.
