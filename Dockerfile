@@ -21,6 +21,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # refuse to read/operate on those repos. Trust all directories for git.
 RUN git config --global --add safe.directory '*'
 
+# Provide a git identity so `git commit` works inside the container (e.g. when
+# accepting a pull request). Overridable at runtime via GIT_USER_NAME/GIT_USER_EMAIL.
+RUN git config --global user.name "Ajapopaja Build" \
+    && git config --global user.email "ajapopaja-build@localhost"
+
 # Install Node.js (pi requires Node >= 22.19.0) and the pi coding agent
 ARG PI_VERSION=0.85.1
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \

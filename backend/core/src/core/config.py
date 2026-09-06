@@ -62,3 +62,8 @@ BASEBOT_LOG_ENABLED = os.getenv("BASEBOT_LOG_ENABLED", "true").lower() == "true"
 # Default model used by CoderBotManager when spawning Pi sessions.
 # If unset, no --model flag is passed to Pi (None).
 CODERBOT_DEFAULT_MODEL: Optional[str] = os.getenv("CODERBOT_DEFAULT_MODEL")
+
+# Git identity used for commits when none is configured in the environment
+# (e.g. inside the Docker image). Overridable via environment variables.
+GIT_USER_NAME = os.getenv("GIT_USER_NAME", "Ajapopaja Build")
+GIT_USER_EMAIL = os.getenv("GIT_USER_EMAIL", "ajapopaja-build@localhost")

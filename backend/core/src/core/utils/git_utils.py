@@ -16,6 +16,7 @@ from typing import Dict, Tuple
 
 import git
 
+from core import config
 from core.exceptions import EntityNotFoundError
 from core.models.models import Pipeline
 from core.queries import pipeline as pipeline_queries
@@ -26,6 +27,28 @@ from core.utils.path_utils import get_workspace_path
 def get_repo(workspace_abs_path: str) -> git.Repo:
     """Returns a git.Repo instance for the given absolute path."""
     return git.Repo(workspace_abs_path)
+
+
+def ensure_git_identity(repo: git.Repo) -> Dict[str, str]:
+    """
+    Return GIT_AUTHOR_*/GIT_COMMITTER_* environment variables for any identity
+    field that is missing from the repo's effective git config.
+
+    Falls back to the configured defaults so `git commit` works in environments
+    without a git user (e.g. the Docker image). An existing identity (e.g. the
+    host user's global config) is respected and left untouched.
+    """
+    reader = repo.config_reader()
+    name = reader.get_value("user", "name", None)
+    email = reader.get_value("user", "email", None)
+    env: Dict[str, str] = {}
+    if not name:
+        env["GIT_AUTHOR_NAME"] = config.GIT_USER_NAME
+        env["GIT_COMMITTER_NAME"] = config.GIT_USER_NAME
+    if not email:
+        env["GIT_AUTHOR_EMAIL"] = config.GIT_USER_EMAIL
+        env["GIT_COMMITTER_EMAIL"] = config.GIT_USER_EMAIL
+    return env
 
 
 async def get_repo_for_pipeline(

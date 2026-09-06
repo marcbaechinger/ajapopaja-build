@@ -115,3 +115,56 @@ def test_get_git_status_summary():
     assert summary["staged"] == 2
     assert summary["unstaged"] == 2
     assert summary["untracked"] == 1
+
+
+def test_ensure_git_identity_returns_empty_when_configured():
+    mock_repo = MagicMock()
+    mock_reader = MagicMock()
+    mock_reader.get_value.side_effect = lambda section, option, default=None: {
+        ("user", "name"): "Jane Doe",
+        ("user", "email"): "jane@example.com",
+    }.get((section, option), default)
+    mock_repo.config_reader.return_value = mock_reader
+
+    env = git_utils.ensure_git_identity(mock_repo)
+
+    assert env == {}
+
+
+def test_ensure_git_identity_fills_missing_fields():
+    mock_repo = MagicMock()
+    mock_reader = MagicMock()
+    mock_reader.get_value.return_value = None
+    mock_repo.config_reader.return_value = mock_reader
+
+    with (
+        patch("core.utils.git_utils.config.GIT_USER_NAME", "Bot"),
+        patch("core.utils.git_utils.config.GIT_USER_EMAIL", "bot@localhost"),
+    ):
+        env = git_utils.ensure_git_identity(mock_repo)
+
+    assert env == {
+        "GIT_AUTHOR_NAME": "Bot",
+        "GIT_COMMITTER_NAME": "Bot",
+        "GIT_AUTHOR_EMAIL": "bot@localhost",
+        "GIT_COMMITTER_EMAIL": "bot@localhost",
+    }
+
+
+def test_ensure_git_identity_respects_existing_identity():
+    mock_repo = MagicMock()
+    mock_reader = MagicMock()
+    mock_reader.get_value.side_effect = lambda section, option, default=None: {
+        ("user", "name"): "Jane Doe",
+        ("user", "email"): None,
+    }.get((section, option), default)
+    mock_repo.config_reader.return_value = mock_reader
+
+    with patch("core.utils.git_utils.config.GIT_USER_EMAIL", "bot@localhost"):
+        env = git_utils.ensure_git_identity(mock_repo)
+
+    # Existing name is respected; only the missing email is filled in.
+    assert env == {
+        "GIT_AUTHOR_EMAIL": "bot@localhost",
+        "GIT_COMMITTER_EMAIL": "bot@localhost",
+    }

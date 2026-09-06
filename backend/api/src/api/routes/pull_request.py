@@ -153,7 +153,10 @@ def commit_changes(repo: git.Repo, pr: PullRequest, commit_message: str) -> str:
     """Commit the changes to the repository and return the commit hash."""
     repo.git.add(A=True)
     # Use --no-verify to bypass pre-commit hooks that might fail in the server environment
-    repo.git.commit("-m", commit_message, "--no-verify")
+    # Provide a git identity via env vars when none is configured (e.g. in Docker).
+    repo.git.commit(
+        "-m", commit_message, "--no-verify", env=git_utils.ensure_git_identity(repo)
+    )
     new_commit_hash = repo.head.commit.hexsha
     logger.info(
         f"Successfully committed changes for PR {pr.id} (hash: {new_commit_hash})"
