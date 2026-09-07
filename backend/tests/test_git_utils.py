@@ -279,14 +279,19 @@ def test_push_with_auth_noop_for_local():
 
 def test_push_with_auth_with_token():
     repo = MagicMock()
+    repo.remotes.origin.url = "https://github.com/org/repo.git"
     pipeline = MagicMock()
     pipeline.repo_uri = "https://github.com/org/repo.git"
     pipeline.repo_username = "user"
     pipeline.repo_token = "tok"
     git_utils.push_with_auth(repo, pipeline)
-    repo.git.push.assert_called_once_with(
-        "https://user:tok@github.com/org/repo.git", "HEAD"
+    # Pushes to the remote name, not a tokenized URL.
+    repo.git.push.assert_called_once_with("origin", "HEAD")
+    # Sets the auth URL, then restores the original.
+    repo.remotes.origin.set_url.assert_any_call(
+        "https://user:tok@github.com/org/repo.git"
     )
+    repo.remotes.origin.set_url.assert_any_call("https://github.com/org/repo.git")
 
 
 def test_push_with_auth_without_token():

@@ -88,15 +88,23 @@ def push_with_auth(repo: git.Repo, pipeline: Pipeline) -> None:
 
     For local pipelines (no repo_uri) this is a no-op. For remote pipelines it
     pushes HEAD to origin, using per-pipeline credentials if set, otherwise the
-    global GIT_PUSH_USERNAME/GIT_PUSH_TOKEN. Credentials are injected into the
-    push URL only and are not persisted in the repo config.
+    global GIT_PUSH_USERNAME/GIT_PUSH_TOKEN.
+
+    Credentials are injected by temporarily setting the origin URL in the repo
+    config (never as a command-line argument, so the token is not exposed in
+    process listings) and restored afterwards, so they are not persisted.
     """
     if not pipeline.repo_uri:
         return
     username, token = _resolve_credentials(pipeline)
     if token:
-        url = _inject_credentials(pipeline.repo_uri, username, token)
-        repo.git.push(url, "HEAD")
+        original_url = repo.remotes.origin.url
+        auth_url = _inject_credentials(pipeline.repo_uri, username, token)
+        try:
+            repo.remotes.origin.set_url(auth_url)
+            repo.git.push("origin", "HEAD")
+        finally:
+            repo.remotes.origin.set_url(original_url)
     else:
         repo.git.push("origin", "HEAD")
 
