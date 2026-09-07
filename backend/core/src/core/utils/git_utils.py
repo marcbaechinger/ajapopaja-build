@@ -13,8 +13,10 @@
 # limitations under the License.
 
 import logging
+import re
 from pathlib import Path
 from typing import Dict, Tuple
+from urllib.parse import urlsplit, urlunsplit
 
 import git
 
@@ -66,13 +68,25 @@ async def ensure_repo_cloned(pipeline: Pipeline) -> None:
 
 
 def _inject_credentials(uri: str, username: str, token: str) -> str:
-    """Insert <user>:<token>@ into an https URL for an authenticated push."""
+    """
+    Insert <user>:<token>@ into a git URL, replacing any existing credentials.
+
+    Uses urllib.parse so pre-existing auth in the URL is replaced rather than
+    double-injected. SCP-style SSH URLs (git@host:path) are returned unchanged.
+    """
     if not username:
         username = "oauth2"  # GitHub accepts any username with a token
-    if "://" in uri:
-        scheme, rest = uri.split("://", 1)
-        return f"{scheme}://{username}:{token}@{rest}"
-    return uri
+    # SCP-style SSH URL: git@host:path
+    if re.match(r"^[^@]+@[^:]+:.+$", uri):
+        return uri
+    parts = urlsplit(uri)
+    if not parts.scheme or not parts.netloc:
+        return uri
+    host = parts.hostname or ""
+    if parts.port:
+        host = f"{host}:{parts.port}"
+    netloc = f"{username}:{token}@{host}"
+    return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
 
 
 def _resolve_credentials(pipeline: Pipeline) -> Tuple[str, str]:

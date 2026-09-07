@@ -247,6 +247,32 @@ def test_inject_credentials():
     )
 
 
+def test_inject_credentials_replaces_existing_auth():
+    # Pre-existing credentials are replaced, not double-injected.
+    assert (
+        git_utils._inject_credentials(
+            "https://olduser:oldpass@github.com/org/repo.git", "user", "tok"
+        )
+        == "https://user:tok@github.com/org/repo.git"
+    )
+
+
+def test_inject_credentials_preserves_port_and_path():
+    assert (
+        git_utils._inject_credentials(
+            "https://host:8443/org/repo.git?x=1#frag", "user", "tok"
+        )
+        == "https://user:tok@host:8443/org/repo.git?x=1#frag"
+    )
+
+
+def test_inject_credentials_scp_ssh_unchanged():
+    assert (
+        git_utils._inject_credentials("git@github.com:org/repo.git", "user", "tok")
+        == "git@github.com:org/repo.git"
+    )
+
+
 def test_resolve_credentials_pipeline_overrides_global():
     pipeline = MagicMock()
     pipeline.repo_username = "pipeuser"
