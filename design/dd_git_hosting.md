@@ -183,6 +183,21 @@ git init --bare my-app.git
 
 ---
 
+## 5.1 Security
+
+- **Prefer HTTPS over SSH** for simplicity; use Gitea's built-in authentication
+  and personal access tokens for private repos.
+- **Least privilege:** scope tokens to the repository (e.g. GitHub
+  `Contents: write`, Gitea repo write) rather than a full-account token.
+- **Never bake credentials into the image.** Inject via environment variables
+  (`GIT_PUSH_USERNAME` / `GIT_PUSH_TOKEN`) or Docker secrets.
+- **Rotate tokens** periodically; a single env-file change redeploys the new
+  credential.
+- For SSH, use a **deploy key** scoped to one repo and mount the private key as
+  a secret.
+
+---
+
 ## 6. Decision summary
 
 | Concern | Choice |

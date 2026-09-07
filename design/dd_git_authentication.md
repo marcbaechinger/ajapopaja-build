@@ -250,6 +250,18 @@ updated.
 - The existing `ensure_repo_cloned()` (clone + fetch + pull) is unchanged; it
   works for public repos without credentials.
 
+### 6.1 Environment variables reference
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `GIT_PUSH_USERNAME` | Global username for pushing to remote repos | *(empty)* |
+| `GIT_PUSH_TOKEN` | Global token for pushing to remote repos | *(empty)* |
+| `GIT_USER_NAME` | Commit identity name (author/committer) | `Ajapopaja Build` |
+| `GIT_USER_EMAIL` | Commit identity email | `ajapopaja-build@localhost` |
+
+Per-pipeline overrides are stored on the `Pipeline` model as `repo_username` /
+`repo_token` and take precedence over the global env vars.
+
 ---
 
 ## 7. Decision summary
