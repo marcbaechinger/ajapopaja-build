@@ -13,10 +13,12 @@
 # limitations under the License.
 
 import os
+import re
 from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 from beanie import Document
 from pydantic import BaseModel, Field, field_validator
@@ -133,6 +135,23 @@ class Pipeline(Document):
 
             return sanitize_relative_path(v)
         return v
+
+    @field_validator("repo_uri")
+    @classmethod
+    def validate_repo_uri(cls, v):
+        if v is None or v == "":
+            return v
+        v = v.strip()
+        # SCP-style SSH URL: git@host:path
+        if re.match(r"^[^@]+@[^:]+:.+$", v):
+            return v
+        parsed = urlparse(v)
+        if parsed.scheme in ("https", "http", "ssh", "git") and parsed.netloc:
+            return v
+        raise ValueError(
+            f"repo_uri must be a well-formed git URL (https://, http://, ssh://, "
+            f"git://, or git@host:path), got '{v}'"
+        )
 
     @property
     def workspace_abs_path(self) -> Optional[Path]:

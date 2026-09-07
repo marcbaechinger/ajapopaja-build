@@ -173,3 +173,23 @@ def test_repo_name_from_uri():
     assert repo_name_from_uri("https://host/org/my-app.git") == "my-app"
     assert repo_name_from_uri("git@host:org/my-app.git") == "my-app"
     assert repo_name_from_uri("https://host/org/my-app") == "my-app"
+
+
+def test_pipeline_repo_uri_valid_https():
+    p = Pipeline(name="Test", repo_uri="https://github.com/org/repo.git")
+    assert p.repo_uri == "https://github.com/org/repo.git"
+
+
+def test_pipeline_repo_uri_valid_scp_ssh():
+    p = Pipeline(name="Test", repo_uri="git@github.com:org/repo.git")
+    assert p.repo_uri == "git@github.com:org/repo.git"
+
+
+def test_pipeline_repo_uri_none_or_empty():
+    assert Pipeline(name="Test", repo_uri=None).repo_uri is None
+    assert Pipeline(name="Test", repo_uri="").repo_uri == ""
+
+
+def test_pipeline_repo_uri_invalid():
+    with pytest.raises(ValidationError):
+        Pipeline(name="Test", repo_uri="not a url")
