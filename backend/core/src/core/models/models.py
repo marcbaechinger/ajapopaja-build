@@ -95,6 +95,8 @@ class Pipeline(Document):
     status: PipelineStatus = PipelineStatus.ACTIVE
     workspace_path: Optional[str] = None
     repo_uri: Optional[str] = None
+    repo_username: Optional[str] = None
+    repo_token: Optional[str] = None
     doc_root: str = "design"
     version: int = 1
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

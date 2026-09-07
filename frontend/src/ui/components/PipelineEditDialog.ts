@@ -59,6 +59,9 @@ export class PipelineEditDialog extends BaseDialog<void> {
   protected renderBody(): string {
     if (!this.props) return '';
     const { pipeline, pipelineId } = this.props;
+    // Credentials only make sense when a remote repo URI is set.
+    const credsReadonly = pipeline.repo_uri ? '' : 'readonly';
+    const credsClass = pipeline.repo_uri ? '' : ' opacity-60 cursor-not-allowed';
     return `
       <div class="flex flex-col gap-4 p-4">
         <div class="grid grid-cols-2 gap-4">
@@ -78,7 +81,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Workspace Path (Optional)</label>
-            <input type="text" name="workspace_path" value="${pipeline.workspace_path || ''}" placeholder="Default Project Root" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1">
+            <input type="text" name="workspace_path" value="${pipeline.workspace_path || ''}" placeholder="Default Project Root" readonly class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1 opacity-60 cursor-not-allowed">
           </div>
           <div>
             <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Documentation Root</label>
@@ -87,7 +90,17 @@ export class PipelineEditDialog extends BaseDialog<void> {
         </div>
         <div>
           <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Repo URI (Optional)</label>
-          <input type="text" name="repo_uri" value="${pipeline.repo_uri || ''}" placeholder="https://host/org/my-app.git" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1">
+          <input type="text" name="repo_uri" value="${pipeline.repo_uri || ''}" placeholder="https://host/org/my-app.git" readonly class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1 opacity-60 cursor-not-allowed">
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Repo Username (Optional)</label>
+            <input type="text" name="repo_username" value="${pipeline.repo_username || ''}" placeholder="git user" ${credsReadonly} class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1${credsClass}">
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Repo Token (Optional)</label>
+            <input type="password" name="repo_token" value="${pipeline.repo_token || ''}" placeholder="personal access token" ${credsReadonly} class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1${credsClass}">
+          </div>
         </div>
         <div class="flex col-span-2">
           <div class="ml-auto text-[10px] font-bold uppercase tracking-widest text-app-muted">ID: ${pipelineId}</div>
@@ -119,6 +132,8 @@ export class PipelineEditDialog extends BaseDialog<void> {
     const workspaceInput = this.dialog.querySelector('input[name="workspace_path"]') as HTMLInputElement;
     const docRootInput = this.dialog.querySelector('input[name="doc_root"]') as HTMLInputElement;
     const repoUriInput = this.dialog.querySelector('input[name="repo_uri"]') as HTMLInputElement;
+    const repoUsernameInput = this.dialog.querySelector('input[name="repo_username"]') as HTMLInputElement;
+    const repoTokenInput = this.dialog.querySelector('input[name="repo_token"]') as HTMLInputElement;
 
     saveBtn.disabled = true;
     saveBtn.textContent = 'Saving...';
@@ -129,6 +144,8 @@ export class PipelineEditDialog extends BaseDialog<void> {
         status: statusSelect.value as PipelineStatus,
         workspace_path: workspaceInput.value.trim() || undefined,
         repo_uri: repoUriInput.value.trim() || undefined,
+        repo_username: repoUsernameInput.value.trim() || undefined,
+        repo_token: repoTokenInput.value.trim() || undefined,
         doc_root: docRootInput.value.trim() || 'design',
       });
       this.close();

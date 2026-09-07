@@ -134,6 +134,8 @@ export class Pipeline {
   status: PipelineStatus = PipelineStatus.ACTIVE;
   workspace_path?: string | null;
   repo_uri?: string | null;
+  repo_username?: string | null;
+  repo_token?: string | null;
   doc_root: string = 'design';
   version: number = 1;
   created_at?: string;
@@ -150,6 +152,8 @@ export class Pipeline {
     if (json.status !== undefined && isPipelineStatus(json.status)) this.status = json.status;
     if (json.workspace_path !== undefined) this.workspace_path = json.workspace_path;
     if (json.repo_uri !== undefined) this.repo_uri = json.repo_uri;
+    if (json.repo_username !== undefined) this.repo_username = json.repo_username;
+    if (json.repo_token !== undefined) this.repo_token = json.repo_token;
     if (json.doc_root !== undefined) this.doc_root = String(json.doc_root);
     if (json.version !== undefined) this.version = Number(json.version);
     if (json.created_at !== undefined) this.created_at = String(json.created_at);

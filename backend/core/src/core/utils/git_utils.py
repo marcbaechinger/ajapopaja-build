@@ -65,6 +65,42 @@ async def ensure_repo_cloned(pipeline: Pipeline) -> None:
             repo.git.reset("--hard", f"origin/{default}")
 
 
+def _inject_credentials(uri: str, username: str, token: str) -> str:
+    """Insert <user>:<token>@ into an https URL for an authenticated push."""
+    if not username:
+        username = "oauth2"  # GitHub accepts any username with a token
+    if "://" in uri:
+        scheme, rest = uri.split("://", 1)
+        return f"{scheme}://{username}:{token}@{rest}"
+    return uri
+
+
+def _resolve_credentials(pipeline: Pipeline) -> Tuple[str, str]:
+    """Resolve credentials: pipeline fields -> global env -> none."""
+    username = pipeline.repo_username or config.GIT_PUSH_USERNAME or ""
+    token = pipeline.repo_token or config.GIT_PUSH_TOKEN or ""
+    return username, token
+
+
+def push_with_auth(repo: git.Repo, pipeline: Pipeline) -> None:
+    """
+    Push the current branch to origin, injecting credentials if configured.
+
+    For local pipelines (no repo_uri) this is a no-op. For remote pipelines it
+    pushes HEAD to origin, using per-pipeline credentials if set, otherwise the
+    global GIT_PUSH_USERNAME/GIT_PUSH_TOKEN. Credentials are injected into the
+    push URL only and are not persisted in the repo config.
+    """
+    if not pipeline.repo_uri:
+        return
+    username, token = _resolve_credentials(pipeline)
+    if token:
+        url = _inject_credentials(pipeline.repo_uri, username, token)
+        repo.git.push(url, "HEAD")
+    else:
+        repo.git.push("origin", "HEAD")
+
+
 def ensure_git_identity(repo: git.Repo) -> Dict[str, str]:
     """
     Return GIT_AUTHOR_*/GIT_COMMITTER_* environment variables for any identity

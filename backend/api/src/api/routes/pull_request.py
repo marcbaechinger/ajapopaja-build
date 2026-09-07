@@ -272,6 +272,10 @@ async def accept_pull_request(
             commit_message = build_commit_message(request, pr)
             new_commit_hash = commit_changes(repo, pr, commit_message)
 
+            # Step 3b: Push to the remote origin for remote pipelines.
+            if pipeline.repo_uri:
+                git_utils.push_with_auth(repo, pipeline)
+
         except Exception:
             if strategy == FailureStrategy.REVERT:
                 logger.warning(

@@ -51,6 +51,8 @@ async def update_pipeline(
     status: Optional[PipelineStatus] = None,
     workspace_path: Optional[str] = None,
     repo_uri: Optional[str] = None,
+    repo_username: Optional[str] = None,
+    repo_token: Optional[str] = None,
     doc_root: Optional[str] = None,
 ) -> Pipeline:
     pipeline = await get_pipeline_by_id(pipeline_id)
@@ -69,6 +71,10 @@ async def update_pipeline(
         pipeline.workspace_path = workspace_path
     if repo_uri is not None:
         pipeline.repo_uri = repo_uri
+    if repo_username is not None:
+        pipeline.repo_username = repo_username
+    if repo_token is not None:
+        pipeline.repo_token = repo_token
     if doc_root is not None:
         pipeline.doc_root = doc_root
 

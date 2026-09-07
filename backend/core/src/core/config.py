@@ -73,3 +73,8 @@ CODERBOT_DEFAULT_MODEL: Optional[str] = os.getenv("CODERBOT_DEFAULT_MODEL")
 # (e.g. inside the Docker image). Overridable via environment variables.
 GIT_USER_NAME = os.getenv("GIT_USER_NAME", "Ajapopaja Build")
 GIT_USER_EMAIL = os.getenv("GIT_USER_EMAIL", "ajapopaja-build@localhost")
+
+# Global git credentials used to push to remote repositories when a pipeline
+# does not define its own per-pipeline credentials. Overridable via env vars.
+GIT_PUSH_USERNAME = os.getenv("GIT_PUSH_USERNAME", "")
+GIT_PUSH_TOKEN = os.getenv("GIT_PUSH_TOKEN", "")

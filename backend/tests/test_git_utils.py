@@ -233,3 +233,68 @@ async def test_get_repo_for_pipeline_remote_calls_ensure_cloned():
 
         assert repo == mock_repo
         mock_ensure.assert_awaited_with(mock_pipeline)
+
+
+def test_inject_credentials():
+    assert (
+        git_utils._inject_credentials("https://github.com/org/repo.git", "user", "tok")
+        == "https://user:tok@github.com/org/repo.git"
+    )
+    # Empty username defaults to oauth2 (GitHub convention).
+    assert (
+        git_utils._inject_credentials("https://github.com/org/repo.git", "", "tok")
+        == "https://oauth2:tok@github.com/org/repo.git"
+    )
+
+
+def test_resolve_credentials_pipeline_overrides_global():
+    pipeline = MagicMock()
+    pipeline.repo_username = "pipeuser"
+    pipeline.repo_token = "pipetok"
+    with (
+        patch("core.utils.git_utils.config.GIT_PUSH_USERNAME", "globaluser"),
+        patch("core.utils.git_utils.config.GIT_PUSH_TOKEN", "globaltok"),
+    ):
+        assert git_utils._resolve_credentials(pipeline) == ("pipeuser", "pipetok")
+
+
+def test_resolve_credentials_falls_back_to_global():
+    pipeline = MagicMock()
+    pipeline.repo_username = None
+    pipeline.repo_token = None
+    with (
+        patch("core.utils.git_utils.config.GIT_PUSH_USERNAME", "globaluser"),
+        patch("core.utils.git_utils.config.GIT_PUSH_TOKEN", "globaltok"),
+    ):
+        assert git_utils._resolve_credentials(pipeline) == ("globaluser", "globaltok")
+
+
+def test_push_with_auth_noop_for_local():
+    repo = MagicMock()
+    pipeline = MagicMock()
+    pipeline.repo_uri = None
+    git_utils.push_with_auth(repo, pipeline)
+    repo.git.push.assert_not_called()
+
+
+def test_push_with_auth_with_token():
+    repo = MagicMock()
+    pipeline = MagicMock()
+    pipeline.repo_uri = "https://github.com/org/repo.git"
+    pipeline.repo_username = "user"
+    pipeline.repo_token = "tok"
+    git_utils.push_with_auth(repo, pipeline)
+    repo.git.push.assert_called_once_with(
+        "https://user:tok@github.com/org/repo.git", "HEAD"
+    )
+
+
+def test_push_with_auth_without_token():
+    repo = MagicMock()
+    pipeline = MagicMock()
+    pipeline.repo_uri = "https://github.com/org/repo.git"
+    pipeline.repo_username = None
+    pipeline.repo_token = None
+    with patch("core.utils.git_utils.config.GIT_PUSH_TOKEN", ""):
+        git_utils.push_with_auth(repo, pipeline)
+        repo.git.push.assert_called_once_with("origin", "HEAD")

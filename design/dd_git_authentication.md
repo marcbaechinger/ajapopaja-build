@@ -131,8 +131,8 @@ Resolution order in `push_with_auth()`: **pipeline fields → global env → non
 Add global settings to `core/config.py` (env-overridable):
 
 ```python
-GIT_USERNAME = os.getenv("GIT_USERNAME", "")
-GIT_TOKEN = os.getenv("GIT_TOKEN", "")
+GIT_PUSH_USERNAME = os.getenv("GIT_PUSH_USERNAME", "")
+GIT_PUSH_TOKEN = os.getenv("GIT_PUSH_TOKEN", "")
 ```
 
 These are forwarded to the container via the existing `env_file`
@@ -167,7 +167,7 @@ def push_with_auth(repo: git.Repo, pipeline: Pipeline) -> None:
 ```
 
 `_resolve_credentials()` returns the pipeline's `repo_username`/`repo_token` if
-set, otherwise the global `GIT_USERNAME`/`GIT_TOKEN`. `_inject_credentials()`
+set, otherwise the global `GIT_PUSH_USERNAME`/`GIT_PUSH_TOKEN`. `_inject_credentials()`
 parses the `repo_uri` and inserts `<user>:<token>@` into the URL (or uses a
 credential helper). The credentials are **not persisted** in the repo config.
 
@@ -241,8 +241,8 @@ updated.
 ## 6. Integration with Ajapopaja Build
 
 - `repo_uri` on the pipeline stays the **public** clone URL.
-- Global credentials come from `GIT_USERNAME` / `GIT_TOKEN` (or `GIT_SSH_KEY`)
-  in the env file, forwarded to the container via `env_file`.
+- Global credentials come from `GIT_PUSH_USERNAME` / `GIT_PUSH_TOKEN` (or
+  `GIT_SSH_KEY`) in the env file, forwarded to the container via `env_file`.
 - Per-pipeline credentials come from optional `repo_username` / `repo_token`
   fields on the `Pipeline` model, set via the pipeline edit dialog.
 - `push_with_auth()` resolves credentials (pipeline → global → none) and
@@ -257,7 +257,7 @@ updated.
 | Concern | Choice |
 |---------|--------|
 | Primary auth | **HTTPS + Personal Access Token** |
-| Global default | `GIT_USERNAME` / `GIT_TOKEN` env vars via `env_file` |
+| Global default | `GIT_PUSH_USERNAME` / `GIT_PUSH_TOKEN` env vars via `env_file` |
 | Per-pipeline override | `repo_username` / `repo_token` fields on `Pipeline` |
 | Resolution order | pipeline fields → global env → none |
 | Push mechanism | `push_with_auth()` rewrites the push URL with credentials |

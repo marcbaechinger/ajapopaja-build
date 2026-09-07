@@ -69,6 +69,73 @@ describe('PipelineEditDialog', () => {
     await showPromise;
   });
 
+  it('should render workspace_path and repo_uri as readonly', async () => {
+    const dialog = new PipelineEditDialog(mockProps);
+    const showPromise = dialog.show();
+
+    const workspaceInput = document.querySelector('input[name="workspace_path"]') as HTMLInputElement;
+    const repoUriInput = document.querySelector('input[name="repo_uri"]') as HTMLInputElement;
+
+    expect(workspaceInput.readOnly).toBe(true);
+    expect(repoUriInput.readOnly).toBe(true);
+
+    document.querySelector('#pipeline-edit-cancel')?.dispatchEvent(new MouseEvent('click'));
+    await showPromise;
+  });
+
+  it('should pass repo_username and repo_token on save', async () => {
+    const dialog = new PipelineEditDialog(mockProps);
+    const showPromise = dialog.show();
+
+    const usernameInput = document.querySelector('input[name="repo_username"]') as HTMLInputElement;
+    const tokenInput = document.querySelector('input[name="repo_token"]') as HTMLInputElement;
+    usernameInput.value = 'gituser';
+    tokenInput.value = 'gittoken';
+
+    const saveBtn = document.querySelector('#pipeline-edit-save') as HTMLButtonElement;
+    saveBtn.click();
+
+    await showPromise;
+
+    expect(mockProps.context.pipelineClient.update).toHaveBeenCalledWith(
+      'pipeline-1',
+      1,
+      expect.objectContaining({
+        repo_username: 'gituser',
+        repo_token: 'gittoken'
+      })
+    );
+  });
+
+  it('should make repo credentials readonly when no repo_uri is set', async () => {
+    const dialog = new PipelineEditDialog(mockProps);
+    const showPromise = dialog.show();
+
+    const usernameInput = document.querySelector('input[name="repo_username"]') as HTMLInputElement;
+    const tokenInput = document.querySelector('input[name="repo_token"]') as HTMLInputElement;
+
+    expect(usernameInput.readOnly).toBe(true);
+    expect(tokenInput.readOnly).toBe(true);
+
+    document.querySelector('#pipeline-edit-cancel')?.dispatchEvent(new MouseEvent('click'));
+    await showPromise;
+  });
+
+  it('should make repo credentials editable when repo_uri is set', async () => {
+    mockProps.pipeline.repo_uri = 'https://host/org/my-app.git';
+    const dialog = new PipelineEditDialog(mockProps);
+    const showPromise = dialog.show();
+
+    const usernameInput = document.querySelector('input[name="repo_username"]') as HTMLInputElement;
+    const tokenInput = document.querySelector('input[name="repo_token"]') as HTMLInputElement;
+
+    expect(usernameInput.readOnly).toBe(false);
+    expect(tokenInput.readOnly).toBe(false);
+
+    document.querySelector('#pipeline-edit-cancel')?.dispatchEvent(new MouseEvent('click'));
+    await showPromise;
+  });
+
   it('should call update and close on save', async () => {
     const dialog = new PipelineEditDialog(mockProps);
     const showPromise = dialog.show();
