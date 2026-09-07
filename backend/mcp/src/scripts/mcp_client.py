@@ -204,6 +204,21 @@ async def run_update_task_design_doc(
     await client.call_tool("update_task_design_doc", args)
 
 
+async def run_update_task_spec(
+    client: MCPHttpClient,
+    task_id: str,
+    spec: str,
+    version: int,
+):
+    logger.info(f"--- Action: Update Task Spec (ID: {task_id}) ---")
+    args = {
+        "task_id": task_id,
+        "spec": spec,
+        "version": version,
+    }
+    await client.call_tool("update_task_spec", args)
+
+
 async def main():
     parser = argparse.ArgumentParser(
         description="CLI tool to test MCP server tools over stateless streamable HTTP.",
@@ -254,6 +269,15 @@ async def main():
         "--version", type=int, required=True, help="Current task version for OCC"
     )
 
+    spec_parser = subparsers.add_parser(
+        "update-task-spec", help="Update the specification for a task"
+    )
+    spec_parser.add_argument("task_id", help="The 24-char hex task ID")
+    spec_parser.add_argument("--spec", required=True, help="The new specification text")
+    spec_parser.add_argument(
+        "--version", type=int, required=True, help="Current task version for OCC"
+    )
+
     subparsers.add_parser("list", help="List all available tools on the MCP server")
 
     args = parser.parse_args()
@@ -286,6 +310,8 @@ async def main():
         await run_update_task_design_doc(
             client, args.task_id, args.design_doc, args.version
         )
+    elif args.command == "update-task-spec":
+        await run_update_task_spec(client, args.task_id, args.spec, args.version)
 
     await client.close()
 

@@ -120,6 +120,38 @@ async def update_task_design_doc(task_id: str, design_doc: str, version: int) ->
         return f"An unexpected error occurred: {str(e)}"
 
 
+async def update_task_spec(task_id: str, spec: str, version: int) -> str:
+    """
+    Updates the specification field for a specific task.
+
+    Args:
+        task_id: The target task ID.
+        spec: The new specification text.
+        version: Current version for optimistic concurrency control (OCC).
+    """
+    if not _is_valid_id(task_id):
+        return f"Error: Invalid task_id '{task_id}'. Must be a 24-char hex string."
+
+    if not spec or not spec.strip():
+        return "Error: spec cannot be empty."
+
+    await init_db()
+    try:
+        await task_queries.update_task_details(
+            task_id=task_id, version=version, spec=spec
+        )
+        await notify_api(task_id)
+        return f"Specification for task {task_id} updated successfully."
+    except EntityNotFoundError as e:
+        return f"Error: {str(e)}"
+    except VersionMismatchError as e:
+        return (
+            f"Error: {str(e)}. Please fetch the task again to get the latest version."
+        )
+    except Exception as e:
+        return f"An unexpected error occurred: {str(e)}"
+
+
 async def complete_task(
     task_id: str, commit_hash: str, completion_info: str, version: int
 ) -> str:
