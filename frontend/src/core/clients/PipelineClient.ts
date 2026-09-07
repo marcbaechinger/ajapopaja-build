@@ -41,16 +41,16 @@ export class PipelineClient extends BaseClient {
     return new Pipeline(await response.json());
   }
 
-  async create(name: string, workspacePath?: string): Promise<Pipeline> {
+  async create(name: string, workspacePath?: string, repoUri?: string): Promise<Pipeline> {
     const response = await this.fetch(`${this.baseUrl}/pipelines/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, workspace_path: workspacePath })
+      body: JSON.stringify({ name, workspace_path: workspacePath, repo_uri: repoUri })
     });
     return new Pipeline(await response.json());
   }
 
-  async update(id: string, version: number, partial: { name?: string, status?: PipelineStatus, workspace_path?: string | null, doc_root?: string }): Promise<Pipeline> {
+  async update(id: string, version: number, partial: { name?: string, status?: PipelineStatus, workspace_path?: string | null, repo_uri?: string | null, doc_root?: string }): Promise<Pipeline> {
     try {
       const response = await this.fetch(`${this.baseUrl}/pipelines/${id}`, {
         method: 'PATCH',

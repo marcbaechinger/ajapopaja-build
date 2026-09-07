@@ -53,15 +53,18 @@ export class DashboardView extends View {
       const form = el as HTMLFormElement;
       const nameInput = form.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
       const wsInput = form.querySelector('input[name="workspace_path"]') as HTMLInputElement;
+      const repoUriInput = form.querySelector('input[name="repo_uri"]') as HTMLInputElement;
       const name = nameInput.value.trim();
       const workspacePath = wsInput.value.trim() || undefined;
+      const repoUri = repoUriInput.value.trim() || undefined;
       
       if (!name) return;
 
       try {
-        await this.context.pipelineClient.create(name, workspacePath);
+        await this.context.pipelineClient.create(name, workspacePath, repoUri);
         nameInput.value = '';
         wsInput.value = '';
+        repoUriInput.value = '';
         // List will be updated via WebSocket
       } catch (error) {
         alert('Failed to create pipeline');
@@ -229,6 +232,10 @@ export class DashboardView extends View {
                 <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Workspace Path (Optional)</label>
                 <input type="text" name="workspace_path" placeholder="e.g. ./my-project" class="w-full bg-app-bg border border-app-border rounded-lg px-4 py-2 focus:ring-2 focus:ring-app-accent-1 outline-none text-app-text transition-all text-sm">
               </div>
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Repo URI (Optional)</label>
+              <input type="text" name="repo_uri" placeholder="https://host/org/my-app.git" class="w-full bg-app-bg border border-app-border rounded-lg px-4 py-2 focus:ring-2 focus:ring-app-accent-1 outline-none text-app-text transition-all text-sm">
             </div>
             <button type="submit" class="w-full bg-app-accent-1 hover:brightness-110 text-white font-bold py-2 rounded-lg transition-all shadow-lg cursor-pointer">
               Create

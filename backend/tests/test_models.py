@@ -150,3 +150,26 @@ async def test_invalid_task_status():
     # Pydantic should catch invalid status strings
     with pytest.raises(ValidationError):
         Task(title="Invalid", pipeline_id="123", status="invalid_status")
+
+
+def test_pipeline_workspace_abs_path_local():
+    pipeline = Pipeline(name="Test", workspace_path="my-app")
+    assert pipeline.workspace_abs_path == config.WORKSPACES_ROOT / "my-app"
+
+
+def test_pipeline_workspace_abs_path_remote():
+    pipeline = Pipeline(name="Test", repo_uri="https://host/org/my-app.git")
+    assert pipeline.workspace_abs_path == config.REMOTE_WORKSPACES_ROOT / "my-app"
+
+
+def test_pipeline_workspace_abs_path_remote_derives_name():
+    pipeline = Pipeline(name="my-app", repo_uri="https://host/org/my-app.git")
+    assert pipeline.workspace_abs_path == config.REMOTE_WORKSPACES_ROOT / "my-app"
+
+
+def test_repo_name_from_uri():
+    from core.utils.path_utils import repo_name_from_uri
+
+    assert repo_name_from_uri("https://host/org/my-app.git") == "my-app"
+    assert repo_name_from_uri("git@host:org/my-app.git") == "my-app"
+    assert repo_name_from_uri("https://host/org/my-app") == "my-app"

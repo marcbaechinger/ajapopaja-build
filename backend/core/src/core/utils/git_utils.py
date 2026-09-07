@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
+from pathlib import Path
 from typing import Dict, Tuple
 
 import git
@@ -23,10 +25,44 @@ from core.queries import pipeline as pipeline_queries
 from core.queries import task as task_queries
 from core.utils.path_utils import get_workspace_path
 
+logger = logging.getLogger(__name__)
+
 
 def get_repo(workspace_abs_path: str) -> git.Repo:
     """Returns a git.Repo instance for the given absolute path."""
     return git.Repo(workspace_abs_path)
+
+
+async def ensure_repo_cloned(pipeline: Pipeline) -> None:
+    """
+    Ensure the pipeline's remote repo is cloned and in sync with origin.
+
+    For local pipelines (no repo_uri) this is a no-op. For remote pipelines it
+    clones the repo into REMOTE_WORKSPACES_ROOT on first use, then fetches and
+    fast-forwards to keep it in sync with origin.
+    """
+    if not pipeline.repo_uri:
+        return
+    target = pipeline.workspace_abs_path
+    if not target:
+        return
+    target = Path(target)
+    if not target.exists():
+        target.parent.mkdir(parents=True, exist_ok=True)
+        git.Repo.clone_from(pipeline.repo_uri, str(target))
+        logger.info(f"Cloned remote repo {pipeline.repo_uri} to {target}")
+    else:
+        repo = git.Repo(str(target))
+        repo.remotes.origin.fetch()
+        try:
+            repo.git.pull("--ff-only")
+        except git.exc.GitCommandError:
+            logger.warning(
+                "Fast-forward pull failed for %s; resetting to origin default branch",
+                target,
+            )
+            default = repo.git.symbolic_ref("refs/remotes/origin/HEAD").split("/")[-1]
+            repo.git.reset("--hard", f"origin/{default}")
 
 
 def ensure_git_identity(repo: git.Repo) -> Dict[str, str]:
@@ -75,6 +111,7 @@ async def get_pipeline_and_repo(
             f"Workspace path not found for pipeline {pipeline_id}"
         )
 
+    await ensure_repo_cloned(pipeline)
     workspace_path = await get_workspace_path(
         pipeline_id, task_id, use_sandbox, pipeline=pipeline
     )

@@ -24,6 +24,12 @@ WORKSPACES_ROOT = Path(
 # Root directory for bot sandboxes
 SANDBOX_ROOT = Path(os.getenv("SANDBOX_ROOT", "/data/ajapopaja/sandboxes")).resolve()
 
+# Root directory where remote git repositories are cloned for pipelines that
+# declare a repo_uri. Lives next to the local WORKSPACES_ROOT.
+REMOTE_WORKSPACES_ROOT = Path(
+    os.getenv("REMOTE_WORKSPACES_ROOT", "/data/ajapopaja/remote_workspaces")
+).resolve()
+
 if not WORKSPACES_ROOT.is_dir():
     raise RuntimeError(
         f"WORKSPACES_ROOT '{WORKSPACES_ROOT}' does not exist or is not a directory. "

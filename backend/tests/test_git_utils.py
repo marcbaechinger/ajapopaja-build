@@ -26,6 +26,7 @@ async def test_get_repo_for_pipeline_success():
     pipeline_id = "p1"
     mock_pipeline = MagicMock()
     mock_pipeline.workspace_abs_path = "/tmp/repo"
+    mock_pipeline.repo_uri = None
 
     with patch(
         "core.utils.git_utils.pipeline_queries.get_pipeline_by_id",
@@ -64,6 +65,7 @@ async def test_get_repo_for_pipeline_by_task_success():
     mock_task.pipeline_id = "p1"
     mock_pipeline = MagicMock()
     mock_pipeline.workspace_abs_path = "/tmp/repo"
+    mock_pipeline.repo_uri = None
 
     with (
         patch(
@@ -168,3 +170,66 @@ def test_ensure_git_identity_respects_existing_identity():
         "GIT_AUTHOR_EMAIL": "bot@localhost",
         "GIT_COMMITTER_EMAIL": "bot@localhost",
     }
+
+
+@pytest.mark.asyncio
+async def test_ensure_repo_cloned_noop_for_local():
+    pipeline = MagicMock()
+    pipeline.repo_uri = None
+    await git_utils.ensure_repo_cloned(pipeline)  # should not raise
+
+
+@pytest.mark.asyncio
+async def test_ensure_repo_cloned_clones_when_missing(tmp_path):
+    pipeline = MagicMock()
+    pipeline.repo_uri = "https://host/org/my-app.git"
+    pipeline.workspace_abs_path = tmp_path / "my-app"
+
+    with patch("core.utils.git_utils.git.Repo.clone_from") as mock_clone:
+        await git_utils.ensure_repo_cloned(pipeline)
+        mock_clone.assert_called_once_with(
+            "https://host/org/my-app.git", str(tmp_path / "my-app")
+        )
+
+
+@pytest.mark.asyncio
+async def test_ensure_repo_cloned_syncs_when_present(tmp_path):
+    pipeline = MagicMock()
+    pipeline.repo_uri = "https://host/org/my-app.git"
+    target = tmp_path / "my-app"
+    target.mkdir(parents=True)
+    pipeline.workspace_abs_path = target
+
+    with patch("core.utils.git_utils.git.Repo") as mock_repo_cls:
+        mock_repo = MagicMock()
+        mock_repo_cls.return_value = mock_repo
+        await git_utils.ensure_repo_cloned(pipeline)
+        mock_repo.remotes.origin.fetch.assert_called_once()
+        mock_repo.git.pull.assert_called_once_with("--ff-only")
+
+
+@pytest.mark.asyncio
+async def test_get_repo_for_pipeline_remote_calls_ensure_cloned():
+    pipeline_id = "p1"
+    mock_pipeline = MagicMock()
+    mock_pipeline.workspace_abs_path = "/tmp/repo"
+    mock_pipeline.repo_uri = "https://host/org/my-app.git"
+
+    with (
+        patch(
+            "core.utils.git_utils.pipeline_queries.get_pipeline_by_id",
+            new_callable=AsyncMock,
+        ) as mock_get,
+        patch(
+            "core.utils.git_utils.ensure_repo_cloned", new_callable=AsyncMock
+        ) as mock_ensure,
+        patch("core.utils.git_utils.git.Repo") as mock_repo_cls,
+    ):
+        mock_get.return_value = mock_pipeline
+        mock_repo = MagicMock()
+        mock_repo_cls.return_value = mock_repo
+
+        repo = await git_utils.get_repo_for_pipeline(pipeline_id)
+
+        assert repo == mock_repo
+        mock_ensure.assert_awaited_with(mock_pipeline)

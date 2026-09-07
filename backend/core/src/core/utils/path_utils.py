@@ -65,6 +65,19 @@ def safe_join(base: Path, *parts: str) -> Path:
     return joined
 
 
+def repo_name_from_uri(uri: str) -> str:
+    """
+    Derive a directory name from a git URI.
+
+    e.g. https://host/org/my-app.git -> "my-app"
+    """
+    uri = uri.rstrip("/")
+    name = uri.rsplit("/", 1)[-1]
+    if name.endswith(".git"):
+        name = name[:-4]
+    return name or "repo"
+
+
 async def get_workspace_path(
     pipeline_id: str,
     task_id: str | None = None,
@@ -87,6 +100,11 @@ async def get_workspace_path(
         from core.queries import pipeline as pipeline_queries
 
         pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
+
+    if pipeline and pipeline.repo_uri:
+        from core.utils import git_utils
+
+        await git_utils.ensure_repo_cloned(pipeline)
 
     if not pipeline or not pipeline.workspace_abs_path:
         raise ValueError("Workspace path not found.")

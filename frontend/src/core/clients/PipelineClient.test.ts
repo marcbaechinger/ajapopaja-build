@@ -227,6 +227,22 @@ describe('PipelineClient', () => {
       expect(body.workspace_path).toBe('/my/workspace');
     });
 
+    it('should create a pipeline with name, workspacePath and repoUri', async () => {
+      (fetch as any).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockPipelineResponse({ name: 'New Pipeline', repo_uri: 'https://host/org/my-app.git' })),
+      });
+
+      const pipeline = await client.create('New Pipeline', '/my/workspace', 'https://host/org/my-app.git');
+
+      expect(pipeline.repo_uri).toBe('https://host/org/my-app.git');
+
+      const body = JSON.parse((fetch as any).mock.calls[0][1].body);
+      expect(body.name).toBe('New Pipeline');
+      expect(body.workspace_path).toBe('/my/workspace');
+      expect(body.repo_uri).toBe('https://host/org/my-app.git');
+    });
+
     it('should authenticate with Authorization header', async () => {
       (fetch as any).mockResolvedValue({
         ok: true,
@@ -315,6 +331,19 @@ describe('PipelineClient', () => {
 
       const body = JSON.parse((fetch as any).mock.calls[0][1].body);
       expect(body.workspace_path).toBe(null);
+    });
+
+    it('should update pipeline repo_uri', async () => {
+      (fetch as any).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockPipelineResponse({ repo_uri: 'https://host/org/my-app.git' })),
+      });
+
+      await client.update('pipe-1', 2, { repo_uri: 'https://host/org/my-app.git' });
+
+      const body = JSON.parse((fetch as any).mock.calls[0][1].body);
+      expect(body.version).toBe(2);
+      expect(body.repo_uri).toBe('https://host/org/my-app.git');
     });
 
     it('should authenticate with Authorization header', async () => {
@@ -487,6 +516,16 @@ describe('PipelineClient', () => {
       expect(pipeline.created_at).toBe('2026-01-01T00:00:00Z');
       expect(pipeline.updated_at).toBe('2026-01-02T00:00:00Z');
       expect(pipeline.deleted).toBe(true);
+    });
+
+    it('should map repo_uri from response', async () => {
+      (fetch as any).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ id: 'pipe-1', name: 'Remote', repo_uri: 'https://host/org/my-app.git' }),
+      });
+
+      const pipeline = await client.get('pipe-1');
+      expect(pipeline.repo_uri).toBe('https://host/org/my-app.git');
     });
 
     it('should map response with id field (not _id)', async () => {

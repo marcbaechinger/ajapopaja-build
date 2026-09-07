@@ -22,7 +22,11 @@ from beanie import Document
 from pydantic import BaseModel, Field, field_validator
 
 from core import config
-from core.utils.path_utils import safe_join, sanitize_relative_path
+from core.utils.path_utils import (
+    repo_name_from_uri,
+    safe_join,
+    sanitize_relative_path,
+)
 
 
 class TaskStatus(str, Enum):
@@ -90,6 +94,7 @@ class Pipeline(Document):
     description: Optional[str] = None
     status: PipelineStatus = PipelineStatus.ACTIVE
     workspace_path: Optional[str] = None
+    repo_uri: Optional[str] = None
     doc_root: str = "design"
     version: int = 1
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -129,6 +134,10 @@ class Pipeline(Document):
 
     @property
     def workspace_abs_path(self) -> Optional[Path]:
+        if self.repo_uri:
+            # Remote pipeline: resolve to the cloned repo under REMOTE_WORKSPACES_ROOT.
+            repo_name = repo_name_from_uri(self.repo_uri) or self.name
+            return safe_join(config.REMOTE_WORKSPACES_ROOT, repo_name)
         if not self.workspace_path:
             return None
         return safe_join(config.WORKSPACES_ROOT, self.workspace_path)

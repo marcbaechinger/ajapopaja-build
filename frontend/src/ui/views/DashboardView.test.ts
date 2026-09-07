@@ -128,14 +128,17 @@ describe('DashboardView', () => {
     const form = container.querySelector('form') as HTMLFormElement;
     const nameInput = form.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
     const wsInput = form.querySelector('input[name="workspace_path"]') as HTMLInputElement;
+    const repoUriInput = form.querySelector('input[name="repo_uri"]') as HTMLInputElement;
     nameInput.value = 'New Pipe';
     wsInput.value = '/tmp/path';
+    repoUriInput.value = 'https://host/org/my-app.git';
 
     await createAction(new Event('submit'), form);
 
-    expect(mockContext.pipelineClient.create).toHaveBeenCalledWith('New Pipe', '/tmp/path');
+    expect(mockContext.pipelineClient.create).toHaveBeenCalledWith('New Pipe', '/tmp/path', 'https://host/org/my-app.git');
     expect(nameInput.value).toBe('');
     expect(wsInput.value).toBe('');
+    expect(repoUriInput.value).toBe('');
   });
 
   it('should handle pipeline deletion with confirmation', async () => {

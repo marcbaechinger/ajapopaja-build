@@ -85,6 +85,10 @@ export class PipelineEditDialog extends BaseDialog<void> {
             <input type="text" name="doc_root" value="${pipeline.doc_root}" placeholder="design" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1">
           </div>
         </div>
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Repo URI (Optional)</label>
+          <input type="text" name="repo_uri" value="${pipeline.repo_uri || ''}" placeholder="https://host/org/my-app.git" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1">
+        </div>
         <div class="flex col-span-2">
           <div class="ml-auto text-[10px] font-bold uppercase tracking-widest text-app-muted">ID: ${pipelineId}</div>
         </div>
@@ -114,6 +118,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
     const statusSelect = this.dialog.querySelector('select[name="pipeline_status"]') as HTMLSelectElement;
     const workspaceInput = this.dialog.querySelector('input[name="workspace_path"]') as HTMLInputElement;
     const docRootInput = this.dialog.querySelector('input[name="doc_root"]') as HTMLInputElement;
+    const repoUriInput = this.dialog.querySelector('input[name="repo_uri"]') as HTMLInputElement;
 
     saveBtn.disabled = true;
     saveBtn.textContent = 'Saving...';
@@ -123,6 +128,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
         name: nameInput.value.trim(),
         status: statusSelect.value as PipelineStatus,
         workspace_path: workspaceInput.value.trim() || undefined,
+        repo_uri: repoUriInput.value.trim() || undefined,
         doc_root: docRootInput.value.trim() || 'design',
       });
       this.close();

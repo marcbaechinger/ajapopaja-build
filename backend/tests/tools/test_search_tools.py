@@ -38,6 +38,7 @@ def mock_pipeline():
     pipeline = MagicMock(spec=Pipeline)
     pipeline.id = "test-pipeline-id"
     pipeline.workspace_path = "mock/workspace"
+    pipeline.repo_uri = None
     pipeline.workspace_abs_path = Path("/tmp/mock/workspace")
     return pipeline
 
@@ -316,6 +317,7 @@ async def test_pipeline_not_found():
 async def test_workspace_path_missing():
     pipeline = MagicMock(spec=Pipeline)
     pipeline.workspace_path = None
+    pipeline.repo_uri = None
     pipeline.workspace_abs_path = None
     with patch(
         "core.queries.pipeline.get_pipeline_by_id", new_callable=AsyncMock
