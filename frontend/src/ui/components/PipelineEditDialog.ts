@@ -114,7 +114,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
     const tokenStored = !!pipeline.has_repo_token;
     const tokenPlaceholder = tokenStored ? '•••••••• (stored)' : 'personal access token';
     const tokenBadge = tokenStored
-      ? '<span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-app-accent-1/10 text-app-accent-1">Token stored</span>'
+      ? '<span class="mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-app-accent-1/10 text-app-accent-1">Token stored</span>'
       : '';
     return `
       <div>
@@ -127,8 +127,9 @@ export class PipelineEditDialog extends BaseDialog<void> {
           <input type="text" name="repo_username" value="${pipeline.repo_username || ''}" placeholder="git user" ${ro} class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1${roClass}">
         </div>
         <div>
-          <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Repo Token (Optional)${tokenBadge}</label>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Repo Token (Optional)</label>
           <input type="password" name="repo_token" value="" placeholder="${tokenPlaceholder}" autocomplete="new-password" ${ro} class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1${roClass}">
+          ${tokenBadge}
         </div>
       </div>
       <p class="text-[10px] text-app-muted">The token is stored only on the server and is never displayed or sent back to the browser. Leave it empty to keep the existing token.</p>
