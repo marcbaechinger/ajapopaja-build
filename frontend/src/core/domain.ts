@@ -136,6 +136,7 @@ export class Pipeline {
   repo_uri?: string | null;
   repo_username?: string | null;
   repo_token?: string | null;
+  has_repo_token?: boolean;
   doc_root: string = 'design';
   version: number = 1;
   created_at?: string;
@@ -154,6 +155,7 @@ export class Pipeline {
     if (json.repo_uri !== undefined) this.repo_uri = json.repo_uri;
     if (json.repo_username !== undefined) this.repo_username = json.repo_username;
     if (json.repo_token !== undefined) this.repo_token = json.repo_token;
+    if (json.has_repo_token !== undefined) this.has_repo_token = Boolean(json.has_repo_token);
     if (json.doc_root !== undefined) this.doc_root = String(json.doc_root);
     if (json.version !== undefined) this.version = Number(json.version);
     if (json.created_at !== undefined) this.created_at = String(json.created_at);

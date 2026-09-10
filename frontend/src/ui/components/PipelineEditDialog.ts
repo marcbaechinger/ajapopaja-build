@@ -25,8 +25,11 @@ export interface PipelineEditDialogProps {
   context: AppContext;
 }
 
+type RepoTab = 'local' | 'remote';
+
 export class PipelineEditDialog extends BaseDialog<void> {
   private props: PipelineEditDialogProps;
+  private activeTab: RepoTab = 'local';
 
   constructor(props: PipelineEditDialogProps) {
     // We need to set props BEFORE super() if renderBody uses them,
@@ -56,52 +59,79 @@ export class PipelineEditDialog extends BaseDialog<void> {
     this.attachInternalEventListeners();
   }
 
-  protected renderBody(): string {
-    if (!this.props) return '';
-    const { pipeline, pipelineId } = this.props;
-    // Credentials only make sense when a remote repo URI is set.
-    const credsReadonly = pipeline.repo_uri ? '' : 'readonly';
-    const credsClass = pipeline.repo_uri ? '' : ' opacity-60 cursor-not-allowed';
+  private tabClass(tab: RepoTab): string {
+    const base = 'px-4 py-2 text-xs font-bold uppercase tracking-widest transition-all cursor-pointer border-b-2';
+    return tab === this.activeTab
+      ? `${base} border-app-accent-1 text-app-accent-1`
+      : `${base} border-transparent text-app-muted hover:text-app-text`;
+  }
+
+  private renderLocalTab(): string {
+    const { pipeline } = this.props;
     return `
-      <div class="flex flex-col gap-4 p-4">
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Pipeline Name</label>
-            <input type="text" name="pipeline_name" value="${pipeline.name}" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1">
-          </div>
-          <div>
-            <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Status</label>
-            <select name="pipeline_status" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1 cursor-pointer">
-              <option value="active" ${pipeline.status === 'active' ? 'selected' : ''}>Active</option>
-              <option value="paused" ${pipeline.status === 'paused' ? 'selected' : ''}>Paused</option>
-              <option value="completed" ${pipeline.status === 'completed' ? 'selected' : ''}>Completed</option>
-            </select>
-          </div>
-        </div>
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Workspace Path (Optional)</label>
-            <input type="text" name="workspace_path" value="${pipeline.workspace_path || ''}" placeholder="Default Project Root" readonly class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1 opacity-60 cursor-not-allowed">
-          </div>
-          <div>
-            <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Documentation Root</label>
-            <input type="text" name="doc_root" value="${pipeline.doc_root}" placeholder="design" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1">
-          </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Pipeline Name</label>
+          <input type="text" name="pipeline_name" value="${pipeline.name}" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1">
         </div>
         <div>
-          <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Repo URI (Optional)</label>
-          <input type="text" name="repo_uri" value="${pipeline.repo_uri || ''}" placeholder="https://host/org/my-app.git" readonly class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1 opacity-60 cursor-not-allowed">
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Status</label>
+          <select name="pipeline_status" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1 cursor-pointer">
+            <option value="active" ${pipeline.status === 'active' ? 'selected' : ''}>Active</option>
+            <option value="paused" ${pipeline.status === 'paused' ? 'selected' : ''}>Paused</option>
+            <option value="completed" ${pipeline.status === 'completed' ? 'selected' : ''}>Completed</option>
+          </select>
         </div>
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Repo Username (Optional)</label>
-            <input type="text" name="repo_username" value="${pipeline.repo_username || ''}" placeholder="git user" ${credsReadonly} class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1${credsClass}">
-          </div>
-          <div>
-            <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Repo Token (Optional)</label>
-            <input type="password" name="repo_token" value="${pipeline.repo_token || ''}" placeholder="personal access token" ${credsReadonly} class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1${credsClass}">
-          </div>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Workspace Path (Optional)</label>
+          <input type="text" name="workspace_path" value="${pipeline.workspace_path || ''}" placeholder="Default Project Root" readonly class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1 opacity-60 cursor-not-allowed">
         </div>
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Documentation Root</label>
+          <input type="text" name="doc_root" value="${pipeline.doc_root}" placeholder="design" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1">
+        </div>
+      </div>
+    `;
+  }
+
+  private renderRemoteTab(): string {
+    const { pipeline } = this.props;
+    const tokenStored = !!pipeline.has_repo_token;
+    const tokenPlaceholder = tokenStored ? '•••••••• (stored)' : 'personal access token';
+    const tokenBadge = tokenStored
+      ? '<span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-app-accent-1/10 text-app-accent-1">Token stored</span>'
+      : '';
+    return `
+      <div>
+        <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Repo URI (Optional)</label>
+        <input type="text" name="repo_uri" value="${pipeline.repo_uri || ''}" placeholder="https://host/org/my-app.git" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1">
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Repo Username (Optional)</label>
+          <input type="text" name="repo_username" value="${pipeline.repo_username || ''}" placeholder="git user" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1">
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Repo Token (Optional)${tokenBadge}</label>
+          <input type="password" name="repo_token" value="" placeholder="${tokenPlaceholder}" autocomplete="new-password" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1">
+        </div>
+      </div>
+      <p class="text-[10px] text-app-muted">The token is stored only on the server and is never displayed or sent back to the browser. Leave it empty to keep the existing token.</p>
+    `;
+  }
+
+  protected renderBody(): string {
+    if (!this.props) return '';
+    const { pipelineId } = this.props;
+    return `
+      <div class="flex flex-col gap-4 p-4">
+        <div class="flex gap-1 border-b border-app-border">
+          <button type="button" data-tab="local" class="${this.tabClass('local')}">Local Repository</button>
+          <button type="button" data-tab="remote" class="${this.tabClass('remote')}">Remote Repository</button>
+        </div>
+        ${this.activeTab === 'local' ? this.renderLocalTab() : this.renderRemoteTab()}
         <div class="flex col-span-2">
           <div class="ml-auto text-[10px] font-bold uppercase tracking-widest text-app-muted">ID: ${pipelineId}</div>
         </div>
@@ -121,6 +151,16 @@ export class PipelineEditDialog extends BaseDialog<void> {
   private attachInternalEventListeners() {
     this.dialog.querySelector('#pipeline-edit-cancel')?.addEventListener('click', () => this.close());
     this.dialog.querySelector('#pipeline-edit-save')?.addEventListener('click', () => this.handleSave());
+
+    this.dialog.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const tab = btn.dataset.tab as RepoTab;
+        if (tab && tab !== this.activeTab) {
+          this.activeTab = tab;
+          this.reRender();
+        }
+      });
+    });
   }
 
   private async handleSave() {
@@ -139,15 +179,29 @@ export class PipelineEditDialog extends BaseDialog<void> {
     saveBtn.textContent = 'Saving...';
 
     try {
-      await context.pipelineClient.update(pipelineId, pipeline.version, {
-        name: nameInput.value.trim(),
-        status: statusSelect.value as PipelineStatus,
-        workspace_path: workspaceInput.value.trim() || undefined,
-        repo_uri: repoUriInput.value.trim() || undefined,
-        repo_username: repoUsernameInput.value.trim() || undefined,
-        repo_token: repoTokenInput.value.trim() || undefined,
-        doc_root: docRootInput.value.trim() || 'design',
-      });
+      const payload: {
+        name?: string;
+        status?: PipelineStatus;
+        workspace_path?: string | null;
+        repo_uri?: string | null;
+        repo_username?: string | null;
+        repo_token?: string;
+        doc_root?: string;
+      } = {
+        name: nameInput?.value.trim(),
+        status: statusSelect?.value as PipelineStatus,
+        workspace_path: workspaceInput?.value.trim() || undefined,
+        doc_root: docRootInput?.value.trim() || 'design',
+      };
+
+      // Only include remote fields when the remote tab is active (inputs exist).
+      if (repoUriInput) payload.repo_uri = repoUriInput.value.trim() || undefined;
+      if (repoUsernameInput) payload.repo_username = repoUsernameInput.value.trim() || undefined;
+      // Never send the token back unless the user typed a new non-empty value.
+      const tokenValue = repoTokenInput?.value.trim();
+      if (tokenValue) payload.repo_token = tokenValue;
+
+      await context.pipelineClient.update(pipelineId, pipeline.version, payload);
       this.close();
     } catch (error) {
       console.error('Failed to update pipeline:', error);

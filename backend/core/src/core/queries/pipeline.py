@@ -73,7 +73,9 @@ async def update_pipeline(
         pipeline.repo_uri = repo_uri
     if repo_username is not None:
         pipeline.repo_username = repo_username
-    if repo_token is not None:
+    # Only override the token when a non-empty value is provided, so an empty
+    # or blank submission never clears the stored token.
+    if repo_token:
         pipeline.repo_token = repo_token
     if doc_root is not None:
         pipeline.doc_root = doc_root

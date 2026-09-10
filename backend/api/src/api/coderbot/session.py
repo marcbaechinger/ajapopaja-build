@@ -187,8 +187,10 @@ class CoderBotSession:
                 logger.info(f"Nothing to commit or commit failed: {e}")
 
             if commit_made:
-                # Use git diff to get a clean, structural patch without commit metadata
-                patch = repo.git.diff("HEAD~1", "HEAD")
+                # Use git diff to get a clean, structural patch without commit metadata.
+                # --binary is required so binary files (e.g. images) are included in the
+                # patch and can be applied later via `git apply --3way`.
+                patch = repo.git.diff("HEAD~1", "HEAD", binary=True)
                 logger.info(f"Generated patch from commit. Length: {len(patch)}")
             else:
                 patch = self.helper.get_patch()

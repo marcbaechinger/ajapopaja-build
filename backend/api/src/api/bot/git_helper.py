@@ -81,7 +81,9 @@ class SandboxGitHelper:
         """Returns the diff between the default branch and current branch."""
         repo = self.get_repo()
         default_branch = self.get_default_branch()
-        return repo.git.diff(default_branch)
+        # --binary is required so binary files (e.g. images) are included in the
+        # patch and can be applied later via `git apply --3way`.
+        return repo.git.diff(default_branch, binary=True)
 
     def cleanup(self):
         """Removes the sandbox directory."""

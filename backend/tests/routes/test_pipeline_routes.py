@@ -94,3 +94,50 @@ async def test_delete_pipeline_unauthenticated(async_client, init_mock_db):
     app.dependency_overrides.clear()  # remove mock auth
     response = await async_client.delete("/api/pipelines/p1")
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.asyncio
+async def test_pipeline_serialization_never_exposes_repo_token():
+    """repo_token must never appear in serialized output; has_repo_token reflects it."""
+    from core.models.models import Pipeline
+
+    pipeline = Pipeline(name="Remote", repo_token="secret-token")
+    data = pipeline.model_dump(mode="json")
+    assert data["repo_token"] is None
+    assert data["has_repo_token"] is True
+
+    empty = Pipeline(name="Local")
+    data = empty.model_dump(mode="json")
+    assert data["repo_token"] is None
+    assert data["has_repo_token"] is False
+
+
+@pytest.mark.asyncio
+async def test_update_pipeline_only_overrides_token_when_non_empty(init_mock_db):
+    """update_pipeline must keep the stored token when a blank/None value is sent."""
+    from core.models.models import Pipeline
+    from core.queries import pipeline as pipeline_queries
+
+    stored = Pipeline(name="Remote", repo_token="existing-token", version=1)
+
+    with (
+        patch(
+            "core.queries.pipeline.get_pipeline_by_id",
+            new_callable=AsyncMock,
+            return_value=stored,
+        ),
+        patch.object(Pipeline, "save", new_callable=AsyncMock),
+    ):
+        # Empty string must NOT clear the token.
+        await pipeline_queries.update_pipeline("p1", stored.version, repo_token="")
+        assert stored.repo_token == "existing-token"
+
+        # None must NOT clear the token.
+        await pipeline_queries.update_pipeline("p1", stored.version, repo_token=None)
+        assert stored.repo_token == "existing-token"
+
+        # A new non-empty value must override the token.
+        await pipeline_queries.update_pipeline(
+            "p1", stored.version, repo_token="new-token"
+        )
+        assert stored.repo_token == "new-token"

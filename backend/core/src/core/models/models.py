@@ -21,7 +21,13 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 from beanie import Document
-from pydantic import BaseModel, Field, field_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    computed_field,
+    field_serializer,
+    field_validator,
+)
 
 from core import config
 from core.utils.path_utils import (
@@ -104,6 +110,17 @@ class Pipeline(Document):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     deleted: bool = False
+
+    @computed_field
+    @property
+    def has_repo_token(self) -> bool:
+        """Whether a repo token is stored. The token itself is never serialized."""
+        return bool(self.repo_token)
+
+    @field_serializer("repo_token")
+    def serialize_repo_token(self, v: Optional[str]) -> Optional[str]:
+        """Never expose the repo token in serialized output (API responses)."""
+        return None
 
     @field_validator("workspace_path")
     @classmethod

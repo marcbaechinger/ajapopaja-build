@@ -51,6 +51,11 @@ describe('PipelineEditDialog', () => {
     vi.stubGlobal('alert', vi.fn());
   });
 
+  const switchToRemoteTab = () => {
+    const remoteTab = document.querySelector('[data-tab="remote"]') as HTMLButtonElement;
+    remoteTab.click();
+  };
+
   it('should render the dialog with correct initial values', async () => {
     const dialog = new PipelineEditDialog(mockProps);
     // show() adds it to the body
@@ -69,23 +74,22 @@ describe('PipelineEditDialog', () => {
     await showPromise;
   });
 
-  it('should render workspace_path and repo_uri as readonly', async () => {
+  it('should render workspace_path as readonly', async () => {
     const dialog = new PipelineEditDialog(mockProps);
     const showPromise = dialog.show();
 
     const workspaceInput = document.querySelector('input[name="workspace_path"]') as HTMLInputElement;
-    const repoUriInput = document.querySelector('input[name="repo_uri"]') as HTMLInputElement;
-
     expect(workspaceInput.readOnly).toBe(true);
-    expect(repoUriInput.readOnly).toBe(true);
 
     document.querySelector('#pipeline-edit-cancel')?.dispatchEvent(new MouseEvent('click'));
     await showPromise;
   });
 
-  it('should pass repo_username and repo_token on save', async () => {
+  it('should switch to remote tab and pass repo_username and repo_token on save', async () => {
     const dialog = new PipelineEditDialog(mockProps);
     const showPromise = dialog.show();
+
+    switchToRemoteTab();
 
     const usernameInput = document.querySelector('input[name="repo_username"]') as HTMLInputElement;
     const tokenInput = document.querySelector('input[name="repo_token"]') as HTMLInputElement;
@@ -107,30 +111,49 @@ describe('PipelineEditDialog', () => {
     );
   });
 
-  it('should make repo credentials readonly when no repo_uri is set', async () => {
+  it('should not send repo_token when the token input is empty', async () => {
     const dialog = new PipelineEditDialog(mockProps);
     const showPromise = dialog.show();
 
-    const usernameInput = document.querySelector('input[name="repo_username"]') as HTMLInputElement;
-    const tokenInput = document.querySelector('input[name="repo_token"]') as HTMLInputElement;
+    switchToRemoteTab();
 
-    expect(usernameInput.readOnly).toBe(true);
-    expect(tokenInput.readOnly).toBe(true);
+    const usernameInput = document.querySelector('input[name="repo_username"]') as HTMLInputElement;
+    usernameInput.value = 'gituser';
+    // token input left empty
+
+    const saveBtn = document.querySelector('#pipeline-edit-save') as HTMLButtonElement;
+    saveBtn.click();
+
+    await showPromise;
+
+    const updateCall = (mockProps.context.pipelineClient.update as any).mock.calls[0];
+    expect(updateCall[2]).toMatchObject({ repo_username: 'gituser' });
+    expect(updateCall[2]).not.toHaveProperty('repo_token');
+  });
+
+  it('should never pre-fill the token input even when a token is stored', async () => {
+    mockProps.pipeline.has_repo_token = true;
+    const dialog = new PipelineEditDialog(mockProps);
+    const showPromise = dialog.show();
+
+    switchToRemoteTab();
+
+    const tokenInput = document.querySelector('input[name="repo_token"]') as HTMLInputElement;
+    expect(tokenInput.value).toBe('');
 
     document.querySelector('#pipeline-edit-cancel')?.dispatchEvent(new MouseEvent('click'));
     await showPromise;
   });
 
-  it('should make repo credentials editable when repo_uri is set', async () => {
-    mockProps.pipeline.repo_uri = 'https://host/org/my-app.git';
+  it('should show a token stored indicator when has_repo_token is true', async () => {
+    mockProps.pipeline.has_repo_token = true;
     const dialog = new PipelineEditDialog(mockProps);
     const showPromise = dialog.show();
 
-    const usernameInput = document.querySelector('input[name="repo_username"]') as HTMLInputElement;
-    const tokenInput = document.querySelector('input[name="repo_token"]') as HTMLInputElement;
+    switchToRemoteTab();
 
-    expect(usernameInput.readOnly).toBe(false);
-    expect(tokenInput.readOnly).toBe(false);
+    const indicator = document.querySelector('input[name="repo_token"]')?.parentElement?.querySelector('span');
+    expect(indicator?.textContent).toContain('Token stored');
 
     document.querySelector('#pipeline-edit-cancel')?.dispatchEvent(new MouseEvent('click'));
     await showPromise;
