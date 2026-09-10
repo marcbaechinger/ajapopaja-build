@@ -14,6 +14,7 @@ the thin command handlers that map CLI arguments onto tool calls.
 import argparse
 import asyncio
 import logging
+import os
 import sys
 from typing import Any, Dict, Optional
 
@@ -38,9 +39,11 @@ class MCPHttpClient:
 
     Args:
         base_url: The base URL of the FastAPI server, e.g. ``http://localhost:8000``.
+        auth_token: Optional bearer token to include in the ``Authorization``
+            header of every RPC request.
     """
 
-    def __init__(self, base_url: str):
+    def __init__(self, base_url: str, auth_token: Optional[str] = None):
         self.base_url = base_url.rstrip("/")
         # FastMCP uses the root of the mounted path
         self.endpoint = (
@@ -49,7 +52,7 @@ class MCPHttpClient:
             else self.base_url
         )
         self.client = httpx.AsyncClient(timeout=30.0)
-        self.rpc = RpcHelper(self.endpoint, self.client)
+        self.rpc = RpcHelper(self.endpoint, self.client, auth_token=auth_token)
 
     async def close(self):
         """Close the underlying HTTP client and release resources."""
@@ -260,6 +263,14 @@ async def main():
     parser.add_argument(
         "--url", default="http://localhost:8000", help="Base URL of the FastAPI server"
     )
+    parser.add_argument(
+        "--auth-token",
+        default=os.getenv("MCP_AUTH_TOKEN"),
+        help=(
+            "Bearer token to send in the Authorization header of every RPC request. "
+            "Defaults to the MCP_AUTH_TOKEN environment variable."
+        ),
+    )
 
     subparsers = parser.add_subparsers(dest="command", help="Available actions")
 
@@ -319,7 +330,7 @@ async def main():
         parser.print_help()
         return
 
-    client = MCPHttpClient(args.url)
+    client = MCPHttpClient(args.url, auth_token=args.auth_token)
 
     await client.connect()
 

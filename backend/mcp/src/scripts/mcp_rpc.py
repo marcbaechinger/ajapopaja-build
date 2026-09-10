@@ -29,11 +29,20 @@ class RpcHelper:
     Args:
         endpoint: The full URL to POST JSON-RPC messages to.
         client: The shared ``httpx.AsyncClient`` used for all requests.
+        auth_token: Optional bearer token to include in the ``Authorization``
+            header of every request. When set, requests are sent with
+            ``Authorization: Bearer <token>``.
     """
 
-    def __init__(self, endpoint: str, client: httpx.AsyncClient):
+    def __init__(
+        self,
+        endpoint: str,
+        client: httpx.AsyncClient,
+        auth_token: Optional[str] = None,
+    ):
         self.endpoint = endpoint
         self.client = client
+        self.auth_token = auth_token
         self.session_id: Optional[str] = None
 
     async def send(
@@ -66,6 +75,9 @@ class RpcHelper:
             "Content-Type": "application/json",
             "Accept": "application/json, text/event-stream",
         }
+
+        if self.auth_token:
+            headers["Authorization"] = f"Bearer {self.auth_token}"
 
         if self.session_id:
             headers["mcp-session-id"] = self.session_id

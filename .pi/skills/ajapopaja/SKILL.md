@@ -23,6 +23,23 @@ pip install httpx
 
 The default server URL is `http://localhost:8000`. Override it with `--url` if the server runs elsewhere.
 
+### Authentication
+
+If the MCP server requires authentication (i.e. `MCP_AUTHENTICATION_ENABLED` is `true`), pass a bearer token with `--auth-token` so every RPC request includes an `Authorization: Bearer …` header:
+
+```bash
+python3 ./mcp_client.py --url http://localhost:8000 --auth-token <token> <command> ...
+```
+
+Alternatively, set the `MCP_AUTH_TOKEN` environment variable instead of passing `--auth-token`:
+
+```bash
+export MCP_AUTH_TOKEN=<token>
+python3 ./mcp_client.py --url http://localhost:8000 <command> ...
+```
+
+If the server has authentication disabled (the default), the token is optional and can be omitted.
+
 ## Main Workflow
 
 The core loop for working on tasks is:

@@ -38,14 +38,46 @@ async def mcp_auth_middleware(scope, receive, send):
     # ... existing token validation logic ...
 ```
 
-## 3. Verification Plan
+## 3. Client-Side Authentication Support
 
-### 3.1. Automated Testing
+To make it easy to talk to a server with authentication enabled, the MCP test client
+(`backend/mcp/src/scripts/mcp_client.py`) now supports sending a bearer token on every
+RPC request.
+
+### 3.1. CLI Flag
+
+A new `--auth-token` flag was added to `mcp_client.py`. When provided, every RPC request
+includes an `Authorization: Bearer <token>` header:
+
+```bash
+python3 ./mcp_client.py --url http://localhost:8000 --auth-token <token> get-task <pipeline_id>
+```
+
+### 3.2. Environment Variable
+
+As an alternative to the flag, the token can be supplied via the `MCP_AUTH_TOKEN`
+environment variable. The flag takes precedence over the environment variable:
+
+```bash
+export MCP_AUTH_TOKEN=<token>
+python3 ./mcp_client.py --url http://localhost:8000 get-task <pipeline_id>
+```
+
+### 3.3. Implementation
+
+The token is threaded from the CLI into `MCPHttpClient` and then into `RpcHelper`
+(`backend/mcp/src/scripts/mcp_rpc.py`). `RpcHelper` adds the `Authorization` header to
+every request it sends, so all RPC calls (including `initialize`, `tools/list`, and
+`tools/call`) are authenticated consistently.
+
+## 4. Verification Plan
+
+### 4.1. Automated Testing
 Update `tests/test_mcp_server.py` to test both configurations:
 1.  **Default (Disabled)**: Verify that requests without a token are accepted (return 200 or hit the test-environment `RuntimeError` instead of 401).
 2.  **Enabled**: Using `monkeypatch` to set `MCP_AUTHENTICATION_ENABLED` to `True`, verify that requests without a token are rejected with 401.
 
-### 3.2. Manual Verification
+### 4.2. Manual Verification
 1.  Start the API server without any environment variables.
 2.  Use `curl` or an MCP client to hit `http://localhost:8000/mcp/` without a token. It should succeed.
 3.  Restart the server with `MCP_AUTHENTICATION_ENABLED=true`.
