@@ -51,9 +51,9 @@ describe('PipelineEditDialog', () => {
     vi.stubGlobal('alert', vi.fn());
   });
 
-  const switchToRemoteTab = () => {
-    const remoteTab = document.querySelector('[data-tab="remote"]') as HTMLButtonElement;
-    remoteTab.click();
+  const switchToTab = (tab: 'local' | 'remote') => {
+    const btn = document.querySelector(`[data-tab="${tab}"]`) as HTMLButtonElement;
+    btn.click();
   };
 
   it('should render the dialog with correct initial values', async () => {
@@ -85,11 +85,53 @@ describe('PipelineEditDialog', () => {
     await showPromise;
   });
 
-  it('should switch to remote tab and pass repo_username and repo_token on save', async () => {
+  it('should select the local tab and lock remote fields for a local pipeline', async () => {
     const dialog = new PipelineEditDialog(mockProps);
     const showPromise = dialog.show();
 
-    switchToRemoteTab();
+    // Local tab is active by default for a local pipeline.
+    const nameInput = document.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
+    expect(nameInput.readOnly).toBe(false);
+
+    // Switching to the remote tab shows read-only remote fields.
+    switchToTab('remote');
+    const repoUriInput = document.querySelector('input[name="repo_uri"]') as HTMLInputElement;
+    const usernameInput = document.querySelector('input[name="repo_username"]') as HTMLInputElement;
+    const tokenInput = document.querySelector('input[name="repo_token"]') as HTMLInputElement;
+    expect(repoUriInput.readOnly).toBe(true);
+    expect(usernameInput.readOnly).toBe(true);
+    expect(tokenInput.readOnly).toBe(true);
+
+    document.querySelector('#pipeline-edit-cancel')?.dispatchEvent(new MouseEvent('click'));
+    await showPromise;
+  });
+
+  it('should select the remote tab and lock local fields for a remote pipeline', async () => {
+    mockProps.pipeline.repo_uri = 'https://host/org/my-app.git';
+    const dialog = new PipelineEditDialog(mockProps);
+    const showPromise = dialog.show();
+
+    // Remote tab is active by default for a remote pipeline.
+    const repoUriInput = document.querySelector('input[name="repo_uri"]') as HTMLInputElement;
+    expect(repoUriInput.readOnly).toBe(false);
+
+    // Switching to the local tab shows read-only local fields.
+    switchToTab('local');
+    const nameInput = document.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
+    const statusSelect = document.querySelector('select[name="pipeline_status"]') as HTMLSelectElement;
+    const docRootInput = document.querySelector('input[name="doc_root"]') as HTMLInputElement;
+    expect(nameInput.readOnly).toBe(true);
+    expect(statusSelect.disabled).toBe(true);
+    expect(docRootInput.readOnly).toBe(true);
+
+    document.querySelector('#pipeline-edit-cancel')?.dispatchEvent(new MouseEvent('click'));
+    await showPromise;
+  });
+
+  it('should pass repo_username and repo_token on save for a remote pipeline', async () => {
+    mockProps.pipeline.repo_uri = 'https://host/org/my-app.git';
+    const dialog = new PipelineEditDialog(mockProps);
+    const showPromise = dialog.show();
 
     const usernameInput = document.querySelector('input[name="repo_username"]') as HTMLInputElement;
     const tokenInput = document.querySelector('input[name="repo_token"]') as HTMLInputElement;
@@ -112,10 +154,9 @@ describe('PipelineEditDialog', () => {
   });
 
   it('should not send repo_token when the token input is empty', async () => {
+    mockProps.pipeline.repo_uri = 'https://host/org/my-app.git';
     const dialog = new PipelineEditDialog(mockProps);
     const showPromise = dialog.show();
-
-    switchToRemoteTab();
 
     const usernameInput = document.querySelector('input[name="repo_username"]') as HTMLInputElement;
     usernameInput.value = 'gituser';
@@ -132,11 +173,10 @@ describe('PipelineEditDialog', () => {
   });
 
   it('should never pre-fill the token input even when a token is stored', async () => {
+    mockProps.pipeline.repo_uri = 'https://host/org/my-app.git';
     mockProps.pipeline.has_repo_token = true;
     const dialog = new PipelineEditDialog(mockProps);
     const showPromise = dialog.show();
-
-    switchToRemoteTab();
 
     const tokenInput = document.querySelector('input[name="repo_token"]') as HTMLInputElement;
     expect(tokenInput.value).toBe('');
@@ -146,11 +186,10 @@ describe('PipelineEditDialog', () => {
   });
 
   it('should show a token stored indicator when has_repo_token is true', async () => {
+    mockProps.pipeline.repo_uri = 'https://host/org/my-app.git';
     mockProps.pipeline.has_repo_token = true;
     const dialog = new PipelineEditDialog(mockProps);
     const showPromise = dialog.show();
-
-    switchToRemoteTab();
 
     const indicator = document.querySelector('input[name="repo_token"]')?.parentElement?.querySelector('span');
     expect(indicator?.textContent).toContain('Token stored');
