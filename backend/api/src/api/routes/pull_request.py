@@ -15,6 +15,7 @@
 import asyncio
 import logging
 import os
+import sys
 import tempfile
 from typing import List, Optional
 
@@ -125,15 +126,25 @@ async def apply_patch(repo: git.Repo, pr: PullRequest) -> None:
             os.remove(patch_path)
 
 
+def _get_ruff_binary() -> str:
+    """Return the path to the ruff binary in the current Python environment.
+
+    The app runs from the backend venv (e.g. /app/backend/.venv), so ruff is
+    available next to the running interpreter. We invoke it directly rather than
+    via `uv run ruff` because the workspace being formatted is a mounted host
+    directory that is not itself a uv project.
+    """
+    return os.path.join(os.path.dirname(sys.executable), "ruff")
+
+
 async def format_workspace(workspace_path: str) -> None:
     """Run ruff formatting on the workspace."""
     try:
+        ruff_bin = _get_ruff_binary()
         logger.info(f"Formatting workspace with ruff: {workspace_path}")
         for ruff_cmd in [["format", "."], ["check", "--fix", "."]]:
             proc = await asyncio.create_subprocess_exec(
-                "uv",
-                "run",
-                "ruff",
+                ruff_bin,
                 *ruff_cmd,
                 cwd=workspace_path,
                 stdout=asyncio.subprocess.PIPE,
@@ -151,6 +162,12 @@ async def format_workspace(workspace_path: str) -> None:
 def commit_changes(repo: git.Repo, pr: PullRequest, commit_message: str) -> str:
     """Commit the changes to the repository and return the commit hash."""
     repo.git.add(A=True)
+    # If the patch was already applied and committed in a prior attempt (e.g. a
+    # previous push failed and the PR stayed OPEN), there is nothing new to
+    # commit. Return the existing HEAD so acceptance can proceed idempotently.
+    if not repo.index.diff(repo.head.commit):
+        logger.info(f"No changes to commit for PR {pr.id}; using existing HEAD")
+        return repo.head.commit.hexsha
     # Use --no-verify to bypass pre-commit hooks that might fail in the server environment
     # Provide a git identity via env vars when none is configured (e.g. in Docker).
     repo.git.commit(

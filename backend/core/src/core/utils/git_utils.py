@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import base64
 import logging
 import re
 from pathlib import Path
 from typing import Dict, Tuple
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import quote, urlsplit, urlunsplit
 
 import git
 
@@ -69,23 +70,26 @@ async def ensure_repo_cloned(pipeline: Pipeline) -> None:
 
 def _inject_credentials(uri: str, username: str, token: str) -> str:
     """
-    Insert <user>:<token>@ into a git URL, replacing any existing credentials.
-
-    Uses urllib.parse so pre-existing auth in the URL is replaced rather than
-    double-injected. SCP-style SSH URLs (git@host:path) are returned unchanged.
+    Insert <user>:<token>@ into an HTTP/HTTPS git URL.
+    Percent-encodes credentials and safely ignores/flags non-HTTP schemes.
     """
-    if not username:
-        username = "oauth2"  # GitHub accepts any username with a token
-    # SCP-style SSH URL: git@host:path
-    if re.match(r"^[^@]+@[^:]+:.+$", uri):
+    # Check for SCP-style (git@host:path) or explicit SSH scheme
+    if re.match(r"^[^@]+@[^:]+:.+$", uri) or uri.startswith("ssh://"):
         return uri
+
     parts = urlsplit(uri)
-    if not parts.scheme or not parts.netloc:
+    if parts.scheme not in ("http", "https") or not parts.netloc:
         return uri
+
+    # GitHub standard token user is 'x-access-token'
+    safe_user = quote(username or "x-access-token", safe="")
+    safe_token = quote(token, safe="")
+
     host = parts.hostname or ""
     if parts.port:
         host = f"{host}:{parts.port}"
-    netloc = f"{username}:{token}@{host}"
+
+    netloc = f"{safe_user}:{safe_token}@{host}"
     return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
 
 
@@ -97,28 +101,25 @@ def _resolve_credentials(pipeline: Pipeline) -> Tuple[str, str]:
 
 
 def push_with_auth(repo: git.Repo, pipeline: Pipeline) -> None:
-    """
-    Push the current branch to origin, injecting credentials if configured.
-
-    For local pipelines (no repo_uri) this is a no-op. For remote pipelines it
-    pushes HEAD to origin, using per-pipeline credentials if set, otherwise the
-    global GIT_PUSH_USERNAME/GIT_PUSH_TOKEN.
-
-    Credentials are injected by temporarily setting the origin URL in the repo
-    config (never as a command-line argument, so the token is not exposed in
-    process listings) and restored afterwards, so they are not persisted.
-    """
     if not pipeline.repo_uri:
         return
+
     username, token = _resolve_credentials(pipeline)
+
     if token:
-        original_url = repo.remotes.origin.url
-        auth_url = _inject_credentials(pipeline.repo_uri, username, token)
-        try:
-            repo.remotes.origin.set_url(auth_url)
+        # For GitHub/Gitea: basic auth header with user:token
+        user = username or token  # fallback to token if no user provided
+        auth_pair = f"{user}:{token}".encode("utf-8")
+        auth_header = (
+            f"Authorization: Basic {base64.b64encode(auth_pair).decode('ascii')}"
+        )
+
+        # Git accepts config parameters via environment variable:
+        # Format is: 'key=value' with single quotes around the key=val pair
+        env_config = f"'http.extraHeader={auth_header}'"
+
+        with repo.git.custom_environment(GIT_CONFIG_PARAMETERS=env_config):
             repo.git.push("origin", "HEAD")
-        finally:
-            repo.remotes.origin.set_url(original_url)
     else:
         repo.git.push("origin", "HEAD")
 
