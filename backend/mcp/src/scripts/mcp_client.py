@@ -1,11 +1,25 @@
+"""CLI test client for the MCP server over stateless streamable HTTP.
+
+This script exercises the MCP tools exposed by the backend (e.g. ``get_next_task``,
+``complete_task``, ``search_tasks``) by speaking JSON-RPC over the streamable HTTP
+transport. It is primarily a developer/testing utility: it initializes an MCP
+session, then dispatches a single user-selected action to the server and prints
+the result.
+
+The transport-level JSON-RPC plumbing lives in :mod:`mcp_rpc` (see
+:class:`mcp_rpc.RpcHelper`); this module keeps the higher-level session logic and
+the thin command handlers that map CLI arguments onto tool calls.
+"""
+
 import argparse
 import asyncio
-import json
 import logging
 import sys
 from typing import Any, Dict, Optional
 
 import httpx
+
+from mcp_rpc import RpcHelper
 
 logging.basicConfig(
     level=logging.INFO,
@@ -16,6 +30,16 @@ logger = logging.getLogger("mcp-tester")
 
 
 class MCPHttpClient:
+    """High-level MCP client that manages a session and exposes tool calls.
+
+    The client owns the MCP session lifecycle (initialization, teardown) and
+    provides convenience methods for the tools the server exposes. All low-level
+    JSON-RPC transport is delegated to an internal :class:`RpcHelper`.
+
+    Args:
+        base_url: The base URL of the FastAPI server, e.g. ``http://localhost:8000``.
+    """
+
     def __init__(self, base_url: str):
         self.base_url = base_url.rstrip("/")
         # FastMCP uses the root of the mounted path
@@ -24,93 +48,39 @@ class MCPHttpClient:
             if not self.base_url.endswith("/mcp/")
             else self.base_url
         )
-        self.session_id = None
         self.client = httpx.AsyncClient(timeout=30.0)
+        self.rpc = RpcHelper(self.endpoint, self.client)
 
     async def close(self):
+        """Close the underlying HTTP client and release resources."""
         await self.client.aclose()
 
     async def connect(self):
-        """Initializes the MCP session using streamable-http."""
+        """Initialize the MCP session using streamable-http.
+
+        Sends the ``initialize`` request and then the ``notifications/initialized``
+        notification. Exits the process if initialization fails.
+        """
         init_params = {
             "protocolVersion": "2024-11-05",
             "capabilities": {},
             "clientInfo": {"name": "mcp-tester-cli", "version": "1.0.0"},
         }
-        res = await self._send_rpc("initialize", init_params)
+        res = await self.rpc.send("initialize", init_params)
         if res:
             logger.info("🟢 Session established via initialize!")
-            await self._send_rpc("notifications/initialized", {})
+            await self.rpc.send("notifications/initialized", {})
         else:
             logger.error("🔴 Failed to initialize session.")
             sys.exit(1)
 
-    async def _send_rpc(
-        self, method: str, params: Optional[Dict] = None
-    ) -> Optional[Dict[str, Any]]:
-        is_notification = method.startswith("notifications/")
-        payload = {
-            "jsonrpc": "2.0",
-            "method": method,
-        }
-        if not is_notification:
-            payload["id"] = method.replace("/", "-")
-        if params:
-            payload["params"] = params
-
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "application/json, text/event-stream",
-        }
-
-        if self.session_id:
-            headers["mcp-session-id"] = self.session_id
-
-        logger.info(f"Sending RPC: {method}...")
-
-        try:
-            # We use stream so we can parse SSE events as they arrive,
-            # though usually it's just one event with the result for streamable-http.
-            async with self.client.stream(
-                "POST", self.endpoint, headers=headers, json=payload
-            ) as response:
-                if response.status_code >= 400:
-                    logger.error(
-                        f"🔴 HTTP {response.status_code}: {await response.aread()}"
-                    )
-                    return None
-
-                # Check for mcp-session-id in headers and save it
-                if "mcp-session-id" in response.headers:
-                    self.session_id = response.headers["mcp-session-id"]
-
-                if is_notification:
-                    # Notifications don't expect a response in the JSON-RPC sense.
-                    # Over streamable-http, we just assume it's accepted if HTTP is 200.
-                    return {"result": {}}
-
-                # Parse the SSE response
-                async for line in response.aiter_lines():
-                    if line.startswith("data: "):
-                        data_str = line[6:].strip()
-                        try:
-                            data_json = json.loads(data_str)
-                            if "error" in data_json:
-                                err = json.dumps(data_json["error"], indent=2)
-                                logger.error(f"❌ RPC Error: {err}")
-                            return data_json
-                        except json.JSONDecodeError:
-                            logger.error(
-                                f"Failed to parse JSON from data line: {data_str}"
-                            )
-
-                return None
-        except Exception as e:
-            logger.error(f"Request failed: {e}")
-            return None
-
     async def list_tools(self) -> Optional[Dict[str, Any]]:
-        result = await self._send_rpc("tools/list")
+        """List all tools exposed by the MCP server.
+
+        Returns:
+            The raw ``tools/list`` response, or ``None`` on failure.
+        """
+        result = await self.rpc.send("tools/list")
         if result and "result" in result:
             tools = result["result"].get("tools", [])
             logger.info(f"✅ Found {len(tools)} tools:")
@@ -124,8 +94,17 @@ class MCPHttpClient:
     async def call_tool(
         self, name: str, arguments: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
+        """Invoke a tool on the MCP server and log any text output.
+
+        Args:
+            name: The name of the tool to call.
+            arguments: The arguments to pass to the tool.
+
+        Returns:
+            The raw ``tools/call`` response, or ``None`` on failure.
+        """
         params = {"name": name, "arguments": arguments}
-        result = await self._send_rpc("tools/call", params)
+        result = await self.rpc.send("tools/call", params)
 
         if result and "result" in result:
             content = result["result"].get("content", [])
@@ -137,16 +116,34 @@ class MCPHttpClient:
 
 
 async def run_get_next_task(client: MCPHttpClient, pipeline_id: str):
+    """Fetch the next available task for the given pipeline.
+
+    Args:
+        client: The MCP client used to call the tool.
+        pipeline_id: The 24-char hex pipeline ID.
+    """
     logger.info(f"--- Action: Get Next Task (Pipeline: {pipeline_id}) ---")
     await client.call_tool("get_next_task", {"pipeline_id": pipeline_id})
 
 
 async def run_get_task_status(client: MCPHttpClient, task_id: str):
+    """Fetch the current status of a task.
+
+    Args:
+        client: The MCP client used to call the tool.
+        task_id: The 24-char hex task ID.
+    """
     logger.info(f"--- Action: Get Task Status(Task: {task_id}) ---")
     await client.call_tool("get_task_status", {"task_id": task_id})
 
 
 async def run_get_task_details(client: MCPHttpClient, task_id: str):
+    """Fetch the full details of a task.
+
+    Args:
+        client: The MCP client used to call the tool.
+        task_id: The 24-char hex task ID.
+    """
     logger.info(f"--- Action: Get Task Details(Task: {task_id}) ---")
     await client.call_tool("get_task_details", {"task_id": task_id})
 
@@ -159,6 +156,16 @@ async def run_search_tasks(
     page: int,
     limit: int,
 ):
+    """Search for tasks by keywords, statuses, and/or pipeline.
+
+    Args:
+        client: The MCP client used to call the tool.
+        keywords: Optional search keywords.
+        statuses: Optional list of status filters.
+        pipeline_id: Optional pipeline ID filter.
+        page: Page number (0-based).
+        limit: Maximum number of results to return.
+    """
     logger.info("--- Action: Search Tasks ---")
     args = {}
     if keywords:
@@ -179,6 +186,15 @@ async def run_complete_task(
     completion_info: str,
     version: int,
 ):
+    """Mark a task as completed.
+
+    Args:
+        client: The MCP client used to call the tool.
+        task_id: The 24-char hex task ID.
+        commit_hash: The git commit hash containing the work.
+        completion_info: A brief summary of what was accomplished.
+        version: Current task version for optimistic concurrency control (OCC).
+    """
     logger.info(f"--- Action: Complete Task (ID: {task_id}) ---")
     args = {
         "task_id": task_id,
@@ -195,6 +211,14 @@ async def run_update_task_design_doc(
     design_doc: str,
     version: int,
 ):
+    """Update the design document for a task.
+
+    Args:
+        client: The MCP client used to call the tool.
+        task_id: The 24-char hex task ID.
+        design_doc: The Markdown-formatted design document.
+        version: Current task version for optimistic concurrency control (OCC).
+    """
     logger.info(f"--- Action: Update Task Design Doc (ID: {task_id}) ---")
     args = {
         "task_id": task_id,
@@ -210,6 +234,14 @@ async def run_update_task_spec(
     spec: str,
     version: int,
 ):
+    """Update the specification for a task.
+
+    Args:
+        client: The MCP client used to call the tool.
+        task_id: The 24-char hex task ID.
+        spec: The new specification text.
+        version: Current task version for optimistic concurrency control (OCC).
+    """
     logger.info(f"--- Action: Update Task Spec (ID: {task_id}) ---")
     args = {
         "task_id": task_id,
@@ -220,6 +252,7 @@ async def run_update_task_spec(
 
 
 async def main():
+    """Parse CLI arguments and dispatch the selected action to the MCP server."""
     parser = argparse.ArgumentParser(
         description="CLI tool to test MCP server tools over stateless streamable HTTP.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
