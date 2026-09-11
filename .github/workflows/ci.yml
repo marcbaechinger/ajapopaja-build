@@ -5,7 +5,6 @@ on:
     branches: [ master ]
   pull_request:
     branches: [ master ]
-  workflow_dispatch:
 
 jobs:
   backend:
@@ -13,10 +12,8 @@ jobs:
     services:
       mongodb:
         image: mongo:6.0
-        # No host port mapping: the job container reaches this service via
-        # the Docker network hostname "mongodb", not localhost. (A published
-        # host port 27017 collides with the native mongod already running on
-        # this machine.)
+        ports:
+          - 27017:27017
     steps:
       - uses: actions/checkout@v4
       - name: Install uv
@@ -30,7 +27,7 @@ jobs:
       - name: Run tests
         env:
           WORKSPACES_ROOT: /tmp
-          MONGODB_URI: mongodb://mongodb:27017
+          MONGODB_URI: mongodb://localhost:27017
           DATABASE_NAME: test_db
         run: cd backend && uv run pytest
 
