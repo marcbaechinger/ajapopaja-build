@@ -98,9 +98,7 @@ async def test_push_with_auth_on_remote_pipeline(remote_pipeline):
     mock_repo = MagicMock()
     mock_repo.remotes.origin.url = "https://host/org/my-app.git"
     git_utils.push_with_auth(mock_repo, remote_pipeline)
-    # Pushes to the remote name, not a tokenized URL.
+    # Pushes to the remote name using http.extraHeader for auth.
     mock_repo.git.push.assert_called_once_with("origin", "HEAD")
-    mock_repo.remotes.origin.set_url.assert_any_call(
-        "https://user:tok@host/org/my-app.git"
-    )
-    mock_repo.remotes.origin.set_url.assert_any_call("https://host/org/my-app.git")
+    # Uses GIT_CONFIG_PARAMETERS for auth, not set_url.
+    mock_repo.git.custom_environment.assert_called_once()

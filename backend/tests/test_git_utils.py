@@ -240,10 +240,10 @@ def test_inject_credentials():
         git_utils._inject_credentials("https://github.com/org/repo.git", "user", "tok")
         == "https://user:tok@github.com/org/repo.git"
     )
-    # Empty username defaults to oauth2 (GitHub convention).
+    # Empty username defaults to x-access-token (GitHub convention).
     assert (
         git_utils._inject_credentials("https://github.com/org/repo.git", "", "tok")
-        == "https://oauth2:tok@github.com/org/repo.git"
+        == "https://x-access-token:tok@github.com/org/repo.git"
     )
 
 
@@ -311,13 +311,10 @@ def test_push_with_auth_with_token():
     pipeline.repo_username = "user"
     pipeline.repo_token = "tok"
     git_utils.push_with_auth(repo, pipeline)
-    # Pushes to the remote name, not a tokenized URL.
+    # Pushes to the remote name using http.extraHeader for auth.
     repo.git.push.assert_called_once_with("origin", "HEAD")
-    # Sets the auth URL, then restores the original.
-    repo.remotes.origin.set_url.assert_any_call(
-        "https://user:tok@github.com/org/repo.git"
-    )
-    repo.remotes.origin.set_url.assert_any_call("https://github.com/org/repo.git")
+    # Uses GIT_CONFIG_PARAMETERS for auth, not set_url.
+    repo.git.custom_environment.assert_called_once()
 
 
 def test_push_with_auth_without_token():
