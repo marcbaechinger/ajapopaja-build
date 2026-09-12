@@ -110,7 +110,7 @@ export class PullRequestDialog extends BaseDialog<void> {
             </div>
           </div>
           <div class="relative group">
-            <textarea id="pr-summary-input" class="w-full bg-transparent text-xl font-bold text-app-text border-none focus:ring-0 resize-none p-0 overflow-hidden min-h-[1.5em]" rows="1">${this.pr.summary}</textarea>
+            <textarea id="pr-summary-input" class="w-full bg-transparent text-xl font-bold text-app-text border-none focus:ring-0 resize-none p-0 overflow-hidden min-h-[1.5em]" rows="1">${this.pr.subject || this.pr.summary}</textarea>
             <div class="absolute -bottom-1 left-0 w-full h-px bg-app-accent-2/30 scale-x-0 group-focus-within:scale-x-100 transition-transform duration-300"></div>
           </div>
           <p class="text-[10px] font-bold text-app-muted uppercase tracking-widest mt-1">Commit Message</p>
@@ -205,7 +205,8 @@ export class PullRequestDialog extends BaseDialog<void> {
     const summaryInput = this.dialog.querySelector('#pr-summary-input') as HTMLTextAreaElement;
     const strategySelect = this.dialog.querySelector('#pr-failure-strategy') as HTMLSelectElement;
     
-    const commitMessage = summaryInput?.value || this.pr.summary;
+    const commitMessage =
+      summaryInput?.value || this.pr.subject || this.pr.summary;
     const failureStrategy = strategySelect?.value || 'revert';
 
     acceptBtn.disabled = true;
