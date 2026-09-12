@@ -266,8 +266,15 @@ class CoderBotSession:
 
         # Move the task to INPROGRESS when CoderBot starts executing it.
         if task.status == TaskStatus.SCHEDULED or task.status == TaskStatus.CREATED:
-            await task_queries.transition_task(
+            updated_task = await task_queries.transition_task(
                 str(task.id), TaskStatus.INPROGRESS, actor="coderbot"
+            )
+            # Broadcast so the UI moves the TaskView card into the In Progress column.
+            await ws_manager.broadcast(
+                WSMessage(
+                    type="TASK_STATUS_UPDATED",
+                    payload=updated_task.model_dump(mode="json"),
+                )
             )
 
         pipeline = await Pipeline.get(self.pipeline_id)

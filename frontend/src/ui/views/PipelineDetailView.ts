@@ -367,6 +367,13 @@ export class PipelineDetailView extends View {
       try {
         await this.context.coderBotClient.triggerCoderBot(taskId);
         this.coderbotState = { status: 'inProgress', taskId };
+        // Optimistically reflect the INPROGRESS status so the card moves to the
+        // In Progress column immediately, even if the broadcast is delayed.
+        const task = this.allLoadedTasks.find(t => t.id === taskId);
+        if (task && task.status !== TaskStatus.INPROGRESS) {
+          task.status = TaskStatus.INPROGRESS;
+          this.context.dataManager.updateTask(task); // -> pipeline:tasks notify -> updateSingleTask
+        }
         this.updateHeader();
       } catch (error) {
         console.error('Trigger CoderBot error:', error);

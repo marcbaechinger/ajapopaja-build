@@ -32,6 +32,9 @@ async def trigger_coderbot(task_id: str):
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
+    # Note: enqueueing the session does NOT transition the task status. The
+    # SCHEDULED|CREATED -> INPROGRESS transition (and its TASK_STATUS_UPDATED
+    # broadcast) happens in CoderBotSession.run(), when execution actually starts.
     await coderbot_manager.process_task(task)
     return {"status": "success", "message": "CoderBot enqueued"}
 
