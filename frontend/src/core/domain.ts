@@ -196,7 +196,7 @@ export class PullRequest {
     if (json.patch !== undefined) this.patch = String(json.patch);
     if (json.status !== undefined) this.status = json.status as PullRequestStatus;
     this.remote_pr_url =
-      json.remote_pr_url !== undefined ? String(json.remote_pr_url) : undefined;
+      json.remote_pr_url != null ? String(json.remote_pr_url) : undefined;
     if (json.created_at !== undefined) this.created_at = String(json.created_at);
     if (json.updated_at !== undefined) this.updated_at = String(json.updated_at);
   }

@@ -105,4 +105,36 @@ describe('PullRequestDialog', () => {
     expect(acceptBtn.textContent).toContain('Accept');
     expect(footer.querySelector('#pr-open-gitea-link')).toBeNull();
   });
+
+  it('shows Accept & Apply for a new OPEN PR even when the backend returns remote_pr_url null', async () => {
+    // A brand-new pull request in gitea_pr pipelines has status OPEN and a
+    // null remote_pr_url (set only after the PR is submitted to Gitea). The
+    // dialog must let the user accept it first rather than showing it as
+    // already submitted. Regression for the null -> "null" string bug.
+    const pr = {
+      _id: 'pr4',
+      pipeline_id: 'p1',
+      task_id: 't1',
+      summary: 'summary',
+      branch_name: 'feature/x',
+      patch: 'patch',
+      status: PullRequestStatus.OPEN,
+      remote_pr_url: null
+    };
+    const dialog = new PullRequestDialog({
+      taskId: 't1',
+      pipelineId: 'p1',
+      context: makeContext(pr)
+    });
+
+    await vi.waitFor(() => expect(dialog['pr']).not.toBeNull());
+
+    expect(dialog['pr']!.remote_pr_url).toBeUndefined();
+    const footer = dialog['dialog'].querySelector('#dialog-footer-container') as HTMLElement;
+    const acceptBtn = footer.querySelector('#pr-accept-btn') as HTMLButtonElement;
+    expect(acceptBtn).not.toBeNull();
+    expect(acceptBtn.textContent).toContain('Accept');
+    expect(footer.querySelector('#pr-open-gitea-link')).toBeNull();
+    expect(footer.innerHTML).not.toContain('Open in Gitea');
+  });
 });
