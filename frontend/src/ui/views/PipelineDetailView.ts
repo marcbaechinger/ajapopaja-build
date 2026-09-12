@@ -318,6 +318,10 @@ export class PipelineDetailView extends View {
     new DocBotDialog(dialogContainer, props);
   }
 
+  private openCoderBotDialog() {
+    new CoderBotDialog(this.context.coderBotService).show();
+  }
+
   private registerActions() {
     this.context.actionRegistry.register('edit_pipeline', async () => {
       if (!this.pipeline) return;
@@ -377,6 +381,7 @@ export class PipelineDetailView extends View {
           this.context.dataManager.updateTask(task); // -> pipeline:tasks notify -> updateSingleTask
         }
         this.updateHeader();
+        this.openCoderBotDialog();
       } catch (error) {
         console.error('Trigger CoderBot error:', error);
         alert('Failed to trigger CoderBot');
@@ -455,7 +460,7 @@ export class PipelineDetailView extends View {
 
     this.context.actionRegistry.register('open_coderbot_dialog', (e) => {
       e.preventDefault();
-      new CoderBotDialog(this.context.coderBotService).show();
+      this.openCoderBotDialog();
     });
 
     this.context.actionRegistry.register('dismiss_coderbot_banner', () => {

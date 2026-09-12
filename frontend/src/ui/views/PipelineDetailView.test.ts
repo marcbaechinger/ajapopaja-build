@@ -17,6 +17,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PipelineDetailView } from './PipelineDetailView.ts';
 import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
+import { CoderBotDialog } from '../components/CoderBotDialog.ts';
 
 // Mock components to avoid deep rendering issues in unit tests
 vi.mock('../components/TaskColumn.ts', () => ({
@@ -36,6 +37,11 @@ vi.mock('../components/CompletedSection.ts', () => ({
 }));
 vi.mock('../components/PaginationControl.ts', () => ({
   PaginationControl: { render: () => '<div class="mock-pagination">Pagination</div>' }
+}));
+vi.mock('../components/CoderBotDialog.ts', () => ({
+  CoderBotDialog: vi.fn(function () {
+    this.show = vi.fn();
+  }),
 }));
 
 describe('PipelineDetailView Layout', () => {
@@ -214,5 +220,112 @@ describe('PipelineDetailView Review Notifications', () => {
     // Should be removed
     expect((view as any).pendingReviews).toEqual(['t2']);
     expect(localStorage.setItem).toHaveBeenCalledWith('pipeline:pending_reviews:p1', JSON.stringify(['t2']));
+  });
+});
+
+describe('PipelineDetailView CoderBot Dialog', () => {
+  let mockContext: any;
+  let container: HTMLElement;
+
+  const getAction = (name: string) =>
+    mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === name)[1];
+
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    LocalStorageManager.resetInstances();
+    vi.clearAllMocks();
+
+    mockContext = {
+      actionRegistry: {
+        register: vi.fn(),
+      },
+      wsClient: { on: vi.fn() },
+      dataManager: {
+        on: vi.fn().mockReturnValue(() => {}),
+        updateTask: vi.fn(),
+        updatePipeline: vi.fn(),
+      },
+      authService: {
+        getUser: vi.fn().mockReturnValue({ username: 'testuser' }),
+        getAccessToken: vi.fn().mockReturnValue('token'),
+      },
+      pipelineClient: { get: vi.fn().mockResolvedValue({ id: 'p1', name: 'Pipe 1' }) },
+      taskClient: {
+        listByPipeline: vi.fn().mockResolvedValue([]),
+        listCompletedByPipeline: vi.fn().mockResolvedValue({ tasks: [], total_count: 0 }),
+      },
+      pullRequestClient: { getPullRequestsByPipeline: vi.fn().mockResolvedValue([]) },
+      systemClient: {
+        getGitStatus: vi.fn().mockResolvedValue({}),
+        isOllamaAvailable: vi.fn().mockResolvedValue(true),
+      },
+      coderBotService: { coderBotService: 'instance' },
+      coderBotClient: { triggerCoderBot: vi.fn().mockResolvedValue({}) },
+    };
+
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn(() => null),
+      setItem: vi.fn(),
+    });
+  });
+
+  it('should open CoderBotDialog automatically after a successful trigger', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+
+    (view as any).allLoadedTasks = [{ id: 't1', status: 'CREATED' }];
+
+    const triggerCoderbot = getAction('trigger_coderbot');
+    const el = document.createElement('button');
+    el.setAttribute('data-task-id', 't1');
+
+    await triggerCoderbot(null, el);
+
+    expect(mockContext.coderBotClient.triggerCoderBot).toHaveBeenCalledWith('t1');
+    expect(CoderBotDialog).toHaveBeenCalledTimes(1);
+    expect(CoderBotDialog).toHaveBeenCalledWith(mockContext.coderBotService);
+    const shownDialog = (CoderBotDialog as any).mock.results[0].value;
+    expect(shownDialog.show).toHaveBeenCalled();
+
+    // Optimistic state still updated alongside dialog opening
+    expect((view as any).coderbotState).toEqual({ status: 'inProgress', taskId: 't1' });
+    const task = (view as any).allLoadedTasks.find((t: any) => t.id === 't1');
+    expect(task.status).toEqual('inprogress');
+    expect(mockContext.dataManager.updateTask).toHaveBeenCalledWith(task);
+  });
+
+  it('should not open CoderBotDialog when the trigger fails', async () => {
+    mockContext.coderBotClient.triggerCoderBot = vi.fn().mockRejectedValue(new Error('boom'));
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+
+    const triggerCoderbot = getAction('trigger_coderbot');
+    const el = document.createElement('button');
+    el.setAttribute('data-task-id', 't1');
+
+    await triggerCoderbot(null, el);
+
+    expect(CoderBotDialog).not.toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalledWith('Failed to trigger CoderBot');
+    alertSpy.mockRestore();
+  });
+
+  it('should still open CoderBotDialog via the manual open_coderbot_dialog action', () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+
+    const openCoderBotDialog = getAction('open_coderbot_dialog');
+    const e = { preventDefault: vi.fn() };
+    openCoderBotDialog(e);
+
+    expect(e.preventDefault).toHaveBeenCalled();
+    expect(CoderBotDialog).toHaveBeenCalledTimes(1);
+    expect(CoderBotDialog).toHaveBeenCalledWith(mockContext.coderBotService);
+    const shownDialog = (CoderBotDialog as any).mock.results[0].value;
+    expect(shownDialog.show).toHaveBeenCalled();
   });
 });
