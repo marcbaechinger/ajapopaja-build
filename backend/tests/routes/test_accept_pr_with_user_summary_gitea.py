@@ -177,6 +177,6 @@ async def test_accept_pr_with_user_summary_gitea(
         mock_client.create_pull_request.assert_awaited_once()
         title = mock_client.create_pull_request.await_args.kwargs.get("title")
         # PR description still reflects the PR summary, not the commit message.
-        assert title == "Original summary"
+        assert title == "Add new feature"
     finally:
         app.dependency_overrides.clear()

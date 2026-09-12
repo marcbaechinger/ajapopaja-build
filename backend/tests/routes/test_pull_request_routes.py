@@ -213,7 +213,7 @@ async def test_submit_as_gitea_pr_flow():
         "repo",
         head="feature/x",
         base="main",
-        title="summary",
+        title="msg",
         body="summary",
     )
     mock_client.aclose.assert_awaited_once()

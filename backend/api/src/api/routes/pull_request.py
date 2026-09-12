@@ -272,7 +272,7 @@ async def _submit_as_gitea_pr(repo, pipeline, pr, commit_message: str) -> str:
             repo_name,
             head=pr.branch_name,
             base=base,
-            title=pr.summary,
+            title=commit_message,
             body=pr.summary,
         )
     finally:
