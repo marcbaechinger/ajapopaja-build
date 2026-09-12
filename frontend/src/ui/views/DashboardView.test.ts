@@ -28,12 +28,22 @@ vi.mock('../components/ConfirmationDialog.ts', () => {
   };
 });
 
+vi.mock('../components/PipelineEditDialog.ts', () => {
+  return {
+    PipelineEditDialog: vi.fn().mockImplementation(function (this: any) {
+      this.show = mockShow;
+    })
+  };
+});
+
 vi.mock('../components/PipelineStatsView.ts', () => ({
   PipelineStatsView: {
     render: vi.fn().mockReturnValue('<div class="mock-stats">Stats</div>'),
     animateBars: vi.fn()
   }
 }));
+
+import { PipelineEditDialog } from '../components/PipelineEditDialog.ts';
 
 describe('DashboardView', () => {
   let mockContext: any;
@@ -91,6 +101,10 @@ describe('DashboardView', () => {
     expect(container.innerHTML).toContain('Create Pipeline');
     expect(container.innerHTML).toContain('Active Pipelines');
     expect(container.querySelector('#pipeline-list')).toBeTruthy();
+    // The pipeline list takes the entire width: no two-column grid layout.
+    expect(container.innerHTML).not.toContain('md:grid-cols-2');
+    // The inline creation form is gone.
+    expect(container.querySelector('form[data-action-submit="create_pipeline"]')).toBeNull();
   });
 
   it('should refresh pipeline list and fetch tasks for each pipeline', async () => {
@@ -118,27 +132,20 @@ describe('DashboardView', () => {
     expect(list?.querySelectorAll('.mock-stats')).toHaveLength(2);
   });
 
-  it('should handle pipeline creation', async () => {
+  it('should open the create pipeline dialog when the header button is clicked', async () => {
     const view = new DashboardView(mockContext);
     container.innerHTML = view.render();
     view.mount(container);
 
     const createAction = mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === 'create_pipeline')[1];
-    
-    const form = container.querySelector('form') as HTMLFormElement;
-    const nameInput = form.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
-    const wsInput = form.querySelector('input[name="workspace_path"]') as HTMLInputElement;
-    const repoUriInput = form.querySelector('input[name="repo_uri"]') as HTMLInputElement;
-    nameInput.value = 'New Pipe';
-    wsInput.value = '/tmp/path';
-    repoUriInput.value = 'https://host/org/my-app.git';
+    const buttonEl = container.querySelector('[data-action-click="create_pipeline"]') as HTMLElement;
+    expect(buttonEl).toBeTruthy();
 
-    await createAction(new Event('submit'), form);
+    await createAction(undefined, buttonEl);
 
-    expect(mockContext.pipelineClient.create).toHaveBeenCalledWith('New Pipe', '/tmp/path', 'https://host/org/my-app.git');
-    expect(nameInput.value).toBe('');
-    expect(wsInput.value).toBe('');
-    expect(repoUriInput.value).toBe('');
+    const mockDialog = (PipelineEditDialog as unknown as ReturnType<typeof vi.fn>);
+    expect(mockDialog).toHaveBeenCalledWith(expect.objectContaining({ mode: 'create' }));
+    expect(mockShow).toHaveBeenCalled();
   });
 
   it('should handle pipeline deletion with confirmation', async () => {

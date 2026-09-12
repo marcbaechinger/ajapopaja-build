@@ -36,6 +36,7 @@ async def get_pipelines(
 async def create_pipeline(
     pipeline: Pipeline, current_user: User = Depends(get_current_user)
 ):
+    pipeline_queries.validate_pipeline_input(pipeline)
     new_pipeline = await pipeline_queries.create_pipeline(pipeline)
     await manager.broadcast(
         WSMessage(type="PIPELINE_CREATED", payload=new_pipeline.model_dump(mode="json"))

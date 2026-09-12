@@ -18,6 +18,7 @@ import { View } from '../../core/Navigator.ts';
 import { AppContext } from '../../core/AppContext.ts';
 import { Pipeline, Task } from '../../core/domain.ts';
 import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
+import { PipelineEditDialog } from '../components/PipelineEditDialog.ts';
 import { PipelineStatsView } from '../components/PipelineStatsView.ts';
 
 export class DashboardView extends View {
@@ -49,26 +50,13 @@ export class DashboardView extends View {
   }
 
   private registerActions() {
-    this.context.actionRegistry.register('create_pipeline', async (_e, el) => {
-      const form = el as HTMLFormElement;
-      const nameInput = form.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
-      const wsInput = form.querySelector('input[name="workspace_path"]') as HTMLInputElement;
-      const repoUriInput = form.querySelector('input[name="repo_uri"]') as HTMLInputElement;
-      const name = nameInput.value.trim();
-      const workspacePath = wsInput.value.trim() || undefined;
-      const repoUri = repoUriInput.value.trim() || undefined;
-      
-      if (!name) return;
-
-      try {
-        await this.context.pipelineClient.create(name, workspacePath, repoUri);
-        nameInput.value = '';
-        wsInput.value = '';
-        repoUriInput.value = '';
-        // List will be updated via WebSocket
-      } catch (error) {
-        alert('Failed to create pipeline');
-      }
+    this.context.actionRegistry.register('create_pipeline', async () => {
+      const dialog = new PipelineEditDialog({
+        mode: 'create',
+        context: this.context
+      });
+      await dialog.show();
+      // List will be updated via WebSocket
     });
 
     this.context.actionRegistry.register('delete_pipeline', async (e, el) => {
@@ -219,32 +207,15 @@ export class DashboardView extends View {
         </div>
       </header>
 
-      <main class="grid gap-8 md:grid-cols-2">
-        <section class="bg-app-surface p-6 rounded-xl shadow-xl border border-app-border transition-all hover:border-app-accent-1/50 h-fit">
-          <h2 class="text-2xl font-bold mb-4 text-app-accent-1">Create Pipeline</h2>
-          <form data-action-submit="create_pipeline" class="space-y-4">
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Pipeline Name</label>
-                <input type="text" name="pipeline_name" placeholder="e.g. My Feature" class="w-full bg-app-bg border border-app-border rounded-lg px-4 py-2 focus:ring-2 focus:ring-app-accent-1 outline-none text-app-text transition-all text-sm">
-              </div>
-              <div>
-                <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Workspace Path (Optional)</label>
-                <input type="text" name="workspace_path" placeholder="e.g. ./my-project" class="w-full bg-app-bg border border-app-border rounded-lg px-4 py-2 focus:ring-2 focus:ring-app-accent-1 outline-none text-app-text transition-all text-sm">
-              </div>
-            </div>
-            <div>
-              <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Repo URI (Optional)</label>
-              <input type="text" name="repo_uri" placeholder="https://host/org/my-app.git" class="w-full bg-app-bg border border-app-border rounded-lg px-4 py-2 focus:ring-2 focus:ring-app-accent-1 outline-none text-app-text transition-all text-sm">
-            </div>
-            <button type="submit" class="w-full bg-app-accent-1 hover:brightness-110 text-white font-bold py-2 rounded-lg transition-all shadow-lg cursor-pointer">
-              Create
-            </button>
-          </form>
-        </section>
-
+      <main class="flex flex-col gap-8">
         <section class="bg-app-surface p-6 rounded-xl shadow-xl border border-app-border transition-all hover:border-app-accent-2/50">
-          <h2 class="text-2xl font-bold mb-4 text-app-accent-2">Active Pipelines</h2>
+          <div class="flex justify-between items-center mb-6">
+            <h2 class="text-2xl font-bold text-app-accent-2">Active Pipelines</h2>
+            <button data-action-click="create_pipeline" class="flex items-center gap-2 bg-app-accent-1 hover:brightness-110 text-white text-xs font-bold uppercase tracking-widest px-4 py-2 rounded-lg transition-all shadow-lg cursor-pointer">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+              Create Pipeline
+            </button>
+          </div>
           <div id="pipeline-list" class="space-y-2">
             <p class="text-app-muted animate-pulse">Loading pipelines...</p>
           </div>

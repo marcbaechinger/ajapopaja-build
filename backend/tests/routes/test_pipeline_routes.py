@@ -113,6 +113,150 @@ async def test_pipeline_serialization_never_exposes_repo_token():
 
 
 @pytest.mark.asyncio
+async def test_create_pipeline_local_with_credentials_rejected(
+    async_client, init_mock_db
+):
+    """A local pipeline (no repo_uri) must not carry repo credentials."""
+    with patch(
+        "api.routes.pipeline.pipeline_queries.create_pipeline", new_callable=AsyncMock
+    ) as mock_create:
+        response = await async_client.post(
+            "/api/pipelines/",
+            json={
+                "name": "Local with creds",
+                "repo_username": "gituser",
+                "repo_token": "gittoken",
+            },
+        )
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+        assert "repo_uri" in response.json()["detail"]
+        mock_create.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_create_pipeline_remote_with_workspace_rejected(
+    async_client, init_mock_db
+):
+    """A remote pipeline must not set workspace_path (derived from the clone)."""
+    with patch(
+        "api.routes.pipeline.pipeline_queries.create_pipeline", new_callable=AsyncMock
+    ) as mock_create:
+        response = await async_client.post(
+            "/api/pipelines/",
+            json={
+                "name": "Remote",
+                "repo_uri": "https://host/org/my-app.git",
+                "workspace_path": "/tmp/ws",
+            },
+        )
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+        assert "workspace_path" in response.json()["detail"]
+        mock_create.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_create_pipeline_valid_local(async_client, init_mock_db):
+    from core.models.models import Pipeline
+
+    with patch(
+        "api.routes.pipeline.pipeline_queries.create_pipeline", new_callable=AsyncMock
+    ) as mock_create:
+        new_pipeline = Pipeline(name="Local", workspace_path="./proj")
+        mock_create.return_value = new_pipeline
+        with patch("api.routes.pipeline.manager.broadcast", new_callable=AsyncMock):
+            response = await async_client.post(
+                "/api/pipelines/", json={"name": "Local", "workspace_path": "./proj"}
+            )
+            assert response.status_code == status.HTTP_200_OK
+            assert response.json()["name"] == "Local"
+            assert mock_create.called
+
+
+@pytest.mark.asyncio
+async def test_create_pipeline_valid_remote_with_credentials(
+    async_client, init_mock_db
+):
+    """A valid remote pipeline may carry username + token; the token is never
+    serialized back, but has_repo_token reflects that it is stored."""
+    from core.models.models import Pipeline
+
+    with patch(
+        "api.routes.pipeline.pipeline_queries.create_pipeline", new_callable=AsyncMock
+    ) as mock_create:
+        created = Pipeline(
+            name="Remote",
+            repo_uri="https://host/org/my-app.git",
+            repo_username="gituser",
+            repo_token="gittoken",
+        )
+        mock_create.return_value = created
+        with patch("api.routes.pipeline.manager.broadcast", new_callable=AsyncMock):
+            response = await async_client.post(
+                "/api/pipelines/",
+                json={
+                    "name": "Remote",
+                    "repo_uri": "https://host/org/my-app.git",
+                    "repo_username": "gituser",
+                    "repo_token": "gittoken",
+                },
+            )
+            assert response.status_code == status.HTTP_200_OK
+            body = response.json()
+            assert body["repo_uri"] == "https://host/org/my-app.git"
+            assert body["repo_token"] is None
+            assert body["has_repo_token"] is True
+
+
+def test_validate_pipeline_input_local():
+    """Query-level validation: local pipelines pass (workspace optional)."""
+    from core.models.models import Pipeline
+    from core.queries.pipeline import validate_pipeline_input
+
+    validate_pipeline_input(Pipeline(name="Local"))
+    validate_pipeline_input(Pipeline(name="Local", workspace_path="./proj"))
+
+
+def test_validate_pipeline_input_local_with_credentials_fails():
+    from core.exceptions import ValidationError
+    from core.models.models import Pipeline
+    from core.queries.pipeline import validate_pipeline_input
+
+    with pytest.raises(ValidationError):
+        validate_pipeline_input(
+            Pipeline(name="Local", repo_username="u", repo_token="t")
+        )
+
+
+def test_validate_pipeline_input_remote_pass():
+    from core.models.models import Pipeline
+    from core.queries.pipeline import validate_pipeline_input
+
+    validate_pipeline_input(
+        Pipeline(
+            name="Remote",
+            repo_uri="https://host/org/my-app.git",
+            repo_username="u",
+            repo_token="t",
+        )
+    )
+
+
+def test_validate_pipeline_input_remote_with_workspace_fails():
+    from core.exceptions import ValidationError
+    from core.models.models import Pipeline
+    from core.queries.pipeline import validate_pipeline_input
+
+    with pytest.raises(ValidationError):
+        validate_pipeline_input(
+            Pipeline(
+                name="Remote",
+                repo_uri="https://host/org/my-app.git",
+                workspace_path="./proj",
+            )
+        )
+
+
+@pytest.mark.asyncio
 async def test_update_pipeline_only_overrides_token_when_non_empty(init_mock_db):
     """update_pipeline must keep the stored token when a blank/None value is sent."""
     from core.models.models import Pipeline

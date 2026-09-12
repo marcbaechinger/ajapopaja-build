@@ -41,11 +41,18 @@ export class PipelineClient extends BaseClient {
     return new Pipeline(await response.json());
   }
 
-  async create(name: string, workspacePath?: string, repoUri?: string): Promise<Pipeline> {
+  async create(payload: {
+    name: string;
+    workspace_path?: string | null;
+    repo_uri?: string | null;
+    repo_username?: string | null;
+    repo_token?: string | null;
+    doc_root?: string;
+  }): Promise<Pipeline> {
     const response = await this.fetch(`${this.baseUrl}/pipelines/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, workspace_path: workspacePath, repo_uri: repoUri })
+      body: JSON.stringify(payload)
     });
     return new Pipeline(await response.json());
   }

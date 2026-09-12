@@ -14,7 +14,7 @@
 
 from typing import List, Optional
 
-from core.exceptions import EntityNotFoundError, VersionMismatchError
+from core.exceptions import EntityNotFoundError, ValidationError, VersionMismatchError
 from core.models.models import Pipeline, PipelineStatus, Task
 
 
@@ -22,6 +22,31 @@ async def get_all_pipelines(include_deleted: bool = False) -> List[Pipeline]:
     if include_deleted:
         return await Pipeline.find_all().to_list()
     return await Pipeline.find(Pipeline.deleted == False).to_list()
+
+
+def validate_pipeline_input(pipeline: Pipeline) -> None:
+    """Validate that the pipeline is consistently populated for either a local
+    or a remote repository before it is created.
+
+    - Local pipeline: no ``repo_uri``; ``workspace_path`` optional. Credentials
+      imply a remote repo, so they are invalid without a ``repo_uri``.
+    - Remote pipeline: ``repo_uri`` required (implies remote); credentials
+      optional. ``workspace_path`` is derived from the clone, so it must not be
+      set explicitly.
+    """
+    if pipeline.repo_uri:
+        if pipeline.workspace_path:
+            raise ValidationError(
+                "Remote pipeline must not set workspace_path \u2014 the working "
+                "directory is derived from the cloned repository."
+            )
+    else:
+        if pipeline.repo_username or pipeline.repo_token:
+            raise ValidationError(
+                "A local pipeline cannot have repo_username or repo_token. "
+                "Set a repo_uri to create a remote pipeline or clear the "
+                "credentials."
+            )
 
 
 async def get_pipeline_by_id(

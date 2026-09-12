@@ -322,6 +322,7 @@ export class PipelineDetailView extends View {
     this.context.actionRegistry.register('edit_pipeline', async () => {
       if (!this.pipeline) return;
       const dialog = new PipelineEditDialog({
+        mode: 'edit',
         pipeline: this.pipeline,
         pipelineId: this.pipelineId,
         context: this.context

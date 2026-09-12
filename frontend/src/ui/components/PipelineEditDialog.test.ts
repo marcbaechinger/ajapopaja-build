@@ -33,6 +33,7 @@ describe('PipelineEditDialog', () => {
     });
 
     mockProps = {
+      mode: 'edit',
       pipeline: new Pipeline({
         _id: 'pipeline-1',
         name: 'Test Pipeline',
@@ -43,12 +44,23 @@ describe('PipelineEditDialog', () => {
       pipelineId: 'pipeline-1',
       context: {
         pipelineClient: {
-          update: vi.fn().mockResolvedValue({})
-        }
-      } as any
+          update: vi.fn().mockResolvedValue({}),
+          create: vi.fn().mockResolvedValue({}),
+        },
+      } as any,
     };
 
     vi.stubGlobal('alert', vi.fn());
+  });
+
+  const mkCreateProps = (): PipelineEditDialogProps => ({
+    mode: 'create',
+    context: {
+      pipelineClient: {
+        create: vi.fn().mockResolvedValue({}),
+        update: vi.fn().mockResolvedValue({}),
+      },
+    } as any,
   });
 
   const switchToTab = (tab: 'local' | 'remote') => {
@@ -107,7 +119,7 @@ describe('PipelineEditDialog', () => {
   });
 
   it('should select the remote tab and lock local fields for a remote pipeline', async () => {
-    mockProps.pipeline.repo_uri = 'https://host/org/my-app.git';
+    mockProps.pipeline!.repo_uri = 'https://host/org/my-app.git';
     const dialog = new PipelineEditDialog(mockProps);
     const showPromise = dialog.show();
 
@@ -129,7 +141,7 @@ describe('PipelineEditDialog', () => {
   });
 
   it('should pass repo_username and repo_token on save for a remote pipeline', async () => {
-    mockProps.pipeline.repo_uri = 'https://host/org/my-app.git';
+    mockProps.pipeline!.repo_uri = 'https://host/org/my-app.git';
     const dialog = new PipelineEditDialog(mockProps);
     const showPromise = dialog.show();
 
@@ -154,7 +166,7 @@ describe('PipelineEditDialog', () => {
   });
 
   it('should not send repo_token when the token input is empty', async () => {
-    mockProps.pipeline.repo_uri = 'https://host/org/my-app.git';
+    mockProps.pipeline!.repo_uri = 'https://host/org/my-app.git';
     const dialog = new PipelineEditDialog(mockProps);
     const showPromise = dialog.show();
 
@@ -173,8 +185,8 @@ describe('PipelineEditDialog', () => {
   });
 
   it('should never pre-fill the token input even when a token is stored', async () => {
-    mockProps.pipeline.repo_uri = 'https://host/org/my-app.git';
-    mockProps.pipeline.has_repo_token = true;
+    mockProps.pipeline!.repo_uri = 'https://host/org/my-app.git';
+    mockProps.pipeline!.has_repo_token = true;
     const dialog = new PipelineEditDialog(mockProps);
     const showPromise = dialog.show();
 
@@ -186,8 +198,8 @@ describe('PipelineEditDialog', () => {
   });
 
   it('should show a token stored indicator when has_repo_token is true', async () => {
-    mockProps.pipeline.repo_uri = 'https://host/org/my-app.git';
-    mockProps.pipeline.has_repo_token = true;
+    mockProps.pipeline!.repo_uri = 'https://host/org/my-app.git';
+    mockProps.pipeline!.has_repo_token = true;
     const dialog = new PipelineEditDialog(mockProps);
     const showPromise = dialog.show();
 
@@ -222,8 +234,8 @@ describe('PipelineEditDialog', () => {
     );
   });
 
-  it('should handle update failure gracefully', async () => {
-    (mockProps.context.pipelineClient.update as any).mockRejectedValue(new Error('Update failed'));
+  it('should surface update validation errors inline (not alert)', async () => {
+    (mockProps.context.pipelineClient.update as any).mockRejectedValue(new Error('Remote pipeline must not set workspace_path'));
     const dialog = new PipelineEditDialog(mockProps);
     const showPromise = dialog.show();
 
@@ -232,14 +244,130 @@ describe('PipelineEditDialog', () => {
 
     // Wait for the async handleSave to fail
     await vi.waitFor(() => {
-       expect(window.alert).toHaveBeenCalledWith('Failed to update pipeline. Please check the console.');
+      const errorEl = document.querySelector('#pipeline-edit-error') as HTMLElement;
+      expect(errorEl?.classList.contains('hidden')).toBe(false);
+      expect(errorEl?.textContent).toContain('Remote pipeline must not set workspace_path');
     });
 
+    expect(window.alert).not.toHaveBeenCalled();
     expect(saveBtn.disabled).toBe(false);
     expect(saveBtn.textContent).toBe('Save Changes');
 
     // Cleanup
     document.querySelector('#pipeline-edit-cancel')?.dispatchEvent(new MouseEvent('click'));
     await showPromise;
+  });
+
+  describe('create mode', () => {
+    it('should render editable local and remote tabs', async () => {
+      const props = mkCreateProps();
+      const dialog = new PipelineEditDialog(props);
+      const showPromise = dialog.show();
+
+      // Local tab is active by default; fields are editable.
+      const nameInput = document.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
+      const workspaceInput = document.querySelector('input[name="workspace_path"]') as HTMLInputElement;
+      expect(nameInput.readOnly).toBe(false);
+      expect(workspaceInput.readOnly).toBe(false);
+      // No status select or hidden pipeline ID in create mode.
+      expect(document.querySelector('select[name="pipeline_status"]')).toBeNull();
+      expect(document.body.textContent).not.toContain('ID:');
+
+      // Switching to the remote tab keeps remote fields editable.
+      switchToTab('remote');
+      const repoUriInput = document.querySelector('input[name="repo_uri"]') as HTMLInputElement;
+      const usernameInput = document.querySelector('input[name="repo_username"]') as HTMLInputElement;
+      const tokenInput = document.querySelector('input[name="repo_token"]') as HTMLInputElement;
+      expect(repoUriInput.readOnly).toBe(false);
+      expect(usernameInput.readOnly).toBe(false);
+      expect(tokenInput.readOnly).toBe(false);
+
+      document.querySelector('#pipeline-edit-cancel')?.dispatchEvent(new MouseEvent('click'));
+      await showPromise;
+    });
+
+    it('should call create with local payload (no repo fields) when saving the local tab', async () => {
+      const props = mkCreateProps();
+      const dialog = new PipelineEditDialog(props);
+      const showPromise = dialog.show();
+
+      const nameInput = document.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
+      const workspaceInput = document.querySelector('input[name="workspace_path"]') as HTMLInputElement;
+      nameInput.value = 'New Local';
+      workspaceInput.value = '/tmp/ws';
+
+      const saveBtn = document.querySelector('#pipeline-edit-save') as HTMLButtonElement;
+      saveBtn.click();
+      await showPromise;
+
+      const createCall = (props.context.pipelineClient.create as any).mock.calls[0];
+      expect(createCall[0]).toMatchObject({
+        name: 'New Local',
+        doc_root: 'design',
+        workspace_path: '/tmp/ws',
+      });
+      expect(createCall[0]).not.toHaveProperty('repo_uri');
+      expect(createCall[0]).not.toHaveProperty('repo_username');
+      expect(createCall[0]).not.toHaveProperty('repo_token');
+    });
+
+    it('should call create with remote payload (no workspace_path) when saving the remote tab', async () => {
+      const props = mkCreateProps();
+      const dialog = new PipelineEditDialog(props);
+      const showPromise = dialog.show();
+
+      switchToTab('remote');
+
+      const nameInput = document.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
+      const repoUriInput = document.querySelector('input[name="repo_uri"]') as HTMLInputElement;
+      const usernameInput = document.querySelector('input[name="repo_username"]') as HTMLInputElement;
+      const tokenInput = document.querySelector('input[name="repo_token"]') as HTMLInputElement;
+      nameInput.value = 'New Remote';
+      repoUriInput.value = 'https://host/org/my-app.git';
+      usernameInput.value = 'gituser';
+      tokenInput.value = 'gittoken';
+
+      const saveBtn = document.querySelector('#pipeline-edit-save') as HTMLButtonElement;
+      saveBtn.click();
+      await showPromise;
+
+      const createCall = (props.context.pipelineClient.create as any).mock.calls[0];
+      expect(createCall[0]).toMatchObject({
+        name: 'New Remote',
+        doc_root: 'design',
+        repo_uri: 'https://host/org/my-app.git',
+        repo_username: 'gituser',
+        repo_token: 'gittoken',
+      });
+      expect(createCall[0]).not.toHaveProperty('workspace_path');
+    });
+
+    it('should surface backend validation errors inline instead of alert', async () => {
+      const props = mkCreateProps();
+      (props.context.pipelineClient.create as any).mockRejectedValue(
+        new Error('A local pipeline cannot have repo_username or repo_token')
+      );
+      const dialog = new PipelineEditDialog(props);
+      const showPromise = dialog.show();
+
+      const nameInput = document.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
+      nameInput.value = 'New Pipe';
+
+      const saveBtn = document.querySelector('#pipeline-edit-save') as HTMLButtonElement;
+      saveBtn.click();
+
+      await vi.waitFor(() => {
+        const errorEl = document.querySelector('#pipeline-edit-error') as HTMLElement;
+        expect(errorEl?.classList.contains('hidden')).toBe(false);
+        expect(errorEl?.textContent).toContain('A local pipeline cannot have repo_username or repo_token');
+      });
+
+      expect(window.alert).not.toHaveBeenCalled();
+      expect(saveBtn.disabled).toBe(false);
+      expect(saveBtn.textContent).toBe('Create Pipeline');
+
+      document.querySelector('#pipeline-edit-cancel')?.dispatchEvent(new MouseEvent('click'));
+      await showPromise;
+    });
   });
 });

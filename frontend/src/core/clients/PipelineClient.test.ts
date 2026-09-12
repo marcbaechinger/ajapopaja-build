@@ -198,7 +198,7 @@ describe('PipelineClient', () => {
         json: () => Promise.resolve(mockPipelineResponse({ name: 'New Pipeline' })),
       });
 
-      const pipeline = await client.create('New Pipeline');
+      const pipeline = await client.create({ name: 'New Pipeline' });
 
       expect(pipeline).toBeInstanceOf(Pipeline);
       expect(pipeline.name).toBe('New Pipeline');
@@ -218,7 +218,7 @@ describe('PipelineClient', () => {
         json: () => Promise.resolve(mockPipelineResponse({ name: 'New Pipeline', workspace_path: '/my/workspace' })),
       });
 
-      const pipeline = await client.create('New Pipeline', '/my/workspace');
+      const pipeline = await client.create({ name: 'New Pipeline', workspace_path: '/my/workspace' });
 
       expect(pipeline.workspace_path).toBe('/my/workspace');
 
@@ -233,7 +233,11 @@ describe('PipelineClient', () => {
         json: () => Promise.resolve(mockPipelineResponse({ name: 'New Pipeline', repo_uri: 'https://host/org/my-app.git' })),
       });
 
-      const pipeline = await client.create('New Pipeline', '/my/workspace', 'https://host/org/my-app.git');
+      const pipeline = await client.create({
+        name: 'New Pipeline',
+        workspace_path: '/my/workspace',
+        repo_uri: 'https://host/org/my-app.git',
+      });
 
       expect(pipeline.repo_uri).toBe('https://host/org/my-app.git');
 
@@ -243,13 +247,37 @@ describe('PipelineClient', () => {
       expect(body.repo_uri).toBe('https://host/org/my-app.git');
     });
 
+    it('should forward the full payload including credentials and doc_root', async () => {
+      (fetch as any).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockPipelineResponse({ name: 'Remote' })),
+      });
+
+      await client.create({
+        name: 'Remote',
+        doc_root: 'docs',
+        repo_uri: 'https://host/org/my-app.git',
+        repo_username: 'gituser',
+        repo_token: 'gittoken',
+      });
+
+      const body = JSON.parse((fetch as any).mock.calls[0][1].body);
+      expect(body).toMatchObject({
+        name: 'Remote',
+        doc_root: 'docs',
+        repo_uri: 'https://host/org/my-app.git',
+        repo_username: 'gituser',
+        repo_token: 'gittoken',
+      });
+    });
+
     it('should authenticate with Authorization header', async () => {
       (fetch as any).mockResolvedValue({
         ok: true,
         json: () => Promise.resolve(mockPipelineResponse()),
       });
 
-      await client.create('Test');
+      await client.create({ name: 'Test' });
 
       const headers = (fetch as any).mock.calls[0][1].headers;
       expect(headers.get('Authorization')).toBe('Bearer mock-token');
@@ -262,7 +290,7 @@ describe('PipelineClient', () => {
         json: () => Promise.resolve({ detail: 'Bad Request: Duplicate name' }),
       });
 
-      await expect(client.create('Existing')).rejects.toThrow('Bad Request: Duplicate name');
+      await expect(client.create({ name: 'Existing' })).rejects.toThrow('Bad Request: Duplicate name');
     });
   });
 
