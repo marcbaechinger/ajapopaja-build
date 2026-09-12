@@ -39,9 +39,7 @@ vi.mock('../components/PaginationControl.ts', () => ({
   PaginationControl: { render: () => '<div class="mock-pagination">Pagination</div>' }
 }));
 vi.mock('../components/CoderBotDialog.ts', () => ({
-  CoderBotDialog: vi.fn(function () {
-    this.show = vi.fn();
-  }),
+  CoderBotDialog: vi.fn(() => ({ show: vi.fn() })),
 }));
 
 describe('PipelineDetailView Layout', () => {
