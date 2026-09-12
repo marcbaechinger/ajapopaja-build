@@ -39,6 +39,7 @@ vi.mock('../components/PipelineEditDialog.ts', () => {
 vi.mock('../components/PipelineStatsView.ts', () => ({
   PipelineStatsView: {
     render: vi.fn().mockReturnValue('<div class="mock-stats">Stats</div>'),
+    renderCompact: vi.fn().mockReturnValue('<div class="mock-stats">Compact Stats</div>'),
     animateBars: vi.fn()
   }
 }));
@@ -71,6 +72,7 @@ describe('DashboardView', () => {
       },
       taskClient: {
         listByPipeline: vi.fn().mockResolvedValue([]),
+        listCompletedByPipeline: vi.fn().mockResolvedValue({ tasks: [], total_count: 0 }),
       },
       systemClient: {
         getVersion: vi.fn().mockResolvedValue('1.0.0'),

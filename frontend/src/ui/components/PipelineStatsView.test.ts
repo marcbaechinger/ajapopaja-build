@@ -176,4 +176,43 @@ describe('PipelineStatsView', () => {
     expect(PipelineStatsView.formatDuration(3665000)).toBe('1h 1m');
     expect(PipelineStatsView.formatDuration(90000000)).toBe('1d 1h');
   });
+
+  describe('renderCompact', () => {
+    it('renders the four compact metric chips with correct values', () => {
+      const task: Task = {
+        id: 'c1',
+        title: 'Compact Task',
+        status: TaskStatus.IMPLEMENTED,
+        history: [
+          { to_status: TaskStatus.SCHEDULED, timestamp: new Date(now).toISOString(), by: 'user' },
+          { to_status: TaskStatus.INPROGRESS, timestamp: new Date(now + 1000).toISOString(), by: 'mcp' },
+          { to_status: TaskStatus.PROPOSED, timestamp: new Date(now + 3000).toISOString(), by: 'mcp' },
+          { to_status: TaskStatus.SCHEDULED, timestamp: new Date(now + 5000).toISOString(), by: 'user' },
+          { to_status: TaskStatus.INPROGRESS, timestamp: new Date(now + 6000).toISOString(), by: 'mcp' },
+          { to_status: TaskStatus.IMPLEMENTED, timestamp: new Date(now + 9000).toISOString(), by: 'mcp' }
+        ]
+      } as Task;
+
+      const html = PipelineStatsView.renderCompact([task]);
+
+      expect(html).toContain('Total');
+      expect(html).toContain('1');
+      expect(html).toContain('Avg Work');
+      expect(html).toContain('5s');          // avg totalWorkTime
+      expect(html).toContain('Median Work');
+      expect(html).toContain('5s');          // median totalWorkTime
+      expect(html).toContain('Avg Lead');
+      expect(html).toContain('9s');          // leadTime
+    });
+
+    it('returns valid markup for empty tasks with N/A metrics', () => {
+      const html = PipelineStatsView.renderCompact([]);
+
+      expect(html).toContain('Total');
+      expect(html).toContain('0');
+      expect(html).toContain('N/A');
+      // still renders an inline flex container
+      expect(html).toContain('flex flex-wrap');
+    });
+  });
 });

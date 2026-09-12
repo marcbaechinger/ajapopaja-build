@@ -249,6 +249,38 @@ export class PipelineStatsView {
     `;
   }
 
+  /**
+   * Renders a compact, single-row summary of pipeline stats.
+   * Used in list views (e.g. the dashboard) where vertical space is precious.
+   * Reuses calculateMetrics() and formatDuration() to keep computation centralized.
+   */
+  static renderCompact(tasks: Task[]): string {
+    const metrics = this.calculateMetrics(tasks);
+
+    let total = 0;
+    tasks.forEach(t => { if (!t.deleted) total++; });
+
+    const chip = (label: string, value: string, dot: string, text: string) => `
+      <span class="flex items-center gap-1.5 min-w-0">
+        <span class="h-1.5 w-1.5 rounded-full shrink-0 ${dot}"></span>
+        <span class="text-[10px] text-app-muted whitespace-nowrap">${label}</span>
+        <span class="text-[11px] font-bold whitespace-nowrap ${text}">${value}</span>
+      </span>
+    `;
+
+    return `
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+        ${chip('Total', String(total), 'bg-app-accent-1', 'text-app-text')}
+        <span class="h-3 w-px bg-app-border/60 hidden sm:block"></span>
+        ${chip('Avg Work', metrics.work.avg, 'bg-app-accent-1', 'text-app-accent-1')}
+        <span class="h-3 w-px bg-app-border/60 hidden sm:block"></span>
+        ${chip('Median Work', metrics.work.median, 'bg-app-accent-2', 'text-app-accent-2')}
+        <span class="h-3 w-px bg-app-border/60 hidden sm:block"></span>
+        ${chip('Avg Lead', metrics.lead.avg, 'bg-green-500', 'text-green-400')}
+      </div>
+    `;
+  }
+
   static animateBars(container: HTMLElement) {
     setTimeout(() => {
       container.querySelectorAll<HTMLElement>('[data-target-width]').forEach(el => {

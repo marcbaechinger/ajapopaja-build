@@ -19,7 +19,7 @@ import { AppContext } from '../../core/AppContext.ts';
 import { Pipeline, PipelineStatus, Task } from '../../core/domain.ts';
 import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
 import { PipelineEditDialog } from '../components/PipelineEditDialog.ts';
-import { PipelineStatsView } from '../components/PipelineStatsView.ts';
+import { PipelineItemView } from '../components/PipelineItemView.ts';
 
 // Sort weight per pipeline status. Lower weight renders first.
 // Unknown/non-conforming statuses fall back to 3 (last).
@@ -146,6 +146,19 @@ export class DashboardView extends View {
         })
       );
 
+      // Build a PipelineItemView for every pipeline. Rendering stays synchronous
+      // (string-based) so grouping/sorting/assembly is unchanged; the recently-
+      // implemented tasks are loaded asynchronously afterwards.
+      const itemsByPipeline = new Map<string, { item: PipelineItemView; html: string }>();
+      for (const entry of pipelinesWithTasks) {
+        const item = new PipelineItemView({
+          pipeline: entry.pipeline,
+          statsTasks: entry.tasks,
+          context: this.context,
+        });
+        itemsByPipeline.set(entry.pipeline.id!, { item, html: item.render() });
+      }
+
       const grouped: Record<string, { pipeline: Pipeline; tasks: Task[] }[]> = {};
       for (const entry of pipelinesWithTasks) {
         const group = statusPriority(entry.pipeline.status);
@@ -159,7 +172,7 @@ export class DashboardView extends View {
         return `
           <div class="mb-2">
             <h3 class="text-xs font-bold uppercase tracking-widest ${color} mb-2">${label}</h3>
-            ${entries.map(({ pipeline, tasks }) => this.renderPipelineItem(pipeline, tasks)).join('')}
+            ${entries.map(({ pipeline }) => itemsByPipeline.get(pipeline.id!)!.html).join('')}
           </div>
         `;
       }).join('');
@@ -167,50 +180,20 @@ export class DashboardView extends View {
       // Render any unknown/non-conforming statuses after the known groups.
       const residualHtml = Object.entries(grouped)
         .filter(([key]) => !knownGroupKeys.has(Number(key)))
-        .map(([, entries]) => entries.map(({ pipeline, tasks }) => this.renderPipelineItem(pipeline, tasks)).join(''))
+        .map(([, entries]) => entries.map(({ pipeline }) => itemsByPipeline.get(pipeline.id!)!.html).join(''))
         .join('');
 
       listContainer.innerHTML = knownHtml + residualHtml;
-      
-      PipelineStatsView.animateBars(listContainer);
+
+      // Asynchronously populate the recently-implemented sections for each item.
+      for (const { item } of itemsByPipeline.values()) {
+        item.bind(listContainer.querySelector<HTMLElement>(`#${item.placeholderId}`))
+            .loadRecentTasks();
+      }
     } catch (error) {
       console.error('Error in refreshList:', error);
       listContainer.innerHTML = `<p class="text-red-400">Error loading pipelines: ${error instanceof Error ? error.message : String(error)}</p>`;
     }
-  }
-
-  private renderPipelineItem(pipeline: Pipeline, tasks: Task[]) {
-    const statusColors: Record<string, string> = {
-      'active': 'bg-green-600/20 text-green-400 border-green-600/30',
-      'paused': 'bg-amber-600/20 text-amber-400 border-amber-600/30',
-      'completed': 'bg-blue-600/20 text-blue-400 border-blue-600/30'
-    };
-
-    return `
-      <div class="bg-app-bg p-4 rounded-lg border border-app-border flex flex-col gap-3 transition-all hover:border-app-accent-1 cursor-pointer group mb-4" 
-           data-view-type="pipeline" data-view-id="${pipeline.id}"
-           data-action-click="view_pipeline">
-        <div class="flex justify-between items-start">
-          <div class="flex flex-col">
-            <span class="font-bold text-app-text text-lg">${pipeline.name}</span>
-            <span class="text-[10px] text-app-muted uppercase font-bold mt-1 tracking-wider">Version ${pipeline.version}</span>
-          </div>
-          <div class="flex items-center gap-3">
-            <span class="text-[10px] px-2 py-0.5 rounded border font-bold uppercase ${statusColors[pipeline.status] || 'bg-slate-600/20 text-slate-400 border-slate-600/30'}">
-              ${pipeline.status}
-            </span>
-            <button data-action-click="delete_pipeline" 
-                    class="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-500/20 text-app-muted hover:text-red-400 rounded transition-all cursor-pointer" title="Delete Pipeline">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-            </button>
-          </div>
-        </div>
-        
-        <div class="pt-2">
-          ${PipelineStatsView.render(tasks, undefined, true)}
-        </div>
-      </div>
-    `;
   }
 
   render() {
