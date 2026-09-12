@@ -61,7 +61,29 @@ describe('HistoryDialog', () => {
     expect(dialogElement.innerHTML).toContain('abcdef1');
   });
 
-  it('should render empty state when no implemented tasks', () => {
+  it('should render submitted tasks', () => {
+    const submittedTask = {
+      id: '3',
+      title: 'Submitted Task',
+      status: TaskStatus.SUBMITTED,
+      commit_hash: 'fedcba987654',
+      updated_at: '2026-04-13T10:00:00Z',
+      pipeline_id: 'pipeline-1',
+      deleted: false,
+      version: 1,
+      order: 0,
+      type: 'manual',
+      created_at: '2026-04-13T10:00:00Z',
+      history: []
+    };
+    const dialog = new HistoryDialog([...mockTasks, submittedTask] as any);
+    const dialogElement = dialog['dialog'];
+
+    expect(dialogElement.innerHTML).toContain('Submitted Task');
+    expect(dialogElement.innerHTML).toContain('fedcba9');
+  });
+
+  it('should render empty state when no implemented or submitted tasks', () => {
     const dialog = new HistoryDialog([mockTasks[1]] as any);
     const dialogElement = dialog['dialog'];
     
