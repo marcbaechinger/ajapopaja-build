@@ -343,7 +343,9 @@ async def test_coderbot_run_transitions_task_state(init_mock_db):
 
     with (
         patch("api.coderbot.session.SandboxGitHelper") as mock_helper_cls,
-        patch("api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock) as mock_broadcast,
+        patch(
+            "api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock
+        ) as mock_broadcast,
         patch("api.coderbot.session.asyncio.create_subprocess_exec") as mock_exec,
         patch("builtins.open", MagicMock()),
         patch("pathlib.Path.mkdir"),
@@ -391,12 +393,14 @@ async def test_coderbot_run_transitions_task_state(init_mock_db):
 
         # The INPROGRESS transition must be broadcast so the UI moves the card.
         status_msgs = [
-            c for c in mock_broadcast.await_args_list
-            if isinstance(c.args[0], WSMessage) and c.args[0].type == "TASK_STATUS_UPDATED"
+            c
+            for c in mock_broadcast.await_args_list
+            if isinstance(c.args[0], WSMessage)
+            and c.args[0].type == "TASK_STATUS_UPDATED"
         ]
         assert status_msgs, "Expected a TASK_STATUS_UPDATED broadcast"
         assert any(
-            msg.args[0].payload.status == TaskStatus.INPROGRESS
-            and msg.args[0].payload.id == str(task.id)
+            msg.args[0].payload["status"] == TaskStatus.INPROGRESS
+            and msg.args[0].payload["id"] == str(task.id)
             for msg in status_msgs
         )
