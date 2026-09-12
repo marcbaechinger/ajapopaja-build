@@ -154,6 +154,29 @@ class CoderBotSession:
             f"### Design Document\n{design_doc}"
         )
 
+    async def _broadcast_rpc(self, event: Dict[str, Any]):
+        """Broadcasts a parsed Pi RPC event to connected websocket clients.
+
+        Forwards the full, unmodified event so that the client can render it in a
+        structured, human-readable way without the backend needing to know about
+        every possible Pi RPC event type.
+
+        Args:
+            event: A single parsed Pi RPC JSONL event (the `type` field identifies
+                its kind).
+        """
+        await ws_manager.broadcast(
+            WSMessage(
+                type="CODERBOT_RPC_EVENT",
+                payload={
+                    "task_id": self.task_id,
+                    "pipeline_id": self.pipeline_id,
+                    "bot_type": "coderbot",
+                    "event": event,
+                },
+            )
+        )
+
     async def _handle_agent_end(self, messages: list):
         """Called when Pi finishes the task."""
         logger.info(f"Handling agent_end for task {self.task_id}")
@@ -344,6 +367,10 @@ class CoderBotSession:
                     event_type = event.get("type")
 
                     logger.debug(f"Received event: {event_type}")
+
+                    # Forward the full RPC event to the client via the websocket so
+                    # the UI can render the whole CoderBot activity stream.
+                    await self._broadcast_rpc(event)
 
                     if event_type == "message_update":
                         delta = event.get("assistantMessageEvent", {})

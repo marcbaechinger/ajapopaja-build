@@ -16,13 +16,17 @@
 
 import { BaseDialog } from './dialog_common.ts';
 import { CoderBotService } from '../../core/CoderBotService.ts';
+import type { RenderBlock } from '../../core/CoderBotService.ts';
 import { Icon } from './Icon.ts';
 
 export class CoderBotDialog extends BaseDialog {
   private coderBotService: CoderBotService;
   private logContainer: HTMLElement | null = null;
+  private blocksContainer: HTMLElement | null = null;
+  private blockEls: Map<string, HTMLElement> = new Map();
   private isFollowMode = true;
   private unsubscribe: (() => void) | null = null;
+  private blockUnsubscribe: (() => void) | null = null;
   private stateUnsubscribe: (() => void) | null = null;
 
   constructor(coderBotService: CoderBotService) {
@@ -68,7 +72,7 @@ export class CoderBotDialog extends BaseDialog {
   protected renderBody(): string {
     return `
       <div class="bg-black text-green-400 p-4 font-mono text-[11px] leading-tight overflow-y-auto h-[60vh] custom-scrollbar selection:bg-app-accent-1/30" id="log-content-container">
-        <div id="log-lines" class="whitespace-pre-wrap break-all"></div>
+        <div id="log-blocks" class="space-y-1"></div>
       </div>
     `;
   }
@@ -99,29 +103,143 @@ export class CoderBotDialog extends BaseDialog {
 
   private initLogDisplay() {
     this.logContainer = this.dialog.querySelector('#log-content-container');
-    const logLines = this.dialog.querySelector('#log-lines');
-    if (!logLines || !this.logContainer) return;
+    this.blocksContainer = this.dialog.querySelector('#log-blocks');
+    if (!this.blocksContainer || !this.logContainer) return;
 
     // Load initial history
     const history = this.coderBotService.getHistory();
-    if (history) {
-      logLines.textContent = history;
-      if (this.isFollowMode) {
-        this.logContainer.scrollTop = this.logContainer.scrollHeight;
-      }
-    }
+    history.forEach((block) => this.applyBlock(block));
+    this.scrollToBottom();
 
-    // Subscribe to new messages
+    // Subscribe to block changes
+    this.blockUnsubscribe = this.coderBotService.onBlocks((blocks) => {
+      this.reconcile(blocks);
+    });
+
+    // Keep legacy onMessage subscription for non-CoderBot streams (harmless if unused).
     this.unsubscribe = this.coderBotService.onMessage((content) => {
       if (content === '') {
-        logLines.textContent = '';
-      } else {
-        logLines.appendChild(document.createTextNode(content));
-        if (this.isFollowMode && this.logContainer) {
-          this.logContainer.scrollTop = this.logContainer.scrollHeight;
-        }
+        this.blocksContainer!.replaceChildren();
+        this.blockEls.clear();
       }
     });
+  }
+
+  private reconcile(blocks: RenderBlock[]) {
+    // Remove blocks that have been dropped (e.g. after clearHistory).
+    const seen = new Set(blocks.map((b) => b.id));
+    for (const [id, el] of this.blockEls) {
+      if (!seen.has(id)) {
+        el.remove();
+        this.blockEls.delete(id);
+      }
+    }
+    blocks.forEach((block) => this.applyBlock(block));
+    this.scrollToBottom();
+  }
+
+  private applyBlock(block: RenderBlock) {
+    let el = this.blockEls.get(block.id);
+    if (!el) {
+      el = this.createBlockEl(block);
+      this.blockEls.set(block.id, el);
+      this.blocksContainer!.appendChild(el);
+    } else {
+      this.updateBlockEl(el, block);
+    }
+  }
+
+  private createBlockEl(block: RenderBlock): HTMLElement {
+    let el: HTMLElement;
+    switch (block.kind) {
+      case 'tool': {
+        const wrapper = document.createElement('div');
+        wrapper.className =
+          'border border-app-border/60 rounded p-2 my-1 bg-app-surface/40';
+        const header = document.createElement('div');
+        header.setAttribute('data-role', 'header');
+        header.className = 'text-app-accent-2 font-semibold whitespace-pre-wrap';
+        header.textContent = block.header ?? '';
+        wrapper.appendChild(header);
+        const body = document.createElement('pre');
+        body.setAttribute('data-role', 'body');
+        body.className = 'whitespace-pre-wrap break-all text-green-300 mt-1 min-h-0';
+        body.textContent = block.text ?? '';
+        wrapper.appendChild(body);
+        el = wrapper;
+        break;
+      }
+      case 'bash': {
+        const pre = document.createElement('pre');
+        pre.className =
+          'whitespace-pre-wrap break-all bg-black/40 border-l-2 border-app-accent-2/40 pl-2 my-0.5';
+        pre.textContent = block.text ?? '';
+        el = pre;
+        break;
+      }
+      case 'thinking': {
+        el = document.createElement('div');
+        el.className = 'italic opacity-70 whitespace-pre-wrap break-all';
+        el.textContent = block.text ?? '';
+        break;
+      }
+      case 'notice': {
+        el = document.createElement('div');
+        el.className = 'text-app-accent-2 whitespace-pre-wrap break-all';
+        el.textContent = block.text ?? '';
+        break;
+      }
+      case 'error': {
+        el = document.createElement('div');
+        el.className = 'text-red-400 whitespace-pre-wrap break-all';
+        el.textContent = block.text ?? '';
+        break;
+      }
+      case 'divider': {
+        el = document.createElement('div');
+        el.className =
+          'text-app-text/40 border-t border-app-border/40 pt-1 my-1 whitespace-pre-wrap break-all';
+        el.textContent = block.text ?? '';
+        break;
+      }
+      case 'text':
+      default: {
+        el = document.createElement('div');
+        el.className = 'whitespace-pre-wrap break-all';
+        el.textContent = block.text ?? '';
+        break;
+      }
+    }
+    return el;
+  }
+
+  private updateBlockEl(el: HTMLElement, block: RenderBlock) {
+    const header = el.querySelector('[data-role="header"]') as HTMLElement | null;
+    if (header) {
+      header.textContent = block.header ?? '';
+    }
+    const body = el.querySelector('[data-role="body"]') as HTMLElement | null;
+    if (body) {
+      const txt = block.text ?? '';
+      if (body.textContent !== txt) {
+        body.textContent = txt;
+      }
+    } else {
+      const txt = block.text ?? block.header ?? '';
+      if (el.textContent !== txt) {
+        el.textContent = txt;
+      }
+    }
+    // Apply error tinting to error blocks.
+    if (block.kind === 'error' && !el.classList.contains('text-red-400')) {
+      el.classList.add('text-red-400');
+    }
+  }
+
+  private scrollToBottom() {
+    if (this.isFollowMode && this.logContainer) {
+      this.logContainer.scrollTop = this.logContainer.scrollHeight;
+    }
   }
 
   private initStateSync() {
@@ -184,6 +302,9 @@ export class CoderBotDialog extends BaseDialog {
   protected close(result: any = null) {
     if (this.unsubscribe) {
       this.unsubscribe();
+    }
+    if (this.blockUnsubscribe) {
+      this.blockUnsubscribe();
     }
     if (this.stateUnsubscribe) {
       this.stateUnsubscribe();

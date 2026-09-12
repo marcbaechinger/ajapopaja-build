@@ -33,6 +33,24 @@ def enable_logging():
 
 
 @pytest.mark.asyncio
+async def test_coderbot_broadcasts_rpc_event(init_mock_db):
+    """Each parsed Pi RPC event is forwarded to clients as CODERBOT_RPC_EVENT."""
+    session = CoderBotSession(pipeline_id="p1", task_id="t1")
+    with patch(
+        "api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock
+    ) as mock_broadcast:
+        await session._broadcast_rpc({"type": "agent_settled"})
+
+        mock_broadcast.assert_awaited_once()
+        msg = mock_broadcast.await_args.args[0]
+        assert msg.type == "CODERBOT_RPC_EVENT"
+        assert msg.payload["bot_type"] == "coderbot"
+        assert msg.payload["task_id"] == "t1"
+        assert msg.payload["pipeline_id"] == "p1"
+        assert msg.payload["event"] == {"type": "agent_settled"}
+
+
+@pytest.mark.asyncio
 async def test_coderbot_session_initialization(init_mock_db):
     task = Task(
         title="Test Task",

@@ -21,14 +21,14 @@ describe('ActionRegistry', () => {
   it('should register and execute a handler', async () => {
     const registry = new ActionRegistry();
     const handler = vi.fn();
-    
+
     registry.register('test_action', handler);
-    
+
     const event = new MouseEvent('click');
     const element = document.createElement('button');
-    
+
     await registry.execute('test_action', event, element);
-    
+
     expect(handler).toHaveBeenCalledWith(event, element);
   });
 
