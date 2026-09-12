@@ -21,7 +21,6 @@ export class PullRequestSection {
   static render(prs: PullRequest[]): string {
     const awaitingReview: PullRequestStatus[] = [
       PullRequestStatus.OPEN,
-      PullRequestStatus.SUBMITTED,
     ];
     const openPrs = prs.filter(pr => awaitingReview.includes(pr.status))
       .sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());

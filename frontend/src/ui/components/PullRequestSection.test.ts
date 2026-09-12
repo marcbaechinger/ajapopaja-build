@@ -31,7 +31,7 @@ describe('PullRequestSection', () => {
     ...overrides
   });
 
-  it('includes SUBMITTED items as awaiting review', () => {
+  it('includes only OPEN items as awaiting review', () => {
     const prs = [
       makePr({ _id: 'a', status: PullRequestStatus.SUBMITTED, remote_pr_url: 'https://host/o/r/pulls/1' }),
       makePr({ _id: 'b', status: PullRequestStatus.OPEN }),
@@ -41,16 +41,20 @@ describe('PullRequestSection', () => {
     const html = PullRequestSection.render(prs);
     expect(html).toContain('summary');
     expect(html).toContain('Review');
-    // Accepted and rejected are not shown.
+    // Submitted, accepted and rejected are not shown.
     expect(html).not.toContain('REJECTED');
   });
 
-  it('shows a Submitted badge for submitted PRs', () => {
+  it('omits SUBMITTED PRs from the list', () => {
     const prs = [
-      makePr({ _id: 'a', status: PullRequestStatus.SUBMITTED })
+      makePr({ _id: 'a', status: PullRequestStatus.OPEN, summary: 'open-one' }),
+      makePr({ _id: 'b', status: PullRequestStatus.SUBMITTED, summary: 'submitted-one' })
     ];
     const html = PullRequestSection.render(prs);
-    expect(html).toContain('Submitted');
+    expect(html).toContain('open-one');
+    expect(html).not.toContain('submitted-one');
+    // No Submitted badge is rendered.
+    expect(html).not.toContain('Submitted');
   });
 
   it('returns empty when there are no awaiting-review PRs', () => {
