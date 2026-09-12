@@ -200,6 +200,22 @@ and left for external review/merging in the Gitea web UI. The Gitea PR URL is
 persisted on the `PullRequest` row (`remote_pr_url`) and surfaced in the UI, and
 the task stays in `PULL_REQUEST_AVAILABLE` until the change is merged externally.
 
+### Submission Flow & Commit History
+
+In `gitea_pr` mode, `_submit_as_gitea_pr` coordinates both git operations and Gitea API calls:
+
+1. **Feature branch push (`git_utils.push_branch_with_auth`)**: Pushes the feature branch (`pr.branch_name`) containing the commit to the remote Git server. This step is strictly required because Gitea's REST API cannot create a pull request if the head branch does not already exist on the remote forge (returns HTTP 422 `ref does not exist`).
+2. **Pull request creation (`GiteaClient.create_pull_request`)**: Calls Gitea's REST API (`POST /api/v1/repos/{owner}/{repo}/pulls`) to register the PR from `pr.branch_name` to the default branch (`base`). It does not push code; it only creates the review entity.
+3. **Workspace restoration**: Restores the local workspace to the default branch (`base`) after submission so the local working copy remains clean while awaiting external review.
+
+#### Why two commits appear after merging on Gitea
+
+When the pull request is merged in the Gitea web UI, Gitea's default merge method is **"Create Merge Commit" (`merge`)**:
+- A Git merge commit joins the base branch and the feature branch with two parent commits.
+- Because no other commits intervened on base, the tree of the merge commit is identical to the feature commit.
+- In Gitea's commit log for `main`, both the feature commit (`pr.branch_name`) and the merge commit (`Merge pull request '...' (#N) from ... into main`) appear.
+- **Configuring single-commit history**: If a single linear commit is desired on the remote repository without an additional merge commit, the repository settings in Gitea should be configured to allow **Rebase (fast-forward)** or **Squash and merge**.
+
 ### Required token scope
 
 For the PR flow the Gitea access token must have **repo write** scope (it needs

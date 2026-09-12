@@ -256,13 +256,11 @@ async def _submit_as_gitea_pr(repo, pipeline, pr, commit_message: str) -> str:
     """Push a feature branch and create a Gitea pull request for review.
 
     The patch has already been applied and committed on the default branch. The
-    feature branch is branched off that state (carrying the changes along), the
-    commit is idempotently reused, and the branch is pushed. Returns the Gitea
-    PR web URL.
+    feature branch is branched off that state (carrying the changes along) and
+    pushed. Returns the Gitea PR web URL.
     """
     base = git_utils.current_default_branch(repo)
     git_utils.ensure_feature_branch(repo, pr.branch_name)
-    commit_changes(repo, pr, commit_message)
     git_utils.push_branch_with_auth(repo, pipeline, pr.branch_name)
 
     base_url, owner, repo_name = git_utils.resolve_gitea_repo(pipeline.repo_uri)
@@ -279,6 +277,11 @@ async def _submit_as_gitea_pr(repo, pipeline, pr, commit_message: str) -> str:
         )
     finally:
         await client.aclose()
+        # Restore workspace to default branch
+        try:
+            repo.git.checkout(base)
+        except Exception as e:
+            logger.warning(f"Failed to switch back to base branch {base}: {e}")
 
 
 # =============================================================================

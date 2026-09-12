@@ -154,10 +154,6 @@ async def test_submit_as_gitea_pr_flow():
             return_value="main",
         ) as mock_base,
         patch("api.routes.pull_request.git_utils.ensure_feature_branch") as mock_ensure,
-        patch(
-            "api.routes.pull_request.commit_changes",
-            return_value="abc123",
-        ) as mock_commit,
         patch("api.routes.pull_request.git_utils.push_branch_with_auth") as mock_push,
         patch(
             "api.routes.pull_request.git_utils.resolve_gitea_repo",
@@ -179,7 +175,6 @@ async def test_submit_as_gitea_pr_flow():
     assert url == "https://host/owner/repo/pulls/9"
     mock_base.assert_called_once_with(mock_repo)
     mock_ensure.assert_called_once_with(mock_repo, "feature/x")
-    mock_commit.assert_called_once_with(mock_repo, mock_pr, "msg")
     mock_push.assert_called_once_with(mock_repo, mock_pipeline, "feature/x")
     mock_client_cls.assert_called_once_with("https://host", "pipetok")
     mock_client.create_pull_request.assert_awaited_once_with(
@@ -191,6 +186,7 @@ async def test_submit_as_gitea_pr_flow():
         body="summary",
     )
     mock_client.aclose.assert_awaited_once()
+    mock_repo.git.checkout.assert_called_with("main")
 
 
 @pytest.mark.asyncio
