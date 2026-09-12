@@ -45,9 +45,7 @@ class GiteaClient:
             headers["Authorization"] = f"token {self.token}"
         return headers
 
-    async def _request(
-        self, method: str, path: str, **kwargs
-    ) -> httpx.Response:
+    async def _request(self, method: str, path: str, **kwargs) -> httpx.Response:
         url = f"{self.base_url}/api/{GITEA_API_VERSION}{path}"
         try:
             response = await self._client.request(

@@ -137,4 +137,45 @@ describe('PullRequestDialog', () => {
     expect(footer.querySelector('#pr-open-gitea-link')).toBeNull();
     expect(footer.innerHTML).not.toContain('Open in Gitea');
   });
+
+  it('sends the edited PR summary as the commit message on accept', async () => {
+    const pr = {
+      _id: 'pr5',
+      pipeline_id: 'p1',
+      task_id: 't1',
+      summary: 'Original summary',
+      branch_name: 'feature/x',
+      patch: 'patch',
+      status: PullRequestStatus.OPEN
+    };
+    const acceptPullRequest = vi.fn().mockResolvedValue(undefined);
+    const context = {
+      pullRequestClient: {
+        getPullRequestByTask: vi.fn().mockResolvedValue(new PullRequest(pr)),
+        getPullRequest: vi.fn().mockResolvedValue(new PullRequest(pr)),
+        acceptPullRequest
+      },
+      onAccept: vi.fn()
+    } as any;
+
+    const dialog = new PullRequestDialog({
+      taskId: 't1',
+      pipelineId: 'p1',
+      context,
+      onAccept: context.onAccept
+    });
+
+    await vi.waitFor(() => expect(dialog['pr']).not.toBeNull());
+
+    // User edits the PR summary in the commit message textarea.
+    const summaryInput = dialog['dialog'].querySelector('#pr-summary-input') as HTMLTextAreaElement;
+    summaryInput.value = 'Add new feature';
+
+    const footer = dialog['dialog'].querySelector('#dialog-footer-container') as HTMLElement;
+    const acceptBtn = footer.querySelector('#pr-accept-btn') as HTMLButtonElement;
+    acceptBtn.click();
+
+    await vi.waitFor(() => expect(acceptPullRequest).toHaveBeenCalled());
+    expect(acceptPullRequest).toHaveBeenCalledWith('pr5', 'Add new feature', 'revert');
+  });
 });

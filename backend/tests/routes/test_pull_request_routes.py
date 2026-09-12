@@ -92,6 +92,31 @@ def test_commit_changes_passes_git_identity_env():
     mock_identity.assert_called_once_with(mock_repo)
 
 
+def test_build_commit_message_uses_request_when_provided():
+    mock_pr = MagicMock()
+    mock_pr.summary = "Original summary"
+    request = pr_routes.AcceptPullRequestRequest(
+        commit_message="Add new feature",
+        failure_strategy=pr_routes.FailureStrategy.REVERT,
+    )
+    assert pr_routes.build_commit_message(request, mock_pr) == "Add new feature"
+
+
+def test_build_commit_message_returns_empty_string_when_both_empty():
+    mock_pr = MagicMock()
+    mock_pr.summary = None
+    request = pr_routes.AcceptPullRequestRequest(
+        commit_message=None, failure_strategy=pr_routes.FailureStrategy.REVERT
+    )
+    assert pr_routes.build_commit_message(request, mock_pr) == ""
+
+
+def test_build_commit_message_none_request():
+    mock_pr = MagicMock()
+    mock_pr.summary = "summary"
+    assert pr_routes.build_commit_message(None, mock_pr) == "summary"
+
+
 def test_is_gitea_pr_mode_remote_and_flag(monkeypatch):
     monkeypatch.setattr(pr_routes.config, "REMOTE_PR_MODE", "gitea_pr")
     pipeline = MagicMock()
@@ -128,16 +153,12 @@ async def test_submit_as_gitea_pr_flow():
             "api.routes.pull_request.git_utils.current_default_branch",
             return_value="main",
         ) as mock_base,
-        patch(
-            "api.routes.pull_request.git_utils.ensure_feature_branch"
-        ) as mock_ensure,
+        patch("api.routes.pull_request.git_utils.ensure_feature_branch") as mock_ensure,
         patch(
             "api.routes.pull_request.commit_changes",
             return_value="abc123",
         ) as mock_commit,
-        patch(
-            "api.routes.pull_request.git_utils.push_branch_with_auth"
-        ) as mock_push,
+        patch("api.routes.pull_request.git_utils.push_branch_with_auth") as mock_push,
         patch(
             "api.routes.pull_request.git_utils.resolve_gitea_repo",
             return_value=("https://host", "owner", "repo"),
@@ -201,20 +222,14 @@ async def test_accept_pull_request_gitea_pr_mode(async_client, init_mock_db):
     with (
         patch("api.routes.pull_request.PullRequest.get") as mock_get_pr,
         patch("api.routes.pull_request.Pipeline.get") as mock_get_pipe,
-        patch(
-            "api.routes.pull_request.git_utils.get_repo", return_value=mock_repo
-        ),
+        patch("api.routes.pull_request.git_utils.get_repo", return_value=mock_repo),
         patch(
             "api.routes.pull_request.validate_workspace_clean",
             new_callable=AsyncMock,
         ),
         patch("api.routes.pull_request.apply_patch", new_callable=AsyncMock),
-        patch(
-            "api.routes.pull_request.format_workspace", new_callable=AsyncMock
-        ),
-        patch(
-            "api.routes.pull_request.commit_changes", return_value="abc1234"
-        ),
+        patch("api.routes.pull_request.format_workspace", new_callable=AsyncMock),
+        patch("api.routes.pull_request.commit_changes", return_value="abc1234"),
         patch(
             "api.routes.pull_request._submit_as_gitea_pr",
             new_callable=AsyncMock,
@@ -276,23 +291,15 @@ async def test_accept_pull_request_direct_mode_uses_push(async_client, init_mock
     with (
         patch("api.routes.pull_request.PullRequest.get") as mock_get_pr,
         patch("api.routes.pull_request.Pipeline.get") as mock_get_pipe,
-        patch(
-            "api.routes.pull_request.git_utils.get_repo", return_value=mock_repo
-        ),
+        patch("api.routes.pull_request.git_utils.get_repo", return_value=mock_repo),
         patch(
             "api.routes.pull_request.validate_workspace_clean",
             new_callable=AsyncMock,
         ),
         patch("api.routes.pull_request.apply_patch", new_callable=AsyncMock),
-        patch(
-            "api.routes.pull_request.format_workspace", new_callable=AsyncMock
-        ),
-        patch(
-            "api.routes.pull_request.commit_changes", return_value="abc1234"
-        ),
-        patch(
-            "api.routes.pull_request.git_utils.push_with_auth"
-        ) as mock_push,
+        patch("api.routes.pull_request.format_workspace", new_callable=AsyncMock),
+        patch("api.routes.pull_request.commit_changes", return_value="abc1234"),
+        patch("api.routes.pull_request.git_utils.push_with_auth") as mock_push,
         patch("api.routes.pull_request.Task.get", return_value=mock_task),
         patch(
             "api.routes.pull_request.update_pull_request_status",

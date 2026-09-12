@@ -144,9 +144,7 @@ def push_branch_with_auth(repo: git.Repo, pipeline: Pipeline, branch: str) -> No
         env_config = f"'http.extraHeader={auth_header}'"
 
         with repo.git.custom_environment(GIT_CONFIG_PARAMETERS=env_config):
-            repo.git.push(
-                "origin", f"refs/heads/{branch}:refs/heads/{branch}"
-            )
+            repo.git.push("origin", f"refs/heads/{branch}:refs/heads/{branch}")
     else:
         repo.git.push("origin", f"refs/heads/{branch}:refs/heads/{branch}")
 

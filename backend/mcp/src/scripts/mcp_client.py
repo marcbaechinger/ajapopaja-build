@@ -19,7 +19,6 @@ import sys
 from typing import Any, Dict, Optional
 
 import httpx
-
 from mcp_rpc import RpcHelper
 
 logging.basicConfig(

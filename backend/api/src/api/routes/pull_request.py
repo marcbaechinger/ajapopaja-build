@@ -220,8 +220,7 @@ async def keep_task_pending_review(
     """
     if task:
         logger.info(
-            f"Keeping task {task.id} in PULL_REQUEST_AVAILABLE "
-            "awaiting external review"
+            f"Keeping task {task.id} in PULL_REQUEST_AVAILABLE awaiting external review"
         )
         task.commit_hash = new_commit_hash
         task.completion_info = summary
@@ -238,8 +237,8 @@ async def keep_task_pending_review(
 def build_commit_message(
     request: Optional[AcceptPullRequestRequest], pr: PullRequest
 ) -> str:
-    """Build the commit message from request or pull request summary."""
-    return (request.commit_message if request else None) or pr.summary
+    """Build the commit message from the request, falling back to the PR summary."""
+    return ((request.commit_message if request else None) or pr.summary) or ""
 
 
 # =============================================================================
@@ -250,9 +249,7 @@ def build_commit_message(
 def _is_gitea_pr_mode(pipeline: Pipeline) -> bool:
     """Whether the remote PR should be submitted as a Gitea PR instead of
     being applied directly. Local pipelines always use the direct path."""
-    return bool(
-        pipeline.repo_uri and config.REMOTE_PR_MODE == "gitea_pr"
-    )
+    return bool(pipeline.repo_uri and config.REMOTE_PR_MODE == "gitea_pr")
 
 
 async def _submit_as_gitea_pr(repo, pipeline, pr, commit_message: str) -> str:
@@ -369,9 +366,7 @@ async def accept_pull_request(
                 git_utils.push_with_auth(repo, pipeline)
 
         except GiteaApiError as e:
-            logger.error(
-                f"Gitea PR submission failed for {pr_id}: {e}", exc_info=True
-            )
+            logger.error(f"Gitea PR submission failed for {pr_id}: {e}", exc_info=True)
             raise HTTPException(
                 status_code=502,
                 detail=f"Failed to create Gitea pull request: {e}",
