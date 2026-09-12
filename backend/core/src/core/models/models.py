@@ -219,6 +219,7 @@ class PullRequestStatus(str, Enum):
     OPEN = "open"
     ACCEPTED = "accepted"
     REJECTED = "rejected"
+    SUBMITTED = "submitted"  # Gitea PR created, awaiting external review
 
 
 class PullRequest(Document):
@@ -228,6 +229,7 @@ class PullRequest(Document):
     branch_name: str
     patch: str  # The git diff output
     status: PullRequestStatus = PullRequestStatus.OPEN
+    remote_pr_url: Optional[str] = None  # set only in gitea_pr mode
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 

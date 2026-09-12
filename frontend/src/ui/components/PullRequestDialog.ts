@@ -15,7 +15,7 @@
  */
 
 import { BaseDialog } from './dialog_common.ts';
-import { PullRequest } from '../../core/domain.ts';
+import { PullRequest, PullRequestStatus } from '../../core/domain.ts';
 import type { AppContext } from '../../core/AppContext.ts';
 import { Icon } from './Icon.ts';
 
@@ -115,7 +115,8 @@ export class PullRequestDialog extends BaseDialog<void> {
           </div>
           <p class="text-[10px] font-bold text-app-muted uppercase tracking-widest mt-1">Commit Message</p>
         </div>
-        
+        ${this.renderExternalReviewBanner()}
+
         <div class="flex-grow overflow-auto p-0 bg-slate-950">
           <pre class="text-[11px] leading-relaxed p-6 text-slate-300 font-mono whitespace-pre overflow-visible"><code>${this.escapeHtml(this.pr.patch)}</code></pre>
         </div>
@@ -125,6 +126,22 @@ export class PullRequestDialog extends BaseDialog<void> {
 
   protected renderFooter(): string {
     if (this.loading || !this.pr) return '';
+
+    if (this.isSubmitted()) {
+      return `
+      <div class="flex justify-between items-center p-4 border-t border-app-border bg-app-surface/50 rounded-b-2xl">
+        <button id="pr-close-btn" class="px-6 py-2 rounded bg-app-bg text-app-text border border-app-border text-xs font-bold uppercase tracking-widest hover:bg-app-surface transition-all cursor-pointer">
+          Close
+        </button>
+        <div class="flex gap-3">
+          <a id="pr-open-gitea-link" href="${this.escapeHtml(this.pr.remote_pr_url || '#')}" target="_blank" rel="noopener noreferrer" class="px-8 py-2 rounded bg-app-accent-2 text-white text-xs font-black uppercase tracking-widest hover:bg-app-accent-2/80 transition-all cursor-pointer shadow-lg shadow-app-accent-2/20 inline-flex items-center gap-2">
+            ${Icon.render('arrowRight', { size: 16 })}
+            Open in Gitea
+          </a>
+        </div>
+      </div>
+    `;
+    }
 
     return `
       <div class="flex justify-between items-center p-4 border-t border-app-border bg-app-surface/50 rounded-b-2xl">
@@ -140,6 +157,26 @@ export class PullRequestDialog extends BaseDialog<void> {
             Accept & Apply
           </button>
         </div>
+      </div>
+    `;
+  }
+
+  private isSubmitted(): boolean {
+    return !!this.pr && (
+      this.pr.status === PullRequestStatus.SUBMITTED || !!this.pr.remote_pr_url
+    );
+  }
+
+  private renderExternalReviewBanner(): string {
+    if (!this.isSubmitted()) return '';
+    const url = this.pr!.remote_pr_url || '#';
+    return `
+      <div class="px-6 py-3 border-b border-app-border bg-app-accent-2/10 flex items-center justify-between gap-3">
+        <div class="flex items-center gap-2 text-[10px] font-bold text-app-accent-2 uppercase tracking-widest">
+          ${Icon.render('git-pull-request', { size: 16 })}
+          Submitted for external review
+        </div>
+        <a href="${this.escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="text-[10px] font-black text-app-accent-2 underline hover:opacity-80">View Pull Request</a>
       </div>
     `;
   }

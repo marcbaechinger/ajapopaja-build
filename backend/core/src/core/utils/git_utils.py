@@ -124,6 +124,107 @@ def push_with_auth(repo: git.Repo, pipeline: Pipeline) -> None:
         repo.git.push("origin", "HEAD")
 
 
+def push_branch_with_auth(repo: git.Repo, pipeline: Pipeline, branch: str) -> None:
+    """Push a named branch (not HEAD) to origin using resolved credentials.
+
+    Targets `refs/heads/{branch}:refs/heads/{branch}` so origin's default branch
+    is never touched. Used by the remote Gitea-PR submission flow.
+    """
+    if not pipeline.repo_uri:
+        return
+
+    username, token = _resolve_credentials(pipeline)
+
+    if token:
+        user = username or token  # fallback to token if no user provided
+        auth_pair = f"{user}:{token}".encode("utf-8")
+        auth_header = (
+            f"Authorization: Basic {base64.b64encode(auth_pair).decode('ascii')}"
+        )
+        env_config = f"'http.extraHeader={auth_header}'"
+
+        with repo.git.custom_environment(GIT_CONFIG_PARAMETERS=env_config):
+            repo.git.push(
+                "origin", f"refs/heads/{branch}:refs/heads/{branch}"
+            )
+    else:
+        repo.git.push("origin", f"refs/heads/{branch}:refs/heads/{branch}")
+
+
+def ensure_feature_branch(repo: git.Repo, branch_name: str) -> None:
+    """Create and check out `branch_name` from the default branch if missing.
+
+    If the branch already exists it is checked out as-is (no-op creation). The
+    new branch is created from the current HEAD so an already-applied patch on
+    the default branch is carried over onto the feature branch.
+    """
+    try:
+        exists = any(b.name == branch_name for b in repo.branches)
+    except git.exc.GitCommandError:
+        exists = False
+
+    if not exists:
+        logger.info(f"Creating feature branch {branch_name}")
+        repo.git.checkout("-b", branch_name)
+    else:
+        logger.info(f"Feature branch {branch_name} already exists; checking it out")
+        repo.git.checkout(branch_name)
+
+
+def current_default_branch(repo: git.Repo) -> str:
+    """Return the name of the remote default branch.
+
+    Derive it from `origin/HEAD` symbolic-ref, falling back to `origin/main`
+    then `origin/master`.
+    """
+    try:
+        symbolic = repo.git.symbolic_ref("refs/remotes/origin/HEAD")
+        # symbolic_ref yields e.g. refs/remotes/origin/main -> "main"
+        name = symbolic.rsplit("/", 1)[-1]
+        if name:
+            return name
+    except git.exc.GitCommandError:
+        pass
+
+    for candidate in ("main", "master"):
+        try:
+            repo.git.rev_parse(f"origin/{candidate}")
+            return candidate
+        except git.exc.GitCommandError:
+            continue
+    return "main"
+
+
+def resolve_gitea_repo(repo_uri: str) -> Tuple[str, str, str]:
+    """Return (base_url, owner, repo) for a Gitea repo_uri.
+
+    Handles `https://host/owner/repo.git`, http URLs and SCP-style
+    `git@host:owner/repo` strings. Trailing `.git` is stripped.
+    """
+    uri = repo_uri.rstrip("/")
+
+    if re.match(r"^[^@]+@[^:]+:.+$", uri):
+        # SCP-style: git@host:owner/repo.git
+        host, path = uri.rsplit(":", 1)
+        host = host.rsplit("@", 1)[-1]
+        base_url = f"https://{host}"
+    else:
+        parts = urlsplit(uri)
+        scheme = parts.scheme or "https"
+        host = parts.netloc or ""
+        path = parts.path.lstrip("/")
+        base_url = f"{scheme}://{host}"
+
+    parts = path.split("/")
+    if len(parts) < 2:
+        raise ValueError(f"repo_uri '{repo_uri}' cannot be parsed into owner/repo")
+    owner = parts[-2]
+    repo = parts[-1]
+    if repo.endswith(".git"):
+        repo = repo[:-4]
+    return base_url, owner, repo
+
+
 def ensure_git_identity(repo: git.Repo) -> Dict[str, str]:
     """
     Return GIT_AUTHOR_*/GIT_COMMITTER_* environment variables for any identity

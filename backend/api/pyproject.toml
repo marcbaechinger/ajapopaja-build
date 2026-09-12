@@ -14,6 +14,7 @@ dependencies = [
   "ollama>=0.6.1",
   "msgpack>=1.1.2",
   "gitpython>=3.1.46",
+  "httpx>=0.28.1",
 ]
 requires-python = ">=3.11"
 

@@ -17,6 +17,7 @@ import logging
 import os
 import sys
 import tempfile
+from datetime import UTC, datetime
 from typing import List, Optional
 
 import git
@@ -25,6 +26,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from api.auth import get_current_user
+from api.git_hosting.gitea import GiteaApiError, GiteaClient
+from core import config
 from core.models.models import (
     Pipeline,
     PullRequest,
@@ -185,9 +188,12 @@ def commit_changes(repo: git.Repo, pr: PullRequest, commit_message: str) -> str:
 # =============================================================================
 
 
-async def update_pull_request_status(pr: PullRequest) -> None:
-    """Update the pull request status to ACCEPTED."""
-    pr.status = PullRequestStatus.ACCEPTED
+async def update_pull_request_status(
+    pr: PullRequest, status: PullRequestStatus, remote_pr_url: Optional[str] = None
+) -> None:
+    """Update the pull request status and optionally persist the external PR URL."""
+    pr.status = status
+    pr.remote_pr_url = remote_pr_url
     await pr.save()
 
 
@@ -204,6 +210,26 @@ async def update_task_status(
         )
 
 
+async def keep_task_pending_review(
+    task: Task, new_commit_hash: str, summary: str, remote_pr_url: str
+) -> None:
+    """Mark the task as pending external review (Gitea-PR mode).
+
+    The task stays in PULL_REQUEST_AVAILABLE so the user knows work is awaiting
+    external review. Commit and PR URL are recorded for later automation.
+    """
+    if task:
+        logger.info(
+            f"Keeping task {task.id} in PULL_REQUEST_AVAILABLE "
+            "awaiting external review"
+        )
+        task.commit_hash = new_commit_hash
+        task.completion_info = summary
+        task.review_md = remote_pr_url
+        task.updated_at = datetime.now(UTC)
+        await task.save()
+
+
 # =============================================================================
 # Helper Functions
 # =============================================================================
@@ -214,6 +240,48 @@ def build_commit_message(
 ) -> str:
     """Build the commit message from request or pull request summary."""
     return (request.commit_message if request else None) or pr.summary
+
+
+# =============================================================================
+# Remote Pull Request Submission (Gitea)
+# =============================================================================
+
+
+def _is_gitea_pr_mode(pipeline: Pipeline) -> bool:
+    """Whether the remote PR should be submitted as a Gitea PR instead of
+    being applied directly. Local pipelines always use the direct path."""
+    return bool(
+        pipeline.repo_uri and config.REMOTE_PR_MODE == "gitea_pr"
+    )
+
+
+async def _submit_as_gitea_pr(repo, pipeline, pr, commit_message: str) -> str:
+    """Push a feature branch and create a Gitea pull request for review.
+
+    The patch has already been applied and committed on the default branch. The
+    feature branch is branched off that state (carrying the changes along), the
+    commit is idempotently reused, and the branch is pushed. Returns the Gitea
+    PR web URL.
+    """
+    base = git_utils.current_default_branch(repo)
+    git_utils.ensure_feature_branch(repo, pr.branch_name)
+    commit_changes(repo, pr, commit_message)
+    git_utils.push_branch_with_auth(repo, pipeline, pr.branch_name)
+
+    base_url, owner, repo_name = git_utils.resolve_gitea_repo(pipeline.repo_uri)
+    token = pipeline.repo_token or config.GIT_PUSH_TOKEN
+    client = GiteaClient(base_url, token)
+    try:
+        return await client.create_pull_request(
+            owner,
+            repo_name,
+            head=pr.branch_name,
+            base=base,
+            title=pr.summary,
+            body=pr.summary,
+        )
+    finally:
+        await client.aclose()
 
 
 # =============================================================================
@@ -289,10 +357,25 @@ async def accept_pull_request(
             commit_message = build_commit_message(request, pr)
             new_commit_hash = commit_changes(repo, pr, commit_message)
 
-            # Step 3b: Push to the remote origin for remote pipelines.
-            if pipeline.repo_uri:
+            # Step 3b: Submit to the remote repo. In gitea_pr mode we push a
+            # feature branch and create a Gitea pull request instead of merging.
+            gitea_pr = _is_gitea_pr_mode(pipeline)
+            remote_pr_url: Optional[str] = None
+            if gitea_pr:
+                remote_pr_url = await _submit_as_gitea_pr(
+                    repo, pipeline, pr, commit_message
+                )
+            elif pipeline.repo_uri:
                 git_utils.push_with_auth(repo, pipeline)
 
+        except GiteaApiError as e:
+            logger.error(
+                f"Gitea PR submission failed for {pr_id}: {e}", exc_info=True
+            )
+            raise HTTPException(
+                status_code=502,
+                detail=f"Failed to create Gitea pull request: {e}",
+            )
         except Exception:
             if strategy == FailureStrategy.REVERT:
                 logger.warning(
@@ -311,9 +394,23 @@ async def accept_pull_request(
                 )
             raise
 
-        # Step 4: Update records
-        await update_pull_request_status(pr)
+        # Step 4: Update records. In gitea_pr mode the change is not merged, so
+        # the task stays in PULL_REQUEST_AVAILABLE awaiting external review.
         task = await Task.get(pr.task_id)
+        if gitea_pr:
+            await update_pull_request_status(
+                pr, PullRequestStatus.SUBMITTED, remote_pr_url=remote_pr_url
+            )
+            await keep_task_pending_review(
+                task, new_commit_hash, pr.summary, remote_pr_url
+            )
+            return {
+                "status": "success",
+                "message": "Pull Request submitted for review",
+                "remote_pr_url": remote_pr_url,
+            }
+
+        await update_pull_request_status(pr, PullRequestStatus.ACCEPTED)
         await update_task_status(task, new_commit_hash, pr.summary, pr_id)
 
         return {

@@ -168,6 +168,7 @@ export const PullRequestStatus = {
   OPEN: "open",
   ACCEPTED: "accepted",
   REJECTED: "rejected",
+  SUBMITTED: "submitted",
 } as const;
 
 export type PullRequestStatus = typeof PullRequestStatus[keyof typeof PullRequestStatus];
@@ -180,6 +181,7 @@ export class PullRequest {
   branch_name: string = '';
   patch: string = '';
   status: PullRequestStatus = PullRequestStatus.OPEN;
+  remote_pr_url?: string;
   created_at?: string;
   updated_at?: string;
 
@@ -193,6 +195,8 @@ export class PullRequest {
     if (json.branch_name !== undefined) this.branch_name = String(json.branch_name);
     if (json.patch !== undefined) this.patch = String(json.patch);
     if (json.status !== undefined) this.status = json.status as PullRequestStatus;
+    this.remote_pr_url =
+      json.remote_pr_url !== undefined ? String(json.remote_pr_url) : undefined;
     if (json.created_at !== undefined) this.created_at = String(json.created_at);
     if (json.updated_at !== undefined) this.updated_at = String(json.updated_at);
   }

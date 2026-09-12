@@ -183,7 +183,42 @@ git init --bare my-app.git
 
 ---
 
-## 5.1 Security
+## 5.1 Remote Pull-Request submission modes
+
+Ajapopaja supports two ways to deliver accepted changes to a **remote** pipeline
+(one that declares a `repo_uri`). The behavior is selected globally via the
+`REMOTE_PR_MODE` setting in `backend/core/src/core/config.py` (env var
+`REMOTE_PR_MODE`). Local pipelines (no `repo_uri`) always use `direct`.
+
+| Mode | Behavior | Use when |
+|------|----------|----------|
+| `direct` (default) | Apply patch, commit, push `HEAD` to `origin`'s default branch | You want Ajapopaja to merge the change immediately |
+| `gitea_pr` | Push a dedicated feature branch and create a **Gitea pull request** via the REST API | You want a code-review window before merging in the Gitea UI |
+
+In `gitea_pr` mode the pull request is **not** merged by Ajapopaja; it is created
+and left for external review/merging in the Gitea web UI. The Gitea PR URL is
+persisted on the `PullRequest` row (`remote_pr_url`) and surfaced in the UI, and
+the task stays in `PULL_REQUEST_AVAILABLE` until the change is merged externally.
+
+### Required token scope
+
+For the PR flow the Gitea access token must have **repo write** scope (it needs
+to push a branch and create a PR). The token is resolved the same way as git push
+credentials: the pipeline's `repo_token` first, then `GIT_PUSH_TOKEN`.
+
+Set this in the environment, e.g.:
+
+```env
+REMOTE_PR_MODE=gitea_pr
+GIT_PUSH_TOKEN=<gitea-personal-access-token-with-repo-write>
+```
+
+Only HTTPS `repo_uri`s are supported for PR creation (SCP/SSH-style URIs resolve
+the host over `https://` for the API call).
+
+---
+
+## 5.2 Security
 
 - **Prefer HTTPS over SSH** for simplicity; use Gitea's built-in authentication
   and personal access tokens for private repos.

@@ -326,3 +326,95 @@ def test_push_with_auth_without_token():
     with patch("core.utils.git_utils.config.GIT_PUSH_TOKEN", ""):
         git_utils.push_with_auth(repo, pipeline)
         repo.git.push.assert_called_once_with("origin", "HEAD")
+
+
+def test_push_branch_with_auth_with_token():
+    repo = MagicMock()
+    pipeline = MagicMock()
+    pipeline.repo_uri = "https://github.com/org/repo.git"
+    pipeline.repo_username = "user"
+    pipeline.repo_token = "tok"
+    git_utils.push_branch_with_auth(repo, pipeline, "feature/x")
+    repo.git.push.assert_called_once_with(
+        "origin", "refs/heads/feature/x:refs/heads/feature/x"
+    )
+    repo.git.custom_environment.assert_called_once()
+
+
+def test_push_branch_with_auth_without_token():
+    repo = MagicMock()
+    pipeline = MagicMock()
+    pipeline.repo_uri = "https://github.com/org/repo.git"
+    pipeline.repo_username = None
+    pipeline.repo_token = None
+    with patch("core.utils.git_utils.config.GIT_PUSH_TOKEN", ""):
+        git_utils.push_branch_with_auth(repo, pipeline, "feature/x")
+        repo.git.push.assert_called_once_with(
+            "origin", "refs/heads/feature/x:refs/heads/feature/x"
+        )
+
+
+def test_push_branch_with_auth_noop_for_local():
+    repo = MagicMock()
+    pipeline = MagicMock()
+    pipeline.repo_uri = None
+    git_utils.push_branch_with_auth(repo, pipeline, "feature/x")
+    repo.git.push.assert_not_called()
+
+
+def test_ensure_feature_branch_creates_when_missing():
+    repo = MagicMock()
+    repo.branches = [MagicMock(name="main")]
+    git_utils.ensure_feature_branch(repo, "feature/x")
+    repo.git.checkout.assert_called_once_with("-b", "feature/x")
+
+
+def test_ensure_feature_branch_checks_out_when_exists():
+    repo = MagicMock()
+    existing = MagicMock()
+    existing.name = "feature/x"
+    repo.branches = [existing]
+    git_utils.ensure_feature_branch(repo, "feature/x")
+    repo.git.checkout.assert_called_once_with("feature/x")
+
+
+def test_current_default_branch_from_head():
+    repo = MagicMock()
+    repo.git.symbolic_ref.return_value = "refs/remotes/origin/main"
+    assert git_utils.current_default_branch(repo) == "main"
+
+
+def test_current_default_branch_fallback():
+    repo = MagicMock()
+    repo.git.symbolic_ref.side_effect = git.exc.GitCommandError("symbolic_ref", 1)
+    repo.git.rev_parse.side_effect = [git.exc.GitCommandError("rev-parse", 1), "ok"]
+    assert git_utils.current_default_branch(repo) == "master"
+
+
+def test_resolve_gitea_repo_https():
+    assert git_utils.resolve_gitea_repo("https://host/org/my-app.git") == (
+        "https://host",
+        "org",
+        "my-app",
+    )
+
+
+def test_resolve_gitea_repo_http():
+    assert git_utils.resolve_gitea_repo("http://host:3000/org/repo") == (
+        "http://host:3000",
+        "org",
+        "repo",
+    )
+
+
+def test_resolve_gitea_repo_scp():
+    assert git_utils.resolve_gitea_repo("git@host:owner/my-app.git") == (
+        "https://host",
+        "owner",
+        "my-app",
+    )
+
+
+def test_resolve_gitea_repo_invalid():
+    with pytest.raises(ValueError):
+        git_utils.resolve_gitea_repo("https://host/repo.git")

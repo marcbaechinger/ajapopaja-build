@@ -78,3 +78,12 @@ GIT_USER_EMAIL = os.getenv("GIT_USER_EMAIL", "ajapopaja-build@localhost")
 # does not define its own per-pipeline credentials. Overridable via env vars.
 GIT_PUSH_USERNAME = os.getenv("GIT_PUSH_USERNAME", "")
 GIT_PUSH_TOKEN = os.getenv("GIT_PUSH_TOKEN", "")
+
+# Remote pull-request submission mode.
+#   "direct"    -> current behavior: apply patch, commit, push HEAD to origin.
+#   "gitea_pr"  -> push a feature branch and create a Gitea pull request for review.
+# The mode is global; local pipelines (no repo_uri) always use the direct path.
+REMOTE_PR_MODE = os.getenv("REMOTE_PR_MODE", "direct").lower()
+
+if REMOTE_PR_MODE not in ("direct", "gitea_pr"):
+    raise RuntimeError("REMOTE_PR_MODE must be 'direct' or 'gitea_pr'")

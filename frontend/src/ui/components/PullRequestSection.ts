@@ -19,7 +19,11 @@ import { Icon } from './Icon.ts';
 
 export class PullRequestSection {
   static render(prs: PullRequest[]): string {
-    const openPrs = prs.filter(pr => pr.status === PullRequestStatus.OPEN)
+    const awaitingReview: PullRequestStatus[] = [
+      PullRequestStatus.OPEN,
+      PullRequestStatus.SUBMITTED,
+    ];
+    const openPrs = prs.filter(pr => awaitingReview.includes(pr.status))
       .sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());
 
     if (openPrs.length === 0) return '';
@@ -55,6 +59,7 @@ export class PullRequestSection {
             <p class="text-[10px] text-app-muted font-mono bg-app-bg px-2 py-0.5 rounded inline-block border border-app-border/50">
               branch: ${pr.branch_name}
             </p>
+            ${pr.status === PullRequestStatus.SUBMITTED ? `<span class="ml-2 text-[10px] font-bold bg-app-accent-2/20 text-app-accent-2 px-2 py-0.5 rounded-full border border-app-accent-2/30 uppercase tracking-widest">Submitted</span>` : ''}
           </div>
           <div class="flex gap-2 shrink-0">
              <button data-action-click="open_pr_dialog" data-task-id="${pr.task_id}" data-pr-id="${pr.id}" class="px-4 py-2 bg-app-accent-2 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-app-accent-2/80 transition-all shadow-lg shadow-app-accent-2/20 cursor-pointer flex items-center gap-2">
