@@ -16,10 +16,29 @@
 
 import { View } from '../../core/Navigator.ts';
 import { AppContext } from '../../core/AppContext.ts';
-import { Pipeline, Task } from '../../core/domain.ts';
+import { Pipeline, PipelineStatus, Task } from '../../core/domain.ts';
 import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
 import { PipelineEditDialog } from '../components/PipelineEditDialog.ts';
 import { PipelineStatsView } from '../components/PipelineStatsView.ts';
+
+// Sort weight per pipeline status. Lower weight renders first.
+// Unknown/non-conforming statuses fall back to 3 (last).
+const PIPELINE_STATUS_PRIORITY: Record<string, number> = {
+  [PipelineStatus.ACTIVE]: 0,
+  [PipelineStatus.PAUSED]: 1,
+  [PipelineStatus.COMPLETED]: 2,
+};
+
+// Status group headers, in priority order. Mirrors PIPELINE_STATUS_PRIORITY.
+const STATUS_GROUPS: { key: string; label: string; color: string }[] = [
+  { key: PipelineStatus.ACTIVE, label: 'Active', color: 'text-green-400' },
+  { key: PipelineStatus.PAUSED, label: 'Paused', color: 'text-amber-400' },
+  { key: PipelineStatus.COMPLETED, label: 'Completed', color: 'text-blue-400' },
+];
+
+function statusPriority(status: PipelineStatus): number {
+  return PIPELINE_STATUS_PRIORITY[status] ?? 3;
+}
 
 export class DashboardView extends View {
   private container: HTMLElement | null = null;
@@ -105,9 +124,18 @@ export class DashboardView extends View {
         return;
       }
 
+      // Sort by status priority (active → paused → completed → unknown),
+      // then by created_at descending (newest first) within each group.
+      const sortedPipelines = [...pipelines].sort((a, b) => {
+        const priA = statusPriority(a.status);
+        const priB = statusPriority(b.status);
+        if (priA !== priB) return priA - priB;
+        return (new Date(b.created_at || 0)).getTime() - (new Date(a.created_at || 0)).getTime();
+      });
+
       // Fetch tasks for all pipelines concurrently
       const pipelinesWithTasks = await Promise.all(
-        pipelines.map(async (pipeline) => {
+        sortedPipelines.map(async (pipeline) => {
           try {
             const tasks = pipeline.id ? await this.context.taskClient.listByPipeline(pipeline.id, true) : [];
             return { pipeline, tasks };
@@ -118,7 +146,31 @@ export class DashboardView extends View {
         })
       );
 
-      listContainer.innerHTML = pipelinesWithTasks.map(({pipeline, tasks}) => this.renderPipelineItem(pipeline, tasks)).join('');
+      const grouped: Record<string, { pipeline: Pipeline; tasks: Task[] }[]> = {};
+      for (const entry of pipelinesWithTasks) {
+        const group = statusPriority(entry.pipeline.status);
+        (grouped[group] = grouped[group] || []).push(entry);
+      }
+
+      const knownGroupKeys = new Set(STATUS_GROUPS.map(g => statusPriority(g.key as PipelineStatus)));
+      const knownHtml = STATUS_GROUPS.map(({ key, label, color }) => {
+        const entries = grouped[statusPriority(key as PipelineStatus)] || [];
+        if (entries.length === 0) return '';
+        return `
+          <div class="mb-2">
+            <h3 class="text-xs font-bold uppercase tracking-widest ${color} mb-2">${label}</h3>
+            ${entries.map(({ pipeline, tasks }) => this.renderPipelineItem(pipeline, tasks)).join('')}
+          </div>
+        `;
+      }).join('');
+
+      // Render any unknown/non-conforming statuses after the known groups.
+      const residualHtml = Object.entries(grouped)
+        .filter(([key]) => !knownGroupKeys.has(Number(key)))
+        .map(([, entries]) => entries.map(({ pipeline, tasks }) => this.renderPipelineItem(pipeline, tasks)).join(''))
+        .join('');
+
+      listContainer.innerHTML = knownHtml + residualHtml;
       
       PipelineStatsView.animateBars(listContainer);
     } catch (error) {

@@ -132,6 +132,68 @@ describe('DashboardView', () => {
     expect(list?.querySelectorAll('.mock-stats')).toHaveLength(2);
   });
 
+  function renderedPipelineNames(): string[] {
+    const items = Array.from(container.querySelectorAll('[data-view-type="pipeline"]'));
+    return items.map(el => {
+      const nameEl = el.querySelector('span.font-bold.text-app-text');
+      return nameEl?.textContent ?? '';
+    });
+  }
+
+  it('should group pipelines by status in active → paused → completed order', async () => {
+    const pipelines = [
+      { id: 'c1', name: 'Completed Pipe', status: PipelineStatus.COMPLETED, version: 1, created_at: '2024-01-01T00:00:00Z' },
+      { id: 'a1', name: 'Active Pipe', status: PipelineStatus.ACTIVE, version: 1, created_at: '2024-01-02T00:00:00Z' },
+      { id: 'p1', name: 'Paused Pipe', status: PipelineStatus.PAUSED, version: 1, created_at: '2024-01-03T00:00:00Z' }
+    ];
+    mockContext.pipelineClient.list.mockResolvedValue(pipelines);
+    mockContext.taskClient.listByPipeline.mockResolvedValue([]);
+
+    const view = new DashboardView(mockContext);
+    container.innerHTML = view.render();
+    view.mount(container);
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(renderedPipelineNames()).toEqual(['Active Pipe', 'Paused Pipe', 'Completed Pipe']);
+    // Group headers are rendered in priority order
+    expect(container.querySelector('#pipeline-list')?.innerHTML).toContain('>Active<');
+    expect(container.querySelector('#pipeline-list')?.innerHTML).toContain('>Paused<');
+    expect(container.querySelector('#pipeline-list')?.innerHTML).toContain('>Completed<');
+  });
+
+  it('should order pipelines by created_at descending within the same status', async () => {
+    const pipelines = [
+      { id: 'a-old', name: 'Older Active', status: PipelineStatus.ACTIVE, version: 1, created_at: '2024-01-01T00:00:00Z' },
+      { id: 'a-new', name: 'Newer Active', status: PipelineStatus.ACTIVE, version: 1, created_at: '2024-01-05T00:00:00Z' }
+    ];
+    mockContext.pipelineClient.list.mockResolvedValue(pipelines);
+    mockContext.taskClient.listByPipeline.mockResolvedValue([]);
+
+    const view = new DashboardView(mockContext);
+    container.innerHTML = view.render();
+    view.mount(container);
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(renderedPipelineNames()).toEqual(['Newer Active', 'Older Active']);
+  });
+
+  it('should place unknown status pipelines after all known statuses', async () => {
+    const pipelines = [
+      { id: 'unk', name: 'Unknown Pipe', status: 'weird_status', version: 1, created_at: '2024-01-01T00:00:00Z' },
+      { id: 'c1', name: 'Completed Pipe', status: PipelineStatus.COMPLETED, version: 1, created_at: '2024-01-02T00:00:00Z' },
+      { id: 'a1', name: 'Active Pipe', status: PipelineStatus.ACTIVE, version: 1, created_at: '2024-01-03T00:00:00Z' }
+    ];
+    mockContext.pipelineClient.list.mockResolvedValue(pipelines);
+    mockContext.taskClient.listByPipeline.mockResolvedValue([]);
+
+    const view = new DashboardView(mockContext);
+    container.innerHTML = view.render();
+    view.mount(container);
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(renderedPipelineNames()).toEqual(['Active Pipe', 'Completed Pipe', 'Unknown Pipe']);
+  });
+
   it('should open the create pipeline dialog when the header button is clicked', async () => {
     const view = new DashboardView(mockContext);
     container.innerHTML = view.render();
