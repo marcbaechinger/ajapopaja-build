@@ -42,6 +42,34 @@ async def test_get_pipelines(async_client, init_mock_db):
 
 
 @pytest.mark.asyncio
+async def test_get_pipelines_ordered_newest_first(async_client, init_mock_db):
+    """GET /api/pipelines/ returns pipelines ordered newest-first by created_at."""
+    from datetime import UTC, datetime
+
+    from core.models.models import Pipeline
+
+    p_newest = Pipeline(
+        name="Newest", created_at=datetime(2026, 1, 3, tzinfo=UTC), version=1
+    )
+    p_middle = Pipeline(
+        name="Middle", created_at=datetime(2026, 1, 2, tzinfo=UTC), version=1
+    )
+    p_oldest = Pipeline(
+        name="Oldest", created_at=datetime(2026, 1, 1, tzinfo=UTC), version=1
+    )
+    # Insert out of order to prove the endpoint sorts them.
+    await p_middle.insert()
+    await p_oldest.insert()
+    await p_newest.insert()
+
+    response = await async_client.get("/api/pipelines/")
+
+    assert response.status_code == status.HTTP_200_OK
+    names = [entry["name"] for entry in response.json()]
+    assert names == ["Newest", "Middle", "Oldest"]
+
+
+@pytest.mark.asyncio
 async def test_create_pipeline_success(async_client, init_mock_db):
     with patch(
         "api.routes.pipeline.pipeline_queries.create_pipeline", new_callable=AsyncMock
