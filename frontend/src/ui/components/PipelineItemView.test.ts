@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { PipelineItemView } from './PipelineItemView';
 import { Pipeline, PipelineStatus, Task, TaskStatus } from '../../core/domain';
 
-function makeContext(listCompletedByPipeline = vi.fn()): any {
-  return { taskClient: { listCompletedByPipeline } };
+function makeContext(): any {
+  return { taskClient: {} };
 }
 
 const pipeline = new Pipeline({
@@ -30,6 +30,17 @@ const pipeline = new Pipeline({
 });
 
 const statsTasks = [new Task({ id: 't1', title: 'Stats Task', status: TaskStatus.IMPLEMENTED })];
+
+/// Builds a Task with an updated_at offset seconds from now.
+function taskAt(secondsAgo: number, opts: Partial<{ id: string; title: string; status: TaskStatus; deleted: boolean }> = {}): Task {
+  return new Task({
+    id: opts.id || `t${secondsAgo}`,
+    title: opts.title || `Task ${secondsAgo}`,
+    status: opts.status || TaskStatus.IMPLEMENTED,
+    deleted: opts.deleted || false,
+    updated_at: new Date(Date.now() - secondsAgo * 1000).toISOString(),
+  });
+}
 
 describe('PipelineItemView', () => {
   it('renders pipeline name, version, status pill, delete button and preserved data-attributes', () => {
@@ -55,21 +66,15 @@ describe('PipelineItemView', () => {
     expect(html).toContain('Loading recent tasks...');
   });
 
-  it('loadRecentTasks calls taskClient.listCompletedByPipeline with id, page 0 and limit 5', async () => {
-    const listCompleted = vi.fn().mockResolvedValue({ tasks: [], total_count: 0 });
-    const item = new PipelineItemView({ pipeline, statsTasks: [], context: makeContext(listCompleted) });
-    await item.loadRecentTasks();
-
-    expect(listCompleted).toHaveBeenCalledWith('p1', 0, 5);
-  });
-
-  it('injects task summaries into the placeholder container on success', async () => {
+  it('injects the most recent completed tasks into the placeholder, including the newest one', async () => {
+    // Two completed tasks in the full task set: the newest must be shown too.
     const tasks = [
-      new Task({ id: 't1', title: 'Fix bug', status: TaskStatus.IMPLEMENTED, updated_at: new Date().toISOString() }),
-      new Task({ id: 't2', title: 'Add tests', status: TaskStatus.IMPLEMENTED, updated_at: new Date().toISOString() }),
+      taskAt(60, { id: 'old', title: 'Older task' }),
+      taskAt(10, { id: 'new', title: 'Newest task' }),
+      taskAt(5, { id: 'inprogress', title: 'In progress', status: TaskStatus.INPROGRESS }),
+      taskAt(3, { id: 'deleted', title: 'Deleted task', deleted: true }),
     ];
-    const listCompleted = vi.fn().mockResolvedValue({ tasks, total_count: tasks.length });
-    const item = new PipelineItemView({ pipeline, statsTasks: [], context: makeContext(listCompleted) });
+    const item = new PipelineItemView({ pipeline, statsTasks: tasks, context: makeContext() });
 
     const host = document.createElement('div');
     host.innerHTML = item.render();
@@ -78,27 +83,32 @@ describe('PipelineItemView', () => {
 
     await item.loadRecentTasks();
 
-    expect(placeholder.innerHTML).toContain('Fix bug');
-    expect(placeholder.innerHTML).toContain('Add tests');
-    expect(placeholder.innerHTML).toContain('implemented');
+    // Newest task first; in-progress and deleted tasks are excluded.
+    expect(placeholder.innerHTML).toContain('Newest task');
+    expect(placeholder.innerHTML).toContain('Older task');
+    expect(placeholder.innerHTML.indexOf('Newest task')).toBeLessThan(placeholder.innerHTML.indexOf('Older task'));
+    expect(placeholder.innerHTML).not.toContain('In progress');
+    expect(placeholder.innerHTML).not.toContain('Deleted task');
   });
 
-  it('renders an unavailable fallback without throwing on fetch error', async () => {
-    const listCompleted = vi.fn().mockRejectedValue(new Error('boom'));
-    const item = new PipelineItemView({ pipeline, statsTasks: [], context: makeContext(listCompleted) });
+  it('caps the recent list at 5 tasks', async () => {
+    const tasks = Array.from({ length: 7 }, (_, i) => taskAt(i * 10, { title: `Task ${i}` }));
+    const item = new PipelineItemView({ pipeline, statsTasks: tasks, context: makeContext() });
 
     const host = document.createElement('div');
     host.innerHTML = item.render();
     const placeholder = host.querySelector('#recent-tasks-p1') as HTMLElement;
     item.bind(placeholder);
 
-    await expect(item.loadRecentTasks()).resolves.toBeUndefined();
-    expect(placeholder.innerHTML).toContain('unavailable');
+    await item.loadRecentTasks();
+
+    const rows = placeholder.querySelectorAll('li').length;
+    expect(rows).toBe(5);
   });
 
   it('renders empty state when no tasks are completed yet', async () => {
-    const listCompleted = vi.fn().mockResolvedValue({ tasks: [], total_count: 0 });
-    const item = new PipelineItemView({ pipeline, statsTasks: [], context: makeContext(listCompleted) });
+    const tasks = [taskAt(5, { title: 'Not done', status: TaskStatus.INPROGRESS })];
+    const item = new PipelineItemView({ pipeline, statsTasks: tasks, context: makeContext() });
 
     const host = document.createElement('div');
     host.innerHTML = item.render();
@@ -110,11 +120,21 @@ describe('PipelineItemView', () => {
   });
 
   it('no-ops gracefully when loadRecentTasks is called without a pipeline id', async () => {
-    const listCompleted = vi.fn();
     const noId = new Pipeline({ name: 'No id', status: PipelineStatus.ACTIVE, version: 1 });
-    const item = new PipelineItemView({ pipeline: noId, statsTasks: [], context: makeContext(listCompleted) });
+    const item = new PipelineItemView({
+      pipeline: noId,
+      statsTasks: [taskAt(1, { title: 'Done', status: TaskStatus.IMPLEMENTED })],
+      context: makeContext(),
+    });
 
-    await item.loadRecentTasks();
-    expect(listCompleted).not.toHaveBeenCalled();
+    const host = document.createElement('div');
+    host.innerHTML = item.render();
+
+    await expect(item.loadRecentTasks()).resolves.toBeUndefined();
+    // No pipeline id -> recent tasks are not derived; the placeholder stays untouched.
+    const placeholder = host.querySelector('#recent-tasks-unknown');
+    expect(placeholder).not.toBeNull();
+    expect(placeholder!.innerHTML).toContain('Loading recent tasks...');
+    expect(placeholder!.innerHTML).not.toContain('Done');
   });
 });

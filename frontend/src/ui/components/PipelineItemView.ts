@@ -20,17 +20,21 @@ import { PipelineStatsView } from './PipelineStatsView.ts';
 
 export interface PipelineItemOptions {
   pipeline: Pipeline;
-  statsTasks: Task[];   // tasks already fetched by DashboardView for compact stats
-  context: AppContext;  // provides taskClient for loading recent tasks
+  statsTasks: Task[];   // full task set already fetched by DashboardView for compact stats
+  context: AppContext;  // kept for interface compatibility; not needed to derive recent tasks
 }
 
 /**
  * Renders a single Pipeline card for the dashboard list.
  *
  * The card shows the pipeline name/version/status, a compact stats row, and a
- * collapsible "Recently Implemented" summary that is populated asynchronously
- * by {@link loadRecentTasks} (kept out of the synchronous render path so that
- * list assembly stays string-based and fast).
+ * collapsible "Recently Implemented" summary populated from {@link statsTasks}.
+ *
+ * The recent list is derived locally from the full task set provided by
+ * {@link DashboardView}. This intentionally avoids the backend
+ * `/tasks/completed` endpoint, which drops the single most recent completed task
+ * so that `PipelineDetailView` can render it as a separate "latest completed"
+ * hero. Reusing that endpoint here would silently omit the newest task.
  *
  * Navigation (`data-action-click="view_pipeline"`) and delete
  * (`data-action-click="delete_pipeline"`) data-attributes are preserved so the
@@ -43,11 +47,10 @@ export class PipelineItemView {
   readonly placeholderId: string;
 
   private boundEl: HTMLElement | null = null;
-  private isLoading = false;
 
   constructor(options: PipelineItemOptions) {
     this.pipeline = options.pipeline;
-    this.statsTasks = options.statsTasks;
+    this.statsTasks = options.statsTasks || [];
     this.context = options.context;
     this.placeholderId = `recent-tasks-${this.pipeline.id || 'unknown'}`;
   }
@@ -114,30 +117,37 @@ export class PipelineItemView {
   }
 
   /**
-   * Loads the last 5 implemented Tasks of this pipeline and injects a compact
-   * summary list into the recently-implemented placeholder. Safe to call before
-   * render / bind: it no-ops harmlessly if the placeholder is not found.
+   * Returns the up to 5 most recent completed (SUBMITTED/IMPLEMENTED/DISCARDED)
+   * non-deleted tasks of this pipeline, sorted by most recently updated first.
+   *
+   * The list is derived from {@link statsTasks} (the full task set fetched for
+   * the compact stats). This deliberately avoids the backend `/tasks/completed`
+   * endpoint, which drops the single most recent task for PipelineDetailView's
+   * "latest completed" hero and therefore must not be reused for this list.
+   */
+  private recentTasks(): Task[] {
+    if (!this.statsTasks || this.statsTasks.length === 0) return [];
+    return this.statsTasks
+      .filter(t => !t.deleted && (
+        t.status === TaskStatus.SUBMITTED ||
+        t.status === TaskStatus.IMPLEMENTED ||
+        t.status === TaskStatus.DISCARDED
+      ))
+      .sort((a, b) => (
+        new Date(b.updated_at || 0).getTime() -
+        new Date(a.updated_at || 0).getTime()
+      ))
+      .slice(0, 5);
+  }
+
+  /**
+   * Populates the recently-implemented placeholder from the locally derived
+   * recent tasks. Safe to call before render / bind: it no-ops harmlessly if
+   * the placeholder is not found or the pipeline has no id.
    */
   async loadRecentTasks(): Promise<void> {
-    if (!this.pipeline.id || this.isLoading) return;
-    this.isLoading = true;
-
-    const placeholder = this.getPlaceholder();
-    if (placeholder) {
-      placeholder.innerHTML = '<span class="text-[11px] text-app-muted animate-pulse">Loading recent tasks...</span>';
-    }
-
-    try {
-      const { tasks } = await this.context.taskClient.listCompletedByPipeline(this.pipeline.id, 0, 5);
-      this.injectRecent(tasks);
-    } catch (error) {
-      const placeholder = this.getPlaceholder();
-      if (placeholder) {
-        placeholder.innerHTML = '<span class="text-[11px] text-app-muted/70 italic">Recent tasks unavailable.</span>';
-      }
-    } finally {
-      this.isLoading = false;
-    }
+    if (!this.pipeline.id) return;
+    this.injectRecent(this.recentTasks());
   }
 
   private getPlaceholder(): HTMLElement | null {
