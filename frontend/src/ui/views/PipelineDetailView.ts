@@ -119,9 +119,10 @@ export class PipelineDetailView extends View {
       case TaskStatus.FAILED: return 'failed-list';
       case TaskStatus.SCHEDULED: return 'scheduled-list';
       case TaskStatus.IMPLEMENTED:
+      case TaskStatus.SUBMITTED:
       case TaskStatus.DISCARDED:
         const completedTasks = this.allLoadedTasks
-          .filter(t => !t.deleted && ([TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED] as any[]).includes(t.status))
+          .filter(t => !t.deleted && ([TaskStatus.IMPLEMENTED, TaskStatus.SUBMITTED, TaskStatus.DISCARDED] as any[]).includes(t.status))
           .sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
         if (completedTasks.length > 0 && completedTasks[0].id === task.id) {
           return 'last-completed-task';
@@ -1070,7 +1071,7 @@ export class PipelineDetailView extends View {
       const scheduledTasks = allTasks.filter(t => !t.deleted && t.status === TaskStatus.SCHEDULED);
       const failedTasks = allTasks.filter(t => !t.deleted && t.status === TaskStatus.FAILED);
 
-      const completedTasks = allTasks.filter(t => !t.deleted && ([TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED] as any[]).includes(t.status));
+      const completedTasks = allTasks.filter(t => !t.deleted && ([TaskStatus.IMPLEMENTED, TaskStatus.SUBMITTED, TaskStatus.DISCARDED] as any[]).includes(t.status));
 
       // Sort columns
       proposedTasks.sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());

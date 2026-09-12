@@ -21,7 +21,38 @@ from fastapi import status
 from api.auth import get_current_user
 from api.main import app
 from api.routes import pull_request as pr_routes
-from core.models.models import PullRequest, PullRequestStatus
+from core.models.models import (
+    PullRequest,
+    PullRequestStatus,
+    TaskStatus,
+)
+
+
+@pytest.mark.asyncio
+async def test_keep_task_pending_review_transitions_to_submitted(init_mock_db):
+    """Gitea-PR submission marks the task as SUBMITTED (a completed state)
+    instead of leaving it in PULL_REQUEST_AVAILABLE."""
+    from core.models.models import Task
+
+    task = Task(
+        title="Task 1",
+        pipeline_id="pipe_123",
+        status=TaskStatus.PULL_REQUEST_AVAILABLE,
+        commit_hash="abc1234",
+        completion_info="summary",
+    )
+    await task.insert()
+
+    await pr_routes.keep_task_pending_review(
+        task, "abc1234", "summary", "https://host/owner/repo/pulls/9"
+    )
+
+    assert task.status == TaskStatus.SUBMITTED
+    assert task.commit_hash == "abc1234"
+    assert task.completion_info == "summary"
+    assert task.review_md == "https://host/owner/repo/pulls/9"
+    assert task.history[-1].to_status == TaskStatus.SUBMITTED
+    assert task.history[-1].from_status == TaskStatus.PULL_REQUEST_AVAILABLE
 
 
 @pytest.mark.asyncio

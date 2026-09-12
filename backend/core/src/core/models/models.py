@@ -44,6 +44,7 @@ class TaskStatus(str, Enum):
     INPROGRESS = "inprogress"
     IMPLEMENTED = "implemented"
     PULL_REQUEST_AVAILABLE = "pull_request_available"
+    SUBMITTED = "submitted"
     DISCARDED = "discarded"
     FAILED = "failed"
 

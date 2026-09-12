@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from datetime import UTC, datetime
+
 import pytest
 
 from core.exceptions import VersionMismatchError
@@ -260,6 +262,69 @@ async def test_transition_to_implemented_allowed_from_active_states(init_mock_db
 
 
 @pytest.mark.asyncio
+async def test_pull_request_available_to_submitted_records_history(init_mock_db):
+    """A Gitea-PR submission transitions a task from PULL_REQUEST_AVAILABLE to
+    SUBMITTED and records the transition in history."""
+    pipeline = Pipeline(name="Test Pipeline")
+    await pipeline.insert()
+
+    task = Task(
+        title="Task 1",
+        pipeline_id=str(pipeline.id),
+        status=TaskStatus.PULL_REQUEST_AVAILABLE,
+    )
+    await task.insert()
+
+    updated = await task_queries.transition_task(
+        str(task.id), TaskStatus.SUBMITTED, actor="user"
+    )
+
+    assert updated.status == TaskStatus.SUBMITTED
+    assert updated.history[-1].to_status == TaskStatus.SUBMITTED
+    assert updated.history[-1].from_status == TaskStatus.PULL_REQUEST_AVAILABLE
+    assert updated.history[-1].by == "user"
+
+
+@pytest.mark.asyncio
+async def test_transition_submitted_to_implemented_allowed(init_mock_db):
+    """A SUBMITTED task may later be finalized as IMPLEMENTED."""
+    pipeline = Pipeline(name="Test Pipeline")
+    await pipeline.insert()
+
+    task = Task(
+        title="Task 1",
+        pipeline_id=str(pipeline.id),
+        status=TaskStatus.SUBMITTED,
+    )
+    await task.insert()
+
+    updated = await task_queries.transition_task(
+        str(task.id), TaskStatus.IMPLEMENTED, actor="user"
+    )
+    assert updated.status == TaskStatus.IMPLEMENTED
+    assert updated.history[-1].to_status == TaskStatus.IMPLEMENTED
+
+
+@pytest.mark.asyncio
+async def test_transition_submitted_to_failed_illegal(init_mock_db):
+    """SUBMMITTED no longer allows going directly back to an active state."""
+    pipeline = Pipeline(name="Test Pipeline")
+    await pipeline.insert()
+
+    task = Task(
+        title="Task 1",
+        pipeline_id=str(pipeline.id),
+        status=TaskStatus.SUBMITTED,
+    )
+    await task.insert()
+
+    with pytest.raises(ValueError, match="Illegal task transition"):
+        await task_queries.transition_task(
+            str(task.id), TaskStatus.FAILED, actor="user"
+        )
+
+
+@pytest.mark.asyncio
 async def test_transition_task_with_task_object_preserves_fields(init_mock_db):
     pipeline = Pipeline(name="Test Pipeline")
     await pipeline.insert()
@@ -316,3 +381,46 @@ async def test_delete_pipeline_cascades(init_mock_db):
     # Check tasks gone
     tasks = await task_queries.get_tasks_by_pipeline(str(pipeline.id))
     assert len(tasks) == 0
+
+
+@pytest.mark.asyncio
+async def test_completed_tasks_query_includes_submitted(init_mock_db):
+    """get_completed_tasks_by_pipeline returns SUBMITTED tasks alongside
+    IMPLEMENTED and DISCARDED tasks."""
+    pipeline = Pipeline(name="Test Pipeline")
+    await pipeline.insert()
+    pid = str(pipeline.id)
+
+    submitted = Task(
+        title="Submitted",
+        pipeline_id=pid,
+        status=TaskStatus.SUBMITTED,
+        updated_at=datetime(2024, 1, 1, tzinfo=UTC),
+    )
+    implemented = Task(
+        title="Implemented",
+        pipeline_id=pid,
+        status=TaskStatus.IMPLEMENTED,
+        updated_at=datetime(2024, 1, 2, tzinfo=UTC),
+    )
+    pending = Task(
+        title="Pending",
+        pipeline_id=pid,
+        status=TaskStatus.PULL_REQUEST_AVAILABLE,
+        updated_at=datetime(2024, 1, 3, tzinfo=UTC),
+    )
+    for t in (submitted, implemented, pending):
+        await t.insert()
+
+    tasks, total = await task_queries.get_completed_tasks_by_pipeline(
+        pid, page=0, limit=5
+    )
+
+    # Pending is excluded; the two completed tasks are returned.
+    # The latest completed (implemented) is treated as the "latest" completed
+    # task and excluded from the returned list by the query, so total is 1.
+    titles = {t.title for t in tasks}
+    assert total == 1
+    assert "Submitted" in titles
+    assert "Pending" not in titles
+    assert "Implemented" not in titles

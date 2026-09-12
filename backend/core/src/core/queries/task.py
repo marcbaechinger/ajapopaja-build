@@ -40,9 +40,13 @@ ALLOWED_TRANSITIONS: Dict[TaskStatus, set] = {
         TaskStatus.IMPLEMENTED,
     },
     TaskStatus.PULL_REQUEST_AVAILABLE: {
+        TaskStatus.SUBMITTED,
         TaskStatus.IMPLEMENTED,
         TaskStatus.CREATED,
         TaskStatus.SCHEDULED,
+    },
+    TaskStatus.SUBMITTED: {
+        TaskStatus.IMPLEMENTED,
     },
     TaskStatus.IMPLEMENTED: set(),
     TaskStatus.DISCARDED: set(),
@@ -106,11 +110,20 @@ async def get_tasks_for_tool(
 async def get_completed_tasks_by_pipeline(
     pipeline_id: str, page: int = 0, limit: int = 5
 ) -> tuple[List[Task], int]:
-    # Filter for completed tasks (IMPLEMENTED or DISCARDED) that are not deleted
+    # Filter for completed tasks (SUBMITTED, IMPLEMENTED, DISCARDED)
+    # not marked as deleted.
     query = Task.find(
         Task.pipeline_id == pipeline_id,
         Task.deleted == False,
-        {"status": {"$in": [TaskStatus.IMPLEMENTED, TaskStatus.DISCARDED]}},
+        {
+            "status": {
+                "$in": [
+                    TaskStatus.SUBMITTED,
+                    TaskStatus.IMPLEMENTED,
+                    TaskStatus.DISCARDED,
+                ]
+            }
+        },
     )
 
     # Total count of all completed tasks

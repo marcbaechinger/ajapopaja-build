@@ -17,7 +17,6 @@ import logging
 import os
 import sys
 import tempfile
-from datetime import UTC, datetime
 from typing import List, Optional
 
 import git
@@ -213,20 +212,21 @@ async def update_task_status(
 async def keep_task_pending_review(
     task: Task, new_commit_hash: str, summary: str, remote_pr_url: str
 ) -> None:
-    """Mark the task as pending external review (Gitea-PR mode).
+    """Mark the task as submitted for external review (Gitea-PR mode).
 
-    The task stays in PULL_REQUEST_AVAILABLE so the user knows work is awaiting
-    external review. Commit and PR URL are recorded for later automation.
+    The task transitions to SUBMITTED so it is considered completed by the UI
+    and completed-tasks query, but kept distinct from IMPLEMENTED since only
+    external review remains. Commit and PR URL are recorded for later
+    automation.
     """
     if task:
-        logger.info(
-            f"Keeping task {task.id} in PULL_REQUEST_AVAILABLE awaiting external review"
-        )
+        logger.info(f"Marking task {task.id} as SUBMITTED awaiting external review")
         task.commit_hash = new_commit_hash
         task.completion_info = summary
         task.review_md = remote_pr_url
-        task.updated_at = datetime.now(UTC)
-        await task.save()
+        await task_queries.transition_task(
+            str(task.id), TaskStatus.SUBMITTED, actor="user", task=task
+        )
 
 
 # =============================================================================
