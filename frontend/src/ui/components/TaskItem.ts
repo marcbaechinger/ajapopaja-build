@@ -52,6 +52,7 @@ export class TaskItem {
     const isInProgress = task.status === TaskStatus.INPROGRESS;
 
     const isImplemented = task.status === TaskStatus.IMPLEMENTED;
+    const isBotTarget = ([TaskStatus.IMPLEMENTED, TaskStatus.SUBMITTED] as any[]).includes(task.status);
 
     const isEditableTitle = ([TaskStatus.CREATED, TaskStatus.PROPOSED] as any[]).includes(task.status);
 
@@ -87,7 +88,7 @@ export class TaskItem {
                 <button data-action-click="copy_task_id" class="p-1 hover:bg-app-surface text-app-muted hover:text-app-accent-2 rounded transition-all cursor-pointer group/copy" title="Copy Task ID">
                    ${Icon.render('copy', { size: 12, className: 'group-hover/copy:scale-110 transition-transform' })}
                 </button>
-                ${isImplemented ? `
+                ${isBotTarget ? `
                   <button data-action-click="trigger_docbot" data-task-id="${taskId}" class="p-1 hover:bg-app-surface text-app-muted hover:text-green-600 rounded transition-all cursor-pointer group/docbot" title="Trigger DocBot (needs Ollama)">
                      ${Icon.render('documentation', { size: 12, className: 'group-hover/docbot:scale-110 transition-transform' })}
                   </button>
@@ -112,7 +113,7 @@ export class TaskItem {
                      ${Icon.render('git-pull-request', { size: 14, className: 'group-hover/pr:scale-110 transition-transform' })}
                   </button>
                 ` : ''}
-                ${isImplemented ? (
+                ${isBotTarget ? (
         task.review_md
           ? `
                       <button data-action-click="open_review_dialog" data-task-id="${taskId}" class="p-1 hover:bg-app-surface text-app-accent-2 hover:text-app-accent-2/80 rounded transition-all cursor-pointer group/review relative" title="View Technical Review">
