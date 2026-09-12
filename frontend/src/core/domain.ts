@@ -179,6 +179,7 @@ export class PullRequest {
   pipeline_id: string = '';
   task_id: string = '';
   summary: string = '';
+  subject: string = '';
   branch_name: string = '';
   patch: string = '';
   status: PullRequestStatus = PullRequestStatus.OPEN;
@@ -193,6 +194,7 @@ export class PullRequest {
     if (json.pipeline_id !== undefined) this.pipeline_id = String(json.pipeline_id);
     if (json.task_id !== undefined) this.task_id = String(json.task_id);
     if (json.summary !== undefined) this.summary = String(json.summary);
+    if (json.subject !== undefined) this.subject = String(json.subject);
     if (json.branch_name !== undefined) this.branch_name = String(json.branch_name);
     if (json.patch !== undefined) this.patch = String(json.patch);
     if (json.status !== undefined) this.status = json.status as PullRequestStatus;

@@ -224,9 +224,14 @@ class CoderBotSession:
             elif not patch.endswith("\n"):
                 patch += "\n"
 
+            # Load the task first so we can capture its title as the PR subject.
+            task = await Task.get(self.task_id)
+            task_title = task.title if task else ""
+
             pr = PullRequest(
                 pipeline_id=self.pipeline_id,
                 task_id=self.task_id,
+                subject=task_title,
                 summary=summary,
                 branch_name=self.helper.branch_name,
                 patch=patch,
@@ -236,7 +241,6 @@ class CoderBotSession:
             logger.info(f"PullRequest {pr.id} created in DB.")
 
             # Update task status
-            task = await Task.get(self.task_id)
             if task and task.status == TaskStatus.INPROGRESS:
                 await task_queries.transition_task(
                     str(task.id), TaskStatus.PULL_REQUEST_AVAILABLE, actor="coderbot"

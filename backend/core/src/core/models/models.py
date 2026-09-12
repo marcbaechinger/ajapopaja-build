@@ -227,6 +227,7 @@ class PullRequest(Document):
     pipeline_id: str
     task_id: str
     summary: str
+    subject: str = ""
     branch_name: str
     patch: str  # The git diff output
     status: PullRequestStatus = PullRequestStatus.OPEN
