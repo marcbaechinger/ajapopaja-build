@@ -12,10 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import base64
 import logging
 import re
 from pathlib import Path
-from typing import Dict, Sequence, Tuple
+from typing import Dict, Tuple
 from urllib.parse import quote, urlsplit, urlunsplit
 
 import git
@@ -99,39 +100,28 @@ def _resolve_credentials(pipeline: Pipeline) -> Tuple[str, str]:
     return username, token
 
 
-def _push_with_auth(repo: git.Repo, pipeline: Pipeline, refspec: Sequence[str]) -> None:
-    """Push ``refspec`` to origin, injecting the pipeline's git credentials.
-
-    Credentials go into the remote URL (basic auth) rather than via the
-    GIT_CONFIG_PARAMETERS http.extraHeader trick, which newer git/gitPython
-    versions no longer honour during an interactive push. The original remote
-    URL is restored immediately after the push.
-    """
-    if not pipeline.repo_uri:
-        return
-
-    origin = repo.remote("origin")
-    original_url = origin.url
-    username, token = _resolve_credentials(pipeline)
-
-    if not token:
-        # No credentials configured: push unauthenticated (may rely on existing
-        # environment credential helpers).
-        repo.git.push("origin", *refspec)
-        return
-
-    auth_url = _inject_credentials(original_url, username or token, token)
-    try:
-        origin.set_url(auth_url)
-        repo.git.push("origin", *refspec)
-    finally:
-        origin.set_url(original_url)
-
-
 def push_with_auth(repo: git.Repo, pipeline: Pipeline) -> None:
     if not pipeline.repo_uri:
         return
-    _push_with_auth(repo, pipeline, ["HEAD"])
+
+    username, token = _resolve_credentials(pipeline)
+
+    if token:
+        # For GitHub/Gitea: basic auth header with user:token
+        user = username or token  # fallback to token if no user provided
+        auth_pair = f"{user}:{token}".encode("utf-8")
+        auth_header = (
+            f"Authorization: Basic {base64.b64encode(auth_pair).decode('ascii')}"
+        )
+
+        # Git accepts config parameters via environment variable:
+        # Format is: 'key=value' with single quotes around the key=val pair
+        env_config = f"'http.extraHeader={auth_header}'"
+
+        with repo.git.custom_environment(GIT_CONFIG_PARAMETERS=env_config):
+            repo.git.push("origin", "HEAD")
+    else:
+        repo.git.push("origin", "HEAD")
 
 
 def push_branch_with_auth(repo: git.Repo, pipeline: Pipeline, branch: str) -> None:
@@ -142,7 +132,21 @@ def push_branch_with_auth(repo: git.Repo, pipeline: Pipeline, branch: str) -> No
     """
     if not pipeline.repo_uri:
         return
-    _push_with_auth(repo, pipeline, [f"refs/heads/{branch}:refs/heads/{branch}"])
+
+    username, token = _resolve_credentials(pipeline)
+
+    if token:
+        user = username or token  # fallback to token if no user provided
+        auth_pair = f"{user}:{token}".encode("utf-8")
+        auth_header = (
+            f"Authorization: Basic {base64.b64encode(auth_pair).decode('ascii')}"
+        )
+        env_config = f"'http.extraHeader={auth_header}'"
+
+        with repo.git.custom_environment(GIT_CONFIG_PARAMETERS=env_config):
+            repo.git.push("origin", f"refs/heads/{branch}:refs/heads/{branch}")
+    else:
+        repo.git.push("origin", f"refs/heads/{branch}:refs/heads/{branch}")
 
 
 def ensure_feature_branch(repo: git.Repo, branch_name: str) -> None:

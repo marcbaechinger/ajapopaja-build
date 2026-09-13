@@ -305,21 +305,16 @@ def test_push_with_auth_noop_for_local():
 
 def test_push_with_auth_with_token():
     repo = MagicMock()
-    origin = MagicMock()
-    origin.url = "https://github.com/org/repo.git"
-    repo.remote.return_value = origin
+    repo.remotes.origin.url = "https://github.com/org/repo.git"
     pipeline = MagicMock()
     pipeline.repo_uri = "https://github.com/org/repo.git"
     pipeline.repo_username = "user"
     pipeline.repo_token = "tok"
     git_utils.push_with_auth(repo, pipeline)
-    # Credentials are injected into the remote URL (basic auth), pushed, then
-    # the original URL is restored.
+    # Pushes to the remote name using http.extraHeader for auth.
     repo.git.push.assert_called_once_with("origin", "HEAD")
-    origin.set_url.assert_any_call("https://user:tok@github.com/org/repo.git")
-    origin.set_url.assert_any_call("https://github.com/org/repo.git")
-    assert origin.set_url.call_count == 2
-    repo.git.custom_environment.assert_not_called()
+    # Uses GIT_CONFIG_PARAMETERS for auth, not set_url.
+    repo.git.custom_environment.assert_called_once()
 
 
 def test_push_with_auth_without_token():
@@ -335,9 +330,6 @@ def test_push_with_auth_without_token():
 
 def test_push_branch_with_auth_with_token():
     repo = MagicMock()
-    origin = MagicMock()
-    origin.url = "https://github.com/org/repo.git"
-    repo.remote.return_value = origin
     pipeline = MagicMock()
     pipeline.repo_uri = "https://github.com/org/repo.git"
     pipeline.repo_username = "user"
@@ -346,10 +338,7 @@ def test_push_branch_with_auth_with_token():
     repo.git.push.assert_called_once_with(
         "origin", "refs/heads/feature/x:refs/heads/feature/x"
     )
-    origin.set_url.assert_any_call("https://user:tok@github.com/org/repo.git")
-    origin.set_url.assert_any_call("https://github.com/org/repo.git")
-    assert origin.set_url.call_count == 2
-    repo.git.custom_environment.assert_not_called()
+    repo.git.custom_environment.assert_called_once()
 
 
 def test_push_branch_with_auth_without_token():
