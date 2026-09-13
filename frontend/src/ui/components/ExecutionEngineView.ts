@@ -49,8 +49,7 @@ export class ExecutionEngineView {
       .sort((a, b) => orderSort(a, b));
 
     return `
-      <div class="flex flex-col min-h-0 h-full overflow-hidden">
-        <h2 class="text-[10px] font-black uppercase tracking-widest text-app-muted px-1 pt-1">Execution Engine</h2>
+      <div class="flex flex-col min-h-0 h-full overflow-hidden pt-2">
         ${ExecutionEngineView.sectionHeader('In Progress', inProgress.length, 'text-amber-400')}
         ${ExecutionEngineView.sectionBody(inProgress, 'No active work.')}
 
