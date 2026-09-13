@@ -129,4 +129,43 @@ describe('TaskItem', () => {
     expect(html).toContain('Open Quickfix in Neovim');
     expect(html).toContain('data-action-click="open_quickfix"');
   });
+
+  const BOT_TARGET_ACTIONS = ['trigger_docbot', 'trigger_reviewbot', 'open_review_dialog'];
+
+  describe('bot-trigger gating', () => {
+    it('should render DocBot and Review buttons for SUBMITTED tasks without review_md', () => {
+      const submittedTask = { ...mockTask, status: TaskStatus.SUBMITTED };
+      const html = TaskItem.render(submittedTask as any);
+      expect(html).toContain('data-action-click="trigger_docbot"');
+      expect(html).toContain('data-action-click="trigger_reviewbot"');
+      expect(html).not.toContain('data-action-click="open_review_dialog"');
+    });
+
+    it('should render DocBot and View Review badge for SUBMITTED tasks with review_md', () => {
+      const submittedTask = { ...mockTask, status: TaskStatus.SUBMITTED, review_md: '# Review' };
+      const html = TaskItem.render(submittedTask as any);
+      expect(html).toContain('data-action-click="trigger_docbot"');
+      expect(html).toContain('data-action-click="open_review_dialog"');
+      expect(html).not.toContain('data-action-click="trigger_reviewbot"');
+    });
+
+    it.each([
+      TaskStatus.PULL_REQUEST_AVAILABLE,
+      TaskStatus.CREATED,
+    ])('should not render bot actions for non-target status %s', (status) => {
+      const task = { ...mockTask, status };
+      const html = TaskItem.render(task as any);
+      for (const action of BOT_TARGET_ACTIONS) {
+        expect(html).not.toContain(`data-action-click="${action}"`);
+      }
+    });
+
+    it('should render DocBot and Review buttons for IMPLEMENTED tasks as before', () => {
+      const implementedTask = { ...mockTask, status: TaskStatus.IMPLEMENTED };
+      const html = TaskItem.render(implementedTask as any);
+      expect(html).toContain('data-action-click="trigger_docbot"');
+      expect(html).toContain('data-action-click="trigger_reviewbot"');
+      expect(html).not.toContain('data-action-click="open_review_dialog"');
+    });
+  });
 });
