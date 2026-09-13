@@ -1,0 +1,72 @@
+[
+  {
+    "title": "Setup Project Structure",
+    "spec": "## Task: Setup Project Structure\n\nCreate a modern full-stack template consisting of:\n\n* **Python backend**\n  * Use **uv** as the package manager.\n  * Create a `src` directory with an `__init__.py` and a placeholder `main.py`.\n  * Include a `pyproject.toml` configured for uv, pytest, and any linting tools.\n  * Add a `tests` directory for unit tests.\n* **Vite + TypeScript + Tailwind frontend**\n  * Use Vite's default template for TypeScript.\n  * Configure Tailwind CSS via `postcss` and `tailwind.config.js`.\n  * Place frontend source in a `frontend` directory.\n  * Include a `package.json` with scripts for dev, build, and lint.\n* Project root\n  * Add a `README.md` with a brief overview.\n  * Add a `.gitignore` covering both Python and Node.\n  * Add a `LICENSE` file.\n\nThe goal is to provide a ready-to-run structure that can be built upon by subsequent tasks.",
+    "want_design_doc": false,
+    "type": "manual",
+    "order": 0
+  },
+  {
+    "title": "Create a notes app",
+    "spec": "Create a notes app where a user can add notes.\n\nThe backend has a FastAPI REST API to create, update and delete notes. Notes are stored in a JSON file in the backend.\n\nThe frontend has a sidebar with a list of existing notes. The main area of the frontend is an editor to create notes in markdown format.",
+    "want_design_doc": false,
+    "type": "manual",
+    "order": 1
+  },
+  {
+    "title": "Migrate from JSON to SQLite storage",
+    "spec": "## Task: Migrate from JSON to SQLite storage\n\n**Goal**: Replace the current JSON-based storage system with a SQLite database for better performance, consistency, and scalability.\n\nSee docs/sqlite-storage.md\n\n**Scope**:\n- Remove the existing JSON storage files and any code that reads/writes them.\n- Design a SQLite schema that captures all necessary data entities (e.g., users, sessions, configuration, logs).\n- Implement data access layer to interface with SQLite.\n- Migrate existing data from JSON files into the new SQLite database.\n- Ensure backward compatibility during transition (e.g., keep JSON files until migration verification).\n- Update unit tests and integration tests to use SQLite.\n- Update documentation to reflect storage change.\n\n**Deliverables**:\n- Updated data layer using SQLite.\n- Migration scripts or code that reads JSON and writes to SQLite.\n- Updated tests.\n- Documentation update.\n\n**Acceptance Criteria**:\n- No remaining code references JSON storage.\n- All existing data can be successfully queried from SQLite.\n- Application starts and functions correctly with SQLite.",
+    "want_design_doc": true,
+    "type": "manual",
+    "order": 2
+  },
+  {
+    "title": "Design SQLite storage schema and API",
+    "spec": "Design a SQLite-backed storage module that replaces the current JSON file storage. Document the database schema, transaction strategy, and how it will integrate with the existing `NoteStorage` API. Include migration plan for existing data.",
+    "want_design_doc": false,
+    "type": "manual",
+    "order": 3
+  },
+  {
+    "title": "Implement SQLite storage module",
+    "spec": "Create a new module src/storage_sqlite.py that implements NoteStorage API using sqlite3. Include connection handling, schema creation, CRUD methods, and transaction management. Ensure compatibility with existing DTOs.\n\nSee docs/sqlite-storage.md",
+    "want_design_doc": false,
+    "type": "manual",
+    "order": 4
+  },
+  {
+    "title": "Add a splash overlay when starting the editor in the browser",
+    "spec": "The overlay welcomes the user and gives a basic overview of the available features.",
+    "want_design_doc": false,
+    "type": "manual",
+    "order": 5
+  },
+  {
+    "title": "Remember when the Splash was shown on app start",
+    "spec": "We only want to display the Splash once when the user starts the app in the browser. To avoid doing this again, we set a flag in the local storage splash_shown=true or similar. If it is set the initial display of the Splash is omitted.",
+    "want_design_doc": false,
+    "type": "manual",
+    "order": 6
+  },
+  {
+    "title": "Add unit test for Sidebar.ts",
+    "spec": "# Unit Test for Sidebar.ts\n\nThe task is to write a unit test for the Sidebar component in the frontend.\n\n## Goals\n\n* Verify that the Sidebar renders the expected navigation links.\n* Ensure that clicking a link emits the correct event or navigates.\n* Test edge-cases such as an empty link list or disabled items.\n\n## Suggested Tests\n\n1. **renders correctly** - snapshot the component.\n2. **links exist** - assert that each navigation item is present.\n3. **click navigation** - simulate a click and confirm the route changes.\n4. **disabled items** - ensure they are not clickable.\n\n## Implementation\n\nUse Vitest + @testing-library/vue.\nCreate a test file `frontend/tests/sidebar.test.ts`.\nProvide a minimal mock for the router.\n\n## Acceptance Criteria\n\n* All tests pass with `npm test`.\n* Commit and push to a new branch `feature/sidebar-test`.",
+    "want_design_doc": false,
+    "type": "manual",
+    "order": 7
+  },
+  {
+    "title": "Add unit test for Splash component",
+    "spec": "The Splash component should display correctly on first launch and be dismissible via the \"Get started\" button. Implement a Vitest test that:\n1. Renders the Splash component.\n2. Verifies the presence of the splash text.\n3. Simulates a click on the \"Get started\" button.\n4. Confirms the splash is removed from the DOM.\n5. Ensures that after dismissal, a subsequent render does not show the splash again, but clicking the sidebar header re-shows it.\n\nThe test should be placed in `frontend/tests/splash.test.ts` and import the Splash component from `../src/components/Splash`. Use @testing-library/dom for DOM interactions.",
+    "want_design_doc": false,
+    "type": "manual",
+    "order": 8
+  },
+  {
+    "title": "Remove JSON migration code from NoteStorage",
+    "spec": "## Task: Remove the legacy JSON migration logic from `NoteStorage`\n\nThe JSON-to-SQLite migration has already run and the project is now SQLite-only. Remove the one-time legacy `notes.json` import code entirely from `src/storage_sqlite.py`.\n\n**Scope of changes in `src/storage_sqlite.py`:** the JSON migration machinery is no longer needed and should be deleted. Concretely:\n\n1. **Remove imports / constants**\n   - Delete `import json` (no longer used after the migration is gone).\n   - Delete the `MIGRATION_VERSION = 1` constant and its comment.\n2. **Remove the migration call + methods:** `_maybe_migrate_from_json`, `_migration_marker_exists`, `_sync_user_version_locked`, and the `self._maybe_migrate_from_json()` call in `__init__`.\n3. **Simplify `_init_schema`** to remove the `schema_migrations` table DDL and `PRAGMA user_version` bookkeeping.\n4. **Update the module/class docstrings** to remove any mention of the legacy JSON import or the migration marker. The docs should state the store is SQLite-only.\n\n**Constraints:**\n- Keep the public `NoteStorage` API (`list`, `get`, `create`, `update`, `delete`) exactly as-is.\n- Do **not** change the database `notes` table schema or the WAL/concurrency pragmas.\n- Do **not** touch tests or documentation in this task (those are separate tasks).\n\n**Verification:**\n- `uv run ruff check src tests` passes.\n- The SQLite `notes` table still creates and all CRUD endpoints work.",
+    "want_design_doc": false,
+    "type": "manual",
+    "order": 9
+  }
+]
