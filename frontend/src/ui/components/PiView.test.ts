@@ -249,6 +249,68 @@ describe('PiView', () => {
     expect(service.clearHistory).toHaveBeenCalled();
   });
 
+  it('thinking blocks are collapsed by default and toggle button expands them', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    emitBlocks([{ id: 'think', kind: 'thinking', text: 'hmm' }]);
+
+    const thinkingEl = mount.querySelector('.piview-thinking') as HTMLElement;
+    const body = thinkingEl.querySelector('[data-role="body"]') as HTMLElement;
+    // Collapsed by default.
+    expect(body.classList.contains('hidden')).toBe(true);
+    // Header still shows a label.
+    expect(thinkingEl.querySelector('[data-role="header"]')?.textContent).toContain('Thinking');
+
+    const toggleBtn = mount.querySelector('#thinking-toggle-btn') as HTMLButtonElement;
+    expect(toggleBtn.getAttribute('aria-pressed')).toBe('false');
+    expect(toggleBtn.getAttribute('aria-label')).toContain('Expand');
+
+    // Expand all via the toggle button.
+    toggleBtn.click();
+    expect(body.classList.contains('hidden')).toBe(false);
+    expect(toggleBtn.getAttribute('aria-pressed')).toBe('true');
+    expect(toggleBtn.getAttribute('aria-label')).toContain('Collapse');
+
+    // New thinking blocks follow the expanded mode.
+    emitBlocks([{ id: 'think', kind: 'thinking', text: 'hmm' }, { id: 'think2', kind: 'thinking', text: 'more' }]);
+    const body1 = mount.querySelectorAll('.piview-thinking')[0].querySelector('[data-role="body"]') as HTMLElement;
+    const body2 = mount.querySelectorAll('.piview-thinking')[1].querySelector('[data-role="body"]') as HTMLElement;
+    expect(body1.classList.contains('hidden')).toBe(false);
+    expect(body2.classList.contains('hidden')).toBe(false);
+
+    // Collapse again via the toggle.
+    toggleBtn.click();
+    expect(body2.classList.contains('hidden')).toBe(true);
+  });
+
+  it('individual thinking header click toggles that block only', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    emitBlocks([{ id: 't1', kind: 'thinking', text: 'a' }, { id: 't2', kind: 'thinking', text: 'b' }]);
+
+    const t1 = mount.querySelector('.piview-thinking') as HTMLElement;
+    const b1 = t1.querySelector('[data-role="body"]') as HTMLElement;
+    const b2 = (mount.querySelectorAll('.piview-thinking')[1]).querySelector('[data-role="body"]') as HTMLElement;
+
+    // Both collapsed by default.
+    expect(b1.classList.contains('hidden')).toBe(true);
+    expect(b2.classList.contains('hidden')).toBe(true);
+
+    // Expand the first block via its header.
+    const header = t1.querySelector('[data-role="header"]') as HTMLElement;
+    header.click();
+    expect(b1.classList.contains('hidden')).toBe(false);
+    expect(b2.classList.contains('hidden')).toBe(true);
+
+    // Re-collapse via header.
+    header.click();
+    expect(b1.classList.contains('hidden')).toBe(true);
+  });
+
   it('destroy() unsubscribes from all service listeners', () => {
     const { service } = createStubService();
     const view = new PiView(service, mount);

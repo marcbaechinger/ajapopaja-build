@@ -66,6 +66,9 @@ export class PiView {
   private logHeightClass: string;
   private unsubs: (() => void)[] = [];
 
+  /** Whether `thinking` blocks are expanded (default: collapsed). */
+  private thinkingExpanded: boolean = false;
+
   constructor(service: PiSessionService, mount: HTMLElement, options: PiViewOptions = {}) {
     this.service = service;
     this.root = mount;
@@ -147,6 +150,16 @@ export class PiView {
     stopBtn.innerHTML = `${Icon.render('close', { size: 14 })}\n            Stop Bot`;
     actions.appendChild(stopBtn);
 
+    const thinkingBtn = document.createElement('button');
+    thinkingBtn.setAttribute('data-action', 'toggle-thinking');
+    thinkingBtn.id = 'thinking-toggle-btn';
+    thinkingBtn.className =
+      'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer';
+    thinkingBtn.setAttribute('aria-label', 'Expand all thinking blocks');
+    thinkingBtn.title = 'Expand all thinking blocks';
+    thinkingBtn.setAttribute('aria-pressed', 'false');
+    actions.appendChild(thinkingBtn);
+
     footer.appendChild(actions);
 
     // Delegate action clicks on the root so the handler survives footer rebuilds
@@ -154,11 +167,22 @@ export class PiView {
     this.root.addEventListener('click', this.handleClick);
     this.unsubs.push(() => this.root.removeEventListener('click', this.handleClick));
 
+    this.updateThinkingBtn();
+
     return footer;
   }
 
   private handleClick = (e: Event): void => {
     const target = e.target as HTMLElement;
+    // Individual collapsible block header toggles its own body.
+    const header = target.closest('[data-role="header"][data-toggle]');
+    if (header) {
+      const collapsible = (header as HTMLElement).parentElement;
+      if (collapsible) {
+        this.toggleBlockCollapse(collapsible);
+      }
+      return;
+    }
     const actionBtn = target.closest('[data-action]');
     if (!actionBtn) return;
     const action = actionBtn.getAttribute('data-action');
@@ -168,6 +192,8 @@ export class PiView {
       this.toggleFollow();
     } else if (action === 'stop-bot') {
       this.stopBot();
+    } else if (action === 'toggle-thinking') {
+      this.toggleThinking();
     }
   };
 
@@ -269,8 +295,27 @@ export class PiView {
       }
       case 'thinking': {
         el = document.createElement('div');
-        el.className = 'italic opacity-70 whitespace-pre-wrap break-all';
-        el.textContent = block.text ?? '';
+        el.className = 'piview-collapsible piview-thinking border-l-2 border-app-text/20 pl-2';
+        const header = document.createElement('div');
+        header.setAttribute('data-role', 'header');
+        header.setAttribute('data-toggle', '');
+        header.className = 'flex items-center gap-1 text-app-text/50 font-medium cursor-pointer select-none';
+        const glyph = document.createElement('span');
+        glyph.setAttribute('data-glyph', '');
+        glyph.innerHTML = Icon.render(this.thinkingExpanded ? 'chevronDown' : 'chevronRight', {
+          size: 12,
+        });
+        const headerLabel = document.createElement('span');
+        headerLabel.textContent = 'Thinking';
+        header.appendChild(glyph);
+        header.appendChild(headerLabel);
+        el.appendChild(header);
+        const body = document.createElement('pre');
+        body.setAttribute('data-role', 'body');
+        body.className = 'whitespace-pre-wrap break-all italic opacity-70 mt-0.5 overflow-hidden';
+        body.textContent = block.text ?? '';
+        if (!this.thinkingExpanded) body.classList.add('hidden');
+        el.appendChild(body);
         break;
       }
       case 'notice': {
@@ -328,7 +373,7 @@ export class PiView {
 
   private updateBlockEl(el: HTMLElement, block: RenderBlock) {
     const header = el.querySelector('[data-role="header"]') as HTMLElement | null;
-    if (header) {
+    if (header && block.kind !== 'thinking') {
       header.textContent = block.kind === 'verification' ? (block.text ?? '') : (block.header ?? '');
     }
     const body = el.querySelector('[data-role="body"]') as HTMLElement | null;
@@ -374,6 +419,57 @@ export class PiView {
         ? 'px-3 py-1.5 rounded text-xs font-medium bg-app-accent-1 text-white hover:bg-app-accent-1/80 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer'
         : 'px-3 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer';
     }
+  }
+
+  /**
+   * Toggles the global expanded/collapsed state of all `thinking` blocks.
+   * Newly rendered thinking blocks follow the current state.
+   */
+  private toggleThinking() {
+    this.thinkingExpanded = !this.thinkingExpanded;
+    const log = this.logContainer;
+    const prev = log ? log.scrollTop : 0;
+    const container = this.blocksContainer;
+    if (container) {
+      container.querySelectorAll('.piview-thinking').forEach((w) => {
+        const body = w.querySelector('[data-role="body"]') as HTMLElement | null;
+        if (body) body.classList.toggle('hidden', !this.thinkingExpanded);
+        const glyph = w.querySelector('[data-glyph]') as HTMLElement | null;
+        if (glyph) {
+          glyph.innerHTML = Icon.render(this.thinkingExpanded ? 'chevronDown' : 'chevronRight', {
+            size: 12,
+          });
+        }
+      });
+    }
+    this.updateThinkingBtn();
+    if (log) log.scrollTop = prev;
+  }
+
+  /**
+   * Toggles a single collapsible block's body (used by header clicks).
+   */
+  private toggleBlockCollapse(el: HTMLElement) {
+    const body = el.querySelector('[data-role="body"]') as HTMLElement | null;
+    if (!body) return;
+    // Currently collapsed -> expand, and vice versa.
+    const nowExpanded = body.classList.contains('hidden');
+    body.classList.toggle('hidden', !nowExpanded);
+    const glyph = el.querySelector('[data-glyph]') as HTMLElement | null;
+    if (glyph) {
+      glyph.innerHTML = `${Icon.render(nowExpanded ? 'chevronDown' : 'chevronRight', { size: 12 })}`;
+    }
+  }
+
+  private updateThinkingBtn() {
+    const btn = this.root.querySelector('#thinking-toggle-btn') as HTMLElement | null;
+    if (!btn) return;
+    const expanded = this.thinkingExpanded;
+    btn.innerHTML = Icon.render(expanded ? 'chevronDown' : 'chevronRight', { size: 14 });
+    btn.setAttribute('aria-pressed', String(expanded));
+    const label = expanded ? 'Collapse all thinking blocks' : 'Expand all thinking blocks';
+    btn.setAttribute('aria-label', label);
+    btn.title = label;
   }
 
   private updateStopButtonVisibility(active: boolean) {
