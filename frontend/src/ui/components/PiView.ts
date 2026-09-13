@@ -69,6 +69,9 @@ export class PiView {
   /** Whether `thinking` blocks are expanded (default: collapsed). */
   private thinkingExpanded: boolean = false;
 
+  /** Whether `tool`/`verification` blocks are collapsed (default: expanded). */
+  private blocksCollapsed: boolean = false;
+
   /** Live-session status/timer state. */
   private sessionActive: boolean = false;
   private startTime: number | null = null;
@@ -198,6 +201,16 @@ export class PiView {
     thinkingBtn.setAttribute('aria-pressed', 'false');
     actions.appendChild(thinkingBtn);
 
+    const collapseBtn = document.createElement('button');
+    collapseBtn.setAttribute('data-action', 'toggle-block-collapse');
+    collapseBtn.id = 'collapse-blocks-btn';
+    collapseBtn.className =
+      'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer';
+    collapseBtn.setAttribute('aria-label', 'Collapse all blocks');
+    collapseBtn.title = 'Collapse all blocks';
+    collapseBtn.setAttribute('aria-pressed', 'false');
+    actions.appendChild(collapseBtn);
+
     const copyAllBtn = document.createElement('button');
     copyAllBtn.setAttribute('data-action', 'copy-all-log');
     copyAllBtn.id = 'copy-all-btn';
@@ -216,6 +229,7 @@ export class PiView {
     this.unsubs.push(() => this.root.removeEventListener('click', this.handleClick));
 
     this.updateThinkingBtn();
+    this.updateCollapseBtn();
 
     return footer;
   }
@@ -249,6 +263,8 @@ export class PiView {
       this.stopBot();
     } else if (action === 'toggle-thinking') {
       this.toggleThinking();
+    } else if (action === 'toggle-block-collapse') {
+      this.toggleBlocksCollapse();
     } else if (action === 'copy-all-log') {
       this.copyAllLog();
     }
@@ -341,16 +357,16 @@ export class PiView {
       case 'tool': {
         const wrapper = document.createElement('div');
         wrapper.className =
-          'border border-app-border/60 rounded p-2 my-1 bg-app-surface/40';
-        const header = document.createElement('div');
-        header.setAttribute('data-role', 'header');
-        header.className = 'text-app-accent-2 font-semibold whitespace-pre-wrap';
-        header.textContent = block.header ?? '';
+          'piview-collapsible piview-toolverify border border-app-border/60 rounded p-2 my-1 bg-app-surface/40';
+        const { header, label } = this.buildCollapsibleHeader(!this.blocksCollapsed);
+        label.className = 'text-app-accent-2 font-semibold whitespace-pre-wrap break-all';
+        label.textContent = block.header ?? '';
         wrapper.appendChild(header);
         const body = document.createElement('pre');
         body.setAttribute('data-role', 'body');
         body.className = 'whitespace-pre-wrap break-all text-green-300 mt-1 min-h-0';
         body.textContent = block.text ?? '';
+        if (this.blocksCollapsed) body.classList.add('hidden');
         wrapper.appendChild(body);
         el = wrapper;
         break;
@@ -404,21 +420,21 @@ export class PiView {
         const wrapper = document.createElement('div');
         const isError = block.error;
         wrapper.className =
-          'border rounded p-2 my-1 ' +
+          'piview-collapsible piview-toolverify border rounded p-2 my-1 ' +
           (isError
             ? 'border-red-500/60 bg-red-950/30'
             : 'border-green-500/60 bg-green-950/30');
-        const header = document.createElement('div');
-        header.setAttribute('data-role', 'header');
-        header.className =
-          'font-semibold whitespace-pre-wrap ' +
+        const { header, label } = this.buildCollapsibleHeader(!this.blocksCollapsed);
+        label.className =
+          'font-semibold whitespace-pre-wrap break-all ' +
           (isError ? 'text-red-400' : 'text-green-400');
-        header.textContent = block.text ?? '';
+        label.textContent = block.text ?? '';
         wrapper.appendChild(header);
         const body = document.createElement('pre');
         body.setAttribute('data-role', 'body');
         body.className = 'whitespace-pre-wrap break-all text-green-300 mt-1 min-h-0';
         body.textContent = (block.sub ?? []).join('\n');
+        if (this.blocksCollapsed) body.classList.add('hidden');
         wrapper.appendChild(body);
         el = wrapper;
         break;
@@ -461,10 +477,33 @@ export class PiView {
     return icon.trim().replace(/>\s+</g, '><');
   }
 
+  private buildCollapsibleHeader(expanded: boolean): { header: HTMLElement; label: HTMLElement } {
+    const header = document.createElement('div');
+    header.setAttribute('data-role', 'header');
+    header.setAttribute('data-toggle', '');
+    header.className = 'flex items-center gap-1 cursor-pointer select-none';
+    const glyph = document.createElement('span');
+    glyph.setAttribute('data-glyph', '');
+    glyph.innerHTML = this.cleanIcon(
+      Icon.render(expanded ? 'chevronDown' : 'chevronRight', { size: 12 })
+    );
+    const label = document.createElement('span');
+    label.setAttribute('data-label', '');
+    header.appendChild(glyph);
+    header.appendChild(label);
+    return { header, label };
+  }
+
   private updateBlockEl(el: HTMLElement, block: RenderBlock) {
     const header = el.querySelector('[data-role="header"]') as HTMLElement | null;
     if (header && block.kind !== 'thinking') {
-      header.textContent = block.kind === 'verification' ? (block.text ?? '') : (block.header ?? '');
+      const value = block.kind === 'verification' ? (block.text ?? '') : (block.header ?? '');
+      const label = header.querySelector('[data-label]') as HTMLElement | null;
+      if (label) {
+        if (label.textContent !== value) label.textContent = value;
+      } else if (header.textContent !== value) {
+        header.textContent = value;
+      }
     }
     const body = el.querySelector('[data-role="body"]') as HTMLElement | null;
     if (body) {
@@ -553,6 +592,43 @@ export class PiView {
     if (glyph) {
       glyph.innerHTML = `${Icon.render(nowExpanded ? 'chevronDown' : 'chevronRight', { size: 12 })}`;
     }
+  }
+
+  /**
+   * Toggles global collapsed state of all `tool`/`verification` blocks.
+   * Newly rendered blocks follow the current state.
+   */
+  private toggleBlocksCollapse() {
+    this.blocksCollapsed = !this.blocksCollapsed;
+    const log = this.logContainer;
+    const prev = log ? log.scrollTop : 0;
+    const container = this.blocksContainer;
+    if (container) {
+      container.querySelectorAll('.piview-toolverify').forEach((w) => {
+        const body = w.querySelector('[data-role="body"]') as HTMLElement | null;
+        if (body) body.classList.toggle('hidden', this.blocksCollapsed);
+        const glyph = w.querySelector('[data-glyph]') as HTMLElement | null;
+        if (glyph) {
+          glyph.innerHTML = this.cleanIcon(
+            Icon.render(this.blocksCollapsed ? 'chevronRight' : 'chevronDown', { size: 12 })
+          );
+        }
+      });
+    }
+    this.updateCollapseBtn();
+    if (log) log.scrollTop = prev;
+  }
+
+  private updateCollapseBtn() {
+    const btn = this.root.querySelector('#collapse-blocks-btn') as HTMLElement | null;
+    if (!btn) return;
+    const collapsed = this.blocksCollapsed;
+    // Plus (expand all) when collapsed, minus (collapse all) when expanded.
+    btn.innerHTML = this.cleanIcon(Icon.render(collapsed ? 'plus' : 'minus', { size: 14 }));
+    btn.setAttribute('aria-pressed', String(collapsed));
+    const label = collapsed ? 'Expand all blocks' : 'Collapse all blocks';
+    btn.setAttribute('aria-label', label);
+    btn.title = label;
   }
 
   private updateThinkingBtn() {

@@ -42,4 +42,6 @@ export const iconMap: Record<string, string> = {
   refresh: 'refresh-icon',
   chevronDown: 'chevron-down-icon',
   'git-pull-request': 'git-pull-request-icon',
+  plus: 'plus-icon',
+  minus: 'minus-icon',
 };
