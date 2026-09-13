@@ -16,9 +16,12 @@
 
 import { Task, TaskStatus } from '../../core/domain.ts';
 import { ExecutionEngineItemView } from './ExecutionEngineItemView.ts';
+import { PipelineHistoryView } from './PipelineHistoryView.ts';
 
 export interface ExecutionEngineViewProps {
   tasks: Task[];
+  historyTasks?: Task[];
+  historyPage?: number;
 }
 
 /**
@@ -31,7 +34,9 @@ export interface ExecutionEngineViewProps {
  */
 export class ExecutionEngineView {
   static render(props: ExecutionEngineViewProps): string {
-    const { tasks } = props;
+    const { tasks = [] } = props;
+    const historyTasks = props.historyTasks ?? [];
+    const historyPage = props.historyPage ?? 0;
 
     const inProgress = tasks
       .filter(t => !t.deleted && t.status === TaskStatus.INPROGRESS)
@@ -44,7 +49,7 @@ export class ExecutionEngineView {
       .sort((a, b) => orderSort(a, b));
 
     return `
-      <div class="flex flex-col gap-3 p-2 min-h-0">
+      <div class="flex flex-col min-h-0 h-full overflow-hidden">
         <h2 class="text-[10px] font-black uppercase tracking-widest text-app-muted px-1 pt-1">Execution Engine</h2>
         ${ExecutionEngineView.sectionHeader('In Progress', inProgress.length, 'text-amber-400')}
         ${ExecutionEngineView.sectionBody(inProgress, 'No active work.')}
@@ -63,6 +68,10 @@ export class ExecutionEngineView {
 
         ${ExecutionEngineView.sectionHeader('Failed', failed.length, 'text-red-400')}
         ${ExecutionEngineView.sectionBody(failed, 'No failed tasks.')}
+
+        <div id="sidebar-history" class="flex-1 min-h-0 mt-2 flex flex-col overflow-hidden">
+          ${PipelineHistoryView.render(historyTasks, historyPage)}
+        </div>
       </div>
     `;
   }
