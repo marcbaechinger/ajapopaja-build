@@ -15,6 +15,7 @@
  */
 
 import { Task, TaskStatus } from '../../core/domain.ts';
+import { OrderControl } from './OrderControl.ts';
 
 function escapeHtml(value: string): string {
   return value
@@ -65,9 +66,7 @@ export class ExecutionEngineItemView {
         <div class="flex items-start justify-between gap-2">
           <span class="text-[11px] font-bold text-app-text leading-snug break-words">${escapeHtml(task.title || '')}</span>
           <span class="flex-none flex items-center gap-1.5">
-            ${task.status === TaskStatus.SCHEDULED ? `
-              <span class="text-[9px] font-bold text-app-muted bg-app-surface border border-app-border rounded-md px-1 py-0.5" title="Queue order">#${escapeHtml(String(task.order))}</span>
-            ` : ''}
+            ${task.status === TaskStatus.SCHEDULED ? OrderControl.render(task) : ''}
             <span class="flex-none text-[9px] font-black uppercase tracking-widest rounded-full px-1.5 py-0.5 border ${meta.badgeClass}">${meta.label}</span>
           </span>
         </div>
