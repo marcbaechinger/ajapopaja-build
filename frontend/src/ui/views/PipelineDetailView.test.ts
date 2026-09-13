@@ -110,32 +110,6 @@ describe('PipelineDetailView Layout', () => {
     expect(container.innerHTML).not.toContain('lg:grid-cols-2');
   });
 
-  it('should initialize with 2-column layout if saved in localStorage', () => {
-    storage['pipeline:layout'] = JSON.stringify('2-col');
-    const view = new PipelineDetailView(mockContext, { id: 'p1' });
-    container.innerHTML = view.render() as string;
-
-    expect(container.innerHTML).toContain('lg:grid-cols-2');
-    expect(container.innerHTML).not.toContain('lg:grid-cols-3');
-  });
-
-  it('should toggle layout and update localStorage', async () => {
-    const view = new PipelineDetailView(mockContext, { id: 'p1' });
-    view.mount(container);
-
-    const toggleAction = mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === 'toggle_layout')[1];
-    
-    // Switch to 2 cols
-    toggleAction();
-    expect(localStorage.setItem).toHaveBeenCalledWith('pipeline:layout', JSON.stringify('2-col'));
-    expect(container.innerHTML).toContain('lg:grid-cols-2');
-
-    // Switch back to 3 cols
-    toggleAction();
-    expect(localStorage.setItem).toHaveBeenCalledWith('pipeline:layout', JSON.stringify('3-col'));
-    expect(container.innerHTML).toContain('lg:grid-cols-3');
-  });
-
   it('should keep PROPOSED/CREATED tasks only in the sidebar BacklogView, not the main prep column', async () => {
     mockContext.taskClient.listByPipeline.mockResolvedValue([
       { id: 'p1', title: 'Proposed Task', status: TaskStatus.PROPOSED, design_doc: '# d', deleted: false, version: 1, order: 0, type: 'manual', want_design_doc: true },

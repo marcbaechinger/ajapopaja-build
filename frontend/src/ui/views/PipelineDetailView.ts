@@ -45,7 +45,6 @@ export class PipelineDetailView extends View {
   private container: HTMLElement | null = null;
   private pipelineId: string;
   private pipeline: Pipeline | null = null;
-  private isTwoColumnLayout: boolean = this.storage.get('layout') === '2-col';
   private context: AppContext;
   private unsubs: (() => void)[] = [];
   private activeEditors: Map<string, EasyMDE> = new Map();
@@ -1016,20 +1015,6 @@ export class PipelineDetailView extends View {
         setTimeout(() => btn.classList.remove('animate-pulse', 'border-app-accent-2'), 500);
       }
     });
-
-    this.context.actionRegistry.register('toggle_layout', () => {
-      this.isTwoColumnLayout = !this.isTwoColumnLayout;
-      this.storage.put('layout', this.isTwoColumnLayout ? '2-col' : '3-col');
-      this.reRenderAll();
-    });
-  }
-
-  private reRenderAll() {
-    if (!this.container) return;
-    this.container.innerHTML = this.render() as string;
-    this.updateHeader();
-    this.refreshTasks();
-    this.checkOllama();
   }
 
   async loadPipeline() {
@@ -1254,7 +1239,6 @@ export class PipelineDetailView extends View {
       user: this.context.authService.getUser(),
       allTasks: this.allLoadedTasks,
       gitStatus: this.gitStatus,
-      isTwoColumnLayout: false,
       pendingReviews: this.pendingReviews
     });
 
@@ -1263,7 +1247,7 @@ export class PipelineDetailView extends View {
 
   private renderPrepColumn(): string {
     return `
-      <div class="flex flex-col gap-8 min-w-0 ${this.isTwoColumnLayout ? '' : 'lg:min-w-[350px]'}">
+      <div class="flex flex-col gap-8 min-w-0 lg:min-w-[350px]">
         <div class="bg-app-surface/30 p-6 rounded-3xl border border-app-border/30 flex flex-col">
           ${TaskForm.render()}
           <div id="selected-task-view" class="mt-6">
@@ -1279,7 +1263,7 @@ export class PipelineDetailView extends View {
 
   private renderActiveColumn(): string {
     return `
-      <div class="flex flex-col gap-8 min-w-0 ${this.isTwoColumnLayout ? '' : 'lg:min-w-[350px]'}">
+      <div class="flex flex-col gap-8 min-w-0 lg:min-w-[350px]">
         <div class="bg-app-surface/30 p-6 rounded-3xl border border-app-border/30 flex flex-col">
           <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 px-1">
             <h3 class="text-xl font-black text-app-accent-1 uppercase tracking-tighter shrink-0">Execution Engine</h3>
@@ -1302,7 +1286,7 @@ export class PipelineDetailView extends View {
 
   private renderHistoryColumn(): string {
     return `
-      <div class="flex flex-col gap-8 min-w-0 ${this.isTwoColumnLayout ? '' : 'lg:min-w-[350px]'}">
+      <div class="flex flex-col gap-8 min-w-0 lg:min-w-[350px]">
         <div class="bg-app-surface/30 p-6 rounded-3xl border border-app-border/30 flex flex-col">
           <div id="col-history" class="space-y-8">
             <!-- Stats and Completed tasks will be rendered here -->
@@ -1330,25 +1314,14 @@ export class PipelineDetailView extends View {
 
           <!-- Main Content Area -->
           <main class="flex-1 min-w-0 overflow-y-auto">
-            <div class="grid grid-cols-1 ${this.isTwoColumnLayout ? 'lg:grid-cols-2' : 'lg:grid-cols-3'} gap-6 items-start w-full p-4">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start w-full p-4">
               <!-- Column 1: Preparation & Review -->
               ${this.renderPrepColumn()}
 
-              ${this.isTwoColumnLayout ?
-        `
-                <!-- Column 2: Merged Active and History for 2-col layout -->
-                <div class="flex flex-col gap-6 min-w-0">
-                   ${this.renderActiveColumn()}
-                   ${this.renderHistoryColumn()}
-                </div>
-                ` :
-        `
-                <!-- Column 2: Active Execution -->
-                ${this.renderActiveColumn()}
-                <!-- Column 3: History & Analytics -->
-                ${this.renderHistoryColumn()}
-                `
-      }
+              <!-- Column 2: Active Execution -->
+              ${this.renderActiveColumn()}
+              <!-- Column 3: History & Analytics -->
+              ${this.renderHistoryColumn()}
             </div>
           </main>
 

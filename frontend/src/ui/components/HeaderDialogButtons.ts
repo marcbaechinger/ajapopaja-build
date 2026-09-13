@@ -18,7 +18,7 @@ import { ButtonComponent } from './ButtonComponent.ts';
 import { Icon } from './Icon.ts';
 
 export class HeaderDialogButtons {
-  static render(pipelineId: string, isTwoColumnLayout: boolean): string {
+  static render(pipelineId: string): string {
     return `
       <div class="flex items-center gap-2">
          ${ButtonComponent.render({
@@ -41,13 +41,6 @@ export class HeaderDialogButtons {
            action: 'open_history',
            icon: Icon.render('clock', { size: 16, className: 'group-hover:scale-110 transition-transform' }),
            title: 'History (H)'
-         })}
-         <div class="w-px h-4 bg-app-border mx-1"></div>
-         ${ButtonComponent.render({
-           action: 'toggle_layout',
-           className: isTwoColumnLayout ? "bg-app-accent-1/20 border-app-accent-1/50 text-app-accent-1" : "",
-           icon: Icon.render('copyRects', { size: 16, className: 'group-hover:scale-110 transition-transform' }),
-           title: isTwoColumnLayout ? 'Switch to 3-Column Layout' : 'Switch to 2-Column Layout'
          })}
       </div>
     `;
