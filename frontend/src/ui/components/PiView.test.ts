@@ -494,4 +494,72 @@ describe('PiView', () => {
 
     view.destroy();
   });
+
+  it('tool and verification blocks are expanded by default; toggle collapses them', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+    emitBlocks([
+      { id: 't1', kind: 'tool', header: '→ write', text: 'body1' },
+      { id: 'v1', kind: 'verification', text: '● PASS', sub: ['- ok'] },
+    ]);
+
+    const toolBody = mount.querySelectorAll('.piview-toolverify')[0].querySelector(
+      '[data-role="body"]'
+    ) as HTMLElement;
+    const verifyBody = mount.querySelectorAll('.piview-toolverify')[1].querySelector(
+      '[data-role="body"]'
+    ) as HTMLElement;
+    expect(toolBody.classList.contains('hidden')).toBe(false);
+    expect(verifyBody.classList.contains('hidden')).toBe(false);
+
+    const collapseBtn = mount.querySelector('#collapse-blocks-btn') as HTMLButtonElement;
+    expect(collapseBtn.getAttribute('aria-pressed')).toBe('false');
+    expect(collapseBtn.getAttribute('aria-label')).toContain('Collapse');
+
+    collapseBtn.click();
+    expect(toolBody.classList.contains('hidden')).toBe(true);
+    expect(verifyBody.classList.contains('hidden')).toBe(true);
+    expect(collapseBtn.getAttribute('aria-pressed')).toBe('true');
+    expect(collapseBtn.getAttribute('aria-label')).toContain('Expand');
+
+    // Expand again.
+    collapseBtn.click();
+    expect(toolBody.classList.contains('hidden')).toBe(false);
+  });
+
+  it('new tool/verification blocks follow the collapsed state', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+    emitBlocks([{ id: 't1', kind: 'tool', header: '→ x', text: 'b1' }]);
+
+    (mount.querySelector('#collapse-blocks-btn') as HTMLButtonElement).click();
+
+    emitBlocks([
+      { id: 't1', kind: 'tool', header: '→ x', text: 'b1' },
+      { id: 't2', kind: 'tool', header: '→ y', text: 'b2' },
+    ]);
+    const newBody = mount.querySelectorAll('.piview-toolverify')[1].querySelector(
+      '[data-role="body"]'
+    ) as HTMLElement;
+    expect(newBody.classList.contains('hidden')).toBe(true);
+  });
+
+  it('individual tool header click toggles its own body', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+    emitBlocks([
+      { id: 't1', kind: 'tool', header: '→ a', text: 'x' },
+      { id: 't2', kind: 'verification', text: '● OK', sub: ['z'] },
+    ]);
+
+    const tool = mount.querySelector('.piview-toolverify') as HTMLElement;
+    const toolBody = tool.querySelector('[data-role="body"]') as HTMLElement;
+    expect(toolBody.classList.contains('hidden')).toBe(false);
+
+    (tool.querySelector('[data-role="header"]') as HTMLElement).click();
+    expect(toolBody.classList.contains('hidden')).toBe(true);
+  });
 });
