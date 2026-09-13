@@ -1050,10 +1050,9 @@ export class PipelineDetailView extends View {
   async refreshTasks() {
     if (!this.container) return;
     const prepContainer = this.container.querySelector('#col-prep');
-    const historyContainer = this.container.querySelector('#col-history');
     const completedCountEl = this.container.querySelector('#completed-count');
 
-    if (!prepContainer || !historyContainer) return;
+    if (!prepContainer) return;
 
     try {
       this.allLoadedTasks = await this.context.taskClient.listByPipeline(this.pipelineId, true);
@@ -1082,12 +1081,7 @@ export class PipelineDetailView extends View {
         ${PullRequestSection.render(this.pullRequests)}
       `;
 
-      // 2. Render History Column
-      // Sort completed tasks by completion time (updated_at)
-      completedTasks.sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
-
-      historyContainer.innerHTML = PipelineHistoryView.render(completedTasks, this.historyPage);
-
+      // Completed count (retained only if the element exists).
       if (completedCountEl) {
         completedCountEl.textContent = `(${completedTasks.length})`;
       }
@@ -1103,17 +1097,19 @@ export class PipelineDetailView extends View {
 
   private setHistoryPage(page: number) {
     if (!this.container) return;
-    const historyContainer = this.container.querySelector('#col-history');
-    if (!historyContainer) return;
-
     this.historyPage = page;
+
+    // PipelineHistoryView moved into the right sidebar at the bottom; re-render
+    // only its feed so the engine sections / CoderBot slot stay untouched.
+    const feed = this.container.querySelector('#history-feed');
+    if (!feed) return;
 
     const completedTasks = this.allLoadedTasks
       .filter(t => !t.deleted && ([TaskStatus.IMPLEMENTED, TaskStatus.SUBMITTED, TaskStatus.DISCARDED] as any[]).includes(t.status));
     // Sort completed tasks by completion time (updated_at)
     completedTasks.sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
 
-    historyContainer.innerHTML = PipelineHistoryView.render(completedTasks, this.historyPage);
+    feed.innerHTML = PipelineHistoryView.render(completedTasks, page);
   }
 
   private updateHeader() {
@@ -1173,18 +1169,7 @@ export class PipelineDetailView extends View {
     `;
   }
 
-  private renderHistoryColumn(): string {
-    return `
-      <div class="flex flex-col gap-8 min-w-0 lg:min-w-[350px]">
-        <div class="bg-app-surface/30 p-6 rounded-3xl border border-app-border/30 flex flex-col">
-          <div id="col-history" class="space-y-8">
-            <!-- Stats and Completed tasks will be rendered here -->
-            <p class="text-app-muted animate-pulse text-center py-10">Loading history...</p>
-          </div>
-        </div>
-      </div>
-    `;
-  }
+
 
   render() {
     return `
@@ -1201,19 +1186,16 @@ export class PipelineDetailView extends View {
             </div>
           </aside>
 
-          <!-- Main Content Area -->
+          <!-- Main Content Area (Preparation / PullRequests only; history moved to sidebar) -->
           <main class="flex-[2] min-w-0 overflow-y-auto">
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start w-full p-4">
-              <!-- Column 1: Preparation & Review -->
+            <div class="w-full p-4">
               ${this.renderPrepColumn()}
-              <!-- Column 2: History & Analytics -->
-              ${this.renderHistoryColumn()}
             </div>
           </main>
 
-          <!-- Right Sidebar: ExecutionEngineView -->
-          <aside class="flex-1 min-w-0 shrink-0 border-l border-app-border/60 bg-app-surface/30 overflow-y-auto">
-            <div id="execution-engine-view" class="min-h-full">
+          <!-- Right Sidebar: ExecutionEngineView + PipelineHistoryView (bottom) -->
+          <aside class="flex-1 min-w-0 shrink-0 border-l border-app-border/60 bg-app-surface/30 flex flex-col overflow-hidden">
+            <div id="execution-engine-view" class="flex-1 min-h-0 flex flex-col overflow-hidden">
               <p class="text-app-muted/40 text-[10px] uppercase font-bold tracking-widest text-center py-6">Loading execution engine...</p>
             </div>
           </aside>
@@ -1406,7 +1388,14 @@ export class PipelineDetailView extends View {
     if (!this.container) return;
     const el = this.container.querySelector('#execution-engine-view');
     if (!el) return;
-    el.innerHTML = ExecutionEngineView.render({ tasks: this.allLoadedTasks });
+    const historyTasks = this.allLoadedTasks
+      .filter(t => !t.deleted && ([TaskStatus.IMPLEMENTED, TaskStatus.SUBMITTED, TaskStatus.DISCARDED] as any[]).includes(t.status))
+      .sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
+    el.innerHTML = ExecutionEngineView.render({
+      tasks: this.allLoadedTasks,
+      historyTasks,
+      historyPage: this.historyPage,
+    });
     // Re-render the engine Pi slot based on the current CoderBot session.
     this.updateEnginePiSlot();
   }

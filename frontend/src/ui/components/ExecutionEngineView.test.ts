@@ -103,4 +103,18 @@ describe('ExecutionEngineView', () => {
     const html = ExecutionEngineView.render({ tasks: [makeTask({ status: TaskStatus.SCHEDULED, deleted: true })] });
     expect(html).toContain('Nothing scheduled.');
   });
+
+  it('should render the PipelineHistoryView at the bottom when history tasks are provided', () => {
+    const html = ExecutionEngineView.render({
+      tasks: [makeTask({ id: 'q', status: TaskStatus.SCHEDULED })],
+      historyTasks: [makeTask({ id: 'h1', status: TaskStatus.IMPLEMENTED, title: 'Done Task' })],
+      historyPage: 0,
+    });
+    expect(html).toContain('History Feed');
+    expect(html).toContain('Done Task');
+    expect(html).toContain('sidebar-history');
+    // History comes after the engine sections (Queue/Failed) at the bottom.
+    expect(html.indexOf('sidebar-history')).toBeGreaterThan(html.indexOf('Failed'));
+    expect(html).toContain('overflow-hidden');
+  });
 });

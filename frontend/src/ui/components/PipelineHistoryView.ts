@@ -50,12 +50,12 @@ export class PipelineHistoryView {
     });
 
     return `
-      <section id="history-feed" class="flex flex-col gap-2">
-        <h3 class="text-sm font-black text-app-muted uppercase tracking-widest px-1">History Feed</h3>
-        <div id="completed-task-list" class="flex flex-col gap-2 px-1">
+      <section id="history-feed" class="flex flex-col min-h-0 flex-1 overflow-hidden gap-1">
+        <h3 class="text-sm font-black text-app-muted uppercase tracking-widest px-1 shrink-0">History Feed</h3>
+        <div id="completed-task-list" class="flex flex-col gap-1 px-1 flex-1 overflow-y-auto min-h-0">
           ${items}
         </div>
-        ${pagination}
+        <div class="shrink-0">${pagination}</div>
       </section>
     `;
   }

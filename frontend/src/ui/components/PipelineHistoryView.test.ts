@@ -126,4 +126,20 @@ describe('PipelineHistoryView', () => {
     expect(html).toContain('Task 24');
     expect(html).toContain('Page 3 of 3');
   });
+
+  it('should let the feed list scroll internally so the parent never overflows', () => {
+    const html = PipelineHistoryView.render([
+      makeTask('t1', 'Task One', TaskStatus.IMPLEMENTED, '2026-04-12T11:00:00Z'),
+    ]);
+    const feed = html.match(/<section id="history-feed"[^>]*>/)?.[0] ?? '';
+    // Feed fills the remaining height and never itself overflows.
+    expect(feed).toContain('flex-1');
+    expect(feed).toContain('min-h-0');
+    expect(feed).toContain('overflow-hidden');
+    // Only the inner list scrolls.
+    const list = html.match(/<div id="completed-task-list"[^>]*>/)?.[0] ?? '';
+    expect(list).toContain('overflow-y-auto');
+    expect(list).toContain('flex-1');
+    expect(list).toContain('min-h-0');
+  });
 });

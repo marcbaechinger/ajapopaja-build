@@ -99,13 +99,24 @@ describe('PipelineDetailView Layout', () => {
     });
   });
 
-  it('should lay out a two-column main area with the ExecutionEngineView in the right sidebar', () => {
+  it('should lay out a single-column main area and put PipelineHistoryView in the right sidebar', async () => {
+    mockContext.taskClient.listByPipeline.mockResolvedValue([
+      { id: 'c1', title: 'Done', status: TaskStatus.IMPLEMENTED, deleted: false, version: 1, order: 0, type: 'manual', want_design_doc: false },
+    ]);
     const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
     container.innerHTML = view.render() as string;
+    await view.refreshTasks();
 
-    expect(container.innerHTML).toContain('lg:grid-cols-2');
-    expect(container.innerHTML).not.toContain('lg:grid-cols-3');
-    expect(container.innerHTML).toContain('execution-engine-view');
+    expect(container.innerHTML).not.toContain('lg:grid-cols-2');
+    // History no longer lives in the main content area.
+    expect(container.querySelector('#col-history')).toBeNull();
+    // PipelineHistoryView (mocked) renders inside the sidebar ExecutionEngineView.
+    const engine = container.querySelector('#execution-engine-view');
+    expect(engine).not.toBeNull();
+    const historyArea = engine!.querySelector('#sidebar-history');
+    expect(historyArea).not.toBeNull();
+    expect(historyArea!.innerHTML).toContain('mock-history');
   });
 
   it('should keep PROPOSED/CREATED tasks only in the sidebar BacklogView, not the main prep column', async () => {
