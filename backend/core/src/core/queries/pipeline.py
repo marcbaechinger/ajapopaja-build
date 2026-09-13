@@ -22,9 +22,7 @@ async def get_all_pipelines(include_deleted: bool = False) -> List[Pipeline]:
     # Newest first: order by created_at descending across both branches.
     if include_deleted:
         return await Pipeline.find_all().sort("-created_at").to_list()
-    return (
-        await Pipeline.find(Pipeline.deleted == False).sort("-created_at").to_list()
-    )
+    return await Pipeline.find(Pipeline.deleted == False).sort("-created_at").to_list()
 
 
 def validate_pipeline_input(pipeline: Pipeline) -> None:

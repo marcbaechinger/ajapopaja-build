@@ -75,10 +75,7 @@ def parse_args(argv=None):
     parser.add_argument(
         "--data",
         default=str(default_data),
-        help=(
-            f"Path to the JSON file containing task data "
-            f"(default: {default_data})"
-        ),
+        help=(f"Path to the JSON file containing task data (default: {default_data})"),
     )
     return parser.parse_args(argv)
 
@@ -104,9 +101,7 @@ def load_tasks(data_path):
 
 
 async def get_or_create_pipeline(name: str) -> Pipeline:
-    existing = await Pipeline.find_one(
-        Pipeline.name == name, Pipeline.deleted == False
-    )
+    existing = await Pipeline.find_one(Pipeline.name == name, Pipeline.deleted == False)
     if existing:
         print(f"Reusing existing pipeline '{name}' ({existing.id}).")
         return existing

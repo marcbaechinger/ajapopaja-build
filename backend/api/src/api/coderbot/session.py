@@ -199,9 +199,7 @@ class CoderBotSession:
             try:
                 parsed = json.loads(raw)
                 if isinstance(parsed, list):
-                    commands = [
-                        c for c in parsed if isinstance(c, list) and c
-                    ]
+                    commands = [c for c in parsed if isinstance(c, list) and c]
                     if commands:
                         return commands
                 logger.warning(
@@ -249,7 +247,9 @@ class CoderBotSession:
                     results["passed"] = False
             except Exception as e:
                 logger.error(
-                    "Verification command failed to run (%s): %s", cmd_str, e,
+                    "Verification command failed to run (%s): %s",
+                    cmd_str,
+                    e,
                     exc_info=True,
                 )
                 results["commands"].append(
@@ -374,9 +374,7 @@ class CoderBotSession:
                 ]
                 for entry in verification_results["commands"]:
                     exit_code = entry.get("exit_code")
-                    lines.append(
-                        f"- `{entry.get('cmd')}` -> exit code {exit_code}"
-                    )
+                    lines.append(f"- `{entry.get('cmd')}` -> exit code {exit_code}")
                 if not verification_results.get("passed"):
                     for entry in verification_results["commands"]:
                         if entry.get("exit_code") not in (0, None):

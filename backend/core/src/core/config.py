@@ -67,9 +67,7 @@ BASEBOT_LOG_ENABLED = os.getenv("BASEBOT_LOG_ENABLED", "true").lower() == "true"
 
 # Default model used by CoderBotManager when spawning Pi sessions.
 # If unset, no --model flag is passed to Pi (None).
-CODERBOT_DEFAULT_MODEL: Optional[str] = os.getenv(
-    "CODERBOT_DEFAULT_MODEL", "deepseek-v4-flash:cloud"
-)
+CODERBOT_DEFAULT_MODEL: Optional[str] = os.getenv("CODERBOT_DEFAULT_MODEL")
 
 # Run the documented project test suite in the sandbox after Pi finishes.
 CODERBOT_RUN_TESTS = os.getenv("CODERBOT_RUN_TESTS", "true").lower() == "true"

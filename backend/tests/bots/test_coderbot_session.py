@@ -18,10 +18,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from api.coderbot.session import CoderBotSession, DEFAULT_TEST_COMMANDS
+from api.coderbot.session import DEFAULT_TEST_COMMANDS, CoderBotSession
 from api.websocket_manager import WSMessage
 from core import config
-from core.models.models import Pipeline, PullRequest, PullRequestStatus, Task, TaskStatus
+from core.models.models import (
+    Pipeline,
+    PullRequest,
+    PullRequestStatus,
+    Task,
+    TaskStatus,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -102,7 +108,9 @@ async def test_coderbot_run_spawns_pi(init_mock_db):
             mock_helper.get_repo.return_value = mock_repo
             mock_helper_cls.return_value = mock_helper
 
-            session = CoderBotSession(pipeline_id=str(pipeline.id), task_id=str(task.id))
+            session = CoderBotSession(
+                pipeline_id=str(pipeline.id), task_id=str(task.id)
+            )
 
             mock_proc = AsyncMock()
             mock_proc.stdin = MagicMock()
@@ -447,6 +455,7 @@ async def test_coderbot_initial_prompt_includes_test_instruction(init_mock_db):
     assert "run the full project" in prompt
     assert "test suite" in prompt
 
+
 def test_coderbot_get_verification_commands_defaults():
     """Without an override, the README-documented commands are used."""
     session = CoderBotSession(pipeline_id="p1", task_id="t1")
@@ -554,7 +563,8 @@ async def test_coderbot_handle_agent_end_runs_verification_and_annotates_pr(
     verif_msgs = [
         c
         for c in mock_broadcast.await_args_list
-        if isinstance(c.args[0], WSMessage) and c.args[0].type == "CODERBOT_VERIFICATION"
+        if isinstance(c.args[0], WSMessage)
+        and c.args[0].type == "CODERBOT_VERIFICATION"
     ]
     assert verif_msgs, "Expected a CODERBOT_VERIFICATION broadcast"
     assert verif_msgs[0].args[0].payload["result"]["passed"] is False
@@ -603,9 +613,7 @@ async def test_coderbot_handle_agent_end_skips_verification_when_disabled(
             patch(
                 "api.coderbot.session.Task.get", new_callable=AsyncMock
             ) as mock_task_get,
-            patch(
-                "core.queries.task.transition_task", new_callable=AsyncMock
-            ),
+            patch("core.queries.task.transition_task", new_callable=AsyncMock),
         ):
             mock_task_get.return_value = task
             await session._handle_agent_end(
