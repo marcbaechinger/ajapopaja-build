@@ -172,4 +172,50 @@ describe('CoderBotService RPC stream', () => {
     ws.dispatch('ASSISTANT_STREAM', { bot_type: 'docbot', content: 'doc text' });
     expect(service.getRawHistory()).toBe('doc text');
   });
+
+  it('renders a passing CODERBOT_VERIFICATION block', () => {
+    ws.dispatch('CODERBOT_VERIFICATION', {
+      task_id: 't1',
+      pipeline_id: 'p1',
+      bot_type: 'coderbot',
+      result: {
+        passed: true,
+        commands: [{ cmd: 'cd backend && uv run pytest', exit_code: 0, output_tail: '' }],
+      },
+    });
+    const verif = history.filter((b) => b.kind === 'verification');
+    expect(verif).toHaveLength(1);
+    expect(LAST(verif).text).toContain('PASSED');
+    expect(LAST(verif).error).toBeFalsy();
+  });
+
+  it('renders a failing CODERBOT_VERIFICATION block with output tail', () => {
+    ws.dispatch('CODERBOT_VERIFICATION', {
+      task_id: 't1',
+      pipeline_id: 'p1',
+      bot_type: 'coderbot',
+      result: {
+        passed: false,
+        commands: [
+          { cmd: 'cd backend && uv run pytest', exit_code: 1, output_tail: 'FAILURES!' },
+        ],
+      },
+    });
+    const verif = history.filter((b) => b.kind === 'verification');
+    expect(verif).toHaveLength(1);
+    expect(LAST(verif).text).toContain('FAILED');
+    expect(LAST(verif).error).toBe(true);
+    expect(LAST(verif).sub?.join('\n')).toContain('exit code 1');
+    expect(LAST(verif).sub?.join('\n')).toContain('FAILURES!');
+  });
+
+  it('ignores CODERBOT_VERIFICATION for non-coderbot bot types', () => {
+    ws.dispatch('CODERBOT_VERIFICATION', {
+      task_id: 't1',
+      pipeline_id: 'p1',
+      bot_type: 'docbot',
+      result: { passed: true, commands: [] },
+    });
+    expect(history.filter((b) => b.kind === 'verification')).toHaveLength(0);
+  });
 });

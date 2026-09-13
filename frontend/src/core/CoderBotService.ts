@@ -26,7 +26,8 @@ export type BlockKind =
   | 'bash'
   | 'notice'
   | 'error'
-  | 'divider';
+  | 'divider'
+  | 'verification';
 
 /**
  * A single structured, rendered line/block in the CoderBot activity log.
@@ -106,6 +107,14 @@ export class CoderBotService {
     this.wsClient.on('CODERBOT_RPC_EVENT', (msg) => {
       if (msg.payload?.bot_type === 'coderbot') {
         this.handleRpcEvent(msg.payload?.event);
+      }
+    });
+
+    // Post-run test verification broadcast. Rendered as a distinct, boxed block
+    // so the user can see whether the mandatory test suite passed or failed.
+    this.wsClient.on('CODERBOT_VERIFICATION', (msg) => {
+      if (msg.payload?.bot_type === 'coderbot') {
+        this.addVerificationBlock(msg.payload.result);
       }
     });
   }
@@ -367,6 +376,34 @@ export class CoderBotService {
 
   private nextId(): string {
     return `blk_${this.nextBlockId++}`;
+  }
+
+  /**
+   * Reducer for a `CODERBOT_VERIFICATION` broadcast. Builds a single
+   * `verification`-kind block summarizing the post-run test suite.
+   */
+  private addVerificationBlock(result: any) {
+    const passed = !!result?.passed;
+    const commands: any[] = Array.isArray(result?.commands)
+      ? result.commands
+      : [];
+    const sub: string[] = [];
+    for (const entry of commands) {
+      const cmd = entry?.cmd ?? '';
+      const exitCode = entry?.exit_code;
+      sub.push(`- ${cmd}  → exit code ${exitCode}`);
+      // Append the (truncated) output tail only for failed commands, matching
+      // the backend's PR summary annotation.
+      if (!passed && exitCode !== 0 && entry?.output_tail) {
+        sub.push(entry.output_tail.slice(0, 500));
+      }
+    }
+    this.addBlock({
+      kind: 'verification',
+      text: passed ? '● Verification: PASSED' : '● Verification: FAILED',
+      sub,
+      error: !passed,
+    });
   }
 
   private addBlock(opts: Omit<RenderBlock, 'id'>) {

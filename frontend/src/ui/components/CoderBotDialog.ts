@@ -195,6 +195,29 @@ export class CoderBotDialog extends BaseDialog {
         el.textContent = block.text ?? '';
         break;
       }
+      case 'verification': {
+        const wrapper = document.createElement('div');
+        const isError = block.error;
+        wrapper.className =
+          'border rounded p-2 my-1 ' +
+          (isError
+            ? 'border-red-500/60 bg-red-950/30'
+            : 'border-green-500/60 bg-green-950/30');
+        const header = document.createElement('div');
+        header.setAttribute('data-role', 'header');
+        header.className =
+          'font-semibold whitespace-pre-wrap ' +
+          (isError ? 'text-red-400' : 'text-green-400');
+        header.textContent = block.text ?? '';
+        wrapper.appendChild(header);
+        const body = document.createElement('pre');
+        body.setAttribute('data-role', 'body');
+        body.className = 'whitespace-pre-wrap break-all text-green-300 mt-1 min-h-0';
+        body.textContent = (block.sub ?? []).join('\n');
+        wrapper.appendChild(body);
+        el = wrapper;
+        break;
+      }
       case 'divider': {
         el = document.createElement('div');
         el.className =
@@ -216,13 +239,16 @@ export class CoderBotDialog extends BaseDialog {
   private updateBlockEl(el: HTMLElement, block: RenderBlock) {
     const header = el.querySelector('[data-role="header"]') as HTMLElement | null;
     if (header) {
-      header.textContent = block.header ?? '';
+      header.textContent = block.kind === 'verification' ? (block.text ?? '') : (block.header ?? '');
     }
     const body = el.querySelector('[data-role="body"]') as HTMLElement | null;
     if (body) {
-      const txt = block.text ?? '';
-      if (body.textContent !== txt) {
-        body.textContent = txt;
+      if (block.kind === 'verification') {
+        const txt = (block.sub ?? []).join('\n');
+        if (body.textContent !== txt) body.textContent = txt;
+      } else {
+        const txt = block.text ?? '';
+        if (body.textContent !== txt) body.textContent = txt;
       }
     } else {
       const txt = block.text ?? block.header ?? '';
