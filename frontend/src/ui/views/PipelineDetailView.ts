@@ -54,7 +54,7 @@ export class PipelineDetailView extends View {
   private expandedSpecs: Set<string> = new Set();
   private isFirstLoad: boolean = true;
   private completedTasksPage: number = 0;
-  private completedPageSize: number = 5;
+  private completedPageSize: number = 10;
   private keydownHandler: ((e: KeyboardEvent) => void) | null = null;
   private gitStatus: GitStatus | undefined = undefined;
   private gitStatusRefreshTimer: ReturnType<typeof setTimeout> | null = null;
