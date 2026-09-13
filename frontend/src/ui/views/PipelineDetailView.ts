@@ -50,7 +50,7 @@ export class PipelineDetailView extends View {
   private activeEditors: Map<string, EasyMDE> = new Map();
   private allLoadedTasks: Task[] = [];
   private collapsedTasks: Set<string> = new Set();
-  private expandedSpecs: Set<string> = new Set();
+  private collapsedSpecs: Set<string> = new Set();
   private isFirstLoad: boolean = true;
   private keydownHandler: ((e: KeyboardEvent) => void) | null = null;
   private gitStatus: GitStatus | undefined = undefined;
@@ -610,8 +610,8 @@ export class PipelineDetailView extends View {
 
       try {
         await this.context.taskClient.updateDetails(taskId, version, { spec: newSpec, want_design_doc: wantDesignDoc });
-        // Ensure spec is expanded after save
-        this.expandedSpecs.add(taskId);
+        // Keep the spec expanded after saving the changes.
+        this.collapsedSpecs.delete(taskId);
         // WS will refresh
       } catch (error) {
         alert('Failed to save specification');
@@ -631,9 +631,9 @@ export class PipelineDetailView extends View {
       el.textContent = isExpanded ? 'Show Less' : 'Show More';
 
       if (isExpanded) {
-        this.expandedSpecs.add(taskId);
+        this.collapsedSpecs.delete(taskId);
       } else {
-        this.expandedSpecs.delete(taskId);
+        this.collapsedSpecs.add(taskId);
       }
     });
 
@@ -1261,7 +1261,7 @@ export class PipelineDetailView extends View {
           false,
           this.collapsedTasks.has(task.id!),
           false,
-          this.expandedSpecs.has(task.id!)
+          !this.collapsedSpecs.has(task.id!)
         );
     const temp = document.createElement('div');
     temp.innerHTML = taskHtml;
@@ -1341,7 +1341,7 @@ export class PipelineDetailView extends View {
             false,
             this.collapsedTasks.has(taskId),
             false,
-            this.expandedSpecs.has(taskId)
+            !this.collapsedSpecs.has(taskId)
           );
       const temp = document.createElement('div');
       temp.innerHTML = taskHtml;
@@ -1381,7 +1381,7 @@ export class PipelineDetailView extends View {
     }
 
     this.selectedTask = fresh;
-    viewEl.innerHTML = TaskItem.render(fresh, false, false, false, false, this.expandedSpecs.has(fresh.id!));
+    viewEl.innerHTML = TaskItem.render(fresh, false, false, false, false, !this.collapsedSpecs.has(fresh.id!));
   }
 
   private refreshExecutionEngine() {

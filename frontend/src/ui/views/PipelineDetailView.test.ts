@@ -168,6 +168,37 @@ describe('PipelineDetailView Layout', () => {
     expect(selectedView!.innerHTML).not.toContain('Select a task from the backlog');
   });
 
+  it('should render the Specification expanded by default, and keep a manual collapse on reselect', async () => {
+    mockContext.taskClient.listByPipeline.mockResolvedValue([
+      { id: 'c1', title: 'Spec Task', spec: 'some spec', status: TaskStatus.CREATED, deleted: false, version: 1, order: 0, type: 'manual', want_design_doc: false },
+    ]);
+
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+    container.innerHTML = view.render() as string;
+    await view.refreshTasks();
+
+    const selectAction = mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === 'select_task')![1];
+    const toggleAction = mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === 'toggle_spec_expand')![1];
+    const selectEl = () => {
+      const el = document.createElement('div');
+      el.setAttribute('data-view-id', 'c1');
+      selectAction(new Event('click'), el);
+      return container.querySelector('#selected-task-view') as HTMLElement;
+    };
+
+    const selectedView = selectEl();
+    const display = selectedView.querySelector('.spec-display') as HTMLElement;
+    // Expanded by default.
+    expect(display.classList.contains('expanded')).toBe(true);
+
+    // User collapses it -> re-rendering (reselect) keeps it collapsed.
+    const toggleBtn = selectedView.querySelector('[data-action-click="toggle_spec_expand"]') as HTMLElement;
+    toggleAction(new Event('click'), toggleBtn);
+    const collapsedView = selectEl();
+    expect(collapsedView.querySelector('.spec-display')!.classList.contains('expanded')).toBe(false);
+  });
+
   it('should refresh the selected TaskView (version) when the task updates over WS', async () => {
     let tasksHandler: ((payload: any) => void) | undefined;
     mockContext.dataManager.on = vi.fn((query: string, cb: any) => {
