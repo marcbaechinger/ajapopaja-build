@@ -24,8 +24,8 @@ import { StatsDialog } from '../components/StatsDialog.ts';
 import { TaskForm } from '../components/TaskForm.ts';
 import { DesignDocDialog } from '../components/DesignDocDialog.ts';
 import { DesignDocDiffDialog } from '../components/DesignDocDiffDialog.ts';
-import { TaskColumn } from '../components/TaskColumn.ts';
 import { BacklogView } from '../components/BacklogView.ts';
+import { ExecutionEngineView } from '../components/ExecutionEngineView.ts';
 import { CompletedSection } from '../components/CompletedSection.ts';
 import { PipelineStatsView } from '../components/PipelineStatsView.ts';
 import { PaginationControl } from '../components/PaginationControl.ts';
@@ -48,7 +48,6 @@ export class PipelineDetailView extends View {
   private context: AppContext;
   private unsubs: (() => void)[] = [];
   private activeEditors: Map<string, EasyMDE> = new Map();
-  private currentSortOrder: 'execution' | 'newest' | 'status' = 'execution';
   private allLoadedTasks: Task[] = [];
   private collapsedTasks: Set<string> = new Set();
   private expandedSpecs: Set<string> = new Set();
@@ -207,6 +206,7 @@ export class PipelineDetailView extends View {
         this.allLoadedTasks = this.allLoadedTasks.filter(t => t.id !== taskOrDeleted.id);
         this.refreshBacklog();
         this.refreshSelectedTask();
+        this.refreshExecutionEngine();
       } else {
         const task = taskOrDeleted as Task;
         this.updateSingleTask(task);
@@ -500,11 +500,6 @@ export class PipelineDetailView extends View {
 
     this.context.actionRegistry.register('open_history', () => {
       new HistoryDialog(this.allLoadedTasks).show();
-    });
-
-    this.context.actionRegistry.register('change_sort_order', async (_e, el) => {
-      this.currentSortOrder = (el as HTMLSelectElement).value as any;
-      this.refreshTasks();
     });
 
     this.context.actionRegistry.register('create_task', async (_e, el) => {
@@ -1064,11 +1059,10 @@ export class PipelineDetailView extends View {
   async refreshTasks() {
     if (!this.container) return;
     const prepContainer = this.container.querySelector('#col-prep');
-    const activeContainer = this.container.querySelector('#col-active');
     const historyContainer = this.container.querySelector('#col-history');
     const completedCountEl = this.container.querySelector('#completed-count');
 
-    if (!prepContainer || !activeContainer || !historyContainer) return;
+    if (!prepContainer || !historyContainer) return;
 
     try {
       this.allLoadedTasks = await this.context.taskClient.listByPipeline(this.pipelineId, true);
@@ -1089,16 +1083,7 @@ export class PipelineDetailView extends View {
         this.isFirstLoad = false;
       }
 
-      const inProgressTasks = allTasks.filter(t => !t.deleted && t.status === TaskStatus.INPROGRESS);
-      const scheduledTasks = allTasks.filter(t => !t.deleted && t.status === TaskStatus.SCHEDULED);
-      const failedTasks = allTasks.filter(t => !t.deleted && t.status === TaskStatus.FAILED);
-
       const completedTasks = allTasks.filter(t => !t.deleted && ([TaskStatus.IMPLEMENTED, TaskStatus.SUBMITTED, TaskStatus.DISCARDED] as any[]).includes(t.status));
-
-      // Sort columns
-      inProgressTasks.sort((a, b) => this.taskSortFn(a, b));
-      scheduledTasks.sort((a, b) => this.taskSortFn(a, b));
-      failedTasks.sort((a, b) => this.taskSortFn(a, b));
 
       // 1. Render Preparation Column (PROPOSED/CREATED tasks now only live in the
       // sidebar BacklogView; the main area keeps the PullRequest section only).
@@ -1106,40 +1091,7 @@ export class PipelineDetailView extends View {
         ${PullRequestSection.render(this.pullRequests)}
       `;
 
-      // 2. Render Active Column
-      activeContainer.innerHTML = `
-        ${TaskColumn.render({
-        id: 'inprogress',
-        title: 'In Progress',
-        tasks: inProgressTasks,
-        emptyMessage: 'No active work.',
-        collapsedTasks: this.collapsedTasks,
-        badge: { text: 'Running', class: 'bg-amber-500/20 text-amber-400 border-amber-500/30' }
-      })}
-        ${TaskColumn.render({
-        id: 'failed',
-        title: 'Failed',
-        tasks: failedTasks,
-        emptyMessage: '',
-        collapsedTasks: this.collapsedTasks,
-        badge: { text: 'Attention', class: 'bg-red-500/20 text-red-400 border-red-500/30' }
-      })}
-        ${TaskColumn.render({
-        id: 'scheduled',
-        title: 'Queue',
-        tasks: scheduledTasks,
-        emptyMessage: 'Nothing scheduled.',
-        showOrdering: this.currentSortOrder === 'execution',
-        collapsedTasks: this.collapsedTasks
-      })}
-      `;
-
-      // Remove empty failed section if no failed tasks
-      if (failedTasks.length === 0) {
-        activeContainer.querySelector('#failed-section')?.remove();
-      }
-
-      // 3. Render History Column
+      // 2. Render History Column
       // Sort completed tasks by completion time (updated_at)
       completedTasks.sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
 
@@ -1167,6 +1119,7 @@ export class PipelineDetailView extends View {
 
       this.refreshBacklog();
       this.refreshSelectedTask();
+      this.refreshExecutionEngine();
     } catch (error) {
       prepContainer.innerHTML = '<p class="text-red-400">Error loading tasks.</p>';
       console.error('Error refreshing tasks:', error);
@@ -1261,29 +1214,6 @@ export class PipelineDetailView extends View {
     `;
   }
 
-  private renderActiveColumn(): string {
-    return `
-      <div class="flex flex-col gap-8 min-w-0 lg:min-w-[350px]">
-        <div class="bg-app-surface/30 p-6 rounded-3xl border border-app-border/30 flex flex-col">
-          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 px-1">
-            <h3 class="text-xl font-black text-app-accent-1 uppercase tracking-tighter shrink-0">Execution Engine</h3>
-            <div class="flex items-center gap-2 w-full sm:w-auto">
-              <select data-action-change="change_sort_order" class="w-full sm:w-auto bg-app-bg border border-app-border rounded-lg px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-app-text outline-none focus:ring-1 focus:ring-app-accent-1 cursor-pointer">
-                <option value="execution" ${this.currentSortOrder === 'execution' ? 'selected' : ''}>Execution Order</option>
-                <option value="newest" ${this.currentSortOrder === 'newest' ? 'selected' : ''}>Newest First</option>
-                <option value="status" ${this.currentSortOrder === 'status' ? 'selected' : ''}>By Status</option>
-              </select>
-            </div>
-          </div>
-          <div id="col-active" class="space-y-10">
-            <!-- In Progress and Scheduled tasks will be rendered here -->
-            <p class="text-app-muted animate-pulse text-center py-10">Loading execution queue...</p>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
   private renderHistoryColumn(): string {
     return `
       <div class="flex flex-col gap-8 min-w-0 lg:min-w-[350px]">
@@ -1313,21 +1243,20 @@ export class PipelineDetailView extends View {
           </aside>
 
           <!-- Main Content Area -->
-          <main class="flex-1 min-w-0 overflow-y-auto">
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start w-full p-4">
+          <main class="flex-[2] min-w-0 overflow-y-auto">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start w-full p-4">
               <!-- Column 1: Preparation & Review -->
               ${this.renderPrepColumn()}
-
-              <!-- Column 2: Active Execution -->
-              ${this.renderActiveColumn()}
-              <!-- Column 3: History & Analytics -->
+              <!-- Column 2: History & Analytics -->
               ${this.renderHistoryColumn()}
             </div>
           </main>
 
-          <!-- Right Sidebar (placeholder, populated in a later step) -->
-          <aside class="w-52 flex-none shrink-0 border-l border-app-border/60 bg-app-surface/30 flex items-center justify-center">
-            <p class="text-app-muted/40 text-[10px] uppercase font-bold tracking-widest">Right Panel</p>
+          <!-- Right Sidebar: ExecutionEngineView -->
+          <aside class="flex-1 min-w-0 shrink-0 border-l border-app-border/60 bg-app-surface/30 overflow-y-auto">
+            <div id="execution-engine-view" class="min-h-full">
+              <p class="text-app-muted/40 text-[10px] uppercase font-bold tracking-widest text-center py-6">Loading execution engine...</p>
+            </div>
           </aside>
         </div>
       </div>
@@ -1358,16 +1287,6 @@ export class PipelineDetailView extends View {
     if (this.keydownHandler) {
       document.removeEventListener('keydown', this.keydownHandler);
       this.keydownHandler = null;
-    }
-  }
-
-  private taskSortFn(a: Task, b: Task): number {
-    if (this.currentSortOrder === 'execution') {
-      return a.order - b.order;
-    } else if (this.currentSortOrder === 'newest') {
-      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
-    } else {
-      return a.status.localeCompare(b.status);
     }
   }
 
@@ -1498,6 +1417,7 @@ export class PipelineDetailView extends View {
 
     this.refreshBacklog();
     this.refreshSelectedTask();
+    this.refreshExecutionEngine();
   }
 
   private refreshSelectedTask() {
@@ -1522,6 +1442,13 @@ export class PipelineDetailView extends View {
 
     this.selectedTask = fresh;
     viewEl.innerHTML = TaskItem.render(fresh, false, false, false, false, this.expandedSpecs.has(fresh.id!));
+  }
+
+  private refreshExecutionEngine() {
+    if (!this.container) return;
+    const el = this.container.querySelector('#execution-engine-view');
+    if (!el) return;
+    el.innerHTML = ExecutionEngineView.render({ tasks: this.allLoadedTasks });
   }
 
   private refreshBacklog() {
