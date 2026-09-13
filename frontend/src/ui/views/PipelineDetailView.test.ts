@@ -37,8 +37,8 @@ vi.mock('../components/TaskForm.ts', () => ({
 vi.mock('../components/PipelineHeaderView.ts', () => ({
   PipelineHeaderView: { render: () => '<div class="mock-header">Header</div>' }
 }));
-vi.mock('../components/CompletedSection.ts', () => ({
-  CompletedSection: { render: () => '<div class="mock-completed">Completed</div>' }
+vi.mock('../components/PipelineHistoryView.ts', () => ({
+  PipelineHistoryView: { render: () => '<div class="mock-history">History</div>' }
 }));
 vi.mock('../components/PaginationControl.ts', () => ({
   PaginationControl: { render: () => '<div class="mock-pagination">Pagination</div>' }

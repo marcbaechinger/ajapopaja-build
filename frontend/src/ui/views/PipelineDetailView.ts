@@ -27,8 +27,7 @@ import { DesignDocDialog } from '../components/DesignDocDialog.ts';
 import { DesignDocDiffDialog } from '../components/DesignDocDiffDialog.ts';
 import { BacklogView } from '../components/BacklogView.ts';
 import { ExecutionEngineView } from '../components/ExecutionEngineView.ts';
-import { CompletedSection } from '../components/CompletedSection.ts';
-import { PaginationControl } from '../components/PaginationControl.ts';
+import { PipelineHistoryView } from '../components/PipelineHistoryView.ts';
 import { DocBotDialog } from '../components/DocBotDialog.ts';
 import { PullRequestSection } from '../components/PullRequestSection.ts';
 import type { DocBotDialogProps } from '../components/DocBotDialog.ts';
@@ -53,8 +52,6 @@ export class PipelineDetailView extends View {
   private collapsedTasks: Set<string> = new Set();
   private expandedSpecs: Set<string> = new Set();
   private isFirstLoad: boolean = true;
-  private completedTasksPage: number = 0;
-  private completedPageSize: number = 10;
   private keydownHandler: ((e: KeyboardEvent) => void) | null = null;
   private gitStatus: GitStatus | undefined = undefined;
   private gitStatusRefreshTimer: ReturnType<typeof setTimeout> | null = null;
@@ -122,12 +119,6 @@ export class PipelineDetailView extends View {
       case TaskStatus.IMPLEMENTED:
       case TaskStatus.SUBMITTED:
       case TaskStatus.DISCARDED:
-        const completedTasks = this.allLoadedTasks
-          .filter(t => !t.deleted && ([TaskStatus.IMPLEMENTED, TaskStatus.SUBMITTED, TaskStatus.DISCARDED] as any[]).includes(t.status))
-          .sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
-        if (completedTasks.length > 0 && completedTasks[0].id === task.id) {
-          return 'last-completed-task';
-        }
         return 'completed-task-list';
       default: return 'backlog-list';
     }
@@ -518,18 +509,6 @@ export class PipelineDetailView extends View {
       } catch (error) {
         alert('Failed to create task');
       }
-    });
-
-    this.context.actionRegistry.register('prev_completed_page', () => {
-      if (this.completedTasksPage > 0) {
-        this.completedTasksPage--;
-        this.refreshCompletedTasks();
-      }
-    });
-
-    this.context.actionRegistry.register('next_completed_page', () => {
-      this.completedTasksPage++;
-      this.refreshCompletedTasks();
     });
 
     this.context.actionRegistry.register('select_task', (_e, el) => {
@@ -1098,17 +1077,7 @@ export class PipelineDetailView extends View {
       // Sort completed tasks by completion time (updated_at)
       completedTasks.sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
 
-      historyContainer.innerHTML = `
-        ${CompletedSection.render({
-        lastCompleted: completedTasks.length > 0 ? completedTasks[0] : null,
-        totalCompletedCount: completedTasks.length,
-        collapsedTasks: this.collapsedTasks
-      })}
-      `;
-
-      if (completedTasks.length > 0) {
-        this.refreshCompletedTasks();
-      }
+      historyContainer.innerHTML = PipelineHistoryView.render(completedTasks);
 
       if (completedCountEl) {
         completedCountEl.textContent = `(${completedTasks.length})`;
@@ -1120,39 +1089,6 @@ export class PipelineDetailView extends View {
     } catch (error) {
       prepContainer.innerHTML = '<p class="text-red-400">Error loading tasks.</p>';
       console.error('Error refreshing tasks:', error);
-    }
-  }
-
-  async refreshCompletedTasks() {
-    if (!this.container) return;
-    const completedContainer = this.container.querySelector('#completed-task-list');
-    const paginationContainer = this.container.querySelector('#completed-pagination');
-    if (!completedContainer) return;
-
-    try {
-      const { tasks, total_count } = await this.context.taskClient.listCompletedByPipeline(
-        this.pipelineId,
-        this.completedTasksPage,
-        this.completedPageSize
-      );
-
-      completedContainer.innerHTML = tasks.length > 0
-        ? tasks.map(t => HistoryItemView.isHistoryStatus(t.status)
-            ? HistoryItemView.render(t)
-            : TaskItem.render(t, false, false, this.collapsedTasks.has(t.id!), false, this.expandedSpecs.has(t.id!))).join('')
-        : '<p class="text-app-muted italic text-xs">No older completed tasks.</p>';
-
-      if (paginationContainer) {
-        paginationContainer.innerHTML = PaginationControl.render({
-          currentPage: this.completedTasksPage,
-          pageSize: this.completedPageSize,
-          totalCount: total_count,
-          prevAction: 'prev_completed_page',
-          nextAction: 'next_completed_page'
-        });
-      }
-    } catch (error) {
-      console.error('Error refreshing completed tasks:', error);
     }
   }
 
@@ -1310,36 +1246,13 @@ export class PipelineDetailView extends View {
 
     this.removeEmptyMessage(columnId);
 
-    // If moving to last-completed-task, push the current one to history feed
-    if (columnId === 'last-completed-task') {
-      const existingLastTaskEl = list.firstElementChild as HTMLElement;
-      if (existingLastTaskEl && existingLastTaskEl.getAttribute('data-view-id')) {
-        const historyFeed = this.container.querySelector('#completed-task-list');
-        if (historyFeed) {
-          this.removeEmptyMessage('completed-task-list');
-          const oldTaskId = existingLastTaskEl.getAttribute('data-view-id');
-          const oldTask = this.allLoadedTasks.find(t => t.id === oldTaskId);
-          if (oldTask) {
-            // Re-render for history feed (without expanded history)
-            const historyHtml = HistoryItemView.isHistoryStatus(oldTask.status)
-              ? HistoryItemView.render(oldTask)
-              : TaskItem.render(oldTask, false, false, this.collapsedTasks.has(oldTask.id!), false, this.expandedSpecs.has(oldTask.id!));
-            const temp = document.createElement('div');
-            temp.innerHTML = historyHtml;
-            historyFeed.prepend(temp.firstElementChild as HTMLElement);
-          }
-          existingLastTaskEl.remove();
-        }
-      }
-    }
-
-    const isHistoryColumn = columnId === 'last-completed-task' || columnId === 'completed-task-list';
-    const taskHtml = HistoryItemView.isHistoryStatus(task.status) && isHistoryColumn
-      ? HistoryItemView.render(task, columnId === 'last-completed-task')
+    const isHistoryColumn = columnId === 'completed-task-list';
+    const taskHtml = isHistoryColumn
+      ? HistoryItemView.render(task)
       : TaskItem.render(
           task,
           columnId === 'backlog-list' || columnId === 'scheduled-list',
-          columnId === 'last-completed-task',
+          false,
           this.collapsedTasks.has(task.id!),
           false,
           this.expandedSpecs.has(task.id!)
@@ -1372,7 +1285,7 @@ export class PipelineDetailView extends View {
   }
 
   private findTaskElementInColumns(taskId: string): { columnId: string; el: HTMLElement } | null {
-    const columnIds = ['inprogress-list', 'failed-list', 'scheduled-list', 'backlog-list', 'proposed-list', 'last-completed-task', 'completed-task-list'];
+    const columnIds = ['inprogress-list', 'failed-list', 'scheduled-list', 'backlog-list', 'proposed-list', 'completed-task-list'];
     for (const columnId of columnIds) {
       const list = this.container?.querySelector(`#${columnId}`);
       const el = list?.querySelector(`[data-view-id="${taskId}"]`) as HTMLElement | null;
@@ -1382,7 +1295,7 @@ export class PipelineDetailView extends View {
   }
 
   private removeTaskFromColumns(taskId: string) {
-    const columnIds = ['inprogress-list', 'failed-list', 'scheduled-list', 'backlog-list', 'proposed-list', 'last-completed-task', 'completed-task-list'];
+    const columnIds = ['inprogress-list', 'failed-list', 'scheduled-list', 'backlog-list', 'proposed-list', 'completed-task-list'];
     for (const columnId of columnIds) {
       const list = this.container?.querySelector(`#${columnId}`);
       const el = list?.querySelector(`[data-view-id="${taskId}"]`) as HTMLElement | null;
@@ -1410,16 +1323,16 @@ export class PipelineDetailView extends View {
     const targetColumnId = this.getTaskColumnId(task);
     const loc = this.findTaskElementInColumns(taskId);
 
-    const isHistoryColumn = targetColumnId === 'last-completed-task' || targetColumnId === 'completed-task-list';
+    const isHistoryColumn = targetColumnId === 'completed-task-list';
 
     if (loc && loc.columnId === targetColumnId) {
       // Same column: replace the content in place (keeps DOM position, avoids flicker)
-      const taskHtml = HistoryItemView.isHistoryStatus(task.status) && isHistoryColumn
-        ? HistoryItemView.render(task, targetColumnId === 'last-completed-task')
+      const taskHtml = isHistoryColumn
+        ? HistoryItemView.render(task)
         : TaskItem.render(
             task,
             targetColumnId === 'backlog-list' || targetColumnId === 'scheduled-list',
-            targetColumnId === 'last-completed-task',
+            false,
             this.collapsedTasks.has(taskId),
             false,
             this.expandedSpecs.has(taskId)
