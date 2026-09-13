@@ -27,7 +27,6 @@ import { DesignDocDiffDialog } from '../components/DesignDocDiffDialog.ts';
 import { BacklogView } from '../components/BacklogView.ts';
 import { ExecutionEngineView } from '../components/ExecutionEngineView.ts';
 import { CompletedSection } from '../components/CompletedSection.ts';
-import { PipelineStatsView } from '../components/PipelineStatsView.ts';
 import { PaginationControl } from '../components/PaginationControl.ts';
 import { DocBotDialog } from '../components/DocBotDialog.ts';
 import { PullRequestSection } from '../components/PullRequestSection.ts';
@@ -1099,10 +1098,6 @@ export class PipelineDetailView extends View {
       completedTasks.sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
 
       historyContainer.innerHTML = `
-        <div class="bg-app-bg/50 p-6 rounded-3xl border border-app-border/50 shadow-sm mb-4">
-          <h3 class="text-sm font-black text-app-muted uppercase tracking-widest mb-6 px-1">Pipeline Health</h3>
-          ${PipelineStatsView.render(allTasks, undefined, true)}
-        </div>
         ${CompletedSection.render({
         lastCompleted: completedTasks.length > 0 ? completedTasks[0] : null,
         totalCompletedCount: completedTasks.length,
@@ -1113,8 +1108,6 @@ export class PipelineDetailView extends View {
       if (completedTasks.length > 0) {
         this.refreshCompletedTasks();
       }
-
-      PipelineStatsView.animateBars(historyContainer as HTMLElement);
 
       if (completedCountEl) {
         completedCountEl.textContent = `(${completedTasks.length})`;

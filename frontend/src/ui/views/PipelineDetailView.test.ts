@@ -37,9 +37,6 @@ vi.mock('../components/TaskForm.ts', () => ({
 vi.mock('../components/PipelineHeaderView.ts', () => ({
   PipelineHeaderView: { render: () => '<div class="mock-header">Header</div>' }
 }));
-vi.mock('../components/PipelineStatsView.ts', () => ({
-  PipelineStatsView: { render: () => '<div class="mock-stats">Stats</div>', animateBars: vi.fn() }
-}));
 vi.mock('../components/CompletedSection.ts', () => ({
   CompletedSection: { render: () => '<div class="mock-completed">Completed</div>' }
 }));
