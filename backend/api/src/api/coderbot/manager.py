@@ -34,7 +34,19 @@ class CoderBotManager:
         self._queue = asyncio.Queue()
         self._worker_task = None
         self._active_session: Optional[CoderBotSession] = None
+        self._last_session: Optional[CoderBotSession] = None
         self._default_model: Optional[str] = config.CODERBOT_DEFAULT_MODEL
+
+    def get_active_session(self) -> Optional[dict]:
+        """Return the current (or last) CoderBot session for UI re-attachment."""
+        session = self._active_session or self._last_session
+        if not session:
+            return None
+        return {
+            "pipeline_id": session.pipeline_id,
+            "task_id": session.task_id,
+            "is_active": session is self._active_session,
+        }
 
     def set_default_model(self, model: Optional[str]) -> None:
         """Updates the default model injected into session constructors."""
@@ -76,6 +88,7 @@ class CoderBotManager:
                     exc_info=True,
                 )
             finally:
+                self._last_session = session
                 self._active_session = None
                 self._queue.task_done()
                 logger.info(f"Completed CoderBot execution for task {session.task_id}.")

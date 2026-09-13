@@ -362,6 +362,9 @@ describe('PipelineDetailView CoderBot Dialog', () => {
         onBlocks: vi.fn(() => () => {}),
         onMessage: vi.fn(() => () => {}),
         onSessionStateChange: vi.fn(() => () => {}),
+        getCurrentSession: vi.fn(() => null),
+        refreshSession: vi.fn().mockResolvedValue(null),
+        reconnect: vi.fn().mockResolvedValue(undefined),
       },
       coderBotClient: { triggerCoderBot: vi.fn().mockResolvedValue({}) },
     };
@@ -381,6 +384,9 @@ describe('PipelineDetailView CoderBot Dialog', () => {
     container.innerHTML = view.render() as string;
     view.mount(container);
 
+    // a CoderBot session is now running for THIS pipeline
+    mockContext.coderBotService.getCurrentSession.mockReturnValue({ pipelineId: 'p1', taskId: 't1', active: true });
+
     const triggerCoderbot = getAction('trigger_coderbot');
     const el = document.createElement('button');
     el.setAttribute('data-task-id', 't1');
@@ -389,7 +395,6 @@ describe('PipelineDetailView CoderBot Dialog', () => {
 
     expect(mockContext.coderBotClient.triggerCoderBot).toHaveBeenCalledWith('t1');
     expect(CoderBotDialog).not.toHaveBeenCalled();
-    expect((view as any).enginePiViewActive).toBe(true);
     expect((view as any).enginePiView).not.toBeNull();
 
     // Optimistic state updated alongside enabling the inline PiView

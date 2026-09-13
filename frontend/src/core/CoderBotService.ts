@@ -72,12 +72,18 @@ export class CoderBotService {
   private blockListeners: Set<BlockListener> = new Set();
   private stateListeners: Set<(active: boolean) => void> = new Set();
   private currentTaskId: string | null = null;
+  private currentPipelineId: string | null = null;
   private isSessionActive: boolean = false;
+  /** Key of the session whose history has already been replayed (dedupe). */
+  private loadedSessionKey: string | null = null;
+
+  private static readonly SESSION_STORAGE_KEY = 'ajapopaja:coderbot:session';
 
   constructor(wsClient: WebSocketClient, authService: AuthService) {
     this.wsClient = wsClient;
     this.authService = authService;
     this.setupHandlers();
+    this.loadPersistedSession();
   }
 
   private setupHandlers() {
@@ -87,11 +93,14 @@ export class CoderBotService {
         this.clearHistory();
         this.currentTaskId = taskId;
       }
+      this.currentPipelineId = msg.payload?.pipeline_id ?? this.currentPipelineId;
       this.setSessionActive(true);
+      this.persistSession();
     });
 
     this.wsClient.on('CODERBOT_COMPLETED', () => {
       this.setSessionActive(false);
+      this.persistSession();
     });
 
     // Legacy plain-text stream for bots other than CoderBot. CoderBot is rendered
@@ -507,6 +516,124 @@ export class CoderBotService {
       const error = await response.json();
       throw new Error(error.detail || 'Failed to stop CoderBot session');
     }
+  }
+
+  /** Returns the current (or last) CoderBot session, or null when none. */
+  public getCurrentSession(): { pipelineId: string | null; taskId: string | null; active: boolean } | null {
+    if (!this.currentTaskId) return null;
+    return { pipelineId: this.currentPipelineId, taskId: this.currentTaskId, active: this.isSessionActive };
+  }
+
+  /** Refreshes the session from the backend (e.g. after a page reload). */
+  public async refreshSession(): Promise<{ pipelineId: string | null; taskId: string | null; active: boolean } | null> {
+    try {
+      const session = await this.fetchSession();
+      if (session && session.task_id) {
+        this.currentPipelineId = session.pipeline_id ?? this.currentPipelineId;
+        this.currentTaskId = session.task_id;
+        this.setSessionActive(!!session.is_active);
+        this.persistSession();
+      } else {
+        this.setSessionActive(false);
+      }
+    } catch (e) {
+      console.error('Failed to refresh CoderBot session', e);
+    }
+    return this.getCurrentSession();
+  }
+
+  /**
+   * Reconnects output to a CoderBot session, loading its persisted history once
+   * (deduped per session) and resuming live updates.
+   */
+  public async reconnect(session?: { pipelineId?: string | null; taskId: string | null; active?: boolean }): Promise<void> {
+    const target = session ?? this.getCurrentSession();
+    if (!target || !target.taskId) {
+      await this.refreshSession();
+      return;
+    }
+    if (!this.currentTaskId) {
+      this.currentTaskId = target.taskId;
+      this.currentPipelineId = target.pipelineId ?? this.currentPipelineId;
+    }
+    if (target.active) this.setSessionActive(true);
+    this.persistSession();
+
+    const key = `${this.currentPipelineId ?? ''}:${this.currentTaskId}`;
+    if (this.loadedSessionKey === key) {
+      this.emitBlocks();
+      return;
+    }
+
+    let events: any[] = [];
+    try {
+      events = await this.fetchSessionHistory(this.currentTaskId);
+    } catch (e) {
+      console.error('Failed to load CoderBot session history', e);
+    }
+
+    // Rebuild the activity log by replaying the same reducer over the persisted
+    // events, so past output of this session is preserved after a reload.
+    this.blocks = [];
+    this.openBlocks.clear();
+    this.nextBlockId = 1;
+    for (const event of events) {
+      this.handleRpcEvent(event);
+    }
+    this.loadedSessionKey = key;
+    this.emitBlocks();
+    this.notify('');
+  }
+
+  private persistSession() {
+    try {
+      const data = {
+        pipeline_id: this.currentPipelineId,
+        task_id: this.currentTaskId,
+        active: this.isSessionActive,
+      };
+      if (!data.task_id) {
+        localStorage.removeItem(CoderBotService.SESSION_STORAGE_KEY);
+        return;
+      }
+      localStorage.setItem(CoderBotService.SESSION_STORAGE_KEY, JSON.stringify(data));
+    } catch (e) {
+      /* localStorage may be unavailable; the session still lives for this app session. */
+    }
+  }
+
+  private loadPersistedSession() {
+    try {
+      const raw = localStorage.getItem(CoderBotService.SESSION_STORAGE_KEY);
+      if (!raw) return;
+      const s = JSON.parse(raw);
+      if (s && s.task_id) {
+        this.currentTaskId = s.task_id;
+        this.currentPipelineId = s.pipeline_id || null;
+        this.isSessionActive = !!s.active;
+      }
+    } catch (e) {
+      /* ignore malformed storage */
+    }
+  }
+
+  private async fetchSession(): Promise<{ pipeline_id?: string; task_id?: string; is_active?: boolean } | null> {
+    const token = this.authService.getAccessToken();
+    const response = await fetch('/api/coderbot/session', {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!response.ok) return null;
+    return await response.json();
+  }
+
+  private async fetchSessionHistory(taskId: string): Promise<any[]> {
+    const token = this.authService.getAccessToken();
+    const response = await fetch(`/api/coderbot/session/${taskId}/history`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!response.ok) return [];
+    const data = await response.json();
+    return Array.isArray(data?.events) ? data.events : [];
   }
 
   private setSessionActive(active: boolean) {

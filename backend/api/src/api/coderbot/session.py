@@ -101,6 +101,40 @@ def slugify(task_id: str) -> str:
     return sanitized
 
 
+def read_session_history(task_id: str) -> list:
+    """Replay the persisted Pi RPC events of a CoderBot session for a task.
+
+    Each session writes its events as JSONL lines (``type == "pi_rpc_event"``)
+    under ``SANDBOX_ROOT/logs/{slugify(task_id)}``. Returns the ordered list of raw
+    RPC events (the same shape the ``CODERBOT_RPC_EVENT`` websocket message carries)
+    so the client can reduce them into its activity log. Reads the most recent log
+    file(s) so the latest run of a task wins.
+    """
+    log_dir = config.SANDBOX_ROOT / "logs" / slugify(task_id)
+    events: list = []
+    if not log_dir.exists():
+        return events
+
+    for log_file in sorted(log_dir.glob("coderbot_*.jsonl"), reverse=True):
+        try:
+            with open(log_file, "r", encoding="utf-8") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        data = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if data.get("type") == "pi_rpc_event" and isinstance(
+                        data.get("event"), dict
+                    ):
+                        events.append(data["event"])
+        except Exception as e:
+            logger.error(f"Failed to read CoderBot log {log_file}: {e}")
+    return events
+
+
 class CoderBotSession:
     """
     Orchestrates the Pi coding agent via its headless RPC mode.

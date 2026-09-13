@@ -63,7 +63,6 @@ export class PipelineDetailView extends View {
   private pendingReviews: string[] = [];
   private selectedTask: Task | null = null;
   private enginePiView: PiView | null = null;
-  private enginePiViewActive: boolean = false;
 
   private loadPendingReviews() {
     this.pendingReviews = this.storage.get<string[]>(`pending_reviews:${this.pipelineId}`, []) || [];
@@ -385,7 +384,7 @@ export class PipelineDetailView extends View {
           this.context.dataManager.updateTask(task); // -> pipeline:tasks notify -> updateSingleTask
         }
         this.updateHeader();
-        this.enableCoderBotPiView();
+        this.updateEnginePiSlot();
       } catch (error) {
         console.error('Trigger CoderBot error:', error);
         alert('Failed to trigger CoderBot');
@@ -1272,6 +1271,15 @@ export class PipelineDetailView extends View {
     this.loadPipeline();
     this.refreshTasks();
     this.checkOllama();
+
+    // React to app-wide CoderBot session state changes so the engine Pi slot
+    // stays correct (mount for this pipeline, notice for another pipeline).
+    const cb = () => this.updateEnginePiSlot();
+    const unsub = this.context.coderBotService?.onSessionStateChange?.(cb);
+    if (unsub) this.unsubs.push(unsub);
+
+    // Reconnect a running CoderBot session to this view (e.g. after a reload).
+    this.refreshEnginePiSlot();
   }
 
   private async checkOllama() {
@@ -1289,7 +1297,6 @@ export class PipelineDetailView extends View {
       this.enginePiView.destroy();
       this.enginePiView = null;
     }
-    this.enginePiViewActive = false;
     this.unsubs.forEach(unsub => unsub());
     this.unsubs = [];
     if (this.keydownHandler) {
@@ -1457,28 +1464,59 @@ export class PipelineDetailView extends View {
     const el = this.container.querySelector('#execution-engine-view');
     if (!el) return;
     el.innerHTML = ExecutionEngineView.render({ tasks: this.allLoadedTasks });
-    // Re-connect the inline CoderBot PiView after re-render while a session is active.
-    if (this.enginePiViewActive) {
-      this.mountCoderBotPiView();
-    }
+    // Re-render the engine Pi slot based on the current CoderBot session.
+    this.updateEnginePiSlot();
   }
 
-  private enableCoderBotPiView() {
-    this.enginePiViewActive = true;
-    this.mountCoderBotPiView();
-  }
-
-  private mountCoderBotPiView() {
+  /** Render the engine Pi slot based on the running session vs this pipeline. */
+  private updateEnginePiSlot() {
     if (!this.container) return;
     const mount = this.container.querySelector('#engine-piview-mount') as HTMLElement | null;
     if (!mount) return;
+
+    const placeholder = `<p class="text-[10px] italic text-app-muted/50 text-center border border-dashed border-app-border/40 rounded-lg py-3">Start a CoderBot to see its output here.</p>`;
+    const session = this.context.coderBotService?.getCurrentSession?.() ?? null;
+
+    if (!session || !session.taskId) {
+      this.teardownEnginePiView();
+      mount.innerHTML = placeholder;
+      return;
+    }
+
+    if (session.pipelineId === this.pipelineId) {
+      // Session belongs to this pipeline: connect/resume the PiView.
+      this.mountCoderBotPiView(mount);
+      return;
+    }
+
+    this.teardownEnginePiView();
+    if (session.active) {
+      mount.innerHTML = `
+        <p class="text-[10px] italic text-app-muted/70 text-center border border-dashed border-app-border/40 rounded-lg py-3">CoderBot is running for another pipeline.</p>
+        <a href="#/pipeline/${session.pipelineId}" class="block text-center text-[10px] font-bold uppercase tracking-widest text-app-accent-2 hover:underline cursor-pointer mt-1">Open pipeline</a>`;
+    } else {
+      mount.innerHTML = placeholder;
+    }
+  }
+
+  private teardownEnginePiView() {
     if (this.enginePiView) {
       this.enginePiView.destroy();
       this.enginePiView = null;
     }
+  }
+
+  private mountCoderBotPiView(mount: HTMLElement) {
+    this.teardownEnginePiView();
     mount.innerHTML = '';
     this.enginePiView = new PiView(this.context.coderBotService, mount, { logHeightClass: 'h-[38vh]' });
     this.enginePiView.render();
+    this.context.coderBotService?.reconnect?.();
+  }
+
+  private async refreshEnginePiSlot() {
+    await this.context.coderBotService?.refreshSession?.();
+    this.updateEnginePiSlot();
   }
 
   private refreshBacklog() {

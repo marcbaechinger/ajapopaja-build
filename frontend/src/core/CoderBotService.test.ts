@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { CoderBotService } from './CoderBotService.ts';
 import type { RenderBlock } from './CoderBotService.ts';
 import { WebSocketClient } from './WebSocketClient.ts';
@@ -217,5 +217,59 @@ describe('CoderBotService RPC stream', () => {
       result: { passed: true, commands: [] },
     });
     expect(history.filter((b) => b.kind === 'verification')).toHaveLength(0);
+  });
+});
+
+describe('CoderBotService session tracking / reconnect', () => {
+  let ws: FakeWS;
+  let service: CoderBotService;
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    localStorage.clear();
+    ({ service, ws } = makeService());
+    fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          events: [
+            { type: 'agent_start' },
+            { type: 'message_update', assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'hello' } },
+          ],
+        }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('tracks task/pipeline and persists the session on CODERBOT_STARTED', () => {
+    expect(service.getCurrentSession()).toBeNull();
+    ws.dispatch('CODERBOT_STARTED', { task_id: 't1', pipeline_id: 'p1' });
+    expect(service.getCurrentSession()).toEqual({ pipelineId: 'p1', taskId: 't1', active: true });
+    const stored = JSON.parse(localStorage.getItem('ajapopaja:coderbot:session')!);
+    expect(stored).toEqual({ pipeline_id: 'p1', task_id: 't1', active: true });
+  });
+
+  it('reconnect replays history once and dedupes on repeat', async () => {
+    ws.dispatch('CODERBOT_STARTED', { task_id: 't1', pipeline_id: 'p1' });
+
+    await service.reconnect({ pipelineId: 'p1', taskId: 't1', active: true });
+    const texts = () => service.getHistory().filter((b) => b.kind === 'text');
+    expect(texts()).toHaveLength(1);
+    expect(LAST(texts()).text).toBe('hello');
+
+    // A subsequent reconnect for the same session must not replay duplicates.
+    await service.reconnect({ pipelineId: 'p1', taskId: 't1', active: true });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(texts()).toHaveLength(1);
+  });
+
+  it('restores a persisted session on construction', () => {
+    localStorage.setItem('ajapopaja:coderbot:session', JSON.stringify({ pipeline_id: 'p9', task_id: 't9', active: false }));
+    const s = makeService();
+    expect(s.service.getCurrentSession()).toEqual({ pipelineId: 'p9', taskId: 't9', active: false });
   });
 });

@@ -18,12 +18,26 @@ from api.auth import get_current_user
 from core.models.models import Task
 
 from .manager import coderbot_manager
+from .session import read_session_history
 
 router = APIRouter(
     prefix="/coderbot",
     tags=["coderbot"],
     dependencies=[Depends(get_current_user)],
 )
+
+
+@router.get("/session")
+async def get_coderbot_session():
+    """Return the current (or last) CoderBot session so the UI can re-attach."""
+    return coderbot_manager.get_active_session()
+
+
+@router.get("/session/{task_id}/history")
+async def get_coderbot_session_history(task_id: str):
+    """Replay the persisted RPC events of a CoderBot session for a task."""
+    events = read_session_history(task_id)
+    return {"task_id": task_id, "events": events}
 
 
 @router.post("/trigger/{task_id}")

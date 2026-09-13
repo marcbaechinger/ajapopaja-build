@@ -176,3 +176,37 @@ async def test_manager_tracks_active_session():
         await worker_task
     except asyncio.CancelledError:
         pass
+
+
+@pytest.mark.asyncio
+async def test_get_active_session_returns_none_when_no_session():
+    manager = CoderBotManager()
+    assert manager.get_active_session() is None
+
+
+@pytest.mark.asyncio
+async def test_get_active_session_returns_active_session():
+    manager = CoderBotManager()
+    mock = MagicMock()
+    mock.pipeline_id = "p1"
+    mock.task_id = "t1"
+    manager._active_session = mock
+    assert manager.get_active_session() == {
+        "pipeline_id": "p1",
+        "task_id": "t1",
+        "is_active": True,
+    }
+
+
+@pytest.mark.asyncio
+async def test_get_active_session_returns_last_session_inactive():
+    manager = CoderBotManager()
+    mock = MagicMock()
+    mock.pipeline_id = "p1"
+    mock.task_id = "t1"
+    manager._last_session = mock
+    assert manager.get_active_session() == {
+        "pipeline_id": "p1",
+        "task_id": "t1",
+        "is_active": False,
+    }

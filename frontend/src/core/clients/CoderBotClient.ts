@@ -22,4 +22,17 @@ export class CoderBotClient extends BaseClient {
       method: 'POST',
     });
   }
+
+  async getSession(): Promise<{ pipeline_id: string; task_id: string; is_active: boolean } | null> {
+    const res = await this.fetch(`/api/coderbot/session`, {});
+    if (!res.ok) return null;
+    return await res.json();
+  }
+
+  async getSessionHistory(taskId: string): Promise<any[]> {
+    const res = await this.fetch(`/api/coderbot/session/${taskId}/history`, {});
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data?.events) ? data.events : [];
+  }
 }
