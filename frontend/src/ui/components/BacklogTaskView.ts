@@ -64,28 +64,30 @@ export class BacklogTaskView {
           <span class="flex-none flex items-center gap-1.5">
             ${OrderControl.render(task)}
             ${hasDesignDoc ? `
-              <span class="flex-none text-[9px] font-black uppercase tracking-widest text-purple-400 bg-purple-500/15 border border-purple-500/30 rounded-full px-1.5 py-0.5" title="Design doc available">Design</span>
+              <span class="flex-none text-[9px] font-black uppercase text-purple-400 bg-purple-500/15 border border-purple-500/30 rounded-full px-1.5 py-0.5" title="Design doc available">D</span>
             ` : ''}
           </span>
         </div>
         ${excerpt ? `
           <p class="text-[10px] text-app-muted leading-snug line-clamp-3">${escapeHtml(excerpt)}</p>
         ` : `<p class="text-[10px] text-app-muted italic line-clamp-2">No specification yet.</p>`}
-        <div class="flex items-center gap-1.5 pt-0.5">
+        <div class="flex flex-col gap-1.5 pt-0.5">
           <button data-action-click="trigger_archbot" data-task-id="${taskId}"
-                  class="flex-1 inline-flex items-center justify-center gap-1 text-[9px] font-bold uppercase tracking-widest bg-purple-500/15 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 rounded-md px-1.5 py-1 transition-colors cursor-pointer"
+                  class="w-full inline-flex items-center justify-center gap-1 text-[9px] font-bold uppercase tracking-widest bg-purple-500/15 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 rounded-md px-1.5 py-1 transition-colors cursor-pointer"
                   title="Design (ArchBot)">
             ${Icon.render('architecture', { size: 10 })}
             <span class="leading-none">Design</span>
           </button>
-          <button data-action-click="trigger_coderbot" data-task-id="${taskId}"
-                  class="flex-1 inline-flex items-center justify-center gap-1 text-[9px] font-bold uppercase tracking-widest bg-green-500/15 hover:bg-green-500/30 text-green-300 border border-green-500/30 rounded-md px-1.5 py-1 transition-colors cursor-pointer"
-                  title="Implement (CoderBot)">
-            ${Icon.render('lightning', { size: 10 })}
-            <span class="leading-none">Implement</span>
-          </button>
+          <div class="flex items-center gap-1.5">
+            <button data-action-click="trigger_coderbot" data-task-id="${taskId}"
+                    class="flex-1 inline-flex items-center justify-center gap-1 text-[9px] font-bold uppercase tracking-widest bg-green-500/15 hover:bg-green-500/30 text-green-300 border border-green-500/30 rounded-md px-1.5 py-1 transition-colors cursor-pointer"
+                    title="Implement (CoderBot)">
+              ${Icon.render('lightning', { size: 10 })}
+              <span class="leading-none">Implement</span>
+            </button>
+            ${statusActionsHtml}
+          </div>
         </div>
-        ${statusActionsHtml}
       </div>
     `;
   }
@@ -104,7 +106,7 @@ export class BacklogTaskView {
 function renderStatusActions(task: Task): string {
   if (task.status === TaskStatus.PROPOSED) {
     return `
-      <div class="flex items-center gap-1.5">
+      <div class="flex-1 flex items-center gap-1.5">
         <button data-action-click="reject_design" data-version="${task.version}"
                 class="flex-1 inline-flex items-center justify-center gap-1 text-[9px] font-bold uppercase tracking-widest bg-red-500/15 hover:bg-red-500/30 text-red-400 border border-red-500/30 rounded-md px-1.5 py-1 transition-colors cursor-pointer"
                 title="Reject design">
@@ -121,7 +123,7 @@ function renderStatusActions(task: Task): string {
   }
   if (task.status === TaskStatus.CREATED) {
     return `
-      <div class="flex items-center gap-1.5">
+      <div class="flex-1 flex items-center gap-1.5">
         <button data-action-click="schedule_task" data-version="${task.version}"
                 class="flex-1 inline-flex items-center justify-center gap-1 text-[9px] font-bold uppercase tracking-widest bg-app-accent-1/20 hover:bg-app-accent-1/35 text-app-accent-1 border border-app-accent-1/40 rounded-md px-1.5 py-1 transition-colors cursor-pointer"
                 title="Schedule for implementation">
