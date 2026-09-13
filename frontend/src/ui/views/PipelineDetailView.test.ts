@@ -158,6 +158,32 @@ describe('PipelineDetailView Layout', () => {
     expect(backlog!.innerHTML).toContain('Proposed Task');
     expect(backlog!.innerHTML).toContain('Created Task');
   });
+
+  it('should render the selected task in the TaskView under the Quick Add Task panel', async () => {
+    mockContext.taskClient.listByPipeline.mockResolvedValue([
+      { id: 'c1', title: 'Currently Worked On', status: TaskStatus.CREATED, deleted: false, version: 2, order: 0, type: 'manual', want_design_doc: false },
+    ]);
+
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+    container.innerHTML = view.render() as string;
+    await view.refreshTasks();
+
+    const selectedView = container.querySelector('#selected-task-view');
+    expect(selectedView).not.toBeNull();
+    // nothing selected yet -> empty hint
+    expect(selectedView!.innerHTML).toContain('Select a task from the backlog');
+
+    // find and invoke the select_task handler as if the user clicked a BacklogTaskView
+    const selectAction = mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === 'select_task')![1];
+    const el = document.createElement('div');
+    el.setAttribute('data-view-id', 'c1');
+    selectAction(new Event('click'), el);
+
+    // the TaskView now shows the selected task and the hint is gone
+    expect(selectedView!.innerHTML).toContain('Currently Worked On');
+    expect(selectedView!.innerHTML).not.toContain('Select a task from the backlog');
+  });
 });
 
 describe('PipelineDetailView Review Notifications', () => {

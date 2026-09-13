@@ -62,6 +62,7 @@ export class PipelineDetailView extends View {
   private gitStatusRefreshInProgress: boolean = false;
   private gitStatusRefreshPending: boolean = false;
   private pendingReviews: string[] = [];
+  private selectedTask: Task | null = null;
 
   private loadPendingReviews() {
     this.pendingReviews = this.storage.get<string[]>(`pending_reviews:${this.pipelineId}`, []) || [];
@@ -206,6 +207,7 @@ export class PipelineDetailView extends View {
         this.removeTaskFromDOM(taskOrDeleted.id);
         this.allLoadedTasks = this.allLoadedTasks.filter(t => t.id !== taskOrDeleted.id);
         this.refreshBacklog();
+        this.refreshSelectedTask();
       } else {
         const task = taskOrDeleted as Task;
         this.updateSingleTask(task);
@@ -531,6 +533,13 @@ export class PipelineDetailView extends View {
     this.context.actionRegistry.register('next_completed_page', () => {
       this.completedTasksPage++;
       this.refreshCompletedTasks();
+    });
+
+    this.context.actionRegistry.register('select_task', (_e, el) => {
+      const taskId = (el.closest('[data-view-id]') as HTMLElement | null)?.getAttribute('data-view-id') || el.getAttribute('data-view-id');
+      if (!taskId) return;
+      this.selectedTask = this.allLoadedTasks.find(t => t.id === taskId) || null;
+      this.refreshSelectedTask();
     });
 
     this.context.actionRegistry.register('toggle_task_collapse', (_e, el) => {
@@ -1172,6 +1181,7 @@ export class PipelineDetailView extends View {
       }
 
       this.refreshBacklog();
+      this.refreshSelectedTask();
     } catch (error) {
       prepContainer.innerHTML = '<p class="text-red-400">Error loading tasks.</p>';
       console.error('Error refreshing tasks:', error);
@@ -1256,8 +1266,10 @@ export class PipelineDetailView extends View {
       <div class="flex flex-col gap-8 min-w-0 ${this.isTwoColumnLayout ? '' : 'lg:min-w-[350px]'}">
         <div class="bg-app-surface/30 p-6 rounded-3xl border border-app-border/30 flex flex-col">
           ${TaskForm.render()}
-          <div id="col-prep" class="space-y-10">
-            <!-- Proposed and Created tasks will be rendered here -->
+          <div id="selected-task-view" class="mt-6">
+            <p class="text-app-muted/60 text-xs italic text-center border border-dashed border-app-border/40 rounded-xl py-6 px-3">Select a task from the backlog to open it here.</p>
+          </div>
+          <div id="col-prep" class="space-y-10 mt-6">
             <p class="text-app-muted animate-pulse text-center py-10">Loading backlog...</p>
           </div>
         </div>
@@ -1488,6 +1500,30 @@ export class PipelineDetailView extends View {
       this.insertTaskIntoDOM(task);
     }
     this.refreshBacklog();
+  }
+
+  private refreshSelectedTask() {
+    if (!this.container) return;
+    const viewEl = this.container.querySelector('#selected-task-view');
+    if (!viewEl) return;
+
+    const hint = `<p class="text-app-muted/60 text-xs italic text-center border border-dashed border-app-border/40 rounded-xl py-6 px-3">Select a task from the backlog to open it here.</p>`;
+
+    if (!this.selectedTask) {
+      viewEl.innerHTML = hint;
+      return;
+    }
+
+    // Re-derive from the freshest cache so status edits are reflected immediately.
+    const fresh = this.allLoadedTasks.find(t => t.id === this.selectedTask!.id);
+    if (!fresh || fresh.deleted) {
+      this.selectedTask = null;
+      viewEl.innerHTML = hint;
+      return;
+    }
+
+    this.selectedTask = fresh;
+    viewEl.innerHTML = TaskItem.render(fresh, false, false, false, false, this.expandedSpecs.has(fresh.id!));
   }
 
   private refreshBacklog() {

@@ -56,8 +56,8 @@ export class BacklogTaskView {
     const statusActionsHtml = renderStatusActions(task);
 
     return `
-      <div class="group rounded-lg border border-app-border bg-app-bg/60 p-3 flex flex-col gap-2 transition-colors hover:border-app-accent-1/40 hover:bg-app-bg"
-           data-view-id="${taskId}" data-task-id="${taskId}">
+      <div class="group rounded-lg border border-app-border bg-app-bg/60 p-3 flex flex-col gap-2 transition-colors cursor-pointer hover:border-app-accent-1/40 hover:bg-app-bg"
+           data-action-click="select_task" data-view-id="${taskId}" data-task-id="${taskId}">
         <div class="flex items-start justify-between gap-2">
           <span class="text-[11px] font-bold text-app-text leading-snug break-words">${escapeHtml(task.title || '')}</span>
           ${hasDesignDoc ? `
