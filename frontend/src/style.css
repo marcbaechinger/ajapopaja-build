@@ -357,3 +357,17 @@ del {
 [data-theme='light'] del {
   @apply !bg-red-100 !text-red-800;
 }
+
+/* In-log search highlight */
+mark.piview-search-match {
+  background: rgba(251, 191, 36, 0.35);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+  margin: 0 -0.5px;
+}
+mark.piview-search-current {
+  background: rgba(251, 191, 36, 0.9);
+  color: #000;
+  outline: 1px solid rgba(255, 255, 255, 0.7);
+}

@@ -102,6 +102,14 @@ export class PiView {
   private blockTimestamps: Map<string, number> = new Map();
   private copyToastTimer: number | null = null;
 
+  /** In-log search state. */
+  private searchQuery: string = '';
+  private debounceTimer: number | null = null;
+  /** Ordered list of highlighted match elements currently in the DOM. */
+  private searchMatches: HTMLElement[] = [];
+  /** Index of the currently-selected match (-1 when no matches exist). */
+  private currentMatch: number = -1;
+
   constructor(service: PiSessionService, mount: HTMLElement, options: PiViewOptions = {}) {
     this.service = service;
     this.root = mount;
@@ -149,6 +157,10 @@ export class PiView {
     if (this.copyToastTimer !== null) {
       window.clearTimeout(this.copyToastTimer);
       this.copyToastTimer = null;
+    }
+    if (this.debounceTimer !== null) {
+      window.clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
     }
   }
 
@@ -243,7 +255,12 @@ export class PiView {
 
   private buildFooter(): HTMLElement {
     const footer = document.createElement('div');
-    footer.className = 'p-3 border-t border-app-border flex justify-between items-center bg-app-surface/50';
+    footer.className =
+      'p-3 border-t border-app-border flex flex-col gap-2 bg-app-surface/50';
+    footer.appendChild(this.buildSearchBar());
+
+    const actionsRow = document.createElement('div');
+    actionsRow.className = 'flex justify-between items-center';
     const actions = document.createElement('div');
     actions.className = 'flex gap-2';
 
@@ -307,7 +324,8 @@ export class PiView {
     copyAllBtn.innerHTML = Icon.render('copyRects', { size: 14, label: 'Copy entire log' });
     actions.appendChild(copyAllBtn);
 
-    footer.appendChild(actions);
+    actionsRow.appendChild(actions);
+    footer.appendChild(actionsRow);
 
     // Delegate action clicks on the root so the handler survives footer rebuilds
     // and only listens while this view is alive.
@@ -315,6 +333,81 @@ export class PiView {
     this.unsubs.push(() => this.root.removeEventListener('click', this.handleClick));
 
     return footer;
+  }
+
+  private buildSearchBar(): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.id = 'piview-search-bar';
+    wrap.setAttribute('role', 'search');
+    wrap.className = 'flex items-center gap-1.5 flex-wrap';
+
+    const label = document.createElement('label');
+    label.setAttribute('for', 'piview-search-input');
+    label.className = 'flex items-center text-app-text/50';
+    label.innerHTML = this.cleanIcon(Icon.render('search', { size: 12 }));
+    wrap.appendChild(label);
+
+    const input = document.createElement('input');
+    input.id = 'piview-search-input';
+    input.type = 'search';
+    input.placeholder = 'Search log…';
+    input.setAttribute('aria-label', 'Search log');
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    input.className =
+      'w-full sm:w-52 px-2 py-1 rounded text-xs bg-black/40 border border-app-border text-green-300 placeholder:text-app-text/40 focus:outline-none focus:border-app-accent-1/60';
+    input.addEventListener('input', this.handleSearchInput);
+    input.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (e.shiftKey) this.previousMatch();
+        else this.nextMatch();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        input.value = '';
+        if (this.debounceTimer !== null) {
+          window.clearTimeout(this.debounceTimer);
+          this.debounceTimer = null;
+        }
+        this.setSearchQuery('');
+        input.blur();
+      }
+    });
+    wrap.appendChild(input);
+
+    const prevBtn = document.createElement('button');
+    prevBtn.type = 'button';
+    prevBtn.id = 'piview-search-prev';
+    prevBtn.title = 'Previous match';
+    prevBtn.setAttribute('aria-label', 'Previous match');
+    prevBtn.className =
+      'px-2 py-1 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center cursor-pointer disabled:opacity-40 disabled:cursor-default';
+    prevBtn.innerHTML = this.cleanIcon(
+      Icon.render('chevronDown', { size: 14, className: 'rotate-180' })
+    );
+    prevBtn.addEventListener('click', () => this.previousMatch());
+    wrap.appendChild(prevBtn);
+
+    const nextBtn = document.createElement('button');
+    nextBtn.type = 'button';
+    nextBtn.id = 'piview-search-next';
+    nextBtn.title = 'Next match';
+    nextBtn.setAttribute('aria-label', 'Next match');
+    nextBtn.className =
+      'px-2 py-1 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center cursor-pointer disabled:opacity-40 disabled:cursor-default';
+    nextBtn.innerHTML = this.cleanIcon(Icon.render('chevronDown', { size: 14 }));
+    nextBtn.addEventListener('click', () => this.nextMatch());
+    wrap.appendChild(nextBtn);
+
+    const counter = document.createElement('span');
+    counter.id = 'piview-search-count';
+    counter.className = 'text-xs text-app-text/50 tabular-nums';
+    counter.setAttribute('role', 'status');
+    counter.setAttribute('aria-live', 'polite');
+    counter.textContent = '0 / 0';
+    wrap.appendChild(counter);
+
+    return wrap;
   }
 
   private handleClick = (e: Event): void => {
@@ -356,13 +449,167 @@ export class PiView {
   };
 
   private handleKeydown = (e: KeyboardEvent): void => {
-    if (e.key !== 'c' && e.key !== 'C') return;
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
     const target = e.target as HTMLElement | null;
     if (!target || !this.root.contains(target)) return;
+    // Don't hijack keys while the user is typing in a search/editable field.
+    if (target.closest('input, textarea, select, [contenteditable="true"]')) return;
+    if (e.key !== 'c' && e.key !== 'C') return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     e.preventDefault();
     this.copyAllLog();
   };
+
+  // ---------------------------------------------------------------------------
+  // In-log search / find
+  // ---------------------------------------------------------------------------
+
+  private handleSearchInput = (e: Event): void => {
+    const input = e.target as HTMLInputElement;
+    const query = input.value;
+    if (this.debounceTimer !== null) window.clearTimeout(this.debounceTimer);
+    this.debounceTimer = window.setTimeout(() => {
+      this.debounceTimer = null;
+      this.setSearchQuery(query);
+    }, 200);
+  };
+
+  private setSearchQuery(query: string) {
+    this.searchQuery = query;
+    this.renderSearchHighlights();
+    this.currentMatch = this.searchMatches.length > 0 ? 0 : -1;
+    this.styleCurrentMatch();
+    this.updateSearchCounter();
+  }
+
+  /**
+   * Clears existing highlights and re-applies them based on the current query.
+   * Rebuilt from scratch so it always stays in sync with the current DOM
+   * (incl. newly added log entries or updated blocks).
+   */
+  private renderSearchHighlights() {
+    this.clearSearchHighlights();
+    this.searchMatches = [];
+    if (!this.blocksContainer || !this.searchQuery) return;
+    this.applyHighlights(this.blocksContainer, this.searchQuery);
+  }
+
+  /** Unwraps existing `<mark>` highlights, preserving the original text. */
+  private clearSearchHighlights() {
+    if (!this.blocksContainer) return;
+    this.blocksContainer.querySelectorAll('mark.piview-search-match').forEach((m) => {
+      const parent = m.parentNode;
+      const text = m.textContent ?? '';
+      parent?.insertBefore(document.createTextNode(text), m);
+      parent?.removeChild(m);
+      parent?.normalize();
+    });
+  }
+
+  /** Walks the tree and wraps every query occurrence in a highlight <mark>. */
+  private applyHighlights(root: HTMLElement, query: string) {
+    const lq = query.toLowerCase();
+    const textNodes: Text[] = [];
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let node: Node | null = walker.nextNode();
+    while (node) {
+      // Skip pure-whitespace nodes to avoid wrapping separators awkwardly.
+      const c = (node.textContent ?? '').trim();
+      if (c !== '') textNodes.push(node as Text);
+      node = walker.nextNode();
+    }
+    for (const textNode of textNodes) {
+      const content = textNode.textContent ?? '';
+      const lower = content.toLowerCase();
+      let idx = lower.indexOf(lq);
+      if (idx === -1) continue;
+      const parent = textNode.parentNode;
+      if (!parent) continue;
+      let start = 0;
+      while (idx !== -1) {
+        const before = content.slice(start, idx);
+        const match = content.slice(idx, idx + query.length);
+        const tail = idx + query.length;
+        if (before) parent.insertBefore(document.createTextNode(before), textNode);
+        const mark = document.createElement('mark');
+        mark.className = 'piview-search-match';
+        mark.textContent = match;
+        parent.insertBefore(mark, textNode);
+        this.searchMatches.push(mark);
+        start = tail;
+        idx = lower.indexOf(lq, start);
+      }
+      const remaining = content.slice(start);
+      if (remaining) parent.insertBefore(document.createTextNode(remaining), textNode);
+      parent.removeChild(textNode);
+    }
+  }
+
+  /** Re-applies highlights after content changes (e.g. new log entries added). */
+  private refreshSearchForNewContent() {
+    if (!this.searchQuery) return;
+    this.renderSearchHighlights();
+    const total = this.searchMatches.length;
+    if (this.currentMatch >= total) {
+      this.currentMatch = total > 0 ? total - 1 : -1;
+    }
+    this.styleCurrentMatch();
+    this.updateSearchCounter();
+  }
+
+  private nextMatch() {
+    const total = this.searchMatches.length;
+    if (total === 0) return;
+    this.goToMatch((this.currentMatch + 1 + total) % total);
+  }
+
+  private previousMatch() {
+    const total = this.searchMatches.length;
+    if (total === 0) return;
+    this.goToMatch((this.currentMatch - 1 + total) % total);
+  }
+
+  private goToMatch(index: number) {
+    const el = this.searchMatches[index];
+    if (!el) return;
+    this.currentMatch = index;
+    this.styleCurrentMatch();
+    this.updateSearchCounter();
+    this.ensureVisible(el);
+  }
+
+  private styleCurrentMatch() {
+    this.searchMatches.forEach((m, i) => {
+      m.classList.toggle('piview-search-current', i === this.currentMatch);
+    });
+  }
+
+  private updateSearchCounter() {
+    const counter = this.root.querySelector('#piview-search-count');
+    if (!counter) return;
+    const total = this.searchMatches.length;
+    const current = total > 0 ? this.currentMatch + 1 : 0;
+    counter.textContent = `${current} / ${total}`;
+  }
+
+  /** Scrolls the given element into the log container's visible area. */
+  private ensureVisible(el: HTMLElement) {
+    const container = this.logContainer;
+    if (!container || !el) return;
+    const containerRect = container.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    const relTop = elRect.top - containerRect.top;
+    const relBottom = elRect.bottom - containerRect.top;
+    const viewH = Math.max(1, container.clientHeight || elRect.height);
+    const padding = 8;
+    const currentScroll = container.scrollTop;
+    let nextScroll = currentScroll;
+    if (relTop < padding) {
+      nextScroll = currentScroll + (relTop - padding);
+    } else if (relBottom > viewH - padding) {
+      nextScroll = currentScroll + (relBottom - (viewH - padding));
+    }
+    container.scrollTop = nextScroll;
+  }
 
   // ---------------------------------------------------------------------------
   // Log display / reconciliation
@@ -424,6 +671,8 @@ export class PiView {
     blocks.forEach((block) => this.applyBlock(block));
     this.updateEmptyState();
     this.scrollToBottom();
+    // Keep highlights/count in sync when new log entries arrive while searching.
+    this.refreshSearchForNewContent();
   }
 
   private applyBlock(block: RenderBlock) {

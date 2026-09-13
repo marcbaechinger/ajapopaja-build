@@ -708,4 +708,305 @@ describe('PiView', () => {
     view.render();
     expect(mount.querySelector('#piview-empty-state-action')).toBeNull();
   });
+
+  // -------------------------------------------------------------------------
+  // In-log search / find
+  // -------------------------------------------------------------------------
+
+  it('renders a search input, prev/next buttons, and an accessible live counter', () => {
+    const { service } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    const bar = mount.querySelector('#piview-search-bar') as HTMLElement;
+    expect(bar).not.toBeNull();
+    expect(bar.getAttribute('role')).toBe('search');
+
+    const input = mount.querySelector('#piview-search-input') as HTMLInputElement;
+    expect(input).not.toBeNull();
+    expect(input.getAttribute('aria-label')).toBe('Search log');
+    expect(input.placeholder).toContain('Search');
+
+    const next = mount.querySelector('#piview-search-next') as HTMLButtonElement;
+    const prev = mount.querySelector('#piview-search-prev') as HTMLButtonElement;
+    expect(next.getAttribute('aria-label')).toBe('Next match');
+    expect(prev.getAttribute('aria-label')).toBe('Previous match');
+
+    const counter = mount.querySelector('#piview-search-count') as HTMLElement;
+    expect(counter.getAttribute('role')).toBe('status');
+    expect(counter.getAttribute('aria-live')).toBe('polite');
+    expect(counter.textContent).toBe('0 / 0');
+  });
+
+  it('does not hijack the copy shortcut (c) while typing in the search input', () => {
+    const writeText = vi.fn(async (_t: string) => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+    emitBlocks([{ id: 'a', kind: 'text', text: 'hello c world' }]);
+
+    const input = mount.querySelector('#piview-search-input') as HTMLInputElement;
+    const keyEvt = new KeyboardEvent('keydown', { key: 'c', bubbles: true });
+    input.dispatchEvent(keyEvt);
+    expect(writeText).not.toHaveBeenCalled();
+  });
+
+  it('debounces live search and highlights matches after the debounce delay', async () => {
+    vi.useFakeTimers();
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+    emitBlocks([
+      { id: 'a', kind: 'text', text: 'alpha beta alpha' },
+      { id: 'b', kind: 'text', text: 'Gamma' },
+    ]);
+
+    const input = mount.querySelector('#piview-search-input') as HTMLInputElement;
+    input.value = 'alpha';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    // Not yet applied (debounced).
+    expect(mount.querySelectorAll('mark.piview-search-match').length).toBe(0);
+
+    vi.advanceTimersByTime(200);
+    const marks = mount.querySelectorAll('mark.piview-search-match');
+    expect(marks.length).toBe(2);
+    // Case-insensitive: 'Gamma' would match 'gamma' but not 'alpha'.
+
+    const counter = mount.querySelector('#piview-search-count') as HTMLElement;
+    expect(counter.textContent).toBe('1 / 2');
+    const first = marks[0] as HTMLElement;
+    expect(first.classList.contains('piview-search-current')).toBe(true);
+    expect(marks[1].classList.contains('piview-search-current')).toBe(false);
+
+    view.destroy();
+    vi.useRealTimers();
+  });
+
+  it('clearing the search input removes all highlights and resets the counter', async () => {
+    vi.useFakeTimers();
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+    emitBlocks([{ id: 'a', kind: 'text', text: 'foo bar foo' }]);
+
+    const input = mount.querySelector('#piview-search-input') as HTMLInputElement;
+    input.value = 'foo';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    vi.advanceTimersByTime(200);
+    expect(mount.querySelectorAll('mark.piview-search-match').length).toBe(2);
+
+    // Clearing the input triggers the debounced handler with an empty query.
+    input.value = '';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    vi.advanceTimersByTime(200);
+
+    expect(mount.querySelectorAll('mark.piview-search-match').length).toBe(0);
+    expect((mount.querySelector('#piview-search-count') as HTMLElement).textContent).toBe('0 / 0');
+    // Original text is preserved after unwrapping.
+    expect(mount.querySelector('#log-blocks')!.textContent).toContain('foo bar foo');
+
+    view.destroy();
+    vi.useRealTimers();
+  });
+
+  it('next/prev buttons navigate between matches, wrapping around, and scroll into view', async () => {
+    vi.useFakeTimers();
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+    emitBlocks([
+      { id: 'a', kind: 'text', text: 'target one' },
+      { id: 'b', kind: 'text', text: 'target two target' },
+    ]);
+
+    const input = mount.querySelector('#piview-search-input') as HTMLInputElement;
+    input.value = 'target';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    vi.advanceTimersByTime(200);
+
+    const marks = mount.querySelectorAll('mark.piview-search-match');
+    expect(marks.length).toBe(3);
+    const counter = mount.querySelector('#piview-search-count') as HTMLElement;
+    expect(counter.textContent).toBe('1 / 3');
+
+    const scrollSpy = vi.spyOn(view as unknown as { ensureVisible: () => void }, 'ensureVisible').mockImplementation(() => {});
+    const container = mount.querySelector('#log-content-container') as HTMLElement;
+    Object.defineProperty(container, 'scrollTop', {
+      configurable: true,
+      writable: true,
+      value: 0,
+    });
+
+    (mount.querySelector('#piview-search-next') as HTMLButtonElement).click();
+    expect(counter.textContent).toBe('2 / 3');
+    expect(marks[1].classList.contains('piview-search-current')).toBe(true);
+    expect(scrollSpy).toHaveBeenCalledTimes(1);
+
+    (mount.querySelector('#piview-search-next') as HTMLButtonElement).click();
+    expect(counter.textContent).toBe('3 / 3');
+
+    // Wrap around forward.
+    (mount.querySelector('#piview-search-next') as HTMLButtonElement).click();
+    expect(counter.textContent).toBe('1 / 3');
+
+    // Prev wraps backward.
+    (mount.querySelector('#piview-search-prev') as HTMLButtonElement).click();
+    expect(counter.textContent).toBe('3 / 3');
+
+    view.destroy();
+    vi.useRealTimers();
+  });
+
+  it('Enter and Shift+Enter in the search input navigate next/prev', async () => {
+    vi.useFakeTimers();
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+    emitBlocks([{ id: 'a', kind: 'text', text: 'x x x' }]);
+
+    const input = mount.querySelector('#piview-search-input') as HTMLInputElement;
+    input.value = 'x';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    vi.advanceTimersByTime(200);
+
+    const counter = mount.querySelector('#piview-search-count') as HTMLElement;
+    expect(counter.textContent).toBe('1 / 3');
+
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(counter.textContent).toBe('2 / 3');
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(counter.textContent).toBe('3 / 3');
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, shiftKey: true })
+    );
+    expect(counter.textContent).toBe('2 / 3');
+
+    view.destroy();
+    vi.useRealTimers();
+  });
+
+  it('does not change match on next/prev when there are no matches', async () => {
+    vi.useFakeTimers();
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+    emitBlocks([{ id: 'a', kind: 'text', text: 'hello' }]);
+
+    (mount.querySelector('#piview-search-next') as HTMLButtonElement).click();
+    (mount.querySelector('#piview-search-prev') as HTMLButtonElement).click();
+
+    const counter = mount.querySelector('#piview-search-count') as HTMLElement;
+    expect(counter.textContent).toBe('0 / 0');
+
+    view.destroy();
+    vi.useRealTimers();
+  });
+
+  it('updates highlights and counter when new log entries arrive during a search', async () => {
+    vi.useFakeTimers();
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+    emitBlocks([{ id: 'a', kind: 'text', text: 'match first' }]);
+
+    const input = mount.querySelector('#piview-search-input') as HTMLInputElement;
+    input.value = 'match';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    vi.advanceTimersByTime(200);
+
+    expect(mount.querySelectorAll('mark.piview-search-match').length).toBe(1);
+    const counter = mount.querySelector('#piview-search-count') as HTMLElement;
+    expect(counter.textContent).toBe('1 / 1');
+
+    // New log entries arrive -> UI updates to reflect new matches.
+    emitBlocks([
+      { id: 'a', kind: 'text', text: 'match first' },
+      { id: 'b', kind: 'text', text: 'another match here' },
+    ]);
+    expect(mount.querySelectorAll('mark.piview-search-match').length).toBe(2);
+    expect(counter.textContent).toBe('1 / 2');
+
+    view.destroy();
+    vi.useRealTimers();
+  });
+
+  it('removes highlights when a searched-for block is dropped from the log', async () => {
+    vi.useFakeTimers();
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+    emitBlocks([{ id: 'a', kind: 'text', text: 'match a' }, { id: 'b', kind: 'text', text: 'match b' }]);
+
+    const input = mount.querySelector('#piview-search-input') as HTMLInputElement;
+    input.value = 'match';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    vi.advanceTimersByTime(200);
+    expect(mount.querySelectorAll('mark.piview-search-match').length).toBe(2);
+
+    // Remove block 'b' (e.g. after a clear/partial reconcile).
+    emitBlocks([{ id: 'a', kind: 'text', text: 'match a' }]);
+    expect(mount.querySelectorAll('mark.piview-search-match').length).toBe(1);
+    expect((mount.querySelector('#piview-search-count') as HTMLElement).textContent).toBe('1 / 1');
+
+    view.destroy();
+    vi.useRealTimers();
+  });
+
+  it('ensureVisible scrolls the container so the current match lands in view', async () => {
+    vi.useFakeTimers();
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+    emitBlocks([{ id: 'a', kind: 'text', text: 'foo bar foo' }]);
+
+    const input = mount.querySelector('#piview-search-input') as HTMLInputElement;
+    input.value = 'foo';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    vi.advanceTimersByTime(200);
+
+    const container = mount.querySelector('#log-content-container') as HTMLElement;
+    let scrollTopValue = 500;
+    Object.defineProperty(container, 'scrollTop', {
+      configurable: true,
+      get: () => scrollTopValue,
+      set: (v: number) => { scrollTopValue = v; },
+    });
+    Object.defineProperty(container, 'clientHeight', { configurable: true, value: 200 });
+
+    // Second mark sits below the visible area -> scrolling should advance.
+    const marks = mount.querySelectorAll('mark.piview-search-match') as unknown as HTMLElement[];
+    const containerRect = { top: 0, bottom: 200, height: 200 } as DOMRect;
+    const belowRect = { top: 600, bottom: 620, height: 20 } as DOMRect;
+    vi.spyOn(container, 'getBoundingClientRect').mockReturnValue(containerRect as DOMRect);
+    vi.spyOn(marks[1], 'getBoundingClientRect').mockReturnValue(belowRect as DOMRect);
+
+    (view as unknown as { goToMatch: (i: number) => void }).goToMatch(1);
+    // relBottom = 620 - 0 = 620 > 200-8 => scroll += 620 - 192 = 428
+    expect(scrollTopValue).toBeGreaterThan(500);
+
+    view.destroy();
+    vi.useRealTimers();
+  });
+
+  it('Escape clears the search, removes highlights, and resets the counter', async () => {
+    vi.useFakeTimers();
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+    emitBlocks([{ id: 'a', kind: 'text', text: 'hello target world' }]);
+
+    const input = mount.querySelector('#piview-search-input') as HTMLInputElement;
+    input.value = 'target';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    vi.advanceTimersByTime(200);
+    expect(mount.querySelectorAll('mark.piview-search-match').length).toBe(1);
+
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(mount.querySelectorAll('mark.piview-search-match').length).toBe(0);
+    expect((mount.querySelector('#piview-search-count') as HTMLElement).textContent).toBe('0 / 0');
+
+    view.destroy();
+    vi.useRealTimers();
+  });
 });
