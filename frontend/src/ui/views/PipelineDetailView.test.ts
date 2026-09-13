@@ -17,6 +17,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PipelineDetailView } from './PipelineDetailView.ts';
 import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
+import { TaskStatus } from '../../core/domain.ts';
 import { CoderBotDialog } from '../components/CoderBotDialog.ts';
 import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
 
@@ -133,6 +134,29 @@ describe('PipelineDetailView Layout', () => {
     toggleAction();
     expect(localStorage.setItem).toHaveBeenCalledWith('pipeline:layout', JSON.stringify('3-col'));
     expect(container.innerHTML).toContain('lg:grid-cols-3');
+  });
+
+  it('should keep PROPOSED/CREATED tasks only in the sidebar BacklogView, not the main prep column', async () => {
+    mockContext.taskClient.listByPipeline.mockResolvedValue([
+      { id: 'p1', title: 'Proposed Task', status: TaskStatus.PROPOSED, design_doc: '# d', deleted: false, version: 1, order: 0, type: 'manual', want_design_doc: true },
+      { id: 'c1', title: 'Created Task', status: TaskStatus.CREATED, deleted: false, version: 1, order: 0, type: 'manual', want_design_doc: false },
+    ]);
+
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+    container.innerHTML = view.render() as string;
+    await view.refreshTasks();
+
+    // Main prep column no longer renders the old PROPOSED/BACKLOG task columns
+    const colPrep = container.querySelector('#col-prep');
+    expect(colPrep).not.toBeNull();
+    expect(colPrep!.innerHTML).not.toContain('mock-column');
+
+    // The sidebar BacklogView still lists both tasks
+    const backlog = container.querySelector('#backlog-view');
+    expect(backlog).not.toBeNull();
+    expect(backlog!.innerHTML).toContain('Proposed Task');
+    expect(backlog!.innerHTML).toContain('Created Task');
   });
 });
 

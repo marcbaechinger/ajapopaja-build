@@ -95,8 +95,6 @@ export class PipelineDetailView extends View {
 
 
   private columnMetadata: Record<string, { title: string, emptyMessage: string }> = {
-    'proposed': { title: 'Proposed', emptyMessage: 'No proposed designs.' },
-    'backlog': { title: 'Backlog', emptyMessage: 'Backlog is empty.' },
     'inprogress': { title: 'In Progress', emptyMessage: 'No active work.' },
     'failed': { title: 'Failed', emptyMessage: '' },
     'scheduled': { title: 'Queue', emptyMessage: 'Nothing scheduled.' },
@@ -1097,9 +1095,6 @@ export class PipelineDetailView extends View {
         this.isFirstLoad = false;
       }
 
-      const proposedTasks = allTasks.filter(t => !t.deleted && t.status === TaskStatus.PROPOSED);
-      const createdTasks = allTasks.filter(t => !t.deleted && t.status === TaskStatus.CREATED);
-
       const inProgressTasks = allTasks.filter(t => !t.deleted && t.status === TaskStatus.INPROGRESS);
       const scheduledTasks = allTasks.filter(t => !t.deleted && t.status === TaskStatus.SCHEDULED);
       const failedTasks = allTasks.filter(t => !t.deleted && t.status === TaskStatus.FAILED);
@@ -1107,32 +1102,14 @@ export class PipelineDetailView extends View {
       const completedTasks = allTasks.filter(t => !t.deleted && ([TaskStatus.IMPLEMENTED, TaskStatus.SUBMITTED, TaskStatus.DISCARDED] as any[]).includes(t.status));
 
       // Sort columns
-      proposedTasks.sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
-
-      createdTasks.sort((a, b) => this.taskSortFn(a, b));
       inProgressTasks.sort((a, b) => this.taskSortFn(a, b));
       scheduledTasks.sort((a, b) => this.taskSortFn(a, b));
       failedTasks.sort((a, b) => this.taskSortFn(a, b));
 
-      // 1. Render Preparation Column
+      // 1. Render Preparation Column (PROPOSED/CREATED tasks now only live in the
+      // sidebar BacklogView; the main area keeps the PullRequest section only).
       prepContainer.innerHTML = `
         ${PullRequestSection.render(this.pullRequests)}
-        ${TaskColumn.render({
-        id: 'proposed',
-        title: 'Proposed',
-        tasks: proposedTasks,
-        emptyMessage: 'No proposed designs.',
-        collapsedTasks: this.collapsedTasks,
-        badge: { text: 'Review', class: 'bg-purple-500/20 text-purple-400 border border-purple-500/30' }
-      })}
-        ${TaskColumn.render({
-        id: 'backlog',
-        title: 'Backlog',
-        tasks: createdTasks,
-        emptyMessage: 'Backlog is empty.',
-        showOrdering: this.currentSortOrder === 'execution',
-        collapsedTasks: this.collapsedTasks
-      })}
       `;
 
       // 2. Render Active Column
