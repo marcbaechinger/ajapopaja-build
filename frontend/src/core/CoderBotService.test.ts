@@ -272,4 +272,33 @@ describe('CoderBotService session tracking / reconnect', () => {
     const s = makeService();
     expect(s.service.getCurrentSession()).toEqual({ pipelineId: 'p9', taskId: 't9', active: false });
   });
+
+  it('reconnect storms share a single history fetch', async () => {
+    ws.dispatch('CODERBOT_STARTED', { task_id: 't1', pipeline_id: 'p1' });
+    const a = service.reconnect({ pipelineId: 'p1', taskId: 't1', active: true });
+    const b = service.reconnect({ pipelineId: 'p1', taskId: 't1', active: true });
+    const c = service.reconnect({ pipelineId: 'p1', taskId: 't1', active: true });
+    await Promise.all([a, b, c]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not notify session state listeners when active is unchanged', () => {
+    const spy = vi.fn();
+    service.onSessionStateChange(spy);
+    ws.dispatch('CODERBOT_STARTED', { task_id: 't1', pipeline_id: 'p1' });
+    expect(spy).toHaveBeenCalledTimes(1);
+    // A second STARTED with the same task must not re-notify (avoids a reconnect loop).
+    ws.dispatch('CODERBOT_STARTED', { task_id: 't1', pipeline_id: 'p1' });
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it('notifies session-change listeners on STARTED even when active is already true', () => {
+    const spy = vi.fn();
+    service.onSessionChange(spy);
+    ws.dispatch('CODERBOT_STARTED', { task_id: 't0', pipeline_id: 'p0' });
+    ws.dispatch('CODERBOT_STARTED', { task_id: 't1', pipeline_id: 'p1' });
+    // A new session must still notify session-change listeners so the view can
+    // mount the PiView even though the active value did not change.
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
 });

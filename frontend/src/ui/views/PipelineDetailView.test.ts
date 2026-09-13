@@ -437,6 +437,26 @@ describe('PipelineDetailView CoderBot Dialog', () => {
     const shownDialog = (CoderBotDialog as any).mock.results[0].value;
     expect(shownDialog.show).toHaveBeenCalled();
   });
+
+  it('re-mounts the engine PiView after the engine view re-renders', async () => {
+    mockContext.coderBotService.getCurrentSession.mockReturnValue({ pipelineId: 'p1', taskId: 't1', active: true });
+    mockContext.taskClient.listByPipeline.mockResolvedValue([]);
+
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await view.refreshTasks();
+
+    const initial = container.querySelector('#engine-piview-mount');
+    expect(initial?.querySelector('#log-content-container')).not.toBeNull();
+
+    // A second refresh re-renders the engine view (wiping the PiView DOM). The
+    // PiView must be re-mounted so the log reappears instead of the placeholder.
+    await view.refreshTasks();
+    const after = container.querySelector('#engine-piview-mount');
+    expect(after?.querySelector('#log-content-container')).not.toBeNull();
+    expect(after?.querySelector('#log-content-container')?.parentElement).toBe(after);
+  });
 });
 
 describe('PipelineDetailView Accept Pull Request', () => {

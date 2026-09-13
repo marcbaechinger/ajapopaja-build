@@ -63,6 +63,7 @@ export class PipelineDetailView extends View {
   private pendingReviews: string[] = [];
   private selectedTask: Task | null = null;
   private enginePiView: PiView | null = null;
+  private enginePiMountedKey: string | null = null;
 
   private loadPendingReviews() {
     this.pendingReviews = this.storage.get<string[]>(`pending_reviews:${this.pipelineId}`, []) || [];
@@ -1272,10 +1273,10 @@ export class PipelineDetailView extends View {
     this.refreshTasks();
     this.checkOllama();
 
-    // React to app-wide CoderBot session state changes so the engine Pi slot
-    // stays correct (mount for this pipeline, notice for another pipeline).
+    // React to app-wide CoderBot session changes so the engine Pi slot stays
+    // correct (mount for this pipeline, notice for another pipeline).
     const cb = () => this.updateEnginePiSlot();
-    const unsub = this.context.coderBotService?.onSessionStateChange?.(cb);
+    const unsub = this.context.coderBotService?.onSessionChange?.(cb);
     if (unsub) this.unsubs.push(unsub);
 
     // Reconnect a running CoderBot session to this view (e.g. after a reload).
@@ -1484,12 +1485,22 @@ export class PipelineDetailView extends View {
     }
 
     if (session.pipelineId === this.pipelineId) {
-      // Session belongs to this pipeline: connect/resume the PiView.
-      this.mountCoderBotPiView(mount);
+      // Session belongs to this pipeline: connect/resume the PiView. Re-mount
+      // when the mounted session changed OR the PiView DOM was wiped by an
+      // ExecutionEngineView re-render; otherwise reuse it and just reconnect.
+      const key = `${session.pipelineId}:${session.taskId}`;
+      const logRendered = !!mount.querySelector('#log-content-container');
+      if (!this.enginePiView || this.enginePiMountedKey !== key || !logRendered) {
+        this.mountCoderBotPiView(mount);
+        this.enginePiMountedKey = key;
+      } else {
+        this.context.coderBotService?.reconnect?.();
+      }
       return;
     }
 
     this.teardownEnginePiView();
+    this.enginePiMountedKey = null;
     if (session.active) {
       mount.innerHTML = `
         <p class="text-[10px] italic text-app-muted/70 text-center border border-dashed border-app-border/40 rounded-lg py-3">CoderBot is running for another pipeline.</p>
@@ -1504,6 +1515,7 @@ export class PipelineDetailView extends View {
       this.enginePiView.destroy();
       this.enginePiView = null;
     }
+    this.enginePiMountedKey = null;
   }
 
   private mountCoderBotPiView(mount: HTMLElement) {

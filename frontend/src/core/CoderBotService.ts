@@ -71,11 +71,14 @@ export class CoderBotService {
   private listeners: Set<CoderBotListener> = new Set();
   private blockListeners: Set<BlockListener> = new Set();
   private stateListeners: Set<(active: boolean) => void> = new Set();
+  private sessionListeners: Set<() => void> = new Set();
   private currentTaskId: string | null = null;
   private currentPipelineId: string | null = null;
   private isSessionActive: boolean = false;
   /** Key of the session whose history has already been replayed (dedupe). */
   private loadedSessionKey: string | null = null;
+  /** In-flight history load so concurrent reconnects share one fetch. */
+  private historyLoadPromise: Promise<void> | null = null;
 
   private static readonly SESSION_STORAGE_KEY = 'ajapopaja:coderbot:session';
 
@@ -96,11 +99,13 @@ export class CoderBotService {
       this.currentPipelineId = msg.payload?.pipeline_id ?? this.currentPipelineId;
       this.setSessionActive(true);
       this.persistSession();
+      this.notifySessionChange();
     });
 
     this.wsClient.on('CODERBOT_COMPLETED', () => {
       this.setSessionActive(false);
       this.persistSession();
+      this.notifySessionChange();
     });
 
     // Legacy plain-text stream for bots other than CoderBot. CoderBot is rendered
@@ -503,6 +508,12 @@ export class CoderBotService {
     return () => this.stateListeners.delete(listener);
   }
 
+  /** Subscribe to session identity/state changes (any pipeline's session update). */
+  public onSessionChange(listener: () => void): () => void {
+    this.sessionListeners.add(listener);
+    return () => this.sessionListeners.delete(listener);
+  }
+
   public async stopSession(taskId: string): Promise<void> {
     const token = this.authService.getAccessToken();
     const response = await fetch(`/api/coderbot/stop/${taskId}`, {
@@ -565,24 +576,37 @@ export class CoderBotService {
       return;
     }
 
-    let events: any[] = [];
-    try {
-      events = await this.fetchSessionHistory(this.currentTaskId);
-    } catch (e) {
-      console.error('Failed to load CoderBot session history', e);
+    // Share a single in-flight history load so a reconnect storm (many UI
+    // refreshes) doesn't issue one GET per call.
+    if (!this.historyLoadPromise) {
+      this.historyLoadPromise = this.loadHistory(this.currentTaskId, key);
     }
+    await this.historyLoadPromise;
+  }
 
-    // Rebuild the activity log by replaying the same reducer over the persisted
-    // events, so past output of this session is preserved after a reload.
-    this.blocks = [];
-    this.openBlocks.clear();
-    this.nextBlockId = 1;
-    for (const event of events) {
-      this.handleRpcEvent(event);
+  private async loadHistory(taskId: string, key: string): Promise<void> {
+    try {
+      let events: any[] = [];
+      try {
+        events = await this.fetchSessionHistory(taskId);
+      } catch (e) {
+        console.error('Failed to load CoderBot session history', e);
+      }
+
+      // Rebuild the activity log by replaying the same reducer over the persisted
+      // events, so past output of this session is preserved after a reload.
+      this.blocks = [];
+      this.openBlocks.clear();
+      this.nextBlockId = 1;
+      for (const event of events) {
+        this.handleRpcEvent(event);
+      }
+      this.loadedSessionKey = key;
+      this.emitBlocks();
+      this.notify('');
+    } finally {
+      this.historyLoadPromise = null;
     }
-    this.loadedSessionKey = key;
-    this.emitBlocks();
-    this.notify('');
   }
 
   private persistSession() {
@@ -637,8 +661,15 @@ export class CoderBotService {
   }
 
   private setSessionActive(active: boolean) {
+    // Only notify on an actual change so re-renders that call setSessionActive()
+    // with the same value (e.g. reconnect) don't trigger a notification loop.
+    if (this.isSessionActive === active) return;
     this.isSessionActive = active;
     this.stateListeners.forEach(l => l(active));
+  }
+
+  private notifySessionChange() {
+    this.sessionListeners.forEach(l => l());
   }
 
   private notify(content: string) {
