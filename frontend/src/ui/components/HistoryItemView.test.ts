@@ -45,25 +45,9 @@ describe('HistoryItemView', () => {
     expect(HistoryItemView.isHistoryStatus(TaskStatus.DISCARDED)).toBe(false);
   });
 
-  it('should render title, task id, and copy button', () => {
+  it('should render the title', () => {
     const html = HistoryItemView.render(baseTask as any);
     expect(html).toContain('Implemented Task');
-    expect(html).toContain('>t1<');
-    expect(html).toContain('data-action-click="copy_task_id"');
-  });
-
-  it('should render DocBot, QuickFix and Review buttons', () => {
-    const html = HistoryItemView.render(baseTask as any);
-    expect(html).toContain('data-action-click="trigger_docbot"');
-    expect(html).toContain('data-action-click="open_quickfix"');
-    expect(html).toContain('title="Open Quickfix in Neovim"');
-    expect(html).toContain('data-action-click="trigger_reviewbot"');
-  });
-
-  it('should render Review badge instead of trigger when review_md is present', () => {
-    const html = HistoryItemView.render({ ...baseTask, review_md: '# Review' } as any);
-    expect(html).toContain('data-action-click="open_review_dialog"');
-    expect(html).not.toContain('data-action-click="trigger_reviewbot"');
   });
 
   it('should render commit hash with open_diff_view action', () => {
@@ -71,51 +55,46 @@ describe('HistoryItemView', () => {
     expect(html).toContain('abcdef1');
     expect(html).toContain('data-action-click="open_diff_view"');
     expect(html).toContain('data-commit-hash="abcdef123456"');
+    expect(html).toContain('title="Open Diff View in Neovim"');
   });
 
-  it('should render implementation time and delete/fail actions', () => {
+  it('should render implementation duration', () => {
     const html = HistoryItemView.render(baseTask as any);
     expect(html).toContain('Impl:');
-    expect(html).toContain('data-action-click="delete_task"');
-    expect(html).toContain('data-action-click="fail_task"');
-    expect(html).toContain('Mark as Failed');
   });
 
-  it('should render the implementation summary', () => {
+  it('should render the status badge', () => {
     const html = HistoryItemView.render(baseTask as any);
-    expect(html).toContain('Implementation Summary');
-    expect(html).toContain('Done');
+    expect(html.trim()).toMatch(/implemented\s*<\/span>/);
   });
 
-  it('should keep the implementation summary collapsed by default', () => {
-    const html = HistoryItemView.render(baseTask as any);
-    const summary = html.match(/<details class="group\/summary[\s\S]*?<\/details>/);
-    expect(summary).not.toBeNull();
-    expect(summary![0]).toContain('Implementation Summary');
-    // no 'open' attribute -> collapsed by default
-    expect(summary![0]).not.toMatch(/<details[^>]*open/);
-  });
-
-  it('should render delete and fail actions in the bottom-right action bar', () => {
-    const html = HistoryItemView.render(baseTask as any);
-    const actionBar = html.match(/<div class="flex justify-end[\s\S]*?<\/div>/);
-    expect(actionBar).not.toBeNull();
-    expect(actionBar![0]).toContain('data-action-click="delete_task"');
-    expect(actionBar![0]).toContain('data-action-click="fail_task"');
-    expect(actionBar![0]).toContain('Mark as Failed');
-  });
-
-  it('should keep the status history collapsed by default', () => {
-    const html = HistoryItemView.render(baseTask as any);
-    expect(html).toContain('Status History');
-    expect(html).toContain('<details');
-    // not 'open' -> collapsed
-    expect(html).not.toMatch(/<details[^>]*open/);
-  });
-
-  it('should make the header clickable to select the task', () => {
+  it('should make the item clickable to select the task', () => {
     const html = HistoryItemView.render(baseTask as any);
     expect(html).toContain('data-action-click="select_task"');
     expect(html).toContain('data-view-id="t1"');
+  });
+
+  it('should not render removed actions or sections', () => {
+    const html = HistoryItemView.render(baseTask as any);
+    expect(html).not.toContain('data-action-click="copy_task_id"');
+    expect(html).not.toContain('data-action-click="trigger_docbot"');
+    expect(html).not.toContain('data-action-click="open_quickfix"');
+    expect(html).not.toContain('data-action-click="trigger_reviewbot"');
+    expect(html).not.toContain('data-action-click="open_review_dialog"');
+    expect(html).not.toContain('data-action-click="delete_task"');
+    expect(html).not.toContain('data-action-click="fail_task"');
+    expect(html).not.toContain('Implementation Summary');
+    expect(html).not.toContain('Status History');
+    expect(html).not.toContain('<details');
+  });
+
+  it('should omit the commit hash when not present', () => {
+    const html = HistoryItemView.render({ ...baseTask, commit_hash: null } as any);
+    expect(html).not.toContain('data-action-click="open_diff_view"');
+  });
+
+  it('should omit duration when not computable', () => {
+    const html = HistoryItemView.render({ ...baseTask, history: [] } as any);
+    expect(html).not.toContain('Impl:');
   });
 });
