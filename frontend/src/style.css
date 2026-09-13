@@ -44,6 +44,42 @@ body {
   @apply bg-app-bg text-app-text transition-colors duration-300;
 }
 
+/*
+ * Thin, theme-matched scrollbars for scrollable content areas
+ * (e.g. the BacklogView sidebar and the main content view).
+ *
+ * This keeps the native default grey scrollbars from standing out and ties
+ * the thumb colour to the app border theme across both light and dark modes.
+ */
+* {
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: var(--app-border) transparent; /* Firefox: thumb / track */
+}
+
+*::-webkit-scrollbar {
+  width: 6px; /* vertical */
+  height: 6px; /* horizontal */
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--app-border);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--app-muted);
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* EasyMDE Dark Mode Tweaks */
 .editor-toolbar {
   @apply !bg-app-surface !border-app-border !text-app-text;
