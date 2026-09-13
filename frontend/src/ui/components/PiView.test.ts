@@ -433,4 +433,65 @@ describe('PiView', () => {
     view.destroy();
     vi.useRealTimers();
   });
+
+  it('adds a copy button to each block that copies block content with a timestamp', () => {
+    const writeText = vi.fn(async (_text: string) => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+    emitBlocks([{ id: 't1', kind: 'tool', header: '→ write', text: 'const x = 1' }]);
+
+    const blockEl = mount.querySelector('#log-blocks > div') as HTMLElement;
+    const copyBtn = blockEl.querySelector('.piview-copy') as HTMLButtonElement;
+    expect(copyBtn).not.toBeNull();
+    expect(copyBtn.getAttribute('aria-label')).toBe('Copy block');
+
+    copyBtn.click();
+    expect(writeText).toHaveBeenCalledTimes(1);
+    const copied = writeText.mock.calls[0][0] as string;
+    expect(copied).toContain('→ write');
+    expect(copied).toContain('const x = 1');
+    // Includes a timestamp line.
+    expect(copied).toMatch(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/);
+  });
+
+  it('copy-all button and c key copy the whole log', () => {
+    const writeText = vi.fn(async (_text: string) => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+    emitBlocks([{ id: 'a', kind: 'text', text: 'first' }, { id: 'b', kind: 'error', text: 'boom' }]);
+
+    const copyAll = mount.querySelector('#copy-all-btn') as HTMLButtonElement;
+    copyAll.click();
+    expect(writeText).toHaveBeenCalledTimes(1);
+    let copied = writeText.mock.calls[0][0] as string;
+    expect(copied).toContain('first');
+    expect(copied).toContain('boom');
+
+    // Keyboard shortcut: focused within the PiView, press 'c'.
+    writeText.mockClear();
+    const keyEvt = new KeyboardEvent('keydown', { key: 'c', bubbles: true });
+    mount.querySelector('#log-content-container')!.dispatchEvent(keyEvt);
+    expect(writeText).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a transient toast after copying a block', async () => {
+    const writeText = vi.fn(async (_text: string) => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+    emitBlocks([{ id: 'a', kind: 'text', text: 'hi' }]);
+
+    (mount.querySelector('#log-blocks .piview-copy') as HTMLButtonElement).click();
+    await new Promise((r) => setTimeout(r, 0));
+    const toast = mount.querySelector('#piview-toast') as HTMLElement;
+    expect(toast.textContent).toBe('Block copied');
+    expect(toast.classList.contains('opacity-100')).toBe(true);
+
+    view.destroy();
+  });
 });
