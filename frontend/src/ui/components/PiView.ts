@@ -72,6 +72,9 @@ export class PiView {
   /** Whether `tool`/`verification` blocks are collapsed (default: expanded). */
   private blocksCollapsed: boolean = false;
 
+  /** Whether `error` blocks are visible (default: visible). */
+  private errorVisible: boolean = true;
+
   /** Live-session status/timer state. */
   private sessionActive: boolean = false;
   private startTime: number | null = null;
@@ -103,6 +106,9 @@ export class PiView {
     this.root.appendChild(this.buildLogArea());
     if (this.showFooter) {
       this.root.appendChild(this.buildFooter());
+      this.updateThinkingBtn();
+      this.updateCollapseBtn();
+      this.updateErrorBtn();
     }
     document.addEventListener('keydown', this.handleKeydown);
     this.unsubs.push(() => document.removeEventListener('keydown', this.handleKeydown));
@@ -211,6 +217,16 @@ export class PiView {
     collapseBtn.setAttribute('aria-pressed', 'false');
     actions.appendChild(collapseBtn);
 
+    const errorToggleBtn = document.createElement('button');
+    errorToggleBtn.setAttribute('data-action', 'toggle-error-visibility');
+    errorToggleBtn.id = 'error-toggle-btn';
+    errorToggleBtn.className =
+      'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer';
+    errorToggleBtn.setAttribute('aria-label', 'Hide error blocks');
+    errorToggleBtn.title = 'Hide error blocks';
+    errorToggleBtn.setAttribute('aria-pressed', 'false');
+    actions.appendChild(errorToggleBtn);
+
     const copyAllBtn = document.createElement('button');
     copyAllBtn.setAttribute('data-action', 'copy-all-log');
     copyAllBtn.id = 'copy-all-btn';
@@ -227,9 +243,6 @@ export class PiView {
     // and only listens while this view is alive.
     this.root.addEventListener('click', this.handleClick);
     this.unsubs.push(() => this.root.removeEventListener('click', this.handleClick));
-
-    this.updateThinkingBtn();
-    this.updateCollapseBtn();
 
     return footer;
   }
@@ -265,6 +278,8 @@ export class PiView {
       this.toggleThinking();
     } else if (action === 'toggle-block-collapse') {
       this.toggleBlocksCollapse();
+    } else if (action === 'toggle-error-visibility') {
+      this.toggleErrorVisibility();
     } else if (action === 'copy-all-log') {
       this.copyAllLog();
     }
@@ -412,8 +427,9 @@ export class PiView {
       }
       case 'error': {
         el = document.createElement('div');
-        el.className = 'text-red-400 whitespace-pre-wrap break-all';
+        el.className = 'piview-error text-red-400 whitespace-pre-wrap break-all';
         el.textContent = block.text ?? '';
+        if (!this.errorVisible) el.classList.add('hidden');
         break;
       }
       case 'verification': {
@@ -627,6 +643,35 @@ export class PiView {
     btn.innerHTML = this.cleanIcon(Icon.render(collapsed ? 'plus' : 'minus', { size: 14 }));
     btn.setAttribute('aria-pressed', String(collapsed));
     const label = collapsed ? 'Expand all blocks' : 'Collapse all blocks';
+    btn.setAttribute('aria-label', label);
+    btn.title = label;
+  }
+
+  /**
+   * Toggles the visibility of all `error` blocks. New error blocks follow
+   * the current state.
+   */
+  private toggleErrorVisibility() {
+    this.errorVisible = !this.errorVisible;
+    const log = this.logContainer;
+    const prev = log ? log.scrollTop : 0;
+    const container = this.blocksContainer;
+    if (container) {
+      container.querySelectorAll('.piview-error').forEach((w) => {
+        w.classList.toggle('hidden', !this.errorVisible);
+      });
+    }
+    this.updateErrorBtn();
+    if (log) log.scrollTop = prev;
+  }
+
+  private updateErrorBtn() {
+    const btn = this.root.querySelector('#error-toggle-btn') as HTMLElement | null;
+    if (!btn) return;
+    const visible = this.errorVisible;
+    btn.innerHTML = this.cleanIcon(Icon.render(visible ? 'eye' : 'eyeOff', { size: 14 }));
+    btn.setAttribute('aria-pressed', String(visible));
+    const label = visible ? 'Hide error blocks' : 'Show error blocks';
     btn.setAttribute('aria-label', label);
     btn.title = label;
   }

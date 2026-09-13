@@ -562,4 +562,53 @@ describe('PiView', () => {
     (tool.querySelector('[data-role="header"]') as HTMLElement).click();
     expect(toolBody.classList.contains('hidden')).toBe(true);
   });
+
+  it('error blocks are visible by default; toggle hides all error blocks', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+    emitBlocks([
+      { id: 'e1', kind: 'error', text: 'boom1' },
+      { id: 'e2', kind: 'error', text: 'boom2' },
+      { id: 't1', kind: 'text', text: 'normal' },
+    ]);
+
+    const errors = mount.querySelectorAll('.piview-error');
+    expect(errors.length).toBe(2);
+    expect(errors[0].classList.contains('hidden')).toBe(false);
+    expect(errors[1].classList.contains('hidden')).toBe(false);
+
+    const toggle = mount.querySelector('#error-toggle-btn') as HTMLButtonElement;
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    expect(toggle.getAttribute('aria-label')).toContain('Hide');
+
+    toggle.click();
+    expect(errors[0].classList.contains('hidden')).toBe(true);
+    expect(errors[1].classList.contains('hidden')).toBe(true);
+    // Non-error blocks are unaffected.
+    const nonError = Array.from(mount.querySelectorAll('#log-blocks > div')).find(
+      (d) => !d.classList.contains('piview-error')
+    );
+    expect(nonError?.classList.contains('hidden')).toBe(false);
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    expect(toggle.getAttribute('aria-label')).toContain('Show');
+
+    // Show again.
+    toggle.click();
+    expect(errors[0].classList.contains('hidden')).toBe(false);
+    expect(errors[1].classList.contains('hidden')).toBe(false);
+  });
+
+  it('new error blocks follow the hidden state', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    (mount.querySelector('#error-toggle-btn') as HTMLButtonElement).click(); // hide
+    emitBlocks([{ id: 'e1', kind: 'error', text: 'a' }, { id: 'e2', kind: 'error', text: 'b' }]);
+
+    const errors = mount.querySelectorAll('.piview-error');
+    expect(errors[0].classList.contains('hidden')).toBe(true);
+    expect(errors[1].classList.contains('hidden')).toBe(true);
+  });
 });
