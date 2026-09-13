@@ -18,6 +18,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PipelineDetailView } from './PipelineDetailView.ts';
 import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
 import { CoderBotDialog } from '../components/CoderBotDialog.ts';
+import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
+
+vi.mock('../components/ConfirmationDialog.ts', () => ({
+  ConfirmationDialog: vi.fn(function ConfirmationDialog() {
+    return { show: vi.fn().mockResolvedValue(true) };
+  }),
+}));
 
 // Mock components to avoid deep rendering issues in unit tests
 vi.mock('../components/TaskColumn.ts', () => ({
@@ -327,5 +334,107 @@ describe('PipelineDetailView CoderBot Dialog', () => {
     expect(CoderBotDialog).toHaveBeenCalledWith(mockContext.coderBotService);
     const shownDialog = (CoderBotDialog as any).mock.results[0].value;
     expect(shownDialog.show).toHaveBeenCalled();
+  });
+});
+
+describe('PipelineDetailView Accept Pull Request', () => {
+  let mockContext: any;
+  let container: HTMLElement;
+
+  const getAction = (name: string) =>
+    mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === name)[1];
+
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    LocalStorageManager.resetInstances();
+    vi.clearAllMocks();
+
+    mockContext = {
+      actionRegistry: {
+        register: vi.fn(),
+      },
+      wsClient: { on: vi.fn() },
+      dataManager: {
+        on: vi.fn().mockReturnValue(() => {}),
+        updateTask: vi.fn(),
+        updatePipeline: vi.fn(),
+      },
+      authService: {
+        getUser: vi.fn().mockReturnValue({ username: 'testuser' }),
+        getAccessToken: vi.fn().mockReturnValue('token'),
+      },
+      pipelineClient: { get: vi.fn().mockResolvedValue({ id: 'p1', name: 'Pipe 1' }) },
+      taskClient: {
+        listByPipeline: vi.fn().mockResolvedValue([]),
+        listCompletedByPipeline: vi.fn().mockResolvedValue({ tasks: [], total_count: 0 }),
+      },
+      pullRequestClient: {
+        getPullRequestsByPipeline: vi.fn().mockResolvedValue([]),
+        acceptPullRequest: vi.fn().mockResolvedValue({}),
+      },
+      systemClient: {
+        getGitStatus: vi.fn().mockResolvedValue({}),
+        isOllamaAvailable: vi.fn().mockResolvedValue(true),
+      },
+    };
+
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn(() => null),
+      setItem: vi.fn(),
+    });
+  });
+
+  it('should register the accept_pr action', () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+
+    const acceptAction = getAction('accept_pr');
+    expect(acceptAction).toBeDefined();
+  });
+
+  it('should call acceptPullRequest and refresh after confirmation', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+    const fetchPullRequestsSpy = vi.spyOn(view as any, 'fetchPullRequests').mockResolvedValue(undefined);
+
+    const acceptAction = getAction('accept_pr');
+    const el = document.createElement('button');
+    el.setAttribute('data-pr-id', 'pr1');
+
+    await acceptAction(null, el);
+
+    expect(mockContext.pullRequestClient.acceptPullRequest).toHaveBeenCalledWith('pr1');
+    expect(fetchPullRequestsSpy).toHaveBeenCalled();
+  });
+
+  it('should not call acceptPullRequest when the confirmation is cancelled', async () => {
+    (ConfirmationDialog as any).mockImplementationOnce(function CancelledDialog() {
+      return { show: vi.fn().mockResolvedValue(false) };
+    });
+
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+
+    const acceptAction = getAction('accept_pr');
+    const el = document.createElement('button');
+    el.setAttribute('data-pr-id', 'pr1');
+
+    await acceptAction(null, el);
+
+    expect(mockContext.pullRequestClient.acceptPullRequest).not.toHaveBeenCalled();
+  });
+
+  it('should not call acceptPullRequest when data-pr-id is missing', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+
+    const acceptAction = getAction('accept_pr');
+    const el = document.createElement('button');
+
+    await acceptAction(null, el);
+
+    expect(mockContext.pullRequestClient.acceptPullRequest).not.toHaveBeenCalled();
   });
 });

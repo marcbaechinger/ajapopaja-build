@@ -430,6 +430,31 @@ export class PipelineDetailView extends View {
       await dialog.show();
     });
 
+    this.context.actionRegistry.register('accept_pr', async (_e, el) => {
+      const prId = el.getAttribute('data-pr-id');
+      if (!prId) return;
+
+      const confirmed = await new ConfirmationDialog(
+        'Accept Pull Request',
+        'This pull request will be applied and committed to the pipeline workspace. Continue?',
+        'Accept & Apply'
+      ).show();
+      if (!confirmed) return;
+
+      const btn = el as HTMLButtonElement;
+      btn.disabled = true;
+      btn.textContent = 'Applying...';
+      try {
+        await this.context.pullRequestClient.acceptPullRequest(prId);
+        this.fetchPullRequests();
+      } catch (error: any) {
+        console.error('Accept PR error:', error);
+        alert(`Failed to accept Pull Request: ${error.message}`);
+        btn.disabled = false;
+        btn.textContent = 'Accept';
+      }
+    });
+
     this.context.actionRegistry.register('copy_pipeline_id', async (_e, el) => {
       try {
         await navigator.clipboard.writeText(this.pipelineId);

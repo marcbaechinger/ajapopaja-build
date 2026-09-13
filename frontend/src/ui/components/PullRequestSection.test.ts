@@ -41,8 +41,26 @@ describe('PullRequestSection', () => {
     const html = PullRequestSection.render(prs);
     expect(html).toContain('summary');
     expect(html).toContain('Review');
+    expect(html).toContain('Accept');
     // Submitted, accepted and rejected are not shown.
     expect(html).not.toContain('REJECTED');
+  });
+
+  it('renders an Accept button with the expected action and data attributes for OPEN PRs', () => {
+    const html = PullRequestSection.render([makePr()]);
+    expect(html).toContain('data-action-click="accept_pr"');
+    expect(html).toContain('data-pr-id="pr1"');
+    expect(html).toContain('data-task-id="t1"');
+    // Accept button is placed before Review
+    const acceptIndex = html.indexOf('data-action-click="accept_pr"');
+    const reviewIndex = html.indexOf('open_pr_dialog');
+    expect(acceptIndex).toBeGreaterThan(-1);
+    expect(reviewIndex).toBeGreaterThan(acceptIndex);
+  });
+
+  it('renders no Accept button when there are no OPEN PRs', () => {
+    const html = PullRequestSection.render([makePr({ status: PullRequestStatus.SUBMITTED, remote_pr_url: 'https://host/o/r/pull/1' })]);
+    expect(html).toBe('');
   });
 
   it('omits SUBMITTED PRs from the list', () => {
