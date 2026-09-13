@@ -44,9 +44,6 @@ export class ExecutionEngineView {
     const queue = tasks
       .filter(t => !t.deleted && t.status === TaskStatus.SCHEDULED)
       .sort((a, b) => orderSort(a, b));
-    const failed = tasks
-      .filter(t => !t.deleted && t.status === TaskStatus.FAILED)
-      .sort((a, b) => orderSort(a, b));
 
     return `
       <div class="flex flex-col min-h-0 h-full overflow-hidden pt-2">
@@ -63,10 +60,7 @@ export class ExecutionEngineView {
         </div>
 
         ${ExecutionEngineView.sectionHeader('Queue', queue.length, 'text-app-accent-1')}
-        ${ExecutionEngineView.sectionBody(queue, 'Nothing scheduled.')}
-
-        ${ExecutionEngineView.sectionHeader('Failed', failed.length, 'text-red-400')}
-        ${ExecutionEngineView.sectionBody(failed, 'No failed tasks.')}
+        ${ExecutionEngineView.sectionBody(queue, 'Nothing scheduled.', 'max-h-48 overflow-y-auto')}
 
         <div id="sidebar-history" class="flex-1 min-h-0 mt-2 flex flex-col overflow-hidden">
           ${PipelineHistoryView.render(historyTasks, historyPage)}
@@ -84,7 +78,7 @@ export class ExecutionEngineView {
     `;
   }
 
-  private static sectionBody(tasks: Task[], emptyMessage: string): string {
+  private static sectionBody(tasks: Task[], emptyMessage: string, listClass: string = ''): string {
     if (tasks.length === 0) {
       return `
         <div class="px-1">
@@ -93,7 +87,7 @@ export class ExecutionEngineView {
       `;
     }
     return `
-      <div class="flex flex-col gap-2">
+      <div class="flex flex-col gap-2 ${listClass}">
         ${tasks.map(t => ExecutionEngineItemView.render(t)).join('')}
       </div>
     `;

@@ -36,7 +36,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
 }
 
 describe('ExecutionEngineView', () => {
-  it('should render the In Progress, Queue and Failed sections', () => {
+  it('should render the In Progress and Queue sections (no Failed section)', () => {
     const html = ExecutionEngineView.render({ tasks: [
       makeTask({ id: 'p', status: TaskStatus.INPROGRESS }),
       makeTask({ id: 'q', status: TaskStatus.SCHEDULED }),
@@ -44,10 +44,10 @@ describe('ExecutionEngineView', () => {
     ] });
     expect(html).toContain('In Progress');
     expect(html).toContain('Queue');
-    expect(html).toContain('Failed');
+    expect(html).not.toContain('Failed');
     expect(html).toContain('data-view-id="p"');
     expect(html).toContain('data-view-id="q"');
-    expect(html).toContain('data-view-id="f"');
+    expect(html).not.toContain('data-view-id="f"');
   });
 
   it('should sort tasks within a section by execution order', () => {
@@ -71,7 +71,7 @@ describe('ExecutionEngineView', () => {
     const html = ExecutionEngineView.render({ tasks: [] });
     expect(html).toContain('No active work.');
     expect(html).toContain('Nothing scheduled.');
-    expect(html).toContain('No failed tasks.');
+    expect(html).not.toContain('No failed tasks.');
   });
 
   it('should show the task count in each section header', () => {
@@ -81,7 +81,7 @@ describe('ExecutionEngineView', () => {
       makeTask({ id: 'q1', status: TaskStatus.SCHEDULED }),
     ] });
     // one count chip per section (section chips use a distinct muted style)
-    expect((html.match(/bg-app-surface border border-app-border rounded-full/g) || []).length).toBe(3);
+    expect((html.match(/bg-app-surface border border-app-border rounded-full/g) || []).length).toBe(2);
   });
 
   it('should include a CoderBot PiView mount between In Progress and Queue', () => {
@@ -113,8 +113,23 @@ describe('ExecutionEngineView', () => {
     expect(html).toContain('History Feed');
     expect(html).toContain('Done Task');
     expect(html).toContain('sidebar-history');
-    // History comes after the engine sections (Queue/Failed) at the bottom.
-    expect(html.indexOf('sidebar-history')).toBeGreaterThan(html.indexOf('Failed'));
+    // History comes after the engine sections (Queue) at the bottom.
+    expect(html.indexOf('sidebar-history')).toBeGreaterThan(html.indexOf('>Queue<'));
     expect(html).toContain('overflow-hidden');
+    // Failed section has been removed, so history comes after Queue.
+    expect(html).not.toContain('Failed');
+  });
+
+  it('should scroll the queue list within a bounded max-height container', () => {
+    const html = ExecutionEngineView.render({ tasks: [
+      makeTask({ id: 'q1', status: TaskStatus.SCHEDULED }),
+      makeTask({ id: 'q2', status: TaskStatus.SCHEDULED }),
+      makeTask({ id: 'q3', status: TaskStatus.SCHEDULED }),
+    ] });
+    expect(html).toContain('max-h-48');
+    expect(html).toContain('overflow-y-auto');
+    expect(html).toContain('data-view-id="q1"');
+    expect(html).toContain('data-view-id="q2"');
+    expect(html).toContain('data-view-id="q3"');
   });
 });

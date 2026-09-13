@@ -136,10 +136,11 @@ describe('PipelineHistoryView', () => {
     expect(feed).toContain('flex-1');
     expect(feed).toContain('min-h-0');
     expect(feed).toContain('overflow-hidden');
-    // Only the inner list scrolls.
+    // Only the inner list scrolls, and it keeps a minimum height (~3 items).
     const list = html.match(/<div id="completed-task-list"[^>]*>/)?.[0] ?? '';
     expect(list).toContain('overflow-y-auto');
     expect(list).toContain('flex-1');
-    expect(list).toContain('min-h-0');
+    expect(list).toContain('min-h-[');
+    expect(list).not.toContain('min-h-0');
   });
 });
