@@ -120,6 +120,12 @@ export class PiView {
   /** Configurable keyboard shortcut map (merged over defaults). */
   private keyboardBindings: Record<string, string>;
 
+  /** Resolved `action -> key` mapping used to annotate toolbar tooltips. */
+  private actionToKey: Record<string, string> = {};
+
+  /** Current human-readable label per action, kept in sync with button state. */
+  private buttonLabels: Record<string, string> = {};
+
   /** In-log search state. */
   private searchQuery: string = '';
   private debounceTimer: number | null = null;
@@ -142,6 +148,8 @@ export class PiView {
     this.logHeightClass = options.logHeightClass ?? 'h-[60vh]';
     this.emptyStateAction = options.emptyStateAction;
     this.keyboardBindings = options.keyboardBindings ?? {};
+    // Build the action->key lookup once, after overrides are merged over defaults.
+    this.actionToKey = this.buildBindings();
   }
 
   /** The element the PiView was mounted into. */
@@ -161,6 +169,7 @@ export class PiView {
       this.updateErrorBtn();
     }
     this.initKeyBindings();
+    this.updateButtonTooltips();
     this.initLogDisplay();
     this.initStateSync();
   }
@@ -288,103 +297,95 @@ export class PiView {
     const actions = document.createElement('div');
     actions.className = 'flex gap-2';
 
-    const followBtn = document.createElement('button');
-    followBtn.setAttribute('data-action', 'toggle-follow');
-    followBtn.id = 'follow-btn';
-    followBtn.className = 'px-3 py-1.5 rounded text-xs font-medium bg-app-accent-1 text-white hover:bg-app-accent-1/80 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer';
-    followBtn.innerHTML = `${Icon.render('refresh', { size: 14 })}\n            Follow Mode: ON`;
+    const followBtn = this.createButton(
+      'toggle-follow',
+      'Follow Mode: ON',
+      `${Icon.render('refresh', { size: 14 })}\n            Follow Mode: ON`,
+      'px-3 py-1.5 rounded text-xs font-medium bg-app-accent-1 text-white hover:bg-app-accent-1/80 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer',
+      { id: 'follow-btn' }
+    );
     actions.appendChild(followBtn);
 
-    const clearBtn = document.createElement('button');
-    clearBtn.setAttribute('data-action', 'clear-logs');
-    clearBtn.className = 'px-3 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer';
-    clearBtn.innerHTML = `${Icon.render('trash', { size: 14 })}\n            Clear`;
+    const clearBtn = this.createButton(
+      'clear-logs',
+      'Clear',
+      `${Icon.render('trash', { size: 14 })}\n            Clear`,
+      'px-3 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer'
+    );
     actions.appendChild(clearBtn);
 
-    const stopBtn = document.createElement('button');
-    stopBtn.setAttribute('data-action', 'stop-bot');
-    stopBtn.id = 'stop-bot-btn';
-    stopBtn.className = 'px-3 py-1.5 rounded text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer hidden';
-    stopBtn.innerHTML = `${Icon.render('close', { size: 14 })}\n            Stop Bot`;
+    const stopBtn = this.createButton(
+      'stop-bot',
+      'Stop Bot',
+      `${Icon.render('close', { size: 14 })}\n            Stop Bot`,
+      'px-3 py-1.5 rounded text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer hidden',
+      { id: 'stop-bot-btn' }
+    );
     actions.appendChild(stopBtn);
 
-    const thinkingBtn = document.createElement('button');
-    thinkingBtn.setAttribute('data-action', 'toggle-thinking');
-    thinkingBtn.id = 'thinking-toggle-btn';
-    thinkingBtn.className =
-      'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer';
-    thinkingBtn.setAttribute('aria-label', 'Expand all thinking blocks');
-    thinkingBtn.title = 'Expand all thinking blocks';
-    thinkingBtn.setAttribute('aria-pressed', 'false');
+    const thinkingBtn = this.createButton(
+      'toggle-thinking',
+      'Expand all thinking blocks',
+      Icon.render('chevronRight', { size: 14 }),
+      'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer',
+      { id: 'thinking-toggle-btn', ariaPressed: false }
+    );
     actions.appendChild(thinkingBtn);
 
-    const collapseBtn = document.createElement('button');
-    collapseBtn.setAttribute('data-action', 'toggle-block-collapse');
-    collapseBtn.id = 'collapse-blocks-btn';
-    collapseBtn.className =
-      'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer';
-    collapseBtn.setAttribute('aria-label', 'Collapse all blocks');
-    collapseBtn.title = 'Collapse all blocks';
-    collapseBtn.setAttribute('aria-pressed', 'false');
+    const collapseBtn = this.createButton(
+      'toggle-block-collapse',
+      'Collapse all blocks',
+      Icon.render('minus', { size: 14 }),
+      'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer',
+      { id: 'collapse-blocks-btn', ariaPressed: false }
+    );
     actions.appendChild(collapseBtn);
 
-    const errorToggleBtn = document.createElement('button');
-    errorToggleBtn.setAttribute('data-action', 'toggle-error-visibility');
-    errorToggleBtn.id = 'error-toggle-btn';
-    errorToggleBtn.className =
-      'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer';
-    errorToggleBtn.setAttribute('aria-label', 'Hide error blocks');
-    errorToggleBtn.title = 'Hide error blocks';
-    errorToggleBtn.setAttribute('aria-pressed', 'false');
+    const errorToggleBtn = this.createButton(
+      'toggle-error-visibility',
+      'Hide error blocks',
+      Icon.render('eye', { size: 14 }),
+      'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer',
+      { id: 'error-toggle-btn', ariaPressed: true }
+    );
     actions.appendChild(errorToggleBtn);
 
-    const prevErrorBtn = document.createElement('button');
-    prevErrorBtn.setAttribute('data-action', 'prev-error');
-    prevErrorBtn.id = 'prev-error-btn';
-    prevErrorBtn.type = 'button';
-    prevErrorBtn.disabled = true;
-    prevErrorBtn.className =
-      'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center cursor-pointer disabled:opacity-40 disabled:cursor-default';
-    prevErrorBtn.setAttribute('aria-label', 'Previous error (Shift+N)');
-    prevErrorBtn.title = 'Previous error (Shift+N)';
-    prevErrorBtn.innerHTML = `<span class="flex items-center">${this.cleanIcon(
-      Icon.render('alert', { size: 14, className: 'rotate-180' })
-    )}</span>`;
+    const prevErrorBtn = this.createButton(
+      'prev-error',
+      'Previous error',
+      `<span class="flex items-center">${this.cleanIcon(
+        Icon.render('alert', { size: 14, className: 'rotate-180' })
+      )}</span>`,
+      'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center cursor-pointer disabled:opacity-40 disabled:cursor-default',
+      { id: 'prev-error-btn', disabled: true }
+    );
     actions.appendChild(prevErrorBtn);
 
-    const nextErrorBtn = document.createElement('button');
-    nextErrorBtn.setAttribute('data-action', 'next-error');
-    nextErrorBtn.id = 'next-error-btn';
-    nextErrorBtn.type = 'button';
-    nextErrorBtn.disabled = true;
-    nextErrorBtn.className =
-      'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center cursor-pointer disabled:opacity-40 disabled:cursor-default';
-    nextErrorBtn.setAttribute('aria-label', 'Next error (N)');
-    nextErrorBtn.title = 'Next error (N)';
-    nextErrorBtn.innerHTML = `<span class="flex items-center">${this.cleanIcon(
-      Icon.render('alert', { size: 14 })
-    )}</span>`;
+    const nextErrorBtn = this.createButton(
+      'next-error',
+      'Next error',
+      `<span class="flex items-center">${this.cleanIcon(Icon.render('alert', { size: 14 }))}</span>`,
+      'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center cursor-pointer disabled:opacity-40 disabled:cursor-default',
+      { id: 'next-error-btn', disabled: true }
+    );
     actions.appendChild(nextErrorBtn);
 
-    const copyAllBtn = document.createElement('button');
-    copyAllBtn.setAttribute('data-action', 'copy-all-log');
-    copyAllBtn.id = 'copy-all-btn';
-    copyAllBtn.className =
-      'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer';
-    copyAllBtn.title = 'Copy entire log (c)';
-    copyAllBtn.setAttribute('aria-label', 'Copy entire log');
-    copyAllBtn.innerHTML = Icon.render('copyRects', { size: 14, label: 'Copy entire log' });
+    const copyAllBtn = this.createButton(
+      'copy-all-log',
+      'Copy entire log',
+      Icon.render('copyRects', { size: 14, label: 'Copy entire log' }),
+      'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer',
+      { id: 'copy-all-btn' }
+    );
     actions.appendChild(copyAllBtn);
 
-    const searchToggleBtn = document.createElement('button');
-    searchToggleBtn.setAttribute('data-action', 'toggle-search');
-    searchToggleBtn.id = 'search-toggle-btn';
-    searchToggleBtn.className =
-      'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer';
-    searchToggleBtn.setAttribute('aria-label', 'Show search bar');
-    searchToggleBtn.title = 'Show search bar';
-    searchToggleBtn.setAttribute('aria-pressed', 'false');
-    searchToggleBtn.innerHTML = this.cleanIcon(Icon.render('search', { size: 14 }));
+    const searchToggleBtn = this.createButton(
+      'toggle-search',
+      'Show search bar',
+      this.cleanIcon(Icon.render('search', { size: 14 })),
+      'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer',
+      { id: 'search-toggle-btn', ariaPressed: false }
+    );
     // Main action buttons on the left, search toggle right-aligned.
     actionsRow.appendChild(actions);
     actionsRow.appendChild(searchToggleBtn);
@@ -397,6 +398,64 @@ export class PiView {
     this.unsubs.push(() => this.root.removeEventListener('click', this.handleClick));
 
     return footer;
+  }
+
+  /**
+   * Toolbar button factory used by `buildFooter`. Generates a `<button>` with a
+   * `data-action` attribute and a hover tooltip (and `aria-label`) in the form
+   * `Label (Shortcut)` when a key is bound to the action.
+   */
+  private createButton(
+    action: string,
+    label: string,
+    icon: string,
+    className: string,
+    opts: { id?: string; ariaPressed?: boolean; disabled?: boolean } = {}
+  ): HTMLButtonElement {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.setAttribute('data-action', action);
+    if (opts.id) btn.id = opts.id;
+    btn.className = className;
+    if (opts.disabled) btn.disabled = true;
+    if (opts.ariaPressed !== undefined) btn.setAttribute('aria-pressed', String(opts.ariaPressed));
+    this.buttonLabels[action] = label;
+    this.applyTooltip(btn, action, label);
+    btn.innerHTML = icon;
+    return btn;
+  }
+
+  /** Sets `title` and `aria-label` to `Label (Shortcut)` when a key exists. */
+  private applyTooltip(btn: HTMLElement, action: string, label: string) {
+    const key = this.getKeyForAction(action);
+    const text = key ? `${label} (${key})` : label;
+    btn.title = text;
+    btn.setAttribute('aria-label', text);
+  }
+
+  /** Re-applies the tooltip for a single action's toolbar button. */
+  private updateButtonTooltip(action: string) {
+    const btn = this.root.querySelector(`[data-action="${action}"]`);
+    const label = this.buttonLabels[action];
+    if (!btn || !label) return;
+    this.applyTooltip(btn as HTMLElement, action, label);
+  }
+
+  /** Re-applies tooltips for every tracked toolbar button. */
+  private updateButtonTooltips() {
+    for (const action of Object.keys(this.buttonLabels)) {
+      this.updateButtonTooltip(action);
+    }
+  }
+
+  /**
+   * Rebuilds the action->key mapping (honoring any updated `keyboardBindings`)
+   * and refreshes the toolbar tooltip/`aria-label` annotations. Useful when the
+   * shortcut map may be reconfigured at runtime.
+   */
+  refreshTooltips() {
+    this.actionToKey = this.buildBindings();
+    this.updateButtonTooltips();
   }
 
   private buildSearchBar(): HTMLElement {
@@ -525,13 +584,8 @@ export class PiView {
   // Keyboard shortcuts
   // ---------------------------------------------------------------------------
 
-  /**
-   * Registers the configurable keyboard shortcut map (defaults merged with
-   * user overrides) against a scoped `KeybindingManager` and schedules its
-   * teardown when the view is destroyed.
-   */
-  private initKeyBindings() {
-    const kb = new KeybindingManager(this.root);
+  /** Merges default shortcut map with user-provided overrides. */
+  private buildBindings(): Record<string, string> {
     const defaults: Record<string, string> = {
       'toggle-follow': 'f',
       'copy-all-log': 'c',
@@ -545,7 +599,22 @@ export class PiView {
       'toggle-error-visibility': 'e',
       'toggle-search': 'k',
     };
-    const bindings = { ...defaults, ...this.keyboardBindings };
+    return { ...defaults, ...this.keyboardBindings };
+  }
+
+  /** Returns the resolved key string for a logical action, if one is bound. */
+  private getKeyForAction(action: string): string | undefined {
+    return this.actionToKey[action];
+  }
+
+  /**
+   * Registers the configurable keyboard shortcut map (defaults merged with
+   * user overrides) against a scoped `KeybindingManager` and schedules its
+   * teardown when the view is destroyed.
+   */
+  private initKeyBindings() {
+    const kb = new KeybindingManager(this.root);
+    const bindings = this.actionToKey;
     Object.entries(bindings).forEach(([action, key]) => {
       kb.register({ key, action, handler: () => this.invokeBinding(action) });
     });
@@ -1041,6 +1110,10 @@ export class PiView {
       btn.className = this.isFollowMode
         ? 'px-3 py-1.5 rounded text-xs font-medium bg-app-accent-1 text-white hover:bg-app-accent-1/80 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer'
         : 'px-3 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer';
+
+      const label = this.isFollowMode ? 'Follow Mode: ON' : 'Follow Mode: OFF';
+      this.buttonLabels['toggle-follow'] = label;
+      this.updateButtonTooltip('toggle-follow');
     }
   }
 
@@ -1117,8 +1190,8 @@ export class PiView {
     btn.innerHTML = this.cleanIcon(Icon.render(collapsed ? 'plus' : 'minus', { size: 14 }));
     btn.setAttribute('aria-pressed', String(collapsed));
     const label = collapsed ? 'Expand all blocks' : 'Collapse all blocks';
-    btn.setAttribute('aria-label', label);
-    btn.title = label;
+    this.buttonLabels['toggle-block-collapse'] = label;
+    this.updateButtonTooltip('toggle-block-collapse');
   }
 
   /**
@@ -1146,8 +1219,8 @@ export class PiView {
     btn.innerHTML = this.cleanIcon(Icon.render(visible ? 'eye' : 'eyeOff', { size: 14 }));
     btn.setAttribute('aria-pressed', String(visible));
     const label = visible ? 'Hide error blocks' : 'Show error blocks';
-    btn.setAttribute('aria-label', label);
-    btn.title = label;
+    this.buttonLabels['toggle-error-visibility'] = label;
+    this.updateButtonTooltip('toggle-error-visibility');
   }
 
   // ---------------------------------------------------------------------------
@@ -1218,8 +1291,8 @@ export class PiView {
     btn.innerHTML = this.cleanIcon(Icon.render(collapsed ? 'search' : 'close', { size: 14 }));
     btn.setAttribute('aria-pressed', String(!collapsed));
     const label = collapsed ? 'Show search bar' : 'Hide search bar';
-    btn.setAttribute('aria-label', label);
-    btn.title = label;
+    this.buttonLabels['toggle-search'] = label;
+    this.updateButtonTooltip('toggle-search');
   }
 
   private updateThinkingBtn() {
@@ -1229,8 +1302,8 @@ export class PiView {
     btn.innerHTML = Icon.render(expanded ? 'chevronDown' : 'chevronRight', { size: 14 });
     btn.setAttribute('aria-pressed', String(expanded));
     const label = expanded ? 'Collapse all thinking blocks' : 'Expand all thinking blocks';
-    btn.setAttribute('aria-label', label);
-    btn.title = label;
+    this.buttonLabels['toggle-thinking'] = label;
+    this.updateButtonTooltip('toggle-thinking');
   }
 
   private updateStopButtonVisibility(active: boolean) {

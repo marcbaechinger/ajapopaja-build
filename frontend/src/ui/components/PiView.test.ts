@@ -1188,3 +1188,103 @@ describe('PiView', () => {
   });
 });
 
+describe('PiView keyboard tooltips', () => {
+  let mount: HTMLElement;
+
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    mount = document.createElement('div');
+    document.body.appendChild(mount);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('annotates each toolbar button with a title and aria-label containing its default shortcut', () => {
+    const { service } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    const expectations: Array<[string, string]> = [
+      ['toggle-follow', 'Follow Mode: ON (f)'],
+      ['clear-logs', 'Clear (x)'],
+      ['stop-bot', 'Stop Bot (s)'],
+      ['toggle-thinking', 'Expand all thinking blocks (t)'],
+      ['toggle-block-collapse', 'Collapse all blocks (b)'],
+      ['toggle-error-visibility', 'Hide error blocks (e)'],
+      ['prev-error', 'Previous error (N)'],
+      ['next-error', 'Next error (n)'],
+      ['copy-all-log', 'Copy entire log (c)'],
+      ['toggle-search', 'Show search bar (k)'],
+    ];
+
+    for (const [action, expected] of expectations) {
+      const btn = mount.querySelector(`[data-action="${action}"]`) as HTMLButtonElement;
+      expect(btn).not.toBeNull();
+      expect(btn.title).toBe(expected);
+      expect(btn.getAttribute('aria-label')).toBe(expected);
+      expect(btn.getAttribute('data-action')).toBe(action);
+    }
+
+    view.destroy();
+  });
+
+  it('uses custom keyboardBindings in the tooltips when provided', () => {
+    const { service } = createStubService();
+    const view = new PiView(service, mount, {
+      keyboardBindings: { 'clear-logs': 'q', 'next-error': 'Shift+B' },
+    });
+    view.render();
+
+    expect((mount.querySelector('[data-action="clear-logs"]') as HTMLButtonElement).title).toBe(
+      'Clear (q)'
+    );
+    expect((mount.querySelector('[data-action="next-error"]') as HTMLButtonElement).title).toBe(
+      'Next error (Shift+B)'
+    );
+    // Untouched defaults still show their default key.
+    expect((mount.querySelector('[data-action="toggle-follow"]') as HTMLButtonElement).title).toBe(
+      'Follow Mode: ON (f)'
+    );
+
+    view.destroy();
+  });
+
+  it('keeps the shortcut in the tooltip when button state toggles', () => {
+    const { service } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    // Follow button label flips to OFF but must retain the (f) shortcut.
+    (mount.querySelector('#follow-btn') as HTMLButtonElement).click();
+    const follow = mount.querySelector('[data-action="toggle-follow"]') as HTMLButtonElement;
+    expect(follow.title).toBe('Follow Mode: OFF (f)');
+
+    // Thinking toggle flips its label while keeping the shortcut.
+    (mount.querySelector('#thinking-toggle-btn') as HTMLButtonElement).click();
+    const thinking = mount.querySelector('[data-action="toggle-thinking"]') as HTMLButtonElement;
+    expect(thinking.title).toBe('Collapse all thinking blocks (t)');
+    expect(thinking.getAttribute('aria-label')).toBe('Collapse all thinking blocks (t)');
+
+    view.destroy();
+  });
+
+  it('refreshTooltips() rebuilds the mapping and updates existing titles', () => {
+    const { service } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    (view as unknown as { keyboardBindings: Record<string, string> }).keyboardBindings = {
+      'clear-logs': 'q',
+    };
+    view.refreshTooltips();
+
+    expect((mount.querySelector('[data-action="clear-logs"]') as HTMLButtonElement).title).toBe(
+      'Clear (q)'
+    );
+
+    view.destroy();
+  });
+});
+
