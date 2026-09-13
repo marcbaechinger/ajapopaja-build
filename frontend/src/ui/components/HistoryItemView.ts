@@ -41,7 +41,6 @@ export class HistoryItemView {
       <div class="bg-app-bg px-3 py-2 rounded-lg border border-app-border flex items-center justify-between gap-3 transition-all hover:border-app-accent-1/30 ${isSystem ? 'border-l-4 border-l-red-500' : ''} ${isLastCompleted ? 'border-app-accent-2/40 shadow-lg shadow-app-accent-2/5' : ''}"
            data-view-type="history" data-view-id="${taskId}" data-action-click="select_task" title="Open in Task View" data-task-id="${taskId}" data-version="${task.version}">
         <div class="flex items-center gap-2 min-w-0">
-          <span class="font-medium text-app-text text-sm truncate">${task.title}</span>
           ${task.commit_hash ? `
             <button data-action-click="open_diff_view" data-commit-hash="${task.commit_hash}"
                     class="text-[10px] font-mono text-app-accent-2 bg-app-surface px-2 py-0.5 rounded border border-app-border hover:bg-app-accent-2/10 hover:border-app-accent-2/50 transition-all cursor-pointer shrink-0"
@@ -49,6 +48,7 @@ export class HistoryItemView {
               ${task.commit_hash.substring(0, 7)}
             </button>
           ` : ''}
+          <span class="font-medium text-app-text text-sm truncate">${task.title}</span>
           ${implementationTime ? `
             <span class="text-[10px] text-app-muted flex items-center gap-1 shrink-0" title="Implementation Duration">
               ${Icon.render('clock', { size: 12 })}
