@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { Task } from '../../core/domain.ts';
+import { Task, TaskStatus } from '../../core/domain.ts';
 import { Icon } from './Icon.ts';
 
 function escapeHtml(value: string): string {
@@ -53,10 +53,11 @@ export class BacklogTaskView {
     const taskId = escapeHtml(task.id || '');
     const hasDesignDoc = !!(task.design_doc && task.design_doc.trim());
     const excerpt = task.spec ? specExcerpt(task.spec) : '';
+    const statusActionsHtml = renderStatusActions(task);
 
     return `
       <div class="group rounded-lg border border-app-border bg-app-bg/60 p-3 flex flex-col gap-2 transition-colors hover:border-app-accent-1/40 hover:bg-app-bg"
-           data-task-id="${taskId}">
+           data-view-id="${taskId}" data-task-id="${taskId}">
         <div class="flex items-start justify-between gap-2">
           <span class="text-[11px] font-bold text-app-text leading-snug break-words">${escapeHtml(task.title || '')}</span>
           ${hasDesignDoc ? `
@@ -80,7 +81,51 @@ export class BacklogTaskView {
             <span class="leading-none">Implement</span>
           </button>
         </div>
+        ${statusActionsHtml}
       </div>
     `;
   }
+}
+
+/**
+ * Renders the status workflow actions shown for a backlog task based on its
+ * state. These mirror the actions in TaskItem so the work flow can continue
+ * directly from the sidebar:
+ *
+ * - PROPOSED: Approve the design (accept_design) or reject it (reject_design)
+ *   to move the task out of the PROPOSED state.
+ * - CREATED: Schedule the task for implementation (schedule_task), which moves
+ *   it to SCHEDULED.
+ */
+function renderStatusActions(task: Task): string {
+  if (task.status === TaskStatus.PROPOSED) {
+    return `
+      <div class="flex items-center gap-1.5">
+        <button data-action-click="reject_design" data-version="${task.version}"
+                class="flex-1 inline-flex items-center justify-center gap-1 text-[9px] font-bold uppercase tracking-widest bg-red-500/15 hover:bg-red-500/30 text-red-400 border border-red-500/30 rounded-md px-1.5 py-1 transition-colors cursor-pointer"
+                title="Reject design">
+          <span class="leading-none">Reject</span>
+        </button>
+        <button data-action-click="accept_design" data-version="${task.version}"
+                class="flex-1 inline-flex items-center justify-center gap-1 text-[9px] font-bold uppercase tracking-widest bg-green-600/20 hover:bg-green-600/35 text-green-300 border border-green-500/40 rounded-md px-1.5 py-1 transition-colors cursor-pointer"
+                title="Approve design">
+          ${Icon.render('check', { size: 10 })}
+          <span class="leading-none">Approve</span>
+        </button>
+      </div>
+    `;
+  }
+  if (task.status === TaskStatus.CREATED) {
+    return `
+      <div class="flex items-center gap-1.5">
+        <button data-action-click="schedule_task" data-version="${task.version}"
+                class="flex-1 inline-flex items-center justify-center gap-1 text-[9px] font-bold uppercase tracking-widest bg-app-accent-1/20 hover:bg-app-accent-1/35 text-app-accent-1 border border-app-accent-1/40 rounded-md px-1.5 py-1 transition-colors cursor-pointer"
+                title="Schedule for implementation">
+          ${Icon.render('calendar', { size: 10 })}
+          <span class="leading-none">Schedule</span>
+        </button>
+      </div>
+    `;
+  }
+  return '';
 }

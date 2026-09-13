@@ -74,4 +74,37 @@ describe('BacklogTaskView', () => {
     expect(html).not.toContain('<script>bad()</script>');
     expect(html).toContain('&lt;script&gt;');
   });
+
+  describe('status workflow actions', () => {
+    it('should render Approve and Reject for a PROPOSED task', () => {
+      const html = BacklogTaskView.render(makeTask({ status: TaskStatus.PROPOSED, design_doc: '# d' }));
+      expect(html).toContain('data-action-click="accept_design"');
+      expect(html).toContain('data-action-click="reject_design"');
+      expect(html).toContain('>Approve</span>');
+      expect(html).toContain('>Reject</span>');
+      expect(html).not.toContain('data-action-click="schedule_task"');
+    });
+
+    it('should render Schedule for a CREATED task', () => {
+      const html = BacklogTaskView.render(makeTask({ status: TaskStatus.CREATED }));
+      expect(html).toContain('data-action-click="schedule_task"');
+      expect(html).toContain('>Schedule</span>');
+      expect(html).not.toContain('data-action-click="accept_design"');
+      expect(html).not.toContain('data-action-click="reject_design"');
+    });
+
+    it('should attach data-view-id and data-version so existing handlers resolve', () => {
+      const html = BacklogTaskView.render(makeTask({ status: TaskStatus.CREATED, version: 3 }));
+      expect(html).toContain('data-view-id="task-1"');
+      // the schedule button carries data-version for the action handler
+      expect(html).toContain('data-action-click="schedule_task" data-version="3"');
+    });
+
+    it('should render no status actions for other statuses', () => {
+      const html = BacklogTaskView.render(makeTask({ status: TaskStatus.SCHEDULED }));
+      expect(html).not.toContain('data-action-click="accept_design"');
+      expect(html).not.toContain('data-action-click="reject_design"');
+      expect(html).not.toContain('data-action-click="schedule_task"');
+    });
+  });
 });
