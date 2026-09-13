@@ -215,6 +215,36 @@ describe('PipelineDetailView Layout', () => {
 
     expect(selectedView.innerHTML).toContain('data-version="2"');
   });
+
+  it('should not duplicate a task in the Queue and should remove it when unscheduled', async () => {
+    let tasksHandler: ((payload: any) => void) | undefined;
+    mockContext.dataManager.on = vi.fn((query: string, cb: any) => {
+      if (query.startsWith('pipeline:tasks:')) tasksHandler = cb;
+      return () => {};
+    });
+    mockContext.taskClient.listByPipeline.mockResolvedValue([]);
+
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+    container.innerHTML = view.render() as string;
+    await view.refreshTasks();
+
+    // TaskColumn is mocked in this suite, so mount a real queue list container.
+    const queueList = document.createElement('div');
+    queueList.id = 'scheduled-list';
+    (container.querySelector('#col-active') as HTMLElement).appendChild(queueList);
+
+    const scheduledTask: any = { id: 's1', title: 'Sched', status: TaskStatus.SCHEDULED, deleted: false, version: 1, order: 0, type: 'manual', want_design_doc: false };
+
+    // the scheduling operation can produce a duplicate WS notification
+    tasksHandler!(scheduledTask);
+    tasksHandler!(scheduledTask);
+    expect(queueList.querySelectorAll('[data-view-id="s1"]').length).toBe(1);
+
+    // moving back to CREATED must remove the task from the Queue
+    tasksHandler!({ id: 's1', title: 'Sched', status: TaskStatus.CREATED, deleted: false, version: 2, order: 0, type: 'manual', want_design_doc: false });
+    expect(queueList.querySelectorAll('[data-view-id="s1"]').length).toBe(0);
+  });
 });
 
 describe('PipelineDetailView Review Notifications', () => {

@@ -1439,8 +1439,14 @@ export class PipelineDetailView extends View {
     temp.innerHTML = taskHtml;
     const taskEl = temp.firstElementChild as HTMLElement;
 
-    // Simple insertion (at top for now, refreshTasks will handle proper sorting later)
-    list.prepend(taskEl);
+    // Don't insert a duplicate if the task is already in this list (defensive
+    // against a WebSocket update arriving more than once). Replace in place.
+    const existing = list.querySelector(`[data-view-id="${task.id}"]`);
+    if (existing) {
+      existing.replaceWith(taskEl);
+    } else {
+      list.prepend(taskEl);
+    }
     this.updateColumnHeaderCount(columnId);
   }
 
@@ -1456,9 +1462,32 @@ export class PipelineDetailView extends View {
     }
   }
 
+  private findTaskElementInColumns(taskId: string): { columnId: string; el: HTMLElement } | null {
+    const columnIds = ['inprogress-list', 'failed-list', 'scheduled-list', 'backlog-list', 'proposed-list', 'last-completed-task', 'completed-task-list'];
+    for (const columnId of columnIds) {
+      const list = this.container?.querySelector(`#${columnId}`);
+      const el = list?.querySelector(`[data-view-id="${taskId}"]`) as HTMLElement | null;
+      if (el) return { columnId, el };
+    }
+    return null;
+  }
+
+  private removeTaskFromColumns(taskId: string) {
+    const columnIds = ['inprogress-list', 'failed-list', 'scheduled-list', 'backlog-list', 'proposed-list', 'last-completed-task', 'completed-task-list'];
+    for (const columnId of columnIds) {
+      const list = this.container?.querySelector(`#${columnId}`);
+      const el = list?.querySelector(`[data-view-id="${taskId}"]`) as HTMLElement | null;
+      if (el) {
+        el.remove();
+        this.updateColumnHeaderCount(columnId);
+        this.ensureEmptyMessage(columnId);
+      }
+    }
+  }
+
   private updateSingleTask(task: Task) {
-    const taskId = task.id;
-    const el = this.container?.querySelector(`[data-view-id="${taskId}"]`);
+    const taskId = task.id ?? '';
+    if (!taskId) return;
 
     // Update local cache
     const index = this.allLoadedTasks.findIndex(t => t.id === taskId);
@@ -1469,36 +1498,31 @@ export class PipelineDetailView extends View {
     }
     this.updateHeader();
 
-    if (el) {
-      const currentColumnId = el.parentElement?.id;
-      const targetColumnId = this.getTaskColumnId(task);
+    const targetColumnId = this.getTaskColumnId(task);
+    const loc = this.findTaskElementInColumns(taskId);
 
-      if (currentColumnId === targetColumnId) {
-        // Just update content
-        const taskHtml = TaskItem.render(
-          task,
-          targetColumnId === 'backlog-list' || targetColumnId === 'scheduled-list',
-          targetColumnId === 'last-completed-task',
-          this.collapsedTasks.has(task.id!),
-          false,
-          this.expandedSpecs.has(task.id!)
-        );
-        const temp = document.createElement('div');
-        temp.innerHTML = taskHtml;
-        el.replaceWith(temp.firstElementChild as HTMLElement);
-      } else {
-        // Move to different column
-        el.remove();
-        if (currentColumnId) {
-          this.updateColumnHeaderCount(currentColumnId);
-          this.ensureEmptyMessage(currentColumnId);
-        }
-        this.insertTaskIntoDOM(task);
-      }
+    if (loc && loc.columnId === targetColumnId) {
+      // Same column: replace the content in place (keeps DOM position, avoids flicker)
+      const taskHtml = TaskItem.render(
+        task,
+        targetColumnId === 'backlog-list' || targetColumnId === 'scheduled-list',
+        targetColumnId === 'last-completed-task',
+        this.collapsedTasks.has(taskId),
+        false,
+        this.expandedSpecs.has(taskId)
+      );
+      const temp = document.createElement('div');
+      temp.innerHTML = taskHtml;
+      loc.el.replaceWith(temp.firstElementChild as HTMLElement);
     } else {
-      // New task or was hidden
+      // Column changed (or the task is not in a column yet): remove any copies from
+      // the columns, then insert the task into the correct one. Removing from all
+      // columns (rather than a single best-effort match) prevents stale rows when
+      // the same data-view-id also appears in the sidebar or the selected TaskView.
+      this.removeTaskFromColumns(taskId);
       this.insertTaskIntoDOM(task);
     }
+
     this.refreshBacklog();
     this.refreshSelectedTask();
   }
