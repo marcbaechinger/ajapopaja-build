@@ -69,6 +69,13 @@ export class PiView {
   /** Whether `thinking` blocks are expanded (default: collapsed). */
   private thinkingExpanded: boolean = false;
 
+  /** Live-session status/timer state. */
+  private sessionActive: boolean = false;
+  private startTime: number | null = null;
+  private elapsedMs: number = 0;
+  private timerHandle: number | null = null;
+  private hasRunSession: boolean = false;
+
   constructor(service: PiSessionService, mount: HTMLElement, options: PiViewOptions = {}) {
     this.service = service;
     this.root = mount;
@@ -106,6 +113,7 @@ export class PiView {
       }
     });
     this.unsubs = [];
+    this.stopStatusTimer();
   }
 
   // ---------------------------------------------------------------------------
@@ -117,6 +125,21 @@ export class PiView {
     container.id = 'log-content-container';
     container.className =
       `bg-black text-green-400 p-4 font-mono text-[11px] leading-tight overflow-y-auto ${this.logHeightClass} custom-scrollbar selection:bg-app-accent-1/30`;
+    const statusBar = document.createElement('div');
+    statusBar.id = 'piview-status-bar';
+    statusBar.className = 'sticky top-0 z-10 bg-black/95 border-b border-app-border/40 px-1 pb-1 mb-1 flex items-center gap-2';
+    statusBar.setAttribute('aria-live', 'polite');
+    const dot = document.createElement('span');
+    dot.id = 'piview-status-dot';
+    dot.setAttribute('aria-hidden', 'true');
+    dot.className = 'inline-block w-2 h-2 rounded-full bg-app-text/40';
+    statusBar.appendChild(dot);
+    const text = document.createElement('span');
+    text.id = 'piview-status-text';
+    text.className = 'text-green-300';
+    text.textContent = 'Session idle';
+    statusBar.appendChild(text);
+    container.appendChild(statusBar);
     const blocks = document.createElement('div');
     blocks.id = 'log-blocks';
     blocks.className = 'space-y-1';
@@ -231,12 +254,15 @@ export class PiView {
 
   private initStateSync() {
     // Initial state
-    this.updateStopButtonVisibility(this.service.isActive());
+    const active = this.service.isActive();
+    this.updateStopButtonVisibility(active);
+    this.syncSessionState(active);
 
     // Subscribe to state changes
     this.unsubs.push(
       this.service.onSessionStateChange((active) => {
         this.updateStopButtonVisibility(active);
+        this.syncSessionState(active);
       })
     );
   }
@@ -503,5 +529,73 @@ export class PiView {
         btn.innerHTML = `${Icon.render('close', { size: 14 })} Stop Bot`;
       }
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Live session status / timer
+  // ---------------------------------------------------------------------------
+
+  private syncSessionState(active: boolean) {
+    this.sessionActive = active;
+    if (active) {
+      this.hasRunSession = true;
+      if (this.startTime === null) this.startTime = Date.now();
+      this.updateStatusDot();
+      this.startStatusTimer();
+    } else {
+      if (this.startTime !== null) {
+        this.elapsedMs += Date.now() - this.startTime;
+        this.startTime = null;
+      }
+      this.stopStatusTimer();
+      this.updateStatusDot();
+    }
+    this.updateStatusText();
+  }
+
+  private startStatusTimer() {
+    if (this.timerHandle !== null) return;
+    this.updateStatusText();
+    this.timerHandle = window.setInterval(() => this.updateStatusText(), 1000);
+  }
+
+  private stopStatusTimer() {
+    if (this.timerHandle !== null) {
+      window.clearInterval(this.timerHandle);
+      this.timerHandle = null;
+    }
+  }
+
+  private updateStatusDot() {
+    const dot = this.root.querySelector('#piview-status-dot') as HTMLElement | null;
+    if (!dot) return;
+    if (this.sessionActive) {
+      dot.className = 'inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse';
+    } else {
+      dot.className = 'inline-block w-2 h-2 rounded-full bg-app-text/40';
+    }
+  }
+
+  private updateStatusText() {
+    const text = this.root.querySelector('#piview-status-text') as HTMLElement | null;
+    if (!text) return;
+    if (this.sessionActive && this.startTime !== null) {
+      const running = this.elapsedMs + (Date.now() - this.startTime);
+      text.textContent = `Running since ${this.formatElapsed(running)}`;
+    } else if (this.hasRunSession) {
+      text.textContent = `Session ended · ${this.formatElapsed(this.elapsedMs)}`;
+    } else {
+      text.textContent = 'Session idle';
+    }
+  }
+
+  /** Formats a millisecond duration as HH:MM:SS. */
+  private formatElapsed(ms: number): string {
+    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = totalSeconds % 60;
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${pad(h)}:${pad(m)}:${pad(s)}`;
   }
 }

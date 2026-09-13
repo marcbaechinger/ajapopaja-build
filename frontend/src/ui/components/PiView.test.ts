@@ -379,4 +379,58 @@ describe('PiView', () => {
     listeners.state.forEach((l) => l(false));
     expect(stopBtn.classList.contains('hidden')).toBe(true);
   });
+
+  it('shows idle status and a non-pulsing dot when the session is inactive', () => {
+    const { service } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    const text = mount.querySelector('#piview-status-text') as HTMLElement;
+    const dot = mount.querySelector('#piview-status-dot') as HTMLElement;
+    expect(text.textContent).toContain('Session idle');
+    expect(dot.className).not.toContain('animate-pulse');
+  });
+
+  it('shows running status + pulsing dot, persists across log entries, and ends on stop', () => {
+    const { service, emitBlocks, listeners } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    // Become active.
+    listeners.state.forEach((l) => l(true));
+    let text = mount.querySelector('#piview-status-text') as HTMLElement;
+    const dot = mount.querySelector('#piview-status-dot') as HTMLElement;
+    expect(text.textContent).toContain('Running since');
+    expect(dot.className).toContain('animate-pulse');
+
+    // A new log entry does not reset the running status/timer.
+    emitBlocks([{ id: 'a', kind: 'text', text: 'x' }]);
+    text = mount.querySelector('#piview-status-text') as HTMLElement;
+    expect(text.textContent).toContain('Running since');
+
+    // Session ends.
+    listeners.state.forEach((l) => l(false));
+    text = mount.querySelector('#piview-status-text') as HTMLElement;
+    expect(text.textContent).toContain('Session ended');
+    expect(dot.className).not.toContain('animate-pulse');
+
+    view.destroy();
+  });
+
+  it('elapsed timer updates every second while running', () => {
+    vi.useFakeTimers();
+    const { service, listeners } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    listeners.state.forEach((l) => l(true));
+    const text = mount.querySelector('#piview-status-text') as HTMLElement;
+    expect(text.textContent).toContain('00:00:00');
+
+    vi.advanceTimersByTime(2000);
+    expect(text.textContent).toContain('00:00:02');
+
+    view.destroy();
+    vi.useRealTimers();
+  });
 });
