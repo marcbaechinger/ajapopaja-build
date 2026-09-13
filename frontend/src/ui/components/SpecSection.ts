@@ -56,7 +56,8 @@ export function renderSpecSection(task: Task, isSpecExpanded: boolean): string {
           <input type="checkbox" id="edit-want-design-doc-${taskId}" class="w-4 h-4 rounded border-app-border bg-app-bg text-app-accent-1 focus:ring-app-accent-1" ${task.want_design_doc ? 'checked' : ''}>
           <label for="edit-want-design-doc-${taskId}" class="text-xs text-app-text cursor-pointer">Require Design Doc Approval</label>
         </div>
-        <textarea class="w-full bg-app-bg border border-app-border rounded p-2 text-app-text outline-none focus:ring-1 focus:ring-app-accent-1 min-h-[100px]" 
+        <textarea class="w-full bg-app-bg border border-app-border rounded p-2 text-[15px] leading-relaxed text-app-text outline-none focus:ring-1 focus:ring-app-accent-1 min-h-[300px]" 
+                  rows="4"
                   placeholder="Provide a detailed specification for the agent...">${task.spec || ''}</textarea>
         <div class="flex gap-2 justify-end">
           <button data-action-click="cancel_spec_edit" class="px-3 py-1 text-app-muted hover:text-app-text transition-colors cursor-pointer">
