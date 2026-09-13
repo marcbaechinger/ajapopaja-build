@@ -104,6 +104,44 @@ cd frontend && CI=true npm run test
 
 ---
 
+## Seeding the test database
+
+[`scripts/setup_test_db.py`](scripts/setup_test_db.py) is a standalone script that
+seeds a MongoDB database with the tasks of the `test_repo` pipeline from
+[`scripts/test_repo_tasks_data.json`](scripts/test_repo_tasks_data.json). It is
+**idempotent** and leaves every task in the `CREATED` state so they can be
+scheduled and executed afterwards.
+
+**Prerequisites:** a running MongoDB (e.g. `mongodb://localhost:27017`) and the
+backend workspace synced (`cd backend && uv sync`).
+
+```bash
+# Use the defaults (localhost MongoDB + ajapopaja_build_prod + default data file)
+python scripts/setup_test_db.py
+
+# Seed an isolated test database
+python scripts/setup_test_db.py --db mytestdb
+
+# Point at a remote MongoDB with a custom data file
+python scripts/setup_test_db.py --uri mongodb://host:27017 --db prod \
+    --data /path/to/tasks.json
+```
+
+**Options:**
+
+- `--uri` – MongoDB connection string (default: `mongodb://localhost:27017`).
+- `--db` – target database name to seed (default: `ajapopaja_build_prod`).
+- `--data` – path to the JSON array of task objects (default:
+  `scripts/test_repo_tasks_data.json`). Each object may only contain the fields
+  `title`, `description`, `spec`, `want_design_doc`, `type`, and `order`; the
+  task status is always forced to `CREATED`.
+
+The script creates a fresh `test_repo` Pipeline if none exists and skips tasks
+whose titles already exist for that pipeline, so re-running it never duplicates
+rows.
+
+---
+
 ## Release history
 
 See [**`RELEASENOTES.md`**](RELEASENOTES.md). The current release is **0.3.0**.
