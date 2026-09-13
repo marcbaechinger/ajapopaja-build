@@ -261,16 +261,16 @@ describe('SearchDialog', () => {
     const toggleBtn = dialog['dialog'].querySelector('[data-action-click="toggle_spec_expand"]');
     const display = dialog['dialog'].querySelector('.spec-display');
     
-    expect(display?.classList.contains('expanded')).toBe(false);
-    
-    toggleBtn?.dispatchEvent(new Event('click', { bubbles: true }));
-    
     expect(display?.classList.contains('expanded')).toBe(true);
-    expect(toggleBtn?.textContent).toBe('Show Less');
     
     toggleBtn?.dispatchEvent(new Event('click', { bubbles: true }));
+    
     expect(display?.classList.contains('expanded')).toBe(false);
     expect(toggleBtn?.textContent).toBe('Show More');
+    
+    toggleBtn?.dispatchEvent(new Event('click', { bubbles: true }));
+    expect(display?.classList.contains('expanded')).toBe(true);
+    expect(toggleBtn?.textContent).toBe('Show Less');
   });
 
   it('should handle task action: fail task', async () => {
