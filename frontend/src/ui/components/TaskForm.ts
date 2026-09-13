@@ -19,7 +19,7 @@ export class TaskForm {
     return `
       <form data-action-submit="create_task" class="mb-6">
         <input type="text" id="task-title" name="task_title" placeholder="What needs to be done?"
-               class="flex-grow bg-app-bg border border-app-border rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-app-accent-1 outline-none text-app-text transition-all text-sm shadow-sm min-w-0"
+               class="w-full bg-app-bg border border-app-border rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-app-accent-1 outline-none text-app-text transition-all text-sm shadow-sm min-w-0 box-border"
                required>
       </form>
     `;
