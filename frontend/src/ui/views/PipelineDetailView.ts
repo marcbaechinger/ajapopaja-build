@@ -25,6 +25,7 @@ import { TaskForm } from '../components/TaskForm.ts';
 import { DesignDocDialog } from '../components/DesignDocDialog.ts';
 import { DesignDocDiffDialog } from '../components/DesignDocDiffDialog.ts';
 import { TaskColumn } from '../components/TaskColumn.ts';
+import { BacklogView } from '../components/BacklogView.ts';
 import { CompletedSection } from '../components/CompletedSection.ts';
 import { PipelineStatsView } from '../components/PipelineStatsView.ts';
 import { PaginationControl } from '../components/PaginationControl.ts';
@@ -206,6 +207,7 @@ export class PipelineDetailView extends View {
       if (taskOrDeleted.deleted) {
         this.removeTaskFromDOM(taskOrDeleted.id);
         this.allLoadedTasks = this.allLoadedTasks.filter(t => t.id !== taskOrDeleted.id);
+        this.refreshBacklog();
       } else {
         const task = taskOrDeleted as Task;
         this.updateSingleTask(task);
@@ -1191,6 +1193,8 @@ export class PipelineDetailView extends View {
       if (completedCountEl) {
         completedCountEl.textContent = `(${completedTasks.length})`;
       }
+
+      this.refreshBacklog();
     } catch (error) {
       prepContainer.innerHTML = '<p class="text-red-400">Error loading tasks.</p>';
       console.error('Error refreshing tasks:', error);
@@ -1328,9 +1332,11 @@ export class PipelineDetailView extends View {
         </div>
 
         <div class="flex flex-1 min-h-0">
-          <!-- Left Sidebar (placeholder, populated in a later step) -->
-          <aside class="w-52 flex-none shrink-0 border-r border-app-border/60 bg-app-surface/30 flex items-center justify-center">
-            <p class="text-app-muted/40 text-[10px] uppercase font-bold tracking-widest">Left Panel</p>
+          <!-- Left Sidebar: BacklogView -->
+          <aside class="w-64 flex-none shrink-0 border-r border-app-border/60 bg-app-surface/30 overflow-y-auto">
+            <div id="backlog-view" class="min-h-full">
+              <p class="text-app-muted/40 text-[10px] uppercase font-bold tracking-widest text-center py-6">Loading backlog...</p>
+            </div>
           </aside>
 
           <!-- Main Content Area -->
@@ -1504,5 +1510,14 @@ export class PipelineDetailView extends View {
       // New task or was hidden
       this.insertTaskIntoDOM(task);
     }
+    this.refreshBacklog();
+  }
+
+  private refreshBacklog() {
+    if (!this.container) return;
+    const backlogEl = this.container.querySelector('#backlog-view');
+    if (!backlogEl) return;
+    const backlogTasks = this.allLoadedTasks.filter(t => !t.deleted && (t.status === TaskStatus.PROPOSED || t.status === TaskStatus.CREATED));
+    backlogEl.innerHTML = BacklogView.render({ tasks: backlogTasks });
   }
 }
