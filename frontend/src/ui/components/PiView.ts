@@ -76,6 +76,10 @@ export class PiView {
   private timerHandle: number | null = null;
   private hasRunSession: boolean = false;
 
+  /** Timestamp (ms) recorded when each block was first rendered. */
+  private blockTimestamps: Map<string, number> = new Map();
+  private copyToastTimer: number | null = null;
+
   constructor(service: PiSessionService, mount: HTMLElement, options: PiViewOptions = {}) {
     this.service = service;
     this.root = mount;
@@ -97,6 +101,8 @@ export class PiView {
     if (this.showFooter) {
       this.root.appendChild(this.buildFooter());
     }
+    document.addEventListener('keydown', this.handleKeydown);
+    this.unsubs.push(() => document.removeEventListener('keydown', this.handleKeydown));
     this.initLogDisplay();
     this.initStateSync();
   }
@@ -114,6 +120,10 @@ export class PiView {
     });
     this.unsubs = [];
     this.stopStatusTimer();
+    if (this.copyToastTimer !== null) {
+      window.clearTimeout(this.copyToastTimer);
+      this.copyToastTimer = null;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -124,7 +134,7 @@ export class PiView {
     const container = document.createElement('div');
     container.id = 'log-content-container';
     container.className =
-      `bg-black text-green-400 p-4 font-mono text-[11px] leading-tight overflow-y-auto ${this.logHeightClass} custom-scrollbar selection:bg-app-accent-1/30`;
+      `relative bg-black text-green-400 p-4 font-mono text-[11px] leading-tight overflow-y-auto ${this.logHeightClass} custom-scrollbar selection:bg-app-accent-1/30`;
     const statusBar = document.createElement('div');
     statusBar.id = 'piview-status-bar';
     statusBar.className = 'sticky top-0 z-10 bg-black/95 border-b border-app-border/40 px-1 pb-1 mb-1 flex items-center gap-2';
@@ -140,6 +150,11 @@ export class PiView {
     text.textContent = 'Session idle';
     statusBar.appendChild(text);
     container.appendChild(statusBar);
+    const toast = document.createElement('div');
+    toast.id = 'piview-toast';
+    toast.className =
+      'absolute top-1 right-1 z-20 px-2 py-1 rounded text-[10px] pointer-events-none bg-app-accent-1 text-white opacity-0 transition-opacity';
+    container.appendChild(toast);
     const blocks = document.createElement('div');
     blocks.id = 'log-blocks';
     blocks.className = 'space-y-1';
@@ -183,6 +198,16 @@ export class PiView {
     thinkingBtn.setAttribute('aria-pressed', 'false');
     actions.appendChild(thinkingBtn);
 
+    const copyAllBtn = document.createElement('button');
+    copyAllBtn.setAttribute('data-action', 'copy-all-log');
+    copyAllBtn.id = 'copy-all-btn';
+    copyAllBtn.className =
+      'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer';
+    copyAllBtn.title = 'Copy entire log (c)';
+    copyAllBtn.setAttribute('aria-label', 'Copy entire log');
+    copyAllBtn.innerHTML = Icon.render('copyRects', { size: 14, label: 'Copy entire log' });
+    actions.appendChild(copyAllBtn);
+
     footer.appendChild(actions);
 
     // Delegate action clicks on the root so the handler survives footer rebuilds
@@ -206,6 +231,13 @@ export class PiView {
       }
       return;
     }
+    // Per-block copy button.
+    const copyBlockBtn = target.closest('[data-copy-block]');
+    if (copyBlockBtn) {
+      const id = (copyBlockBtn as HTMLElement).getAttribute('data-copy-block') ?? '';
+      this.copyBlock(id);
+      return;
+    }
     const actionBtn = target.closest('[data-action]');
     if (!actionBtn) return;
     const action = actionBtn.getAttribute('data-action');
@@ -217,7 +249,18 @@ export class PiView {
       this.stopBot();
     } else if (action === 'toggle-thinking') {
       this.toggleThinking();
+    } else if (action === 'copy-all-log') {
+      this.copyAllLog();
     }
+  };
+
+  private handleKeydown = (e: KeyboardEvent): void => {
+    if (e.key !== 'c' && e.key !== 'C') return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const target = e.target as HTMLElement | null;
+    if (!target || !this.root.contains(target)) return;
+    e.preventDefault();
+    this.copyAllLog();
   };
 
   // ---------------------------------------------------------------------------
@@ -285,6 +328,7 @@ export class PiView {
     if (!el) {
       el = this.createBlockEl(block);
       this.blockEls.set(block.id, el);
+      this.blockTimestamps.set(block.id, Date.now());
       this.blocksContainer!.appendChild(el);
     } else {
       this.updateBlockEl(el, block);
@@ -394,7 +438,27 @@ export class PiView {
         break;
       }
     }
+    // Shared per-block chrome: positioning context + copy button (on hover).
+    el.classList.add('relative', 'group');
+    this.attachCopyButton(el, block);
     return el;
+  }
+
+  private attachCopyButton(el: HTMLElement, block: RenderBlock) {
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className =
+      'piview-copy absolute top-1 right-1 z-10 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 hover:bg-black/80 text-green-300 hover:text-white cursor-pointer';
+    copyBtn.title = 'Copy block';
+    copyBtn.setAttribute('aria-label', 'Copy block');
+    copyBtn.setAttribute('data-copy-block', block.id);
+    copyBtn.innerHTML = this.cleanIcon(Icon.render('copy', { size: 12, label: 'Copy block' }));
+    el.appendChild(copyBtn);
+  }
+
+  /** Removes inter-tag whitespace so an SVG icon never leaks text nodes (e.g. into <pre>). */
+  private cleanIcon(icon: string): string {
+    return icon.trim().replace(/>\s+</g, '><');
   }
 
   private updateBlockEl(el: HTMLElement, block: RenderBlock) {
@@ -413,9 +477,13 @@ export class PiView {
       }
     } else {
       const txt = block.text ?? block.header ?? '';
+      // Preserve the per-block copy button while replacing text content.
+      const copyBtn = el.querySelector('.piview-copy') as HTMLElement | null;
+      if (copyBtn) copyBtn.remove();
       if (el.textContent !== txt) {
         el.textContent = txt;
       }
+      if (copyBtn) el.appendChild(copyBtn);
     }
     // Apply error tinting to error blocks.
     if (block.kind === 'error' && !el.classList.contains('text-red-400')) {
@@ -597,5 +665,96 @@ export class PiView {
     const s = totalSeconds % 60;
     const pad = (n: number) => String(n).padStart(2, '0');
     return `${pad(h)}:${pad(m)}:${pad(s)}`;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Copy-to-clipboard
+  // ---------------------------------------------------------------------------
+
+  private copyBlock(id: string) {
+    const text = this.formatBlock(id);
+    if (!text) return;
+    this.copyToClipboard(text, 'Block copied');
+  }
+
+  private copyAllLog() {
+    const parts: string[] = [];
+    this.blockEls.forEach((_wrapper, id) => {
+      const t = this.formatBlock(id);
+      if (t) parts.push(t);
+    });
+    this.copyToClipboard(parts.join('\n\n'), 'Log copied');
+  }
+
+  /** Reconstructs a block's text (with timestamp) from the rendered DOM. */
+  private formatBlock(id: string): string {
+    const wrapper = this.blockEls.get(id);
+    if (!wrapper) return '';
+    const time = this.blockTimestamps.get(id);
+    const timeStr = time !== undefined ? this.formatCopyTime(time) : '';
+    const structured = wrapper.querySelector('[data-role="body"]');
+    let headerText = '';
+    let bodyText = '';
+    if (structured) {
+      const isThinking = wrapper.classList.contains('piview-thinking');
+      if (!isThinking) {
+        headerText = wrapper.querySelector('[data-role="header"]')?.textContent?.trim() ?? '';
+      }
+      bodyText = structured.textContent?.trim() ?? '';
+    } else {
+      bodyText = (wrapper.textContent ?? '').trim();
+    }
+    return [timeStr, headerText, bodyText].filter(Boolean).join('\n');
+  }
+
+  private formatCopyTime(ts: number): string {
+    const d = new Date(ts);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(
+      d.getHours()
+    )}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
+
+  private async copyToClipboard(text: string, message: string) {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        this.fallbackCopy(text);
+      }
+      this.showToast(message);
+    } catch {
+      this.fallbackCopy(text);
+      this.showToast(message);
+    }
+  }
+
+  private fallbackCopy(text: string) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try {
+      document.execCommand('copy');
+    } catch {
+      /* ignore */
+    }
+    document.body.removeChild(ta);
+  }
+
+  private showToast(msg: string) {
+    const toast = this.root.querySelector('#piview-toast') as HTMLElement | null;
+    if (!toast) return;
+    toast.textContent = msg;
+    toast.classList.remove('opacity-0');
+    toast.classList.add('opacity-100');
+    if (this.copyToastTimer !== null) window.clearTimeout(this.copyToastTimer);
+    this.copyToastTimer = window.setTimeout(() => {
+      toast.classList.remove('opacity-100');
+      toast.classList.add('opacity-0');
+    }, 1800);
   }
 }
