@@ -83,6 +83,7 @@ describe('PipelineDetailView Layout', () => {
       taskClient: {
         listByPipeline: vi.fn().mockResolvedValue([]),
         listCompletedByPipeline: vi.fn().mockResolvedValue({ tasks: [], total_count: 0 }),
+        updateDetails: vi.fn().mockResolvedValue({ id: 't1' }),
       },
       pullRequestClient: {
         getPullRequestsByPipeline: vi.fn().mockResolvedValue([]),
@@ -166,6 +167,27 @@ describe('PipelineDetailView Layout', () => {
     // the TaskView now shows the selected task and the hint is gone
     expect(selectedView!.innerHTML).toContain('Currently Worked On');
     expect(selectedView!.innerHTML).not.toContain('Select a task from the backlog');
+  });
+
+  it('should update a task order via the update_task_order action', async () => {
+    mockContext.taskClient.listByPipeline.mockResolvedValue([]);
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+    await view.refreshTasks();
+
+    const updateOrderAction = mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === 'update_task_order')![1];
+    const containerEl = document.createElement('div');
+    containerEl.setAttribute('data-view-id', 't1');
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.value = '25';
+    input.setAttribute('data-task-id', 't1');
+    input.setAttribute('data-version', '3');
+    containerEl.appendChild(input);
+
+    await updateOrderAction(new Event('change'), input);
+
+    expect(mockContext.taskClient.updateDetails).toHaveBeenCalledWith('t1', 3, { order: 25 });
   });
 
   it('should render the Specification expanded by default, and keep a manual collapse on reselect', async () => {
@@ -365,6 +387,7 @@ describe('PipelineDetailView Review Notifications', () => {
       taskClient: {
         listByPipeline: vi.fn().mockResolvedValue([]),
         listCompletedByPipeline: vi.fn().mockResolvedValue({ tasks: [], total_count: 0 }),
+        updateDetails: vi.fn().mockResolvedValue({ id: 't1' }),
       },
       pullRequestClient: {
         getPullRequestsByPipeline: vi.fn().mockResolvedValue([]),

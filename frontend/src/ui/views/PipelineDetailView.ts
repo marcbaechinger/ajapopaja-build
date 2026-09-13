@@ -908,6 +908,21 @@ export class PipelineDetailView extends View {
       }
     });
 
+    this.context.actionRegistry.register('update_task_order', async (_e, el) => {
+      const taskId = el.closest('[data-view-id]')?.getAttribute('data-view-id') || el.getAttribute('data-task-id');
+      const version = parseInt(el.getAttribute('data-version') || el.closest('[data-view-id]')?.getAttribute('data-version') || '1');
+      const input = el as HTMLInputElement;
+      const newOrder = parseInt(input.value, 10);
+      if (!taskId || Number.isNaN(newOrder)) return;
+
+      try {
+        await this.context.taskClient.updateDetails(taskId, version, { order: newOrder });
+        // Refresh handled by WS
+      } catch (error) {
+        alert('Failed to update order');
+      }
+    });
+
     this.context.actionRegistry.register('fail_task', async (_e, el) => {
       const taskId = el.closest('[data-view-id]')?.getAttribute('data-view-id');
       const version = parseInt(el.getAttribute('data-version') || '1');

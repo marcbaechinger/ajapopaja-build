@@ -17,6 +17,7 @@
 import { Task, TaskStatus } from '../../core/domain.ts';
 import { calculateDuration } from './utils/duration.ts';
 import { Icon } from './Icon.ts';
+import { OrderControl } from './OrderControl.ts';
 
 /**
  * Slim, single/two-line representation of a settled (IMPLEMENTED / SUBMITTED)
@@ -56,9 +57,12 @@ export class HistoryItemView {
             </span>
           ` : ''}
         </div>
-        <span class="text-xs px-2 py-1 rounded font-bold uppercase shrink-0 whitespace-nowrap ${task.status === TaskStatus.IMPLEMENTED ? 'bg-green-600 text-white' : 'bg-teal-600 text-white'}">
-          ${task.status}
-        </span>
+        <div class="flex items-center gap-2 shrink-0 whitespace-nowrap">
+          ${OrderControl.render(task)}
+          <span class="text-xs px-2 py-1 rounded font-bold uppercase shrink-0 whitespace-nowrap ${task.status === TaskStatus.IMPLEMENTED ? 'bg-green-600 text-white' : 'bg-teal-600 text-white'}">
+            ${task.status}
+          </span>
+        </div>
       </div>
     `;
   }

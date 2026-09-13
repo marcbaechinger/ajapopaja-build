@@ -74,6 +74,15 @@ describe('HistoryItemView', () => {
     expect(html).toContain('data-view-id="t1"');
   });
 
+  it('should render an editable order control bound to the task', () => {
+    const html = HistoryItemView.render(baseTask as any);
+    expect(html).toContain('data-action-change="update_task_order"');
+    expect(html).toContain('data-task-id="t1"');
+    expect(html).toContain('value="0"');
+    expect(html).toContain('data-action-click="move_task_up"');
+    expect(html).toContain('data-action-click="move_task_down"');
+  });
+
   it('should not render removed actions or sections', () => {
     const html = HistoryItemView.render(baseTask as any);
     expect(html).not.toContain('data-action-click="copy_task_id"');

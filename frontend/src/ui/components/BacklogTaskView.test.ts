@@ -75,10 +75,13 @@ describe('BacklogTaskView', () => {
     expect(html).toContain('&lt;script&gt;');
   });
 
-  it('should render the task order value', () => {
+  it('should render an editable order control with the task order value', () => {
     const html = BacklogTaskView.render(makeTask({ order: -7 }));
-    expect(html).toContain('title="Priority order"');
-    expect(html).toContain('#-7');
+    expect(html).toContain('title="Priority order (lower = higher priority)"');
+    expect(html).toContain('data-action-change="update_task_order"');
+    expect(html).toContain('value="-7"');
+    expect(html).toContain('data-action-click="move_task_up"');
+    expect(html).toContain('data-action-click="move_task_down"');
   });
 
   describe('status workflow actions', () => {
