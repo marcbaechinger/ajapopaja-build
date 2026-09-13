@@ -32,7 +32,7 @@ export class PaginationControl {
     if (totalPages <= 1) return '';
 
     return `
-      <div class="flex justify-between items-center mt-6 pt-4 pb-2 px-1 border-t border-app-border/20">
+      <div class="flex justify-between items-center pb-2 px-1 border-t border-app-border/20">
         <button data-action-click="${prevAction}" ${currentPage === 0 ? 'disabled' : ''}
                 class="text-[10px] font-bold uppercase tracking-widest text-app-muted hover:text-app-accent-1 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1 flex-row-reverse">
           Previous
