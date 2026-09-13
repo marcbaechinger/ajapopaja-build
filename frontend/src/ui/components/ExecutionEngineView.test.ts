@@ -84,6 +84,21 @@ describe('ExecutionEngineView', () => {
     expect((html.match(/bg-app-surface border border-app-border rounded-full/g) || []).length).toBe(3);
   });
 
+  it('should include a CoderBot PiView mount between In Progress and Queue', () => {
+    const html = ExecutionEngineView.render({ tasks: [
+      makeTask({ id: 'p', status: TaskStatus.INPROGRESS }),
+      makeTask({ id: 'q', status: TaskStatus.SCHEDULED }),
+    ] });
+    const inProgIdx = html.indexOf('In Progress');
+    const mountIdx = html.indexOf('engine-piview-mount');
+    const queueIdx = html.indexOf('>Queue<');
+    expect(mountIdx).toBeGreaterThan(-1);
+    expect(mountIdx).toBeGreaterThan(inProgIdx);
+    expect(mountIdx).toBeLessThan(queueIdx);
+    expect(html).toContain('CoderBot Activity');
+    expect(html).toContain('Start a CoderBot to see its output here.');
+  });
+
   it('should ignore deleted tasks', () => {
     const html = ExecutionEngineView.render({ tasks: [makeTask({ status: TaskStatus.SCHEDULED, deleted: true })] });
     expect(html).toContain('Nothing scheduled.');

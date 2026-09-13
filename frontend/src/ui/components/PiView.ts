@@ -39,6 +39,11 @@ export interface PiViewOptions {
   showFooter?: boolean;
   /** Start with follow-mode auto-scroll enabled. Default true. */
   followInitially?: boolean;
+  /**
+   * Tailwind height class for the log area, so embedded use (e.g. a sidebar)
+   * can be more compact than the modal default. Default 'h-[60vh]'.
+   */
+  logHeightClass?: string;
 }
 
 /**
@@ -58,6 +63,7 @@ export class PiView {
   private blockEls: Map<string, HTMLElement> = new Map();
   private isFollowMode: boolean;
   private showFooter: boolean;
+  private logHeightClass: string;
   private unsubs: (() => void)[] = [];
 
   constructor(service: PiSessionService, mount: HTMLElement, options: PiViewOptions = {}) {
@@ -65,6 +71,12 @@ export class PiView {
     this.root = mount;
     this.showFooter = options.showFooter ?? true;
     this.isFollowMode = options.followInitially ?? true;
+    this.logHeightClass = options.logHeightClass ?? 'h-[60vh]';
+  }
+
+  /** The element the PiView was mounted into. */
+  getRoot(): HTMLElement {
+    return this.root;
   }
 
   /**
@@ -101,7 +113,7 @@ export class PiView {
     const container = document.createElement('div');
     container.id = 'log-content-container';
     container.className =
-      'bg-black text-green-400 p-4 font-mono text-[11px] leading-tight overflow-y-auto h-[60vh] custom-scrollbar selection:bg-app-accent-1/30';
+      `bg-black text-green-400 p-4 font-mono text-[11px] leading-tight overflow-y-auto ${this.logHeightClass} custom-scrollbar selection:bg-app-accent-1/30`;
     const blocks = document.createElement('div');
     blocks.id = 'log-blocks';
     blocks.className = 'space-y-1';

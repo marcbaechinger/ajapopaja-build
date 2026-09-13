@@ -85,6 +85,21 @@ describe('PiView', () => {
     expect(stopBtn).not.toBeNull();
   });
 
+  it('uses the default h-[60vh] log height and honors logHeightClass', () => {
+    const { service } = createStubService();
+
+    const defaultMount = document.createElement('div');
+    const defaultView = new PiView(service, defaultMount);
+    defaultView.render();
+    expect(defaultMount.querySelector('#log-content-container')?.className).toContain('h-[60vh]');
+    defaultView.destroy();
+
+    const compactMount = document.createElement('div');
+    const view = new PiView(service, compactMount, { logHeightClass: 'h-[38vh]' });
+    view.render();
+    expect(compactMount.querySelector('#log-content-container')?.className).toContain('h-[38vh]');
+  });
+
   it('reconciles a block list: new blocks appended, removed blocks detached', () => {
     const { service, emitBlocks } = createStubService();
     const view = new PiView(service, mount);

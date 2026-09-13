@@ -36,6 +36,7 @@ import { PipelineEditDialog } from '../components/PipelineEditDialog.ts';
 import { ReviewDialog } from '../components/ReviewDialog.ts';
 import { PullRequestDialog } from '../components/PullRequestDialog.ts';
 import { CoderBotDialog } from '../components/CoderBotDialog.ts';
+import { PiView } from '../components/PiView.ts';
 import { PipelineHeaderView, type DocbotState, type ReviewbotState, type CoderbotState } from '../components/PipelineHeaderView.ts';
 import EasyMDE from 'easymde';
 import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
@@ -61,6 +62,8 @@ export class PipelineDetailView extends View {
   private gitStatusRefreshPending: boolean = false;
   private pendingReviews: string[] = [];
   private selectedTask: Task | null = null;
+  private enginePiView: PiView | null = null;
+  private enginePiViewActive: boolean = false;
 
   private loadPendingReviews() {
     this.pendingReviews = this.storage.get<string[]>(`pending_reviews:${this.pipelineId}`, []) || [];
@@ -382,7 +385,7 @@ export class PipelineDetailView extends View {
           this.context.dataManager.updateTask(task); // -> pipeline:tasks notify -> updateSingleTask
         }
         this.updateHeader();
-        this.openCoderBotDialog();
+        this.enableCoderBotPiView();
       } catch (error) {
         console.error('Trigger CoderBot error:', error);
         alert('Failed to trigger CoderBot');
@@ -1282,6 +1285,11 @@ export class PipelineDetailView extends View {
   unmount() {
     this.activeEditors.forEach(editor => editor.toTextArea());
     this.activeEditors.clear();
+    if (this.enginePiView) {
+      this.enginePiView.destroy();
+      this.enginePiView = null;
+    }
+    this.enginePiViewActive = false;
     this.unsubs.forEach(unsub => unsub());
     this.unsubs = [];
     if (this.keydownHandler) {
@@ -1449,6 +1457,28 @@ export class PipelineDetailView extends View {
     const el = this.container.querySelector('#execution-engine-view');
     if (!el) return;
     el.innerHTML = ExecutionEngineView.render({ tasks: this.allLoadedTasks });
+    // Re-connect the inline CoderBot PiView after re-render while a session is active.
+    if (this.enginePiViewActive) {
+      this.mountCoderBotPiView();
+    }
+  }
+
+  private enableCoderBotPiView() {
+    this.enginePiViewActive = true;
+    this.mountCoderBotPiView();
+  }
+
+  private mountCoderBotPiView() {
+    if (!this.container) return;
+    const mount = this.container.querySelector('#engine-piview-mount') as HTMLElement | null;
+    if (!mount) return;
+    if (this.enginePiView) {
+      this.enginePiView.destroy();
+      this.enginePiView = null;
+    }
+    mount.innerHTML = '';
+    this.enginePiView = new PiView(this.context.coderBotService, mount, { logHeightClass: 'h-[38vh]' });
+    this.enginePiView.render();
   }
 
   private refreshBacklog() {

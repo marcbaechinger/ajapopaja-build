@@ -353,7 +353,16 @@ describe('PipelineDetailView CoderBot Dialog', () => {
         getGitStatus: vi.fn().mockResolvedValue({}),
         isOllamaAvailable: vi.fn().mockResolvedValue(true),
       },
-      coderBotService: { coderBotService: 'instance' },
+      coderBotService: {
+        getHistory: vi.fn(() => []),
+        getCurrentTaskId: vi.fn(() => null),
+        isActive: vi.fn(() => false),
+        clearHistory: vi.fn(),
+        stopSession: vi.fn().mockResolvedValue({}),
+        onBlocks: vi.fn(() => () => {}),
+        onMessage: vi.fn(() => () => {}),
+        onSessionStateChange: vi.fn(() => () => {}),
+      },
       coderBotClient: { triggerCoderBot: vi.fn().mockResolvedValue({}) },
     };
 
@@ -363,11 +372,14 @@ describe('PipelineDetailView CoderBot Dialog', () => {
     });
   });
 
-  it('should open CoderBotDialog automatically after a successful trigger', async () => {
-    const view = new PipelineDetailView(mockContext, { id: 'p1' });
-    view.mount(container);
+  it('should mount the inline CoderBot PiView instead of opening the dialog after a successful trigger', async () => {
+    mockContext.taskClient.listByPipeline.mockResolvedValue([
+      { id: 't1', title: 'Task One', status: 'CREATED', deleted: false, version: 1, order: 0, type: 'manual', want_design_doc: false },
+    ]);
 
-    (view as any).allLoadedTasks = [{ id: 't1', status: 'CREATED' }];
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
 
     const triggerCoderbot = getAction('trigger_coderbot');
     const el = document.createElement('button');
@@ -376,14 +388,14 @@ describe('PipelineDetailView CoderBot Dialog', () => {
     await triggerCoderbot(null, el);
 
     expect(mockContext.coderBotClient.triggerCoderBot).toHaveBeenCalledWith('t1');
-    expect(CoderBotDialog).toHaveBeenCalledTimes(1);
-    expect(CoderBotDialog).toHaveBeenCalledWith(mockContext.coderBotService);
-    const shownDialog = (CoderBotDialog as any).mock.results[0].value;
-    expect(shownDialog.show).toHaveBeenCalled();
+    expect(CoderBotDialog).not.toHaveBeenCalled();
+    expect((view as any).enginePiViewActive).toBe(true);
+    expect((view as any).enginePiView).not.toBeNull();
 
-    // Optimistic state still updated alongside dialog opening
+    // Optimistic state updated alongside enabling the inline PiView
     expect((view as any).coderbotState).toEqual({ status: 'inProgress', taskId: 't1' });
     const task = (view as any).allLoadedTasks.find((t: any) => t.id === 't1');
+    expect(task).toBeTruthy();
     expect(task.status).toEqual('inprogress');
     expect(mockContext.dataManager.updateTask).toHaveBeenCalledWith(task);
   });
