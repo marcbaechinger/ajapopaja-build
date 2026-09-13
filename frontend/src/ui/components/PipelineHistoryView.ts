@@ -16,17 +16,38 @@
 
 import { Task } from '../../core/domain.ts';
 import { HistoryItemView } from './HistoryItemView.ts';
+import { PaginationControl } from './PaginationControl.ts';
 
 /**
- * Compact history panel for a pipeline. Renders every settled task as a single
- * HistoryItemView in one flat "History Feed" list. There is no separate "last
- * completed" section and no redundant wrapping containers/padding.
+ * Compact history panel for a pipeline. Renders settled tasks as a single
+ * HistoryItemView in one flat "History Feed" list, paged with a fixed page size
+ * (10). The first page is shown by default and a PaginationControl is rendered
+ * to navigate through the remaining pages. There is no separate "last completed"
+ * section and no redundant wrapping containers/padding.
  */
 export class PipelineHistoryView {
-  static render(tasks: Task[]): string {
-    const items = tasks.length > 0
-      ? tasks.map((t) => HistoryItemView.render(t)).join('')
+  static readonly PAGE_SIZE: number = 10;
+
+  static render(tasks: Task[], page: number = 0): string {
+    const totalCount = tasks.length;
+    const pageSize = PipelineHistoryView.PAGE_SIZE;
+    const totalPages = Math.ceil(totalCount / pageSize);
+    // Clamp the requested page to a valid range so it never exceeds bounds.
+    const currentPage = pageSize <= 0 ? 0 : Math.max(0, Math.min(page, Math.max(0, totalPages - 1)));
+    const start = currentPage * pageSize;
+    const pageTasks = tasks.slice(start, start + pageSize);
+
+    const items = pageTasks.length > 0
+      ? pageTasks.map((t) => HistoryItemView.render(t)).join('')
       : '<p class="text-app-muted italic text-[10px] text-center py-3">No tasks completed yet.</p>';
+
+    const pagination = PaginationControl.render({
+      currentPage,
+      pageSize,
+      totalCount,
+      prevAction: 'prev_history_page',
+      nextAction: 'next_history_page',
+    });
 
     return `
       <section id="history-feed" class="flex flex-col gap-2">
@@ -34,6 +55,7 @@ export class PipelineHistoryView {
         <div id="completed-task-list" class="flex flex-col gap-2 px-1">
           ${items}
         </div>
+        ${pagination}
       </section>
     `;
   }

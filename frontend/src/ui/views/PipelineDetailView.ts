@@ -58,6 +58,7 @@ export class PipelineDetailView extends View {
   private gitStatusRefreshInProgress: boolean = false;
   private gitStatusRefreshPending: boolean = false;
   private pendingReviews: string[] = [];
+  private historyPage: number = 0;
   private selectedTask: Task | null = null;
   private enginePiView: PiView | null = null;
   private enginePiMountedKey: string | null = null;
@@ -516,6 +517,14 @@ export class PipelineDetailView extends View {
       if (!taskId) return;
       this.selectedTask = this.allLoadedTasks.find(t => t.id === taskId) || null;
       this.refreshSelectedTask();
+    });
+
+    this.context.actionRegistry.register('prev_history_page', () => {
+      this.setHistoryPage(this.historyPage - 1);
+    });
+
+    this.context.actionRegistry.register('next_history_page', () => {
+      this.setHistoryPage(this.historyPage + 1);
     });
 
     this.context.actionRegistry.register('toggle_task_collapse', (_e, el) => {
@@ -1077,7 +1086,7 @@ export class PipelineDetailView extends View {
       // Sort completed tasks by completion time (updated_at)
       completedTasks.sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
 
-      historyContainer.innerHTML = PipelineHistoryView.render(completedTasks);
+      historyContainer.innerHTML = PipelineHistoryView.render(completedTasks, this.historyPage);
 
       if (completedCountEl) {
         completedCountEl.textContent = `(${completedTasks.length})`;
@@ -1090,6 +1099,21 @@ export class PipelineDetailView extends View {
       prepContainer.innerHTML = '<p class="text-red-400">Error loading tasks.</p>';
       console.error('Error refreshing tasks:', error);
     }
+  }
+
+  private setHistoryPage(page: number) {
+    if (!this.container) return;
+    const historyContainer = this.container.querySelector('#col-history');
+    if (!historyContainer) return;
+
+    this.historyPage = page;
+
+    const completedTasks = this.allLoadedTasks
+      .filter(t => !t.deleted && ([TaskStatus.IMPLEMENTED, TaskStatus.SUBMITTED, TaskStatus.DISCARDED] as any[]).includes(t.status));
+    // Sort completed tasks by completion time (updated_at)
+    completedTasks.sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
+
+    historyContainer.innerHTML = PipelineHistoryView.render(completedTasks, this.historyPage);
   }
 
   private updateHeader() {

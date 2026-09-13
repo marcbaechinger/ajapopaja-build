@@ -70,4 +70,60 @@ describe('PipelineHistoryView', () => {
     expect(html).toContain('No tasks completed yet.');
     expect(html).not.toContain('data-view-id=');
   });
+
+  it('should render at most PAGE_SIZE items per page', () => {
+    const tasks = Array.from({ length: 25 }, (_, i) =>
+      makeTask(`t${i}`, `Task ${i}`, TaskStatus.IMPLEMENTED, `2026-04-12T${String(i).padStart(2, '0')}:00:00Z`)
+    );
+    const html = PipelineHistoryView.render(tasks);
+    const matches = html.match(/data-view-id="t\d+"/g);
+    expect(matches?.length).toBe(PipelineHistoryView.PAGE_SIZE);
+  });
+
+  it('should show the first page by default', () => {
+    const tasks = Array.from({ length: 25 }, (_, i) =>
+      makeTask(`t${i}`, `Task ${i}`, TaskStatus.IMPLEMENTED, `2026-04-12T${String(i).padStart(2, '0')}:00:00Z`)
+    );
+    const html = PipelineHistoryView.render(tasks);
+    expect(html).toContain('Task 0');
+    expect(html).not.toContain('Task 24');
+    expect(html).toContain('Page 1 of 3');
+  });
+
+  it('should render the requested page slice', () => {
+    const tasks = Array.from({ length: 25 }, (_, i) =>
+      makeTask(`t${i}`, `Task ${i}`, TaskStatus.IMPLEMENTED, `2026-04-12T${String(i).padStart(2, '0')}:00:00Z`)
+    );
+    const html = PipelineHistoryView.render(tasks, 2);
+    expect(html).toContain('Task 24');
+    expect(html).not.toContain('Task 0');
+    expect(html).toContain('Page 3 of 3');
+  });
+
+  it('should render pagination controls when there is more than one page', () => {
+    const tasks = Array.from({ length: 25 }, (_, i) =>
+      makeTask(`t${i}`, `Task ${i}`, TaskStatus.IMPLEMENTED, `2026-04-12T10:00:00Z`)
+    );
+    const html = PipelineHistoryView.render(tasks);
+    expect(html).toContain('data-action-click="prev_history_page"');
+    expect(html).toContain('data-action-click="next_history_page"');
+  });
+
+  it('should not render pagination controls when everything fits on one page', () => {
+    const tasks = Array.from({ length: 5 }, (_, i) =>
+      makeTask(`t${i}`, `Task ${i}`, TaskStatus.IMPLEMENTED, `2026-04-12T10:00:00Z`)
+    );
+    const html = PipelineHistoryView.render(tasks);
+    expect(html).not.toContain('data-action-click="prev_history_page"');
+    expect(html).not.toContain('data-action-click="next_history_page"');
+  });
+
+  it('should clamp out-of-range pages and never render an empty page', () => {
+    const tasks = Array.from({ length: 25 }, (_, i) =>
+      makeTask(`t${i}`, `Task ${i}`, TaskStatus.IMPLEMENTED, `2026-04-12T10:00:00Z`)
+    );
+    const html = PipelineHistoryView.render(tasks, 99);
+    expect(html).toContain('Task 24');
+    expect(html).toContain('Page 3 of 3');
+  });
 });
