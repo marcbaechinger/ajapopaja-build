@@ -199,6 +199,74 @@ describe('PipelineDetailView Layout', () => {
     expect(collapsedView.querySelector('.spec-display')!.classList.contains('expanded')).toBe(false);
   });
 
+  it('should select a newly created task and enter Specification edit mode', async () => {
+    const createdTask: any = { id: 'n1', title: 'New Task', spec: '', status: TaskStatus.CREATED, deleted: false, version: 1, order: 0, type: 'manual', want_design_doc: false };
+    mockContext.taskClient.create = vi.fn().mockResolvedValue(createdTask);
+    mockContext.taskClient.listByPipeline.mockResolvedValue([]);
+
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+    container.innerHTML = view.render() as string;
+    await view.refreshTasks();
+
+    const createAction = mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === 'create_task')![1];
+    const form = document.createElement('form');
+    form.innerHTML = '<input name="task_title" value="New Task">';
+    await createAction(new Event('submit'), form);
+
+    const selectedView = container.querySelector('#selected-task-view') as HTMLElement;
+    // the new task is immediately the selected task shown in the main content area
+    expect(selectedView.innerHTML).toContain('New Task');
+    // Specification is in editing mode and the textarea has the cursor
+    expect(selectedView.querySelector('.spec-edit')!.classList.contains('hidden')).toBe(false);
+    expect(selectedView.querySelector('.spec-view')!.classList.contains('hidden')).toBe(true);
+    const textarea = selectedView.querySelector('textarea') as HTMLTextAreaElement;
+    expect(document.activeElement).toBe(textarea);
+
+    // the input is cleared for the next entry
+    expect(form.querySelector('input')!.value).toBe('');
+  });
+
+  it('should keep the new task Specification in edit mode across a WS re-render', async () => {
+    let tasksHandler: ((payload: any) => void) | undefined;
+    mockContext.dataManager.on = vi.fn((query: string, cb: any) => {
+      if (query.startsWith('pipeline:tasks:')) tasksHandler = cb;
+      return () => {};
+    });
+    const createdTask: any = { id: 'n1', title: 'New Task', spec: '', status: TaskStatus.CREATED, deleted: false, version: 1, order: 0, type: 'manual', want_design_doc: false };
+    mockContext.taskClient.create = vi.fn().mockResolvedValue({ ...createdTask });
+    mockContext.taskClient.listByPipeline.mockResolvedValue([]);
+
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+    container.innerHTML = view.render() as string;
+    await view.refreshTasks();
+
+    const createAction = mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === 'create_task')![1];
+    const form = document.createElement('form');
+    form.innerHTML = '<input name="task_title" value="New Task">';
+    await createAction(new Event('submit'), form);
+
+    let selectedView = container.querySelector('#selected-task-view') as HTMLElement;
+    expect(selectedView.querySelector('.spec-edit')!.classList.contains('hidden')).toBe(false);
+
+    // simulate the WS TASK_CREATED/TASK_UPDATED re-render arriving after creation
+    tasksHandler!({ ...createdTask, spec: 'draft spec', version: 1 });
+
+    selectedView = container.querySelector('#selected-task-view') as HTMLElement;
+    // still selected, and Specification remains in edit mode
+    expect(selectedView.innerHTML).toContain('New Task');
+    expect(selectedView.querySelector('.spec-edit')!.classList.contains('hidden')).toBe(false);
+
+    // selecting a different task clears the persisted edit flag
+    const selectAction = mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === 'select_task')![1];
+    const el = document.createElement('div');
+    el.setAttribute('data-view-id', 'other');
+    selectAction(new Event('click'), el);
+    expect((view as any).pendingSpecEditTaskId).toBeNull();
+  });
+
+
   it('should refresh the selected TaskView (version) when the task updates over WS', async () => {
     let tasksHandler: ((payload: any) => void) | undefined;
     mockContext.dataManager.on = vi.fn((query: string, cb: any) => {

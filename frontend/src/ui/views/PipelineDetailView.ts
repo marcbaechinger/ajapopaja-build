@@ -60,6 +60,10 @@ export class PipelineDetailView extends View {
   private pendingReviews: string[] = [];
   private historyPage: number = 0;
   private selectedTask: Task | null = null;
+  // When a task is created via the Quick Add panel, keep its Specification open in
+  // edit mode (even across WS-driven re-renders) until the user saves, cancels, or
+  // selects a different task.
+  private pendingSpecEditTaskId: string | null = null;
   private enginePiView: PiView | null = null;
   private enginePiMountedKey: string | null = null;
 
@@ -504,9 +508,22 @@ export class PipelineDetailView extends View {
       if (!title) return;
 
       try {
-        await this.context.taskClient.create(this.pipelineId, title);
+        const created = await this.context.taskClient.create(this.pipelineId, title);
         titleInput.value = '';
-        // UI refresh handled via WebSocket
+
+        // Make the newly created task the selected task so it is shown in the main
+        // content area immediately. Add it to the local cache so the detail view can
+        // render it even before the WebSocket TASK_CREATED notification arrives.
+        this.selectedTask = created;
+        const existingIndex = this.allLoadedTasks.findIndex(t => t.id === created.id);
+        if (existingIndex === -1) {
+          this.allLoadedTasks.push(created);
+        } else {
+          this.allLoadedTasks[existingIndex] = created;
+        }
+        this.pendingSpecEditTaskId = created.id ?? null;
+        this.refreshBacklog();
+        this.refreshSelectedTask();
       } catch (error) {
         alert('Failed to create task');
       }
@@ -515,6 +532,7 @@ export class PipelineDetailView extends View {
     this.context.actionRegistry.register('select_task', (_e, el) => {
       const taskId = (el.closest('[data-view-id]') as HTMLElement | null)?.getAttribute('data-view-id') || el.getAttribute('data-view-id');
       if (!taskId) return;
+      this.pendingSpecEditTaskId = null;
       this.selectedTask = this.allLoadedTasks.find(t => t.id === taskId) || null;
       this.refreshSelectedTask();
     });
@@ -591,6 +609,8 @@ export class PipelineDetailView extends View {
     this.context.actionRegistry.register('cancel_spec_edit', async (_e, el) => {
       const container = el.closest('.spec-container') as HTMLElement;
       if (!container) return;
+      const taskId = container.getAttribute('data-task-id');
+      if (taskId && this.pendingSpecEditTaskId === taskId) this.pendingSpecEditTaskId = null;
       container.querySelector('.spec-view')?.classList.remove('hidden');
       container.querySelector('[data-action-click="toggle_spec_expand"]')?.classList.remove('hidden');
       container.querySelector('.spec-edit')?.classList.add('hidden');
@@ -600,6 +620,7 @@ export class PipelineDetailView extends View {
       const container = el.closest('.spec-container') as HTMLElement;
       if (!container) return;
       const taskId = container.getAttribute('data-task-id');
+      if (taskId && this.pendingSpecEditTaskId === taskId) this.pendingSpecEditTaskId = null;
       const version = parseInt(container.getAttribute('data-version') || '1');
       const textarea = container.querySelector('textarea');
       const wantDesignCheck = container.querySelector('input[type="checkbox"]') as HTMLInputElement;
@@ -1238,6 +1259,7 @@ export class PipelineDetailView extends View {
     }
     this.unsubs.forEach(unsub => unsub());
     this.unsubs = [];
+    this.pendingSpecEditTaskId = null;
     if (this.keydownHandler) {
       document.removeEventListener('keydown', this.keydownHandler);
       this.keydownHandler = null;
@@ -1382,6 +1404,29 @@ export class PipelineDetailView extends View {
 
     this.selectedTask = fresh;
     viewEl.innerHTML = TaskItem.render(fresh, false, false, false, false, !this.collapsedSpecs.has(fresh.id!));
+
+    // Keep the Specification in edit mode for a newly created task even if a
+    // WebSocket re-render happens right after creation.
+    if (this.pendingSpecEditTaskId && fresh.id === this.pendingSpecEditTaskId) {
+      this.enterSpecEditMode();
+    }
+  }
+
+  /**
+   * Switches the selected task's Specification section into edit mode and moves
+   * the cursor into the textarea so the user can keep writing the spec in one flow.
+   */
+  private enterSpecEditMode() {
+    if (!this.container) return;
+    const viewEl = this.container.querySelector('#selected-task-view');
+    if (!viewEl) return;
+    const specContainer = viewEl.querySelector('.spec-container') as HTMLElement | null;
+    if (!specContainer) return;
+    specContainer.querySelector('.spec-view')?.classList.add('hidden');
+    specContainer.querySelector('[data-action-click="toggle_spec_expand"]')?.classList.add('hidden');
+    specContainer.querySelector('.spec-edit')?.classList.remove('hidden');
+    const textarea = specContainer.querySelector('textarea') as HTMLTextAreaElement | null;
+    if (textarea) textarea.focus();
   }
 
   private refreshExecutionEngine() {
