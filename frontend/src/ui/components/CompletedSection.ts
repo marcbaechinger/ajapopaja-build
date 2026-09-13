@@ -16,6 +16,7 @@
 
 import { Task } from '../../core/domain.ts';
 import { TaskItem } from './TaskItem.ts';
+import { HistoryItemView } from './HistoryItemView.ts';
 import { Icon } from './Icon.ts';
 
 export interface CompletedSectionOptions {
@@ -37,7 +38,9 @@ export class CompletedSection {
           </h3>
           <div id="last-completed-task">
             ${lastCompleted
-        ? TaskItem.render(lastCompleted, false, true, collapsedTasks.has(lastCompleted.id!))
+        ? (HistoryItemView.isHistoryStatus(lastCompleted.status)
+            ? HistoryItemView.render(lastCompleted, true)
+            : TaskItem.render(lastCompleted, false, true, collapsedTasks.has(lastCompleted.id!)))
         : '<p class="text-app-muted italic text-sm py-4 text-center border border-dashed border-app-border/30 rounded-xl">No tasks completed yet.</p>'}
           </div>
         </div>

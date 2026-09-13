@@ -19,6 +19,7 @@ import { AppContext } from '../../core/AppContext.ts';
 import { Pipeline, TaskStatus, Task, type GitStatus } from '../../core/domain.ts';
 import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
 import { TaskItem } from '../components/TaskItem.ts';
+import { HistoryItemView } from '../components/HistoryItemView.ts';
 import { HistoryDialog } from '../components/HistoryDialog.ts';
 import { StatsDialog } from '../components/StatsDialog.ts';
 import { TaskForm } from '../components/TaskForm.ts';
@@ -1136,7 +1137,9 @@ export class PipelineDetailView extends View {
       );
 
       completedContainer.innerHTML = tasks.length > 0
-        ? tasks.map(t => TaskItem.render(t, false, false, this.collapsedTasks.has(t.id!), false, this.expandedSpecs.has(t.id!))).join('')
+        ? tasks.map(t => HistoryItemView.isHistoryStatus(t.status)
+            ? HistoryItemView.render(t)
+            : TaskItem.render(t, false, false, this.collapsedTasks.has(t.id!), false, this.expandedSpecs.has(t.id!))).join('')
         : '<p class="text-app-muted italic text-xs">No older completed tasks.</p>';
 
       if (paginationContainer) {
@@ -1318,7 +1321,9 @@ export class PipelineDetailView extends View {
           const oldTask = this.allLoadedTasks.find(t => t.id === oldTaskId);
           if (oldTask) {
             // Re-render for history feed (without expanded history)
-            const historyHtml = TaskItem.render(oldTask, false, false, this.collapsedTasks.has(oldTask.id!), false, this.expandedSpecs.has(oldTask.id!));
+            const historyHtml = HistoryItemView.isHistoryStatus(oldTask.status)
+              ? HistoryItemView.render(oldTask)
+              : TaskItem.render(oldTask, false, false, this.collapsedTasks.has(oldTask.id!), false, this.expandedSpecs.has(oldTask.id!));
             const temp = document.createElement('div');
             temp.innerHTML = historyHtml;
             historyFeed.prepend(temp.firstElementChild as HTMLElement);
@@ -1328,14 +1333,17 @@ export class PipelineDetailView extends View {
       }
     }
 
-    const taskHtml = TaskItem.render(
-      task,
-      columnId === 'backlog-list' || columnId === 'scheduled-list',
-      columnId === 'last-completed-task',
-      this.collapsedTasks.has(task.id!),
-      false,
-      this.expandedSpecs.has(task.id!)
-    );
+    const isHistoryColumn = columnId === 'last-completed-task' || columnId === 'completed-task-list';
+    const taskHtml = HistoryItemView.isHistoryStatus(task.status) && isHistoryColumn
+      ? HistoryItemView.render(task, columnId === 'last-completed-task')
+      : TaskItem.render(
+          task,
+          columnId === 'backlog-list' || columnId === 'scheduled-list',
+          columnId === 'last-completed-task',
+          this.collapsedTasks.has(task.id!),
+          false,
+          this.expandedSpecs.has(task.id!)
+        );
     const temp = document.createElement('div');
     temp.innerHTML = taskHtml;
     const taskEl = temp.firstElementChild as HTMLElement;
@@ -1402,16 +1410,20 @@ export class PipelineDetailView extends View {
     const targetColumnId = this.getTaskColumnId(task);
     const loc = this.findTaskElementInColumns(taskId);
 
+    const isHistoryColumn = targetColumnId === 'last-completed-task' || targetColumnId === 'completed-task-list';
+
     if (loc && loc.columnId === targetColumnId) {
       // Same column: replace the content in place (keeps DOM position, avoids flicker)
-      const taskHtml = TaskItem.render(
-        task,
-        targetColumnId === 'backlog-list' || targetColumnId === 'scheduled-list',
-        targetColumnId === 'last-completed-task',
-        this.collapsedTasks.has(taskId),
-        false,
-        this.expandedSpecs.has(taskId)
-      );
+      const taskHtml = HistoryItemView.isHistoryStatus(task.status) && isHistoryColumn
+        ? HistoryItemView.render(task, targetColumnId === 'last-completed-task')
+        : TaskItem.render(
+            task,
+            targetColumnId === 'backlog-list' || targetColumnId === 'scheduled-list',
+            targetColumnId === 'last-completed-task',
+            this.collapsedTasks.has(taskId),
+            false,
+            this.expandedSpecs.has(taskId)
+          );
       const temp = document.createElement('div');
       temp.innerHTML = taskHtml;
       loc.el.replaceWith(temp.firstElementChild as HTMLElement);
