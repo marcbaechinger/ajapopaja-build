@@ -39,6 +39,7 @@ export class TaskItem {
       [TaskStatus.PROPOSED]: 'bg-purple-600 text-white',
       [TaskStatus.INPROGRESS]: 'bg-amber-600 text-white',
       [TaskStatus.IMPLEMENTED]: 'bg-green-600 text-white',
+      [TaskStatus.SUBMITTED]: 'bg-teal-600 text-white',
       [TaskStatus.PULL_REQUEST_AVAILABLE]: 'bg-cyan-600 text-white',
       [TaskStatus.FAILED]: 'bg-red-600 text-white',
       [TaskStatus.DISCARDED]: 'bg-slate-800 text-slate-500',
