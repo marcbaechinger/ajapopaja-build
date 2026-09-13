@@ -611,4 +611,101 @@ describe('PiView', () => {
     expect(errors[0].classList.contains('hidden')).toBe(true);
     expect(errors[1].classList.contains('hidden')).toBe(true);
   });
+
+  it('shows the "No active session…" empty state when no logs and no session', () => {
+    const { service } = createStubService({ isActive: vi.fn(() => false) });
+    const view = new PiView(service, mount);
+    view.render();
+
+    const emptyState = mount.querySelector('#piview-empty-state') as HTMLElement;
+    expect(emptyState).not.toBeNull();
+    expect(emptyState.style.display).not.toBe('none');
+    expect(mount.querySelector('#piview-empty-title')?.textContent).toContain('No active session');
+    // Accessible ARIA role.
+    expect(emptyState.getAttribute('role')).toBe('status');
+    // Contains an icon (svg) and no session-ended line.
+    expect(emptyState.querySelector('svg')).not.toBeNull();
+    expect((mount.querySelector('#piview-session-ended') as HTMLElement).style.display).toBe('none');
+  });
+
+  it('empty state hides when a session starts and reappears after logs are removed', () => {
+    const { service, listeners, emitBlocks } = createStubService({
+      isActive: vi.fn(() => false),
+    });
+    const view = new PiView(service, mount);
+    view.render();
+
+    const emptyState = mount.querySelector('#piview-empty-state') as HTMLElement;
+    expect(emptyState.style.display).not.toBe('none');
+
+    // Session starts -> placeholder hides automatically.
+    listeners.state.forEach((l) => l(true));
+    expect(emptyState.style.display).toBe('none');
+
+    // Logs arrive -> still hidden (session active).
+    emitBlocks([{ id: 'a', kind: 'text', text: 'x' }]);
+    expect(emptyState.style.display).toBe('none');
+
+    // Session ends WITH logs -> no empty-state, but a Session-ended line.
+    listeners.state.forEach((l) => l(false));
+    expect(emptyState.style.display).toBe('none');
+
+    // Clear the log -> placeholder returns.
+    service.clearHistory();
+    emitBlocks([]);
+    expect(emptyState.style.display).not.toBe('none');
+
+    view.destroy();
+  });
+
+  it('shows a distinct "Session ended" line once a session completes with logs', () => {
+    const { service, listeners, emitBlocks } = createStubService({
+      isActive: vi.fn(() => false),
+    });
+    const view = new PiView(service, mount);
+    view.render();
+
+    const sessionEnded = mount.querySelector('#piview-session-ended') as HTMLElement;
+    const emptyState = mount.querySelector('#piview-empty-state') as HTMLElement;
+    expect(sessionEnded.style.display).toBe('none');
+
+    // Run a session and produce logs.
+    listeners.state.forEach((l) => l(true));
+    emitBlocks([{ id: 'a', kind: 'text', text: 'result' }]);
+    expect(sessionEnded.style.display).toBe('none');
+
+    // Completion: line appears and empty-state stays hidden.
+    listeners.state.forEach((l) => l(false));
+    expect(sessionEnded.style.display).not.toBe('none');
+    expect(sessionEnded.getAttribute('role')).toBe('status');
+    expect(sessionEnded.querySelector('svg')).not.toBeNull();
+    expect(sessionEnded.textContent).toContain('Session ended');
+    expect(emptyState.style.display).toBe('none');
+
+    view.destroy();
+  });
+
+  it('renders an optional action button in the empty state and fires onClick', () => {
+    const onClick = vi.fn();
+    const { service } = createStubService({ isActive: vi.fn(() => false) });
+    const view = new PiView(service, mount, {
+      emptyStateAction: { label: 'Start a task', onClick },
+    });
+    view.render();
+
+    const action = mount.querySelector('#piview-empty-state-action') as HTMLButtonElement;
+    expect(action).not.toBeNull();
+    expect(action.textContent).toContain('Start a task');
+    action.click();
+    expect(onClick).toHaveBeenCalledTimes(1);
+
+    view.destroy();
+  });
+
+  it('does not render an action button when emptyStateAction is omitted', () => {
+    const { service } = createStubService({ isActive: vi.fn(() => false) });
+    const view = new PiView(service, mount);
+    view.render();
+    expect(mount.querySelector('#piview-empty-state-action')).toBeNull();
+  });
 });

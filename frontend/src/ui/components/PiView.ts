@@ -44,6 +44,17 @@ export interface PiViewOptions {
    * can be more compact than the modal default. Default 'h-[60vh]'.
    */
   logHeightClass?: string;
+  /**
+   * Optional action button rendered in the empty-state placeholder that shows
+   * when the log has no content and no session is running.
+   */
+  emptyStateAction?: EmptyStateAction;
+}
+
+/** A button shown inside the empty-state placeholder. */
+export interface EmptyStateAction {
+  label: string;
+  onClick: () => void;
 }
 
 /**
@@ -82,6 +93,11 @@ export class PiView {
   private timerHandle: number | null = null;
   private hasRunSession: boolean = false;
 
+  /** Empty-state placeholder and the "Session ended" completion line. */
+  private emptyStateEl: HTMLElement | null = null;
+  private sessionEndedEl: HTMLElement | null = null;
+  private emptyStateAction?: EmptyStateAction;
+
   /** Timestamp (ms) recorded when each block was first rendered. */
   private blockTimestamps: Map<string, number> = new Map();
   private copyToastTimer: number | null = null;
@@ -92,6 +108,7 @@ export class PiView {
     this.showFooter = options.showFooter ?? true;
     this.isFollowMode = options.followInitially ?? true;
     this.logHeightClass = options.logHeightClass ?? 'h-[60vh]';
+    this.emptyStateAction = options.emptyStateAction;
   }
 
   /** The element the PiView was mounted into. */
@@ -168,6 +185,59 @@ export class PiView {
     blocks.id = 'log-blocks';
     blocks.className = 'space-y-1';
     container.appendChild(blocks);
+
+    // Empty-state placeholder shown when there are no logs and no active session.
+    const emptyState = document.createElement('div');
+    emptyState.id = 'piview-empty-state';
+    emptyState.setAttribute('role', 'status');
+    emptyState.setAttribute('aria-live', 'polite');
+    emptyState.className =
+      'flex flex-col items-center justify-center text-center gap-1.5 py-10 px-4 text-app-text/50';
+    const emptyIcon = document.createElement('span');
+    emptyIcon.setAttribute('aria-hidden', 'true');
+    emptyIcon.className = 'text-app-text/40 mb-1';
+    emptyIcon.innerHTML = this.cleanIcon(Icon.render('clock', { size: 32 }));
+    emptyState.appendChild(emptyIcon);
+    const emptyTitle = document.createElement('p');
+    emptyTitle.id = 'piview-empty-title';
+    emptyTitle.className = 'text-sm font-medium text-app-text/70';
+    emptyTitle.textContent = 'No active session…';
+    emptyState.appendChild(emptyTitle);
+    const emptySub = document.createElement('p');
+    emptySub.className = 'text-xs';
+    emptySub.textContent = 'When a bot starts, its activity log will appear here.';
+    emptyState.appendChild(emptySub);
+    if (this.emptyStateAction) {
+      const action = document.createElement('button');
+      action.id = 'piview-empty-state-action';
+      action.type = 'button';
+      action.className =
+        'mt-2 px-3 py-1.5 rounded text-xs font-medium bg-app-accent-1 text-white hover:bg-app-accent-1/80 transition-colors flex items-center gap-1.5 cursor-pointer';
+      action.innerHTML = `${this.cleanIcon(Icon.render('lightning', { size: 14 }))}
+            ${this.emptyStateAction.label}`;
+      action.addEventListener('click', () => this.emptyStateAction?.onClick());
+      emptyState.appendChild(action);
+    }
+    this.emptyStateEl = emptyState;
+    container.appendChild(emptyState);
+
+    // Distinct "Session ended" completion line shown after a session finishes.
+    const sessionEnded = document.createElement('div');
+    sessionEnded.id = 'piview-session-ended';
+    sessionEnded.setAttribute('role', 'status');
+    sessionEnded.setAttribute('aria-live', 'polite');
+    sessionEnded.className =
+      'flex items-center gap-2 text-green-400 font-semibold text-xs py-1.5';
+    const endedIcon = document.createElement('span');
+    endedIcon.innerHTML = this.cleanIcon(Icon.render('check', { size: 14, label: 'Session ended' }));
+    sessionEnded.appendChild(endedIcon);
+    const endedText = document.createElement('span');
+    endedText.id = 'piview-session-ended-text';
+    endedText.textContent = 'Session ended';
+    sessionEnded.appendChild(endedText);
+    this.sessionEndedEl = sessionEnded;
+    container.appendChild(sessionEnded);
+
     return container;
   }
 
@@ -321,6 +391,7 @@ export class PiView {
         if (content === '') {
           this.blocksContainer!.replaceChildren();
           this.blockEls.clear();
+          this.updateEmptyState();
         }
       })
     );
@@ -351,6 +422,7 @@ export class PiView {
       }
     }
     blocks.forEach((block) => this.applyBlock(block));
+    this.updateEmptyState();
     this.scrollToBottom();
   }
 
@@ -739,7 +811,26 @@ export class PiView {
       this.stopStatusTimer();
       this.updateStatusDot();
     }
+    this.updateEmptyState();
     this.updateStatusText();
+  }
+
+  /**
+   * Toggles the empty-state placeholder and the "Session ended" completion line
+   * based on whether any logs are present and whether a session is running.
+   *
+   * - No logs + no active session  -> show "No active session…" placeholder.
+   * - Logs present + session ended  -> show the distinct "Session ended" line.
+   */
+  private updateEmptyState() {
+    const hasLogs = this.blockEls.size > 0;
+    if (this.emptyStateEl) {
+      this.emptyStateEl.style.display = !this.sessionActive && !hasLogs ? '' : 'none';
+    }
+    if (this.sessionEndedEl) {
+      this.sessionEndedEl.style.display =
+        this.hasRunSession && !this.sessionActive && hasLogs ? '' : 'none';
+    }
   }
 
   private startStatusTimer() {
