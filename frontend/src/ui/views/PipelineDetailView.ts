@@ -1239,15 +1239,15 @@ export class PipelineDetailView extends View {
   private renderHeader(): string {
     if (!this.pipeline) {
       return `
-        <header class="flex justify-between items-center bg-app-surface p-6 rounded-2xl shadow-lg border border-app-border shrink-0">
-          <div class="flex gap-6 items-center">
-            <button onclick="window.location.hash = '#'" class="p-3 hover:bg-app-bg rounded-xl transition-all text-app-muted hover:text-app-accent-1 border border-transparent hover:border-app-border group cursor-pointer" title="Back to Dashboard">
-              <svg class="w-6 h-6 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <header class="flex justify-between items-center bg-app-surface px-4 py-2 border-b border-app-border shrink-0">
+          <div class="flex gap-4 items-center">
+            <button onclick="window.location.hash = '#'" class="p-2 hover:bg-app-bg rounded-xl transition-all text-app-muted hover:text-app-accent-1 border border-transparent hover:border-app-border group cursor-pointer" title="Back to Dashboard">
+              <svg class="w-5 h-5 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
               </svg>
             </button>
             <div class="min-w-[400px]">
-              <h2 class="text-3xl font-black text-app-accent-1 tracking-tight">Loading...</h2>
+              <h2 class="text-2xl font-black text-app-accent-1 tracking-tight">Loading...</h2>
             </div>
           </div>
         </header>
@@ -1322,30 +1322,45 @@ export class PipelineDetailView extends View {
 
   render() {
     return `
-      <div class="max-w-[1800px] mx-auto px-6 py-8 flex flex-col gap-8 min-h-screen">
-        <div id="pipeline-header-container">
+      <div class="h-screen flex flex-col overflow-hidden bg-app-bg">
+        <div id="pipeline-header-container" class="flex-none shrink-0 border-b border-app-border/60">
           ${this.renderHeader()}
         </div>
 
-        <div class="grid grid-cols-1 ${this.isTwoColumnLayout ? 'lg:grid-cols-2' : 'lg:grid-cols-3'} gap-8 items-start flex-grow w-full">
-          <!-- Column 1: Preparation & Review -->
-          ${this.renderPrepColumn()}
+        <div class="flex flex-1 min-h-0">
+          <!-- Left Sidebar (placeholder, populated in a later step) -->
+          <aside class="w-52 flex-none shrink-0 border-r border-app-border/60 bg-app-surface/30 flex items-center justify-center">
+            <p class="text-app-muted/40 text-[10px] uppercase font-bold tracking-widest">Left Panel</p>
+          </aside>
 
-          ${this.isTwoColumnLayout ?
+          <!-- Main Content Area -->
+          <main class="flex-1 min-w-0 overflow-y-auto">
+            <div class="grid grid-cols-1 ${this.isTwoColumnLayout ? 'lg:grid-cols-2' : 'lg:grid-cols-3'} gap-6 items-start w-full p-4">
+              <!-- Column 1: Preparation & Review -->
+              ${this.renderPrepColumn()}
+
+              ${this.isTwoColumnLayout ?
         `
-            <!-- Column 2: Merged Active and History for 2-col layout -->
-            <div class="flex flex-col gap-8 min-w-0">
-               ${this.renderActiveColumn()}
-               ${this.renderHistoryColumn()}
-            </div>
-            ` :
+                <!-- Column 2: Merged Active and History for 2-col layout -->
+                <div class="flex flex-col gap-6 min-w-0">
+                   ${this.renderActiveColumn()}
+                   ${this.renderHistoryColumn()}
+                </div>
+                ` :
         `
-            <!-- Column 2: Active Execution -->
-            ${this.renderActiveColumn()}
-            <!-- Column 3: History & Analytics -->
-            ${this.renderHistoryColumn()}
-            `
+                <!-- Column 2: Active Execution -->
+                ${this.renderActiveColumn()}
+                <!-- Column 3: History & Analytics -->
+                ${this.renderHistoryColumn()}
+                `
       }
+            </div>
+          </main>
+
+          <!-- Right Sidebar (placeholder, populated in a later step) -->
+          <aside class="w-52 flex-none shrink-0 border-l border-app-border/60 bg-app-surface/30 flex items-center justify-center">
+            <p class="text-app-muted/40 text-[10px] uppercase font-bold tracking-widest">Right Panel</p>
+          </aside>
         </div>
       </div>
       <div id="docbot-dialog-container"></div>
