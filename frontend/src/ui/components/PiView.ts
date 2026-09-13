@@ -113,6 +113,12 @@ export class PiView {
   /** Index of the currently-selected match (-1 when no matches exist). */
   private currentMatch: number = -1;
 
+  /** Index of the currently-selected error block (-1 when none selected). */
+  private currentErrorIndex: number = -1;
+
+  /** Ordered list of error block elements currently in the DOM. */
+  private errorEls: HTMLElement[] = [];
+
   constructor(service: PiSessionService, mount: HTMLElement, options: PiViewOptions = {}) {
     this.service = service;
     this.root = mount;
@@ -317,6 +323,34 @@ export class PiView {
     errorToggleBtn.setAttribute('aria-pressed', 'false');
     actions.appendChild(errorToggleBtn);
 
+    const prevErrorBtn = document.createElement('button');
+    prevErrorBtn.setAttribute('data-action', 'prev-error');
+    prevErrorBtn.id = 'prev-error-btn';
+    prevErrorBtn.type = 'button';
+    prevErrorBtn.disabled = true;
+    prevErrorBtn.className =
+      'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center cursor-pointer disabled:opacity-40 disabled:cursor-default';
+    prevErrorBtn.setAttribute('aria-label', 'Previous error (Shift+N)');
+    prevErrorBtn.title = 'Previous error (Shift+N)';
+    prevErrorBtn.innerHTML = `<span class="flex items-center">${this.cleanIcon(
+      Icon.render('alert', { size: 14, className: 'rotate-180' })
+    )}</span>`;
+    actions.appendChild(prevErrorBtn);
+
+    const nextErrorBtn = document.createElement('button');
+    nextErrorBtn.setAttribute('data-action', 'next-error');
+    nextErrorBtn.id = 'next-error-btn';
+    nextErrorBtn.type = 'button';
+    nextErrorBtn.disabled = true;
+    nextErrorBtn.className =
+      'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center cursor-pointer disabled:opacity-40 disabled:cursor-default';
+    nextErrorBtn.setAttribute('aria-label', 'Next error (N)');
+    nextErrorBtn.title = 'Next error (N)';
+    nextErrorBtn.innerHTML = `<span class="flex items-center">${this.cleanIcon(
+      Icon.render('alert', { size: 14 })
+    )}</span>`;
+    actions.appendChild(nextErrorBtn);
+
     const copyAllBtn = document.createElement('button');
     copyAllBtn.setAttribute('data-action', 'copy-all-log');
     copyAllBtn.id = 'copy-all-btn';
@@ -461,6 +495,10 @@ export class PiView {
       this.toggleBlocksCollapse();
     } else if (action === 'toggle-error-visibility') {
       this.toggleErrorVisibility();
+    } else if (action === 'prev-error') {
+      this.prevError();
+    } else if (action === 'next-error') {
+      this.nextError();
     } else if (action === 'toggle-search') {
       this.toggleSearchBar();
     } else if (action === 'copy-all-log') {
@@ -473,10 +511,17 @@ export class PiView {
     if (!target || !this.root.contains(target)) return;
     // Don't hijack keys while the user is typing in a search/editable field.
     if (target.closest('input, textarea, select, [contenteditable="true"]')) return;
-    if (e.key !== 'c' && e.key !== 'C') return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-    e.preventDefault();
-    this.copyAllLog();
+    if (e.key === 'c' || e.key === 'C') {
+      e.preventDefault();
+      this.copyAllLog();
+    } else if (e.key === 'n') {
+      e.preventDefault();
+      this.nextError();
+    } else if (e.key === 'N') {
+      e.preventDefault();
+      this.prevError();
+    }
   };
 
   // ---------------------------------------------------------------------------
@@ -643,6 +688,7 @@ export class PiView {
     // Load initial history
     const history = this.service.getHistory();
     history.forEach((block) => this.applyBlock(block));
+    this.refreshErrorList();
     this.scrollToBottom();
 
     // Subscribe to block changes
@@ -693,6 +739,8 @@ export class PiView {
     this.scrollToBottom();
     // Keep highlights/count in sync when new log entries arrive while searching.
     this.refreshSearchForNewContent();
+    // Keep the error navigation list + button states in sync.
+    this.refreshErrorList();
   }
 
   private applyBlock(block: RenderBlock) {
@@ -1015,6 +1063,57 @@ export class PiView {
     const label = visible ? 'Hide error blocks' : 'Show error blocks';
     btn.setAttribute('aria-label', label);
     btn.title = label;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Next/Prev error navigation
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Rebuilds the ordered list of error blocks from the current DOM and keeps
+   * the selected index + button states in sync (e.g. after new log entries are
+   * appended or blocks are dropped).
+   */
+  private refreshErrorList() {
+    const container = this.blocksContainer;
+    this.errorEls = container ? Array.from(container.querySelectorAll('.piview-error')) : [];
+    if (this.currentErrorIndex >= this.errorEls.length) {
+      this.currentErrorIndex = this.errorEls.length > 0 ? this.errorEls.length - 1 : -1;
+    }
+    this.updateErrorNavBtns();
+  }
+
+  /** Scrolls to and selects the next error block (no-op when at the end). */
+  private nextError() {
+    if (this.errorEls.length === 0) return;
+    const next = this.currentErrorIndex + 1;
+    if (next >= this.errorEls.length) return;
+    this.goToError(next);
+  }
+
+  /** Scrolls to and selects the previous error block (no-op when at the start). */
+  private prevError() {
+    if (this.errorEls.length === 0) return;
+    const prev = this.currentErrorIndex - 1;
+    if (prev < 0) return;
+    this.goToError(prev);
+  }
+
+  /** Selects the error at `index` and scrolls it into the visible area. */
+  private goToError(index: number) {
+    const el = this.errorEls[index];
+    if (!el) return;
+    this.currentErrorIndex = index;
+    this.ensureVisible(el);
+    this.updateErrorNavBtns();
+  }
+
+  private updateErrorNavBtns() {
+    const next = this.root.querySelector('#next-error-btn') as HTMLButtonElement | null;
+    const prev = this.root.querySelector('#prev-error-btn') as HTMLButtonElement | null;
+    const total = this.errorEls.length;
+    if (prev) prev.disabled = total === 0 || this.currentErrorIndex <= 0;
+    if (next) next.disabled = total === 0 || this.currentErrorIndex >= total - 1;
   }
 
   /**

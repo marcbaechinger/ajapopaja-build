@@ -46,4 +46,5 @@ export const iconMap: Record<string, string> = {
   minus: 'minus-icon',
   eye: 'eye-icon',
   eyeOff: 'eye-off-icon',
+  alert: 'alert-icon',
 };

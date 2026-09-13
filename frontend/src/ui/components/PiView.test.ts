@@ -1039,4 +1039,152 @@ describe('PiView', () => {
     view.destroy();
     vi.useRealTimers();
   });
+
+  // -------------------------------------------------------------------------
+  // Next/Prev error navigation
+  // -------------------------------------------------------------------------
+
+  it('renders prev/next error buttons with icons/ARIA labels, disabled when no errors', () => {
+    const { service } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    const prev = mount.querySelector('#prev-error-btn') as HTMLButtonElement;
+    const next = mount.querySelector('#next-error-btn') as HTMLButtonElement;
+    expect(prev).not.toBeNull();
+    expect(next).not.toBeNull();
+    expect(prev.getAttribute('aria-label')).toContain('Previous error');
+    expect(next.getAttribute('aria-label')).toContain('Next error');
+    // Icons present and initially disabled with no log content.
+    expect(prev.querySelector('svg')).not.toBeNull();
+    expect(next.querySelector('svg')).not.toBeNull();
+    expect(prev.disabled).toBe(true);
+    expect(next.disabled).toBe(true);
+
+    view.destroy();
+  });
+
+  it('next/prev error buttons navigate blocks, scroll into view, and disable at boundaries', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+    emitBlocks([
+      { id: 'e1', kind: 'error', text: 'err one' },
+      { id: 't1', kind: 'text', text: 'normal' },
+      { id: 'e2', kind: 'error', text: 'err two' },
+    ]);
+
+    const prev = mount.querySelector('#prev-error-btn') as HTMLButtonElement;
+    const next = mount.querySelector('#next-error-btn') as HTMLButtonElement;
+
+    // Two errors -> no selection yet: next enabled, prev disabled.
+    expect(next.disabled).toBe(false);
+    expect(prev.disabled).toBe(true);
+
+    const scrollSpy = vi
+      .spyOn(view as unknown as { ensureVisible: () => void }, 'ensureVisible')
+      .mockImplementation(() => {});
+
+    next.click();
+    expect(scrollSpy).toHaveBeenCalledTimes(1);
+    expect(prev.disabled).toBe(true); // still at first error
+    expect(next.disabled).toBe(false);
+
+    next.click();
+    expect(scrollSpy).toHaveBeenCalledTimes(2);
+    expect(next.disabled).toBe(true); // at last error
+    expect(prev.disabled).toBe(false);
+
+    prev.click();
+    expect(scrollSpy).toHaveBeenCalledTimes(3);
+    expect(prev.disabled).toBe(true);
+    expect(next.disabled).toBe(false);
+
+    view.destroy();
+  });
+
+  it('n / Shift+N keyboard shortcuts jump to next/prev error', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+    emitBlocks([
+      { id: 'e1', kind: 'error', text: 'a' },
+      { id: 'e2', kind: 'error', text: 'b' },
+      { id: 'e3', kind: 'error', text: 'c' },
+    ]);
+
+    const log = mount.querySelector('#log-content-container') as HTMLElement;
+    const scrollSpy = vi
+      .spyOn(view as unknown as { ensureVisible: () => void }, 'ensureVisible')
+      .mockImplementation(() => {});
+
+    // n -> next error(s).
+    log.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', bubbles: true }));
+    expect(scrollSpy).toHaveBeenCalledTimes(1);
+    log.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', bubbles: true }));
+    expect(scrollSpy).toHaveBeenCalledTimes(2);
+
+    // Shift+n (key 'N') -> previous error.
+    log.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'N', bubbles: true, shiftKey: true })
+    );
+    expect(scrollSpy).toHaveBeenCalledTimes(3);
+
+    // At the first error, Shift+n does not wrap to the end.
+    log.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'N', bubbles: true, shiftKey: true })
+    );
+    expect(scrollSpy).toHaveBeenCalledTimes(3);
+
+    view.destroy();
+  });
+
+  it('does not hijack n/N while typing in the search input', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+    emitBlocks([{ id: 'e1', kind: 'error', text: 'a' }, { id: 't1', kind: 'text', text: 'x' }]);
+
+    const scrollSpy = vi
+      .spyOn(view as unknown as { ensureVisible: () => void }, 'ensureVisible')
+      .mockImplementation(() => {});
+    const input = mount.querySelector('#piview-search-input') as HTMLInputElement;
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', bubbles: true }));
+    expect(scrollSpy).not.toHaveBeenCalled();
+
+    view.destroy();
+  });
+
+  it('error nav button state stays in sync when errors are added or dropped', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    const next = mount.querySelector('#next-error-btn') as HTMLButtonElement;
+    const prev = mount.querySelector('#prev-error-btn') as HTMLButtonElement;
+    expect(next.disabled).toBe(true);
+
+    emitBlocks([{ id: 'e1', kind: 'error', text: 'a' }, { id: 't1', kind: 'text', text: 'x' }]);
+    expect(next.disabled).toBe(false);
+
+    next.click(); // select the only error -> both boundaries.
+    expect(prev.disabled).toBe(true);
+    expect(next.disabled).toBe(true);
+
+    // A new error appended -> next enabled again.
+    emitBlocks([
+      { id: 'e1', kind: 'error', text: 'a' },
+      { id: 'e2', kind: 'error', text: 'b' },
+      { id: 't1', kind: 'text', text: 'x' },
+    ]);
+    expect(next.disabled).toBe(false);
+
+    // Drop back to a single error -> both boundaries become disabled.
+    emitBlocks([{ id: 'e2', kind: 'error', text: 'b' }]);
+    expect(prev.disabled).toBe(true);
+    expect(next.disabled).toBe(true);
+
+    view.destroy();
+  });
 });
+
