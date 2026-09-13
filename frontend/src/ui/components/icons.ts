@@ -44,4 +44,6 @@ export const iconMap: Record<string, string> = {
   'git-pull-request': 'git-pull-request-icon',
   plus: 'plus-icon',
   minus: 'minus-icon',
+  eye: 'eye-icon',
+  eyeOff: 'eye-off-icon',
 };
