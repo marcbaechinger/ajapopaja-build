@@ -319,27 +319,22 @@ describe('PiView', () => {
     view.destroy();
 
     const onBlocks = service.onBlocks as unknown as ReturnType<typeof vi.fn>;
-    const onMessage = service.onMessage as unknown as ReturnType<typeof vi.fn>;
     const onState = service.onSessionStateChange as unknown as ReturnType<typeof vi.fn>;
 
     // Each subscription returned a cleanup that we can't spy directly; instead
-    // verify the service subscribed 3 times and the view tracked them.
+    // verify the service subscribed once per listener and the view tracked them.
     expect(onBlocks).toHaveBeenCalledTimes(1);
-    expect(onMessage).toHaveBeenCalledTimes(1);
     expect(onState).toHaveBeenCalledTimes(1);
   });
 
   it('destroy() runs the unsubscribe callbacks returned by the service', () => {
     const unsubBlocks = vi.fn();
-    const unsubMessage = vi.fn();
     const unsubState = vi.fn();
     const onBlocks = vi.fn(() => unsubBlocks);
-    const onMessage = vi.fn(() => unsubMessage);
     const onSessionStateChange = vi.fn(() => unsubState);
 
     const { service } = createStubService({
       onBlocks,
-      onMessage,
       onSessionStateChange,
     });
 
@@ -348,7 +343,6 @@ describe('PiView', () => {
     view.destroy();
 
     expect(unsubBlocks).toHaveBeenCalledTimes(1);
-    expect(unsubMessage).toHaveBeenCalledTimes(1);
     expect(unsubState).toHaveBeenCalledTimes(1);
   });
 

@@ -839,27 +839,14 @@ export class PiView {
     this.blocksContainer = this.root.querySelector('#log-blocks');
     if (!this.blocksContainer || !this.logContainer) return;
 
-    // Load initial history
     const history = this.service.getHistory();
     history.forEach((block) => this.applyBlock(block));
     this.refreshErrorList();
     this.scrollToBottom();
 
-    // Subscribe to block changes
     this.unsubs.push(
       this.service.onBlocks((blocks) => {
         this.reconcile(blocks);
-      })
-    );
-
-    // Keep legacy onMessage subscription for non-CoderBot streams (harmless if unused).
-    this.unsubs.push(
-      this.service.onMessage((content) => {
-        if (content === '') {
-          this.blocksContainer!.replaceChildren();
-          this.blockEls.clear();
-          this.updateEmptyState();
-        }
       })
     );
   }
