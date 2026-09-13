@@ -47,7 +47,7 @@ export class Task {
   type: string = "manual"; // manual, system
   spec?: string | null;
   want_design_doc: boolean = false;
-  order: number = 0;
+  order: number = 100;
   version: number = 1;
   commit_hash?: string | null;
   completion_info?: string | null;

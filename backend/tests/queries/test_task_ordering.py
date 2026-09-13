@@ -21,6 +21,21 @@ from core.queries import task as task_queries
 
 
 @pytest.mark.asyncio
+async def test_task_default_order_is_100(init_mock_db):
+    task = Task(
+        title="Default Order Task", pipeline_id="pid", status=TaskStatus.CREATED
+    )
+    await task.insert()
+    assert task.order == 100
+
+    # A task explicitly prioritised (negative order) sorts first.
+    t_high = Task(title="High Priority", pipeline_id=task.pipeline_id, order=-10)
+    await t_high.insert()
+    tasks = await task_queries.get_tasks_by_pipeline(task.pipeline_id)
+    assert tasks[0].title == "High Priority"
+
+
+@pytest.mark.asyncio
 async def test_task_execution_order_fifo_scheduled(init_mock_db):
     pipeline = Pipeline(name="Order Test Pipeline")
     await pipeline.insert()

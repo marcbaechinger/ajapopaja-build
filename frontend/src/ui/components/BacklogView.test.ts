@@ -64,15 +64,15 @@ describe('BacklogView', () => {
     expect((html.match(/rounded-full px-1.5 py-0.5/g) || []).length).toBe(3); // 1 proposed + 2 created
   });
 
-  it('should sort tasks within a section by most recently updated first', () => {
+  it('should sort tasks within a section by order ascending (lower first)', () => {
     const tasks = [
-      makeTask({ id: 'old', status: TaskStatus.CREATED, updated_at: '2026-04-12T10:00:00Z' }),
-      makeTask({ id: 'new', status: TaskStatus.CREATED, updated_at: '2026-04-13T10:00:00Z' }),
+      makeTask({ id: 'high', status: TaskStatus.CREATED, order: 10 }),
+      makeTask({ id: 'low', status: TaskStatus.CREATED, order: -5 }),
     ];
     const html = BacklogView.render({ tasks });
     expect(html.indexOf('A task')).toBeGreaterThan(-1);
-    // the newer task's data-task-id appears before the older one
-    expect(html.indexOf('data-task-id="new"')).toBeLessThan(html.indexOf('data-task-id="old"'));
+    // the lower-order task appears before the higher-order one
+    expect(html.indexOf('data-task-id="low"')).toBeLessThan(html.indexOf('data-task-id="high"'));
   });
 
   it('should render empty states when no tasks exist', () => {

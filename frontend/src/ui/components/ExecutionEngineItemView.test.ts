@@ -68,6 +68,17 @@ describe('ExecutionEngineItemView', () => {
     expect(html).not.toContain('reject_design');
   });
 
+  it('should render the order value for a SCHEDULED (queued) task', () => {
+    const html = ExecutionEngineItemView.render(makeTask({ status: TaskStatus.SCHEDULED, order: 3 }));
+    expect(html).toContain('title="Queue order"');
+    expect(html).toContain('#3');
+  });
+
+  it('should not render the order value for non-SCHEDULED tasks', () => {
+    const html = ExecutionEngineItemView.render(makeTask({ status: TaskStatus.INPROGRESS, order: 3 }));
+    expect(html).not.toContain('title="Queue order"');
+  });
+
   it('should escape HTML in the title', () => {
     const html = ExecutionEngineItemView.render(makeTask({ title: '<script>bad()</script>' }));
     expect(html).not.toContain('<script>bad()</script>');

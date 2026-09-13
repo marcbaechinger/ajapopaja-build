@@ -63,7 +63,10 @@ class Task(Document):
     type: str = "manual"  # manual, system
     spec: Optional[str] = None
     want_design_doc: bool = False
-    order: int = 0
+    # Priority/position used to sort backlog (CREATED/PROPOSED) and scheduled
+    # tasks. Lower values sort first; the default (100) places new tasks below
+    # any that were given an explicit (often negative or small) priority.
+    order: int = 100
     version: int = 1
     commit_hash: Optional[str] = None
     completion_info: Optional[str] = None

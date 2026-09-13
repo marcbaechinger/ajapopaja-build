@@ -75,6 +75,12 @@ describe('BacklogTaskView', () => {
     expect(html).toContain('&lt;script&gt;');
   });
 
+  it('should render the task order value', () => {
+    const html = BacklogTaskView.render(makeTask({ order: -7 }));
+    expect(html).toContain('title="Priority order"');
+    expect(html).toContain('#-7');
+  });
+
   describe('status workflow actions', () => {
     it('should render Approve and Reject for a PROPOSED task', () => {
       const html = BacklogTaskView.render(makeTask({ status: TaskStatus.PROPOSED, design_doc: '# d' }));

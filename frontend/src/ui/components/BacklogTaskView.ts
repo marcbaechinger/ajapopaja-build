@@ -60,9 +60,12 @@ export class BacklogTaskView {
            data-action-click="select_task" data-view-id="${taskId}" data-task-id="${taskId}">
         <div class="flex items-start justify-between gap-2">
           <span class="text-[11px] font-bold text-app-text leading-snug break-words">${escapeHtml(task.title || '')}</span>
-          ${hasDesignDoc ? `
-            <span class="flex-none text-[9px] font-black uppercase tracking-widest text-purple-400 bg-purple-500/15 border border-purple-500/30 rounded-full px-1.5 py-0.5" title="Design doc available">Design</span>
-          ` : ''}
+          <span class="flex-none flex items-center gap-1.5">
+            <span class="text-[9px] font-bold text-app-muted bg-app-surface border border-app-border rounded-md px-1 py-0.5" title="Priority order">#${escapeHtml(String(task.order))}</span>
+            ${hasDesignDoc ? `
+              <span class="flex-none text-[9px] font-black uppercase tracking-widest text-purple-400 bg-purple-500/15 border border-purple-500/30 rounded-full px-1.5 py-0.5" title="Design doc available">Design</span>
+            ` : ''}
+          </span>
         </div>
         ${excerpt ? `
           <p class="text-[10px] text-app-muted leading-snug line-clamp-3">${escapeHtml(excerpt)}</p>

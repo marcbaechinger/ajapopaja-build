@@ -29,8 +29,9 @@ export interface BacklogViewProps {
  * grouped into two vertical sections - PROPOSED on top and CREATED below - each
  * with a header showing the section type and the number of tasks in it.
  *
- * Tasks inside a section are sorted by most recently updated/created first so
- * the newest work is always visible at the top.
+ * Tasks inside a section are sorted by their ``order`` value ascending (lower
+ * values first) so the user can prioritise work regardless of when it was
+ * created or updated.
  */
 export class BacklogView {
   static render(props: BacklogViewProps): string {
@@ -80,10 +81,10 @@ export class BacklogView {
 }
 
 /**
- * Sort tasks by updated_at falling back to created_at, most recent first.
+ * Sort tasks by their ``order`` value ascending (lower order first). The order
+ * can be negative; default tasks use 100 so they naturally sort below anything
+ * explicitly prioritised.
  */
 function taskSort(a: Task, b: Task): number {
-  const aTime = new Date(a.updated_at || a.created_at || 0).getTime();
-  const bTime = new Date(b.updated_at || b.created_at || 0).getTime();
-  return bTime - aTime;
+  return (a.order || 0) - (b.order || 0);
 }
