@@ -18,10 +18,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from api.coderbot.session import CoderBotSession
+from api.coderbot.session import CoderBotSession, DEFAULT_TEST_COMMANDS
 from api.websocket_manager import WSMessage
 from core import config
-from core.models.models import Pipeline, Task, TaskStatus
+from core.models.models import Pipeline, PullRequest, PullRequestStatus, Task, TaskStatus
 
 
 @pytest.fixture(autouse=True)
@@ -83,70 +83,75 @@ async def test_coderbot_run_spawns_pi(init_mock_db):
     )
     await task.insert()
 
-    with (
-        patch("api.coderbot.session.SandboxGitHelper") as mock_helper_cls,
-        patch("api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock),
-        patch("api.coderbot.session.asyncio.create_subprocess_exec") as mock_exec,
-        patch("builtins.open", MagicMock()),
-        patch("pathlib.Path.mkdir"),
-    ):
-        mock_helper = MagicMock()
-        mock_helper.branch_name = "test-branch"
-        mock_helper.get_patch.return_value = "test-patch"
-        mock_repo = MagicMock()
-        mock_repo.git.diff.return_value = "test-patch"
-        mock_repo.git.show.return_value = "diff --git a/file b/file\n+new line"
-        mock_helper.get_repo.return_value = mock_repo
-        mock_helper_cls.return_value = mock_helper
+    original_run_tests = config.CODERBOT_RUN_TESTS
+    config.CODERBOT_RUN_TESTS = False
+    try:
+        with (
+            patch("api.coderbot.session.SandboxGitHelper") as mock_helper_cls,
+            patch("api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock),
+            patch("api.coderbot.session.asyncio.create_subprocess_exec") as mock_exec,
+            patch("builtins.open", MagicMock()),
+            patch("pathlib.Path.mkdir"),
+        ):
+            mock_helper = MagicMock()
+            mock_helper.branch_name = "test-branch"
+            mock_helper.get_patch.return_value = "test-patch"
+            mock_repo = MagicMock()
+            mock_repo.git.diff.return_value = "test-patch"
+            mock_repo.git.show.return_value = "diff --git a/file b/file\n+new line"
+            mock_helper.get_repo.return_value = mock_repo
+            mock_helper_cls.return_value = mock_helper
 
-        session = CoderBotSession(pipeline_id=str(pipeline.id), task_id=str(task.id))
+            session = CoderBotSession(pipeline_id=str(pipeline.id), task_id=str(task.id))
 
-        mock_proc = AsyncMock()
-        mock_proc.stdin = MagicMock()
-        mock_proc.stdin.write = MagicMock()
-        mock_proc.stdin.drain = AsyncMock()
-        mock_proc.stdin.can_write_eof.return_value = True
-        mock_proc.stdin.write_eof = MagicMock()
+            mock_proc = AsyncMock()
+            mock_proc.stdin = MagicMock()
+            mock_proc.stdin.write = MagicMock()
+            mock_proc.stdin.drain = AsyncMock()
+            mock_proc.stdin.can_write_eof.return_value = True
+            mock_proc.stdin.write_eof = MagicMock()
 
-        # Simulate stdout returning a single 'agent_end' event
-        async def mock_stdout_stream():
-            yield (
-                json.dumps({"type": "agent_end", "messages": []}).encode("utf-8")
-                + b"\n"
+            # Simulate stdout returning a single 'agent_end' event
+            async def mock_stdout_stream():
+                yield (
+                    json.dumps({"type": "agent_end", "messages": []}).encode("utf-8")
+                    + b"\n"
+                )
+
+            mock_proc.stdout.__aiter__.side_effect = lambda: mock_stdout_stream()
+            mock_proc.wait = AsyncMock()
+
+            mock_exec.return_value = mock_proc
+
+            await session.run()
+
+            mock_helper_cls.assert_called_once()
+            mock_helper.setup_sandbox.assert_called_once()
+
+            # Check subprocess was created with 'pi', 10MB limit and stderr redirect
+            # Default model is None, so --model flag is omitted
+            mock_exec.assert_called_once_with(
+                "pi",
+                "--mode",
+                "rpc",
+                "--no-session",
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                cwd=str(mock_helper.sandbox_path),
+                limit=10 * 1024 * 1024,
             )
 
-        mock_proc.stdout.__aiter__.side_effect = lambda: mock_stdout_stream()
-        mock_proc.wait = AsyncMock()
+            # Verify stdin was written to
+            mock_proc.stdin.write.assert_called_once()
+            written_data = mock_proc.stdin.write.call_args[0][0].decode("utf-8")
+            assert "prompt" in written_data
+            assert "Test Task" in written_data
 
-        mock_exec.return_value = mock_proc
-
-        await session.run()
-
-        mock_helper_cls.assert_called_once()
-        mock_helper.setup_sandbox.assert_called_once()
-
-        # Check subprocess was created with 'pi', 10MB limit and stderr redirect
-        # Default model is None, so --model flag is omitted
-        mock_exec.assert_called_once_with(
-            "pi",
-            "--mode",
-            "rpc",
-            "--no-session",
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-            cwd=str(mock_helper.sandbox_path),
-            limit=10 * 1024 * 1024,
-        )
-
-        # Verify stdin was written to
-        mock_proc.stdin.write.assert_called_once()
-        written_data = mock_proc.stdin.write.call_args[0][0].decode("utf-8")
-        assert "prompt" in written_data
-        assert "Test Task" in written_data
-
-        # Verify EOF was signaled
-        mock_proc.stdin.write_eof.assert_called_once()
+            # Verify EOF was signaled
+            mock_proc.stdin.write_eof.assert_called_once()
+    finally:
+        config.CODERBOT_RUN_TESTS = original_run_tests
 
 
 @pytest.mark.asyncio
@@ -164,62 +169,67 @@ async def test_coderbot_run_with_model_includes_model_flag(init_mock_db):
     )
     await task.insert()
 
-    with (
-        patch("api.coderbot.session.SandboxGitHelper") as mock_helper_cls,
-        patch("api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock),
-        patch("api.coderbot.session.asyncio.create_subprocess_exec") as mock_exec,
-        patch("builtins.open", MagicMock()),
-        patch("pathlib.Path.mkdir"),
-    ):
-        mock_helper = MagicMock()
-        mock_helper.branch_name = "test-branch"
-        mock_helper.get_patch.return_value = "test-patch"
-        mock_repo = MagicMock()
-        mock_repo.git.diff.return_value = "test-patch"
-        mock_repo.git.show.return_value = "diff --git a/file b/file\n+new line"
-        mock_helper.get_repo.return_value = mock_repo
-        mock_helper_cls.return_value = mock_helper
+    original_run_tests = config.CODERBOT_RUN_TESTS
+    config.CODERBOT_RUN_TESTS = False
+    try:
+        with (
+            patch("api.coderbot.session.SandboxGitHelper") as mock_helper_cls,
+            patch("api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock),
+            patch("api.coderbot.session.asyncio.create_subprocess_exec") as mock_exec,
+            patch("builtins.open", MagicMock()),
+            patch("pathlib.Path.mkdir"),
+        ):
+            mock_helper = MagicMock()
+            mock_helper.branch_name = "test-branch"
+            mock_helper.get_patch.return_value = "test-patch"
+            mock_repo = MagicMock()
+            mock_repo.git.diff.return_value = "test-patch"
+            mock_repo.git.show.return_value = "diff --git a/file b/file\n+new line"
+            mock_helper.get_repo.return_value = mock_repo
+            mock_helper_cls.return_value = mock_helper
 
-        session = CoderBotSession(
-            pipeline_id=str(pipeline.id),
-            task_id=str(task.id),
-            model="custom-model:cloud",
-        )
-
-        mock_proc = AsyncMock()
-        mock_proc.stdin = MagicMock()
-        mock_proc.stdin.write = MagicMock()
-        mock_proc.stdin.drain = AsyncMock()
-        mock_proc.stdin.can_write_eof.return_value = True
-        mock_proc.stdin.write_eof = MagicMock()
-
-        async def mock_stdout_stream():
-            yield (
-                json.dumps({"type": "agent_end", "messages": []}).encode("utf-8")
-                + b"\n"
+            session = CoderBotSession(
+                pipeline_id=str(pipeline.id),
+                task_id=str(task.id),
+                model="custom-model:cloud",
             )
 
-        mock_proc.stdout.__aiter__.side_effect = lambda: mock_stdout_stream()
-        mock_proc.wait = AsyncMock()
+            mock_proc = AsyncMock()
+            mock_proc.stdin = MagicMock()
+            mock_proc.stdin.write = MagicMock()
+            mock_proc.stdin.drain = AsyncMock()
+            mock_proc.stdin.can_write_eof.return_value = True
+            mock_proc.stdin.write_eof = MagicMock()
 
-        mock_exec.return_value = mock_proc
+            async def mock_stdout_stream():
+                yield (
+                    json.dumps({"type": "agent_end", "messages": []}).encode("utf-8")
+                    + b"\n"
+                )
 
-        await session.run()
+            mock_proc.stdout.__aiter__.side_effect = lambda: mock_stdout_stream()
+            mock_proc.wait = AsyncMock()
 
-        # Check subprocess was created with the injected --model flag
-        mock_exec.assert_called_once_with(
-            "pi",
-            "--mode",
-            "rpc",
-            "--no-session",
-            "--model",
-            "custom-model:cloud",
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-            cwd=str(mock_helper.sandbox_path),
-            limit=10 * 1024 * 1024,
-        )
+            mock_exec.return_value = mock_proc
+
+            await session.run()
+
+            # Check subprocess was created with the injected --model flag
+            mock_exec.assert_called_once_with(
+                "pi",
+                "--mode",
+                "rpc",
+                "--no-session",
+                "--model",
+                "custom-model:cloud",
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                cwd=str(mock_helper.sandbox_path),
+                limit=10 * 1024 * 1024,
+            )
+    finally:
+        config.CODERBOT_RUN_TESTS = original_run_tests
 
 
 @pytest.mark.asyncio
@@ -422,3 +432,197 @@ async def test_coderbot_run_transitions_task_state(init_mock_db):
             and msg.args[0].payload["id"] == str(task.id)
             for msg in status_msgs
         )
+
+
+@pytest.mark.asyncio
+async def test_coderbot_initial_prompt_includes_test_instruction(init_mock_db):
+    """The initial prompt must instruct Pi to run the full test suite."""
+    task = Task(title="Test Task", pipeline_id="p1", design_doc="D", spec="S")
+    session = CoderBotSession(pipeline_id="p1", task_id="t1")
+
+    prompt = await session.get_initial_prompt(task)
+
+    assert "uv run pytest" in prompt
+    assert "CI=true npm run test" in prompt
+    assert "run the full project" in prompt
+    assert "test suite" in prompt
+
+def test_coderbot_get_verification_commands_defaults():
+    """Without an override, the README-documented commands are used."""
+    session = CoderBotSession(pipeline_id="p1", task_id="t1")
+    with patch.object(config, "CODERBOT_TEST_COMMANDS_JSON", ""):
+        commands = session._get_verification_commands()
+    assert commands == list(DEFAULT_TEST_COMMANDS)
+    assert any("uv run pytest" in " ".join(c) for c in commands)
+    assert any("CI=true npm run test" in " ".join(c) for c in commands)
+
+
+def test_coderbot_get_verification_commands_override():
+    """A valid JSON override replaces the defaults."""
+    session = CoderBotSession(pipeline_id="p1", task_id="t1")
+    override = json.dumps([["pytest", "-q"]])
+    with patch.object(config, "CODERBOT_TEST_COMMANDS_JSON", override):
+        commands = session._get_verification_commands()
+    assert commands == [["pytest", "-q"]]
+
+
+def test_coderbot_get_verification_commands_invalid_override_falls_back():
+    """An invalid override falls back to the defaults."""
+    session = CoderBotSession(pipeline_id="p1", task_id="t1")
+    with patch.object(config, "CODERBOT_TEST_COMMANDS_JSON", "not-json"):
+        commands = session._get_verification_commands()
+    assert commands == list(DEFAULT_TEST_COMMANDS)
+
+
+@pytest.mark.asyncio
+async def test_coderbot_run_verification_aggregates_exit_codes():
+    """_run_verification aggregates exit codes from all commands."""
+    session = CoderBotSession(pipeline_id="p1", task_id="t1")
+    session.helper = MagicMock()
+    session.helper.sandbox_path = "/tmp/sandbox"
+
+    success_proc = AsyncMock()
+    success_proc.communicate = AsyncMock(return_value=(b"all green\n", b""))
+    success_proc.returncode = 0
+
+    fail_proc = AsyncMock()
+    fail_proc.communicate = AsyncMock(return_value=(b"boom\n", b""))
+    fail_proc.returncode = 1
+
+    with patch(
+        "api.coderbot.session.asyncio.create_subprocess_exec",
+        new_callable=AsyncMock,
+        side_effect=[success_proc, fail_proc],
+    ) as mock_exec:
+        results = await session._run_verification()
+
+    assert mock_exec.await_count == 2
+    assert results["passed"] is False
+    assert len(results["commands"]) == 2
+    assert results["commands"][0]["exit_code"] == 0
+    assert results["commands"][1]["exit_code"] == 1
+    assert "boom" in results["commands"][1]["output_tail"]
+
+
+@pytest.mark.asyncio
+async def test_coderbot_handle_agent_end_runs_verification_and_annotates_pr(
+    init_mock_db,
+):
+    """Verification runs before PR creation, broadcasts results and annotates
+    the PR summary when a command fails."""
+    task = Task(title="Test Task", pipeline_id="p1", design_doc="D", spec="S")
+    await task.insert()
+
+    session = CoderBotSession(pipeline_id="p1", task_id=str(task.id))
+    session.helper = MagicMock()
+    session.helper.branch_name = "branch"
+    repo = MagicMock()
+    repo.git.add = MagicMock()
+    repo.git.commit.return_value = "ok"
+    repo.git.diff.return_value = "test-patch"
+    session.helper.get_repo.return_value = repo
+
+    fail_proc = AsyncMock()
+    fail_proc.communicate = AsyncMock(return_value=(b"boom output\n", b""))
+    fail_proc.returncode = 1
+
+    with (
+        patch(
+            "api.coderbot.session.asyncio.create_subprocess_exec",
+            new_callable=AsyncMock,
+            return_value=fail_proc,
+        ),
+        patch(
+            "api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock
+        ) as mock_broadcast,
+        patch("api.coderbot.session.Task.get", new_callable=AsyncMock) as mock_task_get,
+        patch(
+            "core.queries.task.transition_task", new_callable=AsyncMock
+        ) as mock_transition,
+    ):
+        mock_task_get.return_value = task
+        await session._handle_agent_end(
+            [
+                {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "Task complete."}],
+                }
+            ]
+        )
+
+    # A CODERBOT_VERIFICATION event must be broadcast.
+    verif_msgs = [
+        c
+        for c in mock_broadcast.await_args_list
+        if isinstance(c.args[0], WSMessage) and c.args[0].type == "CODERBOT_VERIFICATION"
+    ]
+    assert verif_msgs, "Expected a CODERBOT_VERIFICATION broadcast"
+    assert verif_msgs[0].args[0].payload["result"]["passed"] is False
+
+    # The PR must be created with an annotated summary flagging the failure.
+    prs = await PullRequest.find(PullRequest.task_id == str(task.id)).to_list()
+    assert len(prs) == 1
+    assert "Verification" in prs[0].summary
+    assert "FAILED" in prs[0].summary
+    assert "boom output" in prs[0].summary
+
+    # The pull request status is recorded.
+    assert prs[0].status == PullRequestStatus.OPEN
+
+
+@pytest.mark.asyncio
+async def test_coderbot_handle_agent_end_skips_verification_when_disabled(
+    init_mock_db,
+):
+    """When CODERBOT_RUN_TESTS is false, no verification runs and no
+    CODERBOT_VERIFICATION event is emitted."""
+    task = Task(title="Test Task", pipeline_id="p1", design_doc="D", spec="S")
+    await task.insert()
+
+    session = CoderBotSession(pipeline_id="p1", task_id=str(task.id))
+    session.helper = MagicMock()
+    session.helper.branch_name = "branch"
+    repo = MagicMock()
+    repo.git.add = MagicMock()
+    repo.git.commit.return_value = "ok"
+    repo.git.diff.return_value = "test-patch"
+    session.helper.get_repo.return_value = repo
+
+    original = config.CODERBOT_RUN_TESTS
+    config.CODERBOT_RUN_TESTS = False
+    try:
+        with (
+            patch(
+                "api.coderbot.session.asyncio.create_subprocess_exec",
+                new_callable=AsyncMock,
+                side_effect=AssertionError("should not be called"),
+            ),
+            patch(
+                "api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock
+            ) as mock_broadcast,
+            patch(
+                "api.coderbot.session.Task.get", new_callable=AsyncMock
+            ) as mock_task_get,
+            patch(
+                "core.queries.task.transition_task", new_callable=AsyncMock
+            ),
+        ):
+            mock_task_get.return_value = task
+            await session._handle_agent_end(
+                [
+                    {
+                        "role": "assistant",
+                        "content": [{"type": "text", "text": "done."}],
+                    }
+                ]
+            )
+
+        verif_msgs = [
+            c
+            for c in mock_broadcast.await_args_list
+            if isinstance(c.args[0], WSMessage)
+            and c.args[0].type == "CODERBOT_VERIFICATION"
+        ]
+        assert not verif_msgs, "No CODERBOT_VERIFICATION event expected"
+    finally:
+        config.CODERBOT_RUN_TESTS = original

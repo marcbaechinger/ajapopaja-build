@@ -69,6 +69,13 @@ BASEBOT_LOG_ENABLED = os.getenv("BASEBOT_LOG_ENABLED", "true").lower() == "true"
 # If unset, no --model flag is passed to Pi (None).
 CODERBOT_DEFAULT_MODEL: Optional[str] = os.getenv("CODERBOT_DEFAULT_MODEL")
 
+# Run the documented project test suite in the sandbox after Pi finishes.
+CODERBOT_RUN_TESTS = os.getenv("CODERBOT_RUN_TESTS", "true").lower() == "true"
+
+# Optional override of the test commands (JSON list of argv). When unset,
+# the README commands are used.
+CODERBOT_TEST_COMMANDS_JSON = os.getenv("CODERBOT_TEST_COMMANDS_JSON", "")
+
 # Git identity used for commits when none is configured in the environment
 # (e.g. inside the Docker image). Overridable via environment variables.
 GIT_USER_NAME = os.getenv("GIT_USER_NAME", "Ajapopaja Build")

@@ -104,6 +104,8 @@ CODERBOT_DEFAULT_MODEL=deepseek-v4-flash:cloud
 | `SANDBOX_ROOT` | No | Directory inside the container where bot sandboxes are created. Default: `/data/ajapopaja/sandboxes`. |
 | `MCP_AUTHENTICATION_ENABLED` | No | Set `true` to enable MCP authentication. Default: `false`. |
 | `BASEBOT_LOG_ENABLED` | No | Set `false` to disable bot logging. Default: `true`. |
+| `CODERBOT_RUN_TESTS` | No | When `true` (default), CoderBot runs the project's documented test suite (see `README.md`) in the sandbox after Pi finishes, surfacing the results on the PR. Set `false` to skip this post-run verification. |
+| `CODERBOT_TEST_COMMANDS_JSON` | No | Optional JSON list of argv test commands overriding the README-documented ones. E.g. `[["sh","-c","cd backend && uv run pytest"]]`. When unset or invalid, the README commands are used. |
 
 ### 3.3 Important notes
 

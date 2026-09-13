@@ -35,6 +35,36 @@ from api.bot.git_helper import SandboxGitHelper
 
 logger = logging.getLogger(__name__)
 
+# Default test commands for the post-run verification hook, mirroring the
+# commands documented in the project README.md. Kept centralized so future
+# changes are a one-line edit. These are generic (they cd into the sub-parts
+# of the monorepo and run the documented suite) and work for any project whose
+# README documents these commands.
+DEFAULT_TEST_COMMANDS = [
+    # Backend
+    ["sh", "-c", "cd backend && uv run pytest"],
+    # Frontend
+    ["sh", "-c", "cd frontend && CI=true npm run test"],
+]
+
+# Instructions appended to the initial task prompt. They are generic and refer
+# to README.md as the authoritative source for the project's test commands, so
+# they remain correct for any project.
+TEST_INSTRUCTION = """\
+### Mandatory Verification
+This repository is a monorepo. Before finishing, you MUST run the full project
+test suite exactly as documented in README.md, fix any failures your changes
+cause, and re-run until green. The required commands are:
+
+- Backend: `cd backend && uv run pytest`
+- Frontend: `cd frontend && CI=true npm run test`
+
+Do NOT report the task as complete until these tests pass (or, if a failure is
+pre-existing and unrelated to your change, explain it in your summary
+instead). Include the test commands you ran and their outcome in your final
+completion summary.
+"""
+
 
 def slugify(task_id: str) -> str:
     """Sanitize task_id for safe use in file paths.
@@ -151,8 +181,86 @@ class CoderBotSession:
             f"Please implement the following task.\n\n"
             f"### Task: {task.title}\n\n"
             f"### Specification\n{spec}\n\n"
-            f"### Design Document\n{design_doc}"
+            f"### Design Document\n{design_doc}\n\n"
+            f"{TEST_INSTRUCTION}"
         )
+
+    def _get_verification_commands(self):
+        """Resolves the argv lists for the post-run test verification.
+
+        Uses the ``CODERBOT_TEST_COMMANDS_JSON`` override when set and valid,
+        otherwise falls back to the README-documented default commands.
+
+        Returns:
+            A list of argv lists (e.g. ``[["sh", "-c", "..."], ...]``).
+        """
+        raw = getattr(config, "CODERBOT_TEST_COMMANDS_JSON", "") or ""
+        if raw:
+            try:
+                parsed = json.loads(raw)
+                if isinstance(parsed, list):
+                    commands = [
+                        c for c in parsed if isinstance(c, list) and c
+                    ]
+                    if commands:
+                        return commands
+                logger.warning(
+                    "CODERBOT_TEST_COMMANDS_JSON is not a non-empty list; "
+                    "falling back to default test commands."
+                )
+            except (json.JSONDecodeError, ValueError) as e:
+                logger.warning(
+                    "Invalid CODERBOT_TEST_COMMANDS_JSON (%s); falling back "
+                    "to default test commands.",
+                    e,
+                )
+        return list(DEFAULT_TEST_COMMANDS)
+
+    async def _run_verification(self) -> Dict[str, Any]:
+        """Runs the project test commands in the sandbox and returns results.
+
+        The PR is created regardless of the outcome, but the returned dict flags
+        any failing command so a human can see the suite was red.
+
+        Returns:
+            A dict ``{"commands": [...], "passed": bool}`` where each command
+            entry contains the argv, the exit code and the tail of its output.
+        """
+        results: Dict[str, Any] = {"commands": [], "passed": True}
+        for entry in self._get_verification_commands():
+            cmd_str = " ".join(entry)
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    *entry,
+                    cwd=str(self.helper.sandbox_path),
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT,
+                )
+                out, _ = await proc.communicate()
+                tail = out.decode(errors="replace")[-2000:]
+                results["commands"].append(
+                    {
+                        "cmd": cmd_str,
+                        "exit_code": proc.returncode,
+                        "output_tail": tail,
+                    }
+                )
+                if proc.returncode != 0:
+                    results["passed"] = False
+            except Exception as e:
+                logger.error(
+                    "Verification command failed to run (%s): %s", cmd_str, e,
+                    exc_info=True,
+                )
+                results["commands"].append(
+                    {
+                        "cmd": cmd_str,
+                        "exit_code": None,
+                        "output_tail": str(e)[-2000:],
+                    }
+                )
+                results["passed"] = False
+        return results
 
     async def _broadcast_rpc(self, event: Dict[str, Any]):
         """Broadcasts a parsed Pi RPC event to connected websocket clients.
@@ -224,15 +332,69 @@ class CoderBotSession:
             elif not patch.endswith("\n"):
                 patch += "\n"
 
+            # Optional post-run verification: run the documented test suite in the
+            # sandbox before creating the PR. This is a hard guarantee that
+            # catches cases where Pi left the suite red. The PR is still created,
+            # but its summary flags any failing command.
+            verification_results = None
+            if config.CODERBOT_RUN_TESTS:
+                verification_results = await self._run_verification()
+                self._log_event(
+                    {"type": "coderbot_verification", "result": verification_results}
+                )
+                await ws_manager.broadcast(
+                    WSMessage(
+                        type="CODERBOT_VERIFICATION",
+                        payload={
+                            "task_id": self.task_id,
+                            "pipeline_id": self.pipeline_id,
+                            "bot_type": "coderbot",
+                            "result": verification_results,
+                        },
+                    )
+                )
+                if verification_results.get("passed"):
+                    logger.info("Post-run verification passed.")
+                else:
+                    logger.warning(
+                        "Post-run verification FAILED: %s", verification_results
+                    )
+
             # Load the task first so we can capture its title as the PR subject.
             task = await Task.get(self.task_id)
             task_title = task.title if task else ""
+
+            pr_summary = summary
+            if verification_results and verification_results.get("commands"):
+                status = "PASSED" if verification_results.get("passed") else "FAILED"
+                lines = [
+                    "",
+                    "### Verification",
+                    f"Status: **{status}**",
+                ]
+                for entry in verification_results["commands"]:
+                    exit_code = entry.get("exit_code")
+                    lines.append(
+                        f"- `{entry.get('cmd')}` -> exit code {exit_code}"
+                    )
+                if not verification_results.get("passed"):
+                    for entry in verification_results["commands"]:
+                        if entry.get("exit_code") not in (0, None):
+                            tail = entry.get("output_tail", "").rstrip()
+                            if tail:
+                                lines.append(
+                                    f"\nOutput tail of `{entry.get('cmd')}`:\n"
+                                    "```\n"
+                                    f"{tail}"
+                                    "\n```"
+                                )
+                pr_summary = summary + "\n".join(lines)
 
             pr = PullRequest(
                 pipeline_id=self.pipeline_id,
                 task_id=self.task_id,
                 subject=task_title,
-                summary=summary,
+                summary=pr_summary,
                 branch_name=self.helper.branch_name,
                 patch=patch,
                 status=PullRequestStatus.OPEN,
