@@ -163,12 +163,6 @@ export class CoderBotService {
       case 'agent_settled':
         this.addBlock({ kind: 'notice', text: '● Agent settled (no pending work)' });
         break;
-      case 'turn_start':
-        this.addBlock({ kind: 'divider', text: '— turn start —' });
-        break;
-      case 'turn_end':
-        this.addBlock({ kind: 'divider', text: '— turn end —' });
-        break;
       case 'bash_execution_update':
         this.handleBashUpdate(event);
         break;
