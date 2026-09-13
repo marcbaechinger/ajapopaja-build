@@ -16,6 +16,8 @@
 
 import type { RenderBlock } from '../../core/CoderBotService.ts';
 import { Icon } from './Icon.ts';
+import { KeybindingManager } from './KeybindingManager.ts';
+import './Keybinding.css';
 
 /**
  * Minimal interface describing the Pi-session capabilities a standalone Pi
@@ -49,6 +51,16 @@ export interface PiViewOptions {
    * when the log has no content and no session is running.
    */
   emptyStateAction?: EmptyStateAction;
+  /**
+   * Configurable keyboard shortcuts mapping a logical action name to a key
+   * string (e.g. 'f', 'ctrl+c', 'shift+N', '/'). These are merged over the
+   * defaults, so you only need to provide the bindings you want to change.
+   * Supported action names:
+   * 'toggle-follow' | 'copy-all-log' | 'focus-search' | 'next-error' |
+   * 'prev-error' | 'clear-logs' | 'stop-bot' | 'toggle-thinking' |
+   * 'toggle-block-collapse' | 'toggle-error-visibility' | 'toggle-search'.
+   */
+  keyboardBindings?: Record<string, string>;
 }
 
 /** A button shown inside the empty-state placeholder. */
@@ -105,6 +117,9 @@ export class PiView {
   /** Whether the in-log search bar is hidden (collapsed). Default: collapsed. */
   private searchCollapsed: boolean = true;
 
+  /** Configurable keyboard shortcut map (merged over defaults). */
+  private keyboardBindings: Record<string, string>;
+
   /** In-log search state. */
   private searchQuery: string = '';
   private debounceTimer: number | null = null;
@@ -126,6 +141,7 @@ export class PiView {
     this.isFollowMode = options.followInitially ?? true;
     this.logHeightClass = options.logHeightClass ?? 'h-[60vh]';
     this.emptyStateAction = options.emptyStateAction;
+    this.keyboardBindings = options.keyboardBindings ?? {};
   }
 
   /** The element the PiView was mounted into. */
@@ -144,8 +160,7 @@ export class PiView {
       this.updateCollapseBtn();
       this.updateErrorBtn();
     }
-    document.addEventListener('keydown', this.handleKeydown);
-    this.unsubs.push(() => document.removeEventListener('keydown', this.handleKeydown));
+    this.initKeyBindings();
     this.initLogDisplay();
     this.initStateSync();
   }
@@ -506,23 +521,93 @@ export class PiView {
     }
   };
 
-  private handleKeydown = (e: KeyboardEvent): void => {
-    const target = e.target as HTMLElement | null;
-    if (!target || !this.root.contains(target)) return;
-    // Don't hijack keys while the user is typing in a search/editable field.
-    if (target.closest('input, textarea, select, [contenteditable="true"]')) return;
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
-    if (e.key === 'c' || e.key === 'C') {
-      e.preventDefault();
-      this.copyAllLog();
-    } else if (e.key === 'n') {
-      e.preventDefault();
-      this.nextError();
-    } else if (e.key === 'N') {
-      e.preventDefault();
-      this.prevError();
+  // ---------------------------------------------------------------------------
+  // Keyboard shortcuts
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Registers the configurable keyboard shortcut map (defaults merged with
+   * user overrides) against a scoped `KeybindingManager` and schedules its
+   * teardown when the view is destroyed.
+   */
+  private initKeyBindings() {
+    const kb = new KeybindingManager(this.root);
+    const defaults: Record<string, string> = {
+      'toggle-follow': 'f',
+      'copy-all-log': 'c',
+      'focus-search': '/',
+      'next-error': 'n',
+      'prev-error': 'N',
+      'clear-logs': 'x',
+      'stop-bot': 's',
+      'toggle-thinking': 't',
+      'toggle-block-collapse': 'b',
+      'toggle-error-visibility': 'e',
+      'toggle-search': 'k',
+    };
+    const bindings = { ...defaults, ...this.keyboardBindings };
+    Object.entries(bindings).forEach(([action, key]) => {
+      kb.register({ key, action, handler: () => this.invokeBinding(action) });
+    });
+    this.unsubs.push(() => kb.destroy());
+  }
+
+  /** Dispatches a logical action and flashes the corresponding button. */
+  private invokeBinding(action: string) {
+    switch (action) {
+      case 'toggle-follow':
+        this.toggleFollow();
+        break;
+      case 'copy-all-log':
+        this.copyAllLog();
+        break;
+      case 'focus-search':
+        this.focusSearch();
+        break;
+      case 'next-error':
+        this.nextError();
+        break;
+      case 'prev-error':
+        this.prevError();
+        break;
+      case 'clear-logs':
+        this.service.clearHistory();
+        break;
+      case 'stop-bot':
+        this.stopBot();
+        break;
+      case 'toggle-thinking':
+        this.toggleThinking();
+        break;
+      case 'toggle-block-collapse':
+        this.toggleBlocksCollapse();
+        break;
+      case 'toggle-error-visibility':
+        this.toggleErrorVisibility();
+        break;
+      case 'toggle-search':
+        this.toggleSearchBar();
+        break;
+      default:
+        return;
     }
-  };
+    this.flashButton(action);
+  }
+
+  /** Temporarily flashes a toolbar button to indicate the shortcut fired. */
+  private flashButton(action: string) {
+    const btn = this.root.querySelector(`[data-action="${action}"]`);
+    if (!btn) return;
+    btn.classList.add('shortcut-active');
+    window.setTimeout(() => btn.classList.remove('shortcut-active'), 200);
+  }
+
+  /** Expands (if needed) and focuses the in-log search input. */
+  private focusSearch() {
+    if (this.searchCollapsed) this.toggleSearchBar();
+    const input = this.root.querySelector('#piview-search-input') as HTMLInputElement | null;
+    input?.focus();
+  }
 
   // ---------------------------------------------------------------------------
   // In-log search / find

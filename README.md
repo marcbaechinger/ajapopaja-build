@@ -57,6 +57,11 @@ Agents work on real code inside isolated sandboxes and report back through the U
   session output with follow‑mode auto‑scroll, collapsible `thinking`/`tool`
   blocks, an error visibility toggle, copy‑to‑clipboard, an elapsed‑time
   indicator, and empty / session‑ended states.
+- **Configurable keyboard shortcuts** – PiView ships with global shortcuts
+  (`/` focus search, `f` toggle follow, `n`/`N` next/prev error, `c` copy,
+  `x` clear, `s` stop, `t` thinking, `b` collapse, `e` error visibility, `k`
+  show search bar) that can be per‑instance remapped via the `keyboardBindings`
+  option.
 - **Secure by default** – JWT‑based authentication across the API, sandboxed
   workspaces with path‑traversal protection, and Markdown sanitization.
 
