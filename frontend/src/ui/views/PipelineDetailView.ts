@@ -1235,7 +1235,7 @@ export class PipelineDetailView extends View {
 
         <div class="flex flex-1 min-h-0">
           <!-- Left Sidebar: BacklogView -->
-          <aside class="w-64 flex-none shrink-0 border-r border-app-border/60 bg-app-surface/30 overflow-y-auto">
+          <aside class="w-80 flex-none shrink-0 border-r border-app-border/60 bg-app-surface/30 overflow-y-auto">
             <div id="backlog-view" class="min-h-full">
               <p class="text-app-muted/40 text-[10px] uppercase font-bold tracking-widest text-center py-6">Loading backlog...</p>
             </div>
