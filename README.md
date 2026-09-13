@@ -50,6 +50,13 @@ Agents work on real code inside isolated sandboxes and report back through the U
   `pi` skill and `mcp_client.py` CLI make task search/management scriptable.
 - **Real‑time UI** – WebSocket‑driven dashboard with a git‑status indicator,
   multi‑layout columns, persisted state, and a streaming logs viewer.
+- **Compact pipeline history** – the `PipelineHistoryView` lists the implemented
+  tasks in a compact, paged feed (page size 10) at the bottom of the right
+  sidebar, below the streaming CoderBot activity log.
+- **Detailed CoderBot activity** – the `PiView` terminal‑style log streams live
+  session output with follow‑mode auto‑scroll, collapsible `thinking`/`tool`
+  blocks, an error visibility toggle, copy‑to‑clipboard, an elapsed‑time
+  indicator, and empty / session‑ended states.
 - **Secure by default** – JWT‑based authentication across the API, sandboxed
   workspaces with path‑traversal protection, and Markdown sanitization.
 

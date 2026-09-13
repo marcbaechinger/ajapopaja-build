@@ -107,6 +107,23 @@ This document defines the architecture and design principles for the Ajapopaja B
 - **Task Column**: `frontend/src/ui/components/TaskColumn.ts`
 - **Task Form**: `frontend/src/ui/components/TaskForm.ts`
 - **Pipeline Stats**: `frontend/src/ui/components/PipelineStatsView.ts`
+- **Pipeline History**: `frontend/src/ui/components/PipelineHistoryView.ts`
+  - Renders the settled tasks of a pipeline as a compact, flat "History Feed"
+    list in the right sidebar (below the Execution Engine). Each settled task is
+    rendered as a `HistoryItemView` and the `PaginationControl` navigates the
+    feed with a fixed page size of 10; the first page is shown by default.
+- **History Item**: `frontend/src/ui/components/HistoryItemView.ts`
+- **Pagination Control**: `frontend/src/ui/components/PaginationControl.ts`
+- **Execution Engine**: `frontend/src/ui/components/ExecutionEngineView.ts`
+  - Right-side panel of the `PipelineDetailView` that groups tasks handled by
+    the execution engine into **In Progress**, **Queue** and **Failed** sections,
+    embeds the `PiView` CoderBot activity log, and hosts the `PipelineHistoryView`
+    at the bottom.
+- **Pi View**: `frontend/src/ui/components/PiView.ts`
+  - Terminal-style CoderBot activity log with live streaming, follow-mode
+    auto-scroll, collapsible `thinking`/`tool` blocks, an error visibility
+    toggle, copy-to-clipboard, an elapsed-time indicator, and empty /
+    session-ended states.
 
 ## 8. Dialog System
 
