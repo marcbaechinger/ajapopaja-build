@@ -31,7 +31,12 @@ class GiteaApiError(Exception):
 
 
 class GiteaClient:
-    """Async client for the Gitea REST API, focused on pull-request creation."""
+    """Async client for the Gitea REST API.
+
+    Provides support for reading and writing issues and pull requests. The Gitea
+    REST API mirrors the GitHub REST API closely enough that this client can also
+    be used against GitHub-compatible hosts.
+    """
 
     def __init__(self, base_url: str, token: str) -> None:
         self.base_url = base_url.rstrip("/")
@@ -104,6 +109,110 @@ class GiteaClient:
                 detail=response.text,
             )
         return f"{self.base_url}/{owner}/{repo}/pulls/{number}"
+
+    async def _get_json(self, path: str, params: dict | None = None) -> list | dict:
+        """Perform a GET request and return the parsed JSON body."""
+        response = await self._request("GET", path, params=params or {})
+        return response.json()
+
+    async def list_issues(
+        self,
+        owner: str,
+        repo: str,
+        *,
+        state: str = "open",
+        type: str = "issues",
+        assignee: str | None = None,
+        labels: str | None = None,
+        page: int = 1,
+        per_page: int = 20,
+    ) -> list:
+        """GET /repos/{owner}/{repo}/issues -> list of issues (or PRs).
+
+        Args:
+            state: One of 'open', 'closed', or 'all'.
+            type: One of 'issues', 'pulls', or 'all'.
+            assignee: Restrict to issues assigned to this username.
+            labels: Comma-separated list of labels to filter by.
+            page: Page number to return.
+            per_page: Number of items per page (max 100).
+        """
+        params: dict = {
+            "state": state,
+            "type": type,
+            "page": page,
+            "limit": per_page,
+        }
+        if assignee:
+            params["assigned"] = assignee
+        if labels:
+            params["labels"] = labels
+        return await self._get_json(f"/repos/{owner}/{repo}/issues", params=params)
+
+    async def get_issue(self, owner: str, repo: str, index: int) -> dict:
+        """GET /repos/{owner}/{repo}/issues/{index} -> single issue or PR."""
+        return await self._get_json(f"/repos/{owner}/{repo}/issues/{index}")
+
+    async def list_issue_comments(self, owner: str, repo: str, index: int) -> list:
+        """GET /repos/{owner}/{repo}/issues/{index}/comments -> issue comments."""
+        return await self._get_json(f"/repos/{owner}/{repo}/issues/{index}/comments")
+
+    async def create_issue_comment(
+        self, owner: str, repo: str, index: int, body: str
+    ) -> dict:
+        """POST /repos/{owner}/{repo}/issues/{index}/comments -> the created comment."""
+        response = await self._request(
+            "POST",
+            f"/repos/{owner}/{repo}/issues/{index}/comments",
+            json={"body": body},
+        )
+        return response.json()
+
+    async def close_issue(self, owner: str, repo: str, index: int) -> dict:
+        """PATCH /repos/{owner}/{repo}/issues/{index} -> the closed issue."""
+        response = await self._request(
+            "PATCH",
+            f"/repos/{owner}/{repo}/issues/{index}",
+            json={"state": "closed"},
+        )
+        return response.json()
+
+    async def create_issue(
+        self,
+        owner: str,
+        repo: str,
+        *,
+        title: str,
+        body: str = "",
+        assignees: list[str] | None = None,
+    ) -> dict:
+        """POST /repos/{owner}/{repo}/issues -> the created issue."""
+        payload: dict = {"title": title, "body": body}
+        if assignees:
+            payload["assignees"] = assignees
+        response = await self._request(
+            "POST", f"/repos/{owner}/{repo}/issues", json=payload
+        )
+        return response.json()
+
+    async def list_pull_requests(
+        self,
+        owner: str,
+        repo: str,
+        *,
+        state: str = "open",
+        page: int = 1,
+        per_page: int = 20,
+    ) -> list:
+        """GET /repos/{owner}/{repo}/pulls -> list of pull requests."""
+        return await self._get_json(
+            f"/repos/{owner}/{repo}/pulls",
+            params={"state": state, "page": page, "limit": per_page},
+        )
+
+    async def get_pull_request(self, owner: str, repo: str, index: int) -> dict:
+        """GET /repos/{owner}/{repo}/pulls/{index} -> single pull request."""
+        return await self._get_json(f"/repos/{owner}/{repo}/pulls/{index}")
 
     async def aclose(self) -> None:
         await self._client.aclose()

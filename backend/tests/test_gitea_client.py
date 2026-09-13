@@ -88,3 +88,128 @@ async def test_create_pull_request_raises_on_non_2xx():
 
     assert excinfo.value.status_code == 422
     assert "bad" in excinfo.value.detail
+
+
+@pytest.mark.asyncio
+async def test_list_issues_builds_request():
+    client = GiteaClient("https://host", "tok")
+    response = MagicMock()
+    response.status_code = 200
+    response.json.return_value = [{"number": 1, "title": "Bug"}]
+
+    with patch.object(
+        client._client, "request", new=AsyncMock(return_value=response)
+    ) as mock_req:
+        issues = await client.list_issues(
+            "owner", "repo", state="closed", assignee="alice", labels="bug,ui"
+        )
+
+    assert issues == [{"number": 1, "title": "Bug"}]
+    args, kwargs = mock_req.await_args
+    assert args[0] == "GET"
+    assert args[1] == "https://host/api/v1/repos/owner/repo/issues"
+    assert kwargs["params"] == {
+        "state": "closed",
+        "type": "issues",
+        "page": 1,
+        "limit": 20,
+        "assigned": "alice",
+        "labels": "bug,ui",
+    }
+
+
+@pytest.mark.asyncio
+async def test_list_pull_requests_builds_request():
+    client = GiteaClient("https://host", "tok")
+    response = MagicMock()
+    response.status_code = 200
+    response.json.return_value = [{"number": 7, "title": "PR"}]
+
+    with patch.object(
+        client._client, "request", new=AsyncMock(return_value=response)
+    ) as mock_req:
+        prs = await client.list_pull_requests("owner", "repo", state="all", per_page=50)
+
+    assert prs == [{"number": 7, "title": "PR"}]
+    args, kwargs = mock_req.await_args
+    assert args[1] == "https://host/api/v1/repos/owner/repo/pulls"
+    assert kwargs["params"] == {"state": "all", "page": 1, "limit": 50}
+
+
+@pytest.mark.asyncio
+async def test_get_issue_uses_index_in_path():
+    client = GiteaClient("https://host", "tok")
+    response = MagicMock()
+    response.status_code = 200
+    response.json.return_value = {"number": 3, "title": "Detail"}
+
+    with patch.object(
+        client._client, "request", new=AsyncMock(return_value=response)
+    ) as mock_req:
+        issue = await client.get_issue("owner", "repo", 3)
+
+    assert issue["number"] == 3
+    args, _ = mock_req.await_args
+    assert args[1] == "https://host/api/v1/repos/owner/repo/issues/3"
+
+
+@pytest.mark.asyncio
+async def test_create_issue_comment_posts_json():
+    client = GiteaClient("https://host", "tok")
+    response = MagicMock()
+    response.status_code = 201
+    response.json.return_value = {"id": 9, "body": "hello"}
+
+    with patch.object(
+        client._client, "request", new=AsyncMock(return_value=response)
+    ) as mock_req:
+        result = await client.create_issue_comment("owner", "repo", 2, "hello")
+
+    assert result == {"id": 9, "body": "hello"}
+    args, kwargs = mock_req.await_args
+    assert args[0] == "POST"
+    assert args[1] == "https://host/api/v1/repos/owner/repo/issues/2/comments"
+    assert kwargs["json"] == {"body": "hello"}
+
+
+@pytest.mark.asyncio
+async def test_close_issue_patches_state():
+    client = GiteaClient("https://host", "tok")
+    response = MagicMock()
+    response.status_code = 200
+    response.json.return_value = {"number": 5, "state": "closed"}
+
+    with patch.object(
+        client._client, "request", new=AsyncMock(return_value=response)
+    ) as mock_req:
+        result = await client.close_issue("owner", "repo", 5)
+
+    assert result["state"] == "closed"
+    args, kwargs = mock_req.await_args
+    assert args[0] == "PATCH"
+    assert kwargs["json"] == {"state": "closed"}
+
+
+@pytest.mark.asyncio
+async def test_create_issue_posts_assignees():
+    client = GiteaClient("https://host", "tok")
+    response = MagicMock()
+    response.status_code = 201
+    response.json.return_value = {"number": 10, "title": "New"}
+
+    with patch.object(
+        client._client, "request", new=AsyncMock(return_value=response)
+    ) as mock_req:
+        result = await client.create_issue(
+            "owner", "repo", title="New", body="desc", assignees=["alice", "bob"]
+        )
+
+    assert result["number"] == 10
+    args, kwargs = mock_req.await_args
+    assert args[0] == "POST"
+    assert args[1] == "https://host/api/v1/repos/owner/repo/issues"
+    assert kwargs["json"] == {
+        "title": "New",
+        "body": "desc",
+        "assignees": ["alice", "bob"],
+    }

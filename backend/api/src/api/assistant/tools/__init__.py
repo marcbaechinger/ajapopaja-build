@@ -19,6 +19,7 @@ Assistant tools module.
 from . import (
     file_tools,
     git_tools,
+    github_issues_tools,
     nvim_tools,
     pipeline_tools,
     search_tools,
@@ -28,6 +29,7 @@ from . import (
 __all__ = [
     "file_tools",
     "git_tools",
+    "github_issues_tools",
     "nvim_tools",
     "pipeline_tools",
     "search_tools",
