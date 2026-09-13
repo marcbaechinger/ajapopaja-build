@@ -87,6 +87,24 @@ describe('HistoryItemView', () => {
     expect(html).toContain('Done');
   });
 
+  it('should keep the implementation summary collapsed by default', () => {
+    const html = HistoryItemView.render(baseTask as any);
+    const summary = html.match(/<details class="group\/summary[\s\S]*?<\/details>/);
+    expect(summary).not.toBeNull();
+    expect(summary![0]).toContain('Implementation Summary');
+    // no 'open' attribute -> collapsed by default
+    expect(summary![0]).not.toMatch(/<details[^>]*open/);
+  });
+
+  it('should render delete and fail actions in the bottom-right action bar', () => {
+    const html = HistoryItemView.render(baseTask as any);
+    const actionBar = html.match(/<div class="flex justify-end[\s\S]*?<\/div>/);
+    expect(actionBar).not.toBeNull();
+    expect(actionBar![0]).toContain('data-action-click="delete_task"');
+    expect(actionBar![0]).toContain('data-action-click="fail_task"');
+    expect(actionBar![0]).toContain('Mark as Failed');
+  });
+
   it('should keep the status history collapsed by default', () => {
     const html = HistoryItemView.render(baseTask as any);
     expect(html).toContain('Status History');

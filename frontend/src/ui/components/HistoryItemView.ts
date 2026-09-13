@@ -102,30 +102,33 @@ export class HistoryItemView {
             <span class="text-xs px-2 py-1 rounded font-bold uppercase ${task.status === TaskStatus.IMPLEMENTED ? 'bg-green-600 text-white' : 'bg-teal-600 text-white'}">
               ${task.status}
             </span>
-            <button data-action-click="delete_task"
-                    class="p-1.5 hover:bg-red-500/20 text-app-muted hover:text-red-400 rounded transition-all cursor-pointer" title="Delete Task">
-              ${Icon.render('trash', { size: 16 })}
-            </button>
-            <button data-action-click="fail_task" data-version="${task.version}"
-                    class="text-xs text-red-400 hover:text-red-300 px-3 py-1 rounded transition-all cursor-pointer">
-              Mark as Failed
-            </button>
           </div>
         </div>
 
         ${task.completion_info ? `
-          <div class="bg-green-500/10 border border-green-500/20 p-3 rounded-lg text-sm text-app-text/80">
-            <div class="font-bold text-green-400 mb-1 flex items-center gap-2">
-               ${Icon.render('check', { size: 16 })}
+          <details class="group/summary bg-green-500/10 border border-green-500/20 p-3 rounded-lg text-sm text-app-text/80">
+            <summary class="font-bold text-green-400 flex items-center gap-2 cursor-pointer list-none hover:text-green-300 transition-colors">
+               ${Icon.render('chevronRight', { size: 16, className: 'text-green-400 transition-transform group-open/summary:rotate-90' })}
                Implementation Summary
-            </div>
-            <div class="prose-theme prose-sm max-w-none text-app-text/80 marker:text-green-500">
+            </summary>
+            <div class="prose-theme prose-sm max-w-none text-app-text/80 marker:text-green-500 mt-2">
               ${DOMPurify.sanitize(marked.parse(task.completion_info) as string)}
             </div>
-          </div>
+          </details>
         ` : ''}
 
         ${renderStatusHistorySection(task, false)}
+
+        <div class="flex justify-end items-center gap-2" data-action-click="none">
+          <button data-action-click="fail_task" data-version="${task.version}"
+                  class="text-xs text-red-400 hover:text-red-300 px-3 py-1 rounded transition-all cursor-pointer">
+            Mark as Failed
+          </button>
+          <button data-action-click="delete_task"
+                  class="p-1.5 hover:bg-red-500/20 text-app-muted hover:text-red-400 rounded transition-all cursor-pointer" title="Delete Task">
+            ${Icon.render('trash', { size: 16 })}
+          </button>
+        </div>
       </div>
     `;
   }
