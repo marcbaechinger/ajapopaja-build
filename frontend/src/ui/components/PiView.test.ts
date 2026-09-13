@@ -709,6 +709,36 @@ describe('PiView', () => {
     expect(mount.querySelector('#piview-empty-state-action')).toBeNull();
   });
 
+  it('search bar is collapsed by default and toggled by the right-aligned search icon', () => {
+    const { service } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    const bar = mount.querySelector('#piview-search-bar') as HTMLElement;
+    expect(bar).not.toBeNull();
+    // Collapsed by default.
+    expect(bar.classList.contains('hidden')).toBe(true);
+
+    const toggleBtn = mount.querySelector('#search-toggle-btn') as HTMLButtonElement;
+    expect(toggleBtn).not.toBeNull();
+    // Search icon present and button reflects the collapsed state.
+    expect(toggleBtn.getAttribute('aria-label')).toContain('Show search bar');
+    expect(toggleBtn.getAttribute('aria-pressed')).toBe('false');
+
+    // Toggle -> search bar becomes visible.
+    toggleBtn.click();
+    expect(bar.classList.contains('hidden')).toBe(false);
+    expect(toggleBtn.getAttribute('aria-label')).toContain('Hide search bar');
+    expect(toggleBtn.getAttribute('aria-pressed')).toBe('true');
+
+    // Toggle again -> collapsed.
+    toggleBtn.click();
+    expect(bar.classList.contains('hidden')).toBe(true);
+    expect(toggleBtn.getAttribute('aria-label')).toContain('Show search bar');
+
+    view.destroy();
+  });
+
   // -------------------------------------------------------------------------
   // In-log search / find
   // -------------------------------------------------------------------------

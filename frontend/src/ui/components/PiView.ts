@@ -102,6 +102,9 @@ export class PiView {
   private blockTimestamps: Map<string, number> = new Map();
   private copyToastTimer: number | null = null;
 
+  /** Whether the in-log search bar is hidden (collapsed). Default: collapsed. */
+  private searchCollapsed: boolean = true;
+
   /** In-log search state. */
   private searchQuery: string = '';
   private debounceTimer: number | null = null;
@@ -324,7 +327,19 @@ export class PiView {
     copyAllBtn.innerHTML = Icon.render('copyRects', { size: 14, label: 'Copy entire log' });
     actions.appendChild(copyAllBtn);
 
+    const searchToggleBtn = document.createElement('button');
+    searchToggleBtn.setAttribute('data-action', 'toggle-search');
+    searchToggleBtn.id = 'search-toggle-btn';
+    searchToggleBtn.className =
+      'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer';
+    searchToggleBtn.setAttribute('aria-label', 'Show search bar');
+    searchToggleBtn.title = 'Show search bar';
+    searchToggleBtn.setAttribute('aria-pressed', 'false');
+    searchToggleBtn.innerHTML = this.cleanIcon(Icon.render('search', { size: 14 }));
+    // Main action buttons on the left, search toggle right-aligned.
     actionsRow.appendChild(actions);
+    actionsRow.appendChild(searchToggleBtn);
+
     footer.appendChild(actionsRow);
 
     // Delegate action clicks on the root so the handler survives footer rebuilds
@@ -339,7 +354,10 @@ export class PiView {
     const wrap = document.createElement('div');
     wrap.id = 'piview-search-bar';
     wrap.setAttribute('role', 'search');
-    wrap.className = 'flex items-center gap-1.5 flex-wrap';
+    // Collapsed by default; toggled via the search icon in the action bar.
+    wrap.className = this.searchCollapsed
+      ? 'hidden flex items-center gap-1.5 flex-wrap'
+      : 'flex items-center gap-1.5 flex-wrap';
 
     const label = document.createElement('label');
     label.setAttribute('for', 'piview-search-input');
@@ -443,6 +461,8 @@ export class PiView {
       this.toggleBlocksCollapse();
     } else if (action === 'toggle-error-visibility') {
       this.toggleErrorVisibility();
+    } else if (action === 'toggle-search') {
+      this.toggleSearchBar();
     } else if (action === 'copy-all-log') {
       this.copyAllLog();
     }
@@ -993,6 +1013,27 @@ export class PiView {
     btn.innerHTML = this.cleanIcon(Icon.render(visible ? 'eye' : 'eyeOff', { size: 14 }));
     btn.setAttribute('aria-pressed', String(visible));
     const label = visible ? 'Hide error blocks' : 'Show error blocks';
+    btn.setAttribute('aria-label', label);
+    btn.title = label;
+  }
+
+  /**
+   * Toggles the visibility of the in-log search bar.
+   */
+  private toggleSearchBar() {
+    this.searchCollapsed = !this.searchCollapsed;
+    const bar = this.root.querySelector('#piview-search-bar');
+    if (bar) bar.classList.toggle('hidden', this.searchCollapsed);
+    this.updateSearchToggleBtn();
+  }
+
+  private updateSearchToggleBtn() {
+    const btn = this.root.querySelector('#search-toggle-btn') as HTMLElement | null;
+    if (!btn) return;
+    const collapsed = this.searchCollapsed;
+    btn.innerHTML = this.cleanIcon(Icon.render(collapsed ? 'search' : 'close', { size: 14 }));
+    btn.setAttribute('aria-pressed', String(!collapsed));
+    const label = collapsed ? 'Show search bar' : 'Hide search bar';
     btn.setAttribute('aria-label', label);
     btn.title = label;
   }
