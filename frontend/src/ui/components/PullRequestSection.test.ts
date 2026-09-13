@@ -24,6 +24,7 @@ describe('PullRequestSection', () => {
     pipeline_id: 'p1',
     task_id: 't1',
     summary: 'summary',
+    subject: 'task subject',
     branch_name: 'feature/x',
     patch: 'diff',
     status: PullRequestStatus.OPEN,
@@ -39,7 +40,7 @@ describe('PullRequestSection', () => {
       makePr({ _id: 'd', status: PullRequestStatus.REJECTED })
     ];
     const html = PullRequestSection.render(prs);
-    expect(html).toContain('summary');
+    expect(html).toContain('task subject');
     expect(html).toContain('Review');
     expect(html).toContain('Accept');
     // Submitted, accepted and rejected are not shown.
@@ -65,8 +66,8 @@ describe('PullRequestSection', () => {
 
   it('omits SUBMITTED PRs from the list', () => {
     const prs = [
-      makePr({ _id: 'a', status: PullRequestStatus.OPEN, summary: 'open-one' }),
-      makePr({ _id: 'b', status: PullRequestStatus.SUBMITTED, summary: 'submitted-one' })
+      makePr({ _id: 'a', status: PullRequestStatus.OPEN, subject: 'open-one' }),
+      makePr({ _id: 'b', status: PullRequestStatus.SUBMITTED, subject: 'submitted-one' })
     ];
     const html = PullRequestSection.render(prs);
     expect(html).toContain('open-one');

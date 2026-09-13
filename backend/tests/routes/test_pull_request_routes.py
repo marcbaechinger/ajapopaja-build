@@ -135,17 +135,17 @@ def test_build_commit_message_uses_request_when_provided():
 
 def test_build_commit_message_returns_empty_string_when_both_empty():
     mock_pr = MagicMock()
-    mock_pr.summary = None
+    mock_pr.subject = None
     request = pr_routes.AcceptPullRequestRequest(
         commit_message=None, failure_strategy=pr_routes.FailureStrategy.REVERT
     )
     assert pr_routes.build_commit_message(request, mock_pr) == ""
 
 
-def test_build_commit_message_none_request():
+def test_build_commit_message_falls_back_to_subject():
     mock_pr = MagicMock()
-    mock_pr.summary = "summary"
-    assert pr_routes.build_commit_message(None, mock_pr) == "summary"
+    mock_pr.subject = "Task title"
+    assert pr_routes.build_commit_message(None, mock_pr) == "Task title"
 
 
 def test_is_gitea_pr_mode_remote_and_flag(monkeypatch):

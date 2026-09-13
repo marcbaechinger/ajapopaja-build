@@ -54,7 +54,7 @@ export class PullRequestSection {
       <div class="bg-app-surface border border-app-border rounded-2xl p-4 shadow-sm group hover:border-app-accent-2/40 transition-all duration-300">
         <div class="flex justify-between items-start gap-4">
           <div class="flex-grow min-w-0">
-            <h4 class="font-bold text-app-text mb-1 truncate">${pr.summary}</h4>
+            <h4 class="font-bold text-app-text mb-1 truncate">${pr.subject}</h4>
             <p class="text-[10px] text-app-muted font-mono bg-app-bg px-2 py-0.5 rounded inline-block border border-app-border/50">
               branch: ${pr.branch_name}
             </p>

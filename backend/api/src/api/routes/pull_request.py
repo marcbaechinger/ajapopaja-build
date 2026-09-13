@@ -237,8 +237,12 @@ async def keep_task_pending_review(
 def build_commit_message(
     request: Optional[AcceptPullRequestRequest], pr: PullRequest
 ) -> str:
-    """Build the commit message from the request, falling back to the PR summary."""
-    return ((request.commit_message if request else None) or pr.summary) or ""
+    """Build the commit message from the request, falling back to the PR subject.
+
+    The subject carries the title of the Task that was implemented, which is
+    the desired commit message for the change.
+    """
+    return ((request.commit_message if request else None) or pr.subject) or ""
 
 
 # =============================================================================
