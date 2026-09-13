@@ -1096,8 +1096,7 @@ export class PipelineDetailView extends View {
 
       const completedTasks = allTasks.filter(t => !t.deleted && ([TaskStatus.IMPLEMENTED, TaskStatus.SUBMITTED, TaskStatus.DISCARDED] as any[]).includes(t.status));
 
-      // 1. Render Preparation Column (PROPOSED/CREATED tasks now only live in the
-      // sidebar BacklogView; the main area keeps the PullRequest section only).
+      // 1. Render Preparation Column (the main area keeps the PullRequest section only).
       prepContainer.innerHTML = `
         ${PullRequestSection.render(this.pullRequests)}
       `;
