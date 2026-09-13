@@ -1500,6 +1500,7 @@ export class PipelineDetailView extends View {
       this.insertTaskIntoDOM(task);
     }
     this.refreshBacklog();
+    this.refreshSelectedTask();
   }
 
   private refreshSelectedTask() {

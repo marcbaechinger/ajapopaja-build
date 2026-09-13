@@ -184,6 +184,37 @@ describe('PipelineDetailView Layout', () => {
     expect(selectedView!.innerHTML).toContain('Currently Worked On');
     expect(selectedView!.innerHTML).not.toContain('Select a task from the backlog');
   });
+
+  it('should refresh the selected TaskView (version) when the task updates over WS', async () => {
+    let tasksHandler: ((payload: any) => void) | undefined;
+    mockContext.dataManager.on = vi.fn((query: string, cb: any) => {
+      if (query.startsWith('pipeline:tasks:')) tasksHandler = cb;
+      return () => {};
+    });
+    mockContext.taskClient.listByPipeline.mockResolvedValue([
+      { id: 'c1', title: 'Selected Task', spec: 'v1', status: TaskStatus.CREATED, deleted: false, version: 1, order: 0, type: 'manual', want_design_doc: false },
+    ]);
+
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+    container.innerHTML = view.render() as string;
+    await view.refreshTasks();
+
+    // select the task
+    const selectAction = mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === 'select_task')![1];
+    const el = document.createElement('div');
+    el.setAttribute('data-view-id', 'c1');
+    selectAction(new Event('click'), el);
+
+    const selectedView = container.querySelector('#selected-task-view') as HTMLElement;
+    expect(selectedView.innerHTML).toContain('Selected Task');
+    expect(selectedView.innerHTML).toContain('data-version="1"');
+
+    // simulate the WS TASK_UPDATED carrying the bumped version
+    tasksHandler!({ id: 'c1', title: 'Selected Task', spec: 'v2', status: TaskStatus.CREATED, deleted: false, version: 2, order: 0, type: 'manual', want_design_doc: false });
+
+    expect(selectedView.innerHTML).toContain('data-version="2"');
+  });
 });
 
 describe('PipelineDetailView Review Notifications', () => {
