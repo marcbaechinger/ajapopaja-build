@@ -71,17 +71,17 @@ describe('TaskItem', () => {
     expect(html).toContain('data-action-click="edit_design_doc"');
   });
 
-  it('should render specification with Show More button by default', () => {
-    const taskWithSpec = { 
-      ...mockTask, 
+  it('should render specification expanded by default', () => {
+    const taskWithSpec = {
+      ...mockTask,
       spec: 'My spec'
     };
     const html = TaskItem.render(taskWithSpec as any);
-    
+
     expect(html).toContain('Specification');
     expect(html).toContain('spec-display');
-    expect(html).not.toContain('spec-display expanded');
-    expect(html).toContain('Show More');
+    expect(html).toMatch(/spec-display[^>]*\bexpanded\b/);
+    expect(html).toContain('Show Less');
     expect(html).toContain('data-action-click="toggle_spec_expand"');
   });
 

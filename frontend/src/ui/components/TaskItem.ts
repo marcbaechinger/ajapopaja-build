@@ -30,7 +30,7 @@ export class TaskItem {
     expandHistory: boolean = false,
     isCollapsed: boolean = false,
     showStatusSelector: boolean = false,
-    isSpecExpanded: boolean = false
+    isSpecExpanded: boolean = true
   ): string {
     const taskId = task.id;
     const statusColors: Record<string, string> = {
