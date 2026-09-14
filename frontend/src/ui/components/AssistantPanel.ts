@@ -255,7 +255,7 @@ export class AssistantPanel {
         <form id="assistant-form" class="relative">
           <textarea id="assistant-input" 
                     class="w-full bg-app-surface border border-app-border rounded-xl pl-4 pr-12 py-3 text-sm text-app-text outline-none focus:ring-2 focus:ring-app-accent-2 transition-all resize-none max-h-32"
-                    placeholder="Ask me anything..."
+                    placeholder="Ask me anything... (Use \`/\` to see available slash commands)"
                     rows="1"></textarea>
           <button type="submit" class="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-app-accent-2 text-white rounded-lg hover:brightness-110 transition-all shadow-lg cursor-pointer focus:ring-2 focus:ring-offset-2 focus:ring-app-accent-2 outline-none" aria-label="Send Message">
              ${Icon.render('arrowRight', { size: 16 })}
