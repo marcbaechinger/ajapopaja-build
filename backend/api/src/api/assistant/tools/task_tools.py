@@ -66,6 +66,40 @@ async def list_tasks(
 
 
 @register_tool(tool_type=READ_ONLY)
+async def get_backlog_tasks(
+    pipeline_id: str, offset: int = 0, page_size: int = 25
+) -> Dict:
+    """
+    Returns a paginated list of tasks that are still in the backlog (i.e. in
+    the CREATED state) of a specific pipeline. Specs and design_doc entries are
+    truncated to limit the output size.
+
+    Args:
+        pipeline_id: The ID of the pipeline whose backlog tasks should be listed.
+        offset: The number of items to skip for pagination (default: 0).
+        page_size: The number of items to return at once (default: 25).
+
+    Returns:
+        A JSON dictionary containing:
+        - total_tasks: The total number of CREATED (backlog) tasks in the pipeline.
+        - offset: The offset used in the query.
+        - page_size: The number of items requested.
+        - tasks: The list of backlog task objects with truncated 'spec' and 'design_doc'.
+    """
+    # Validate pipeline existence
+    try:
+        await pipeline_queries.get_pipeline_by_id(pipeline_id)
+    except EntityNotFoundError:
+        return {
+            "error": f"Pipeline with ID '{pipeline_id}' not found. Please verify the pipeline_id or use list_pipelines to find the correct ID."
+        }
+
+    return await task_queries.get_backlog_tasks_by_pipeline(
+        pipeline_id, offset, page_size
+    )
+
+
+@register_tool(tool_type=READ_ONLY)
 async def get_task(task_id: str) -> Dict:
     """
     Returns detailed information for a specific task.

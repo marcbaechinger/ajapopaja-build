@@ -91,10 +91,13 @@ describe('AssistantPanel', () => {
     }
 
     it.each([
-      ['/projectstructure', 'Show me the project structure of pipeline PIPELINE_ID'],
+      ['/pr', 'Show me the project structure of pipeline PIPELINE_ID'],
       ['/gl', 'Show me the commit hashes and message of the last 5 commits in pipeline PIPELINE_ID'],
       ['/gi', 'Show 5 most recent issues of pipeline PIPELINE_ID'],
       ['/review', 'Make a review of the last implemented task of pipeline PIPELINE_ID'],
+      ['/backlog', 'Show me the tasks in the backlog (state CREATED) of pipeline PIPELINE_ID'],
+      ['/pulls', 'Show me the recent pull request of pipeline PIPELINE_ID'],
+      ['/summary', 'Summarize what we discussed and suggest new tasks to address what we learned (for pipeline PIPELINE_ID)'],
     ])('pastes template for %s', (command, expected) => {
       const input = submitInput(command);
 
@@ -125,9 +128,22 @@ describe('AssistantPanel', () => {
       expect(document.querySelector('#assistant-panel')?.className).not.toContain('pointer-events-auto');
     });
 
+    it.each(['/', '//'])(
+      'inserts the slash command index for %s without sending a message',
+      (command) => {
+        const input = submitInput(command);
+
+        expect(document.body.textContent).toContain('Slash Commands');
+        expect(document.body.textContent).toContain('/backlog');
+        expect(document.body.textContent).toContain('/pulls');
+        expect(mockContext.assistantService.sendMessage).not.toHaveBeenCalled();
+        expect(input.value).toBe('');
+      }
+    );
+
     it('substitutes the current pipeline id into the template', () => {
       (global as any).window.location.hash = '#/pipeline/abc123';
-      const input = submitInput('/projectstructure');
+      const input = submitInput('/pr');
 
       expect(input.value).toBe('Show me the project structure of pipeline abc123');
     });

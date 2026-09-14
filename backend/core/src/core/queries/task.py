@@ -107,6 +107,45 @@ async def get_tasks_for_tool(
     }
 
 
+async def get_backlog_tasks_by_pipeline(
+    pipeline_id: str, offset: int = 0, page_size: int = 25
+) -> dict:
+    """
+    Returns a paginated list of tasks for a pipeline that are still in the
+    CREATED (backlog) state.
+    """
+    query = Task.find(
+        Task.pipeline_id == pipeline_id,
+        Task.deleted == False,
+        Task.status == TaskStatus.CREATED,
+    )
+    total_tasks = await query.count()
+
+    tasks = (
+        await query.sort("+order", "+created_at")
+        .skip(offset)
+        .limit(page_size)
+        .to_list()
+    )
+
+    MAX_LEN = 500
+    task_dicts = []
+    for t in tasks:
+        td = t.model_dump(mode="json")
+        if td.get("spec") and len(td["spec"]) > MAX_LEN:
+            td["spec"] = td["spec"][:MAX_LEN] + "\n...[truncated]"
+        if td.get("design_doc") and len(td["design_doc"]) > MAX_LEN:
+            td["design_doc"] = td["design_doc"][:MAX_LEN] + "\n...[truncated]"
+        task_dicts.append(td)
+
+    return {
+        "total_tasks": total_tasks,
+        "offset": offset,
+        "page_size": page_size,
+        "tasks": task_dicts,
+    }
+
+
 async def get_completed_tasks_by_pipeline(
     pipeline_id: str, page: int = 0, limit: int = 5
 ) -> tuple[List[Task], int]:

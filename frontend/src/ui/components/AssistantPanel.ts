@@ -66,11 +66,31 @@ type PanelSize = 'normal' | 'expanded';
  * The token PIPELINE_ID is substituted with the current pipeline id (when known).
  */
 const PIPELINE_TEMPLATE_COMMANDS: Record<string, string> = {
-  '/projectstructure': 'Show me the project structure of pipeline PIPELINE_ID',
-  '/gl': 'Show me the commit hashes and message of the last 5 commits in pipeline PIPELINE_ID',
+  '/backlog': 'Show me the tasks in the backlog (state CREATED) of pipeline PIPELINE_ID',
   '/gi': 'Show 5 most recent issues of pipeline PIPELINE_ID',
+  '/gl': 'Show me the commit hashes and message of the last 5 commits in pipeline PIPELINE_ID',
+  '/pr': 'Show me the project structure of pipeline PIPELINE_ID',
+  '/pulls': 'Show me the recent pull request of pipeline PIPELINE_ID',
   '/review': 'Make a review of the last implemented task of pipeline PIPELINE_ID',
+  '/summary': 'Summarize what we discussed and suggest new tasks to address what we learned (for pipeline PIPELINE_ID)',
 };
+
+/**
+ * Index of every available slash command (sorted alphanumerically) used for
+ * the inline slash command overview panel shown by '/' and '//'.
+ */
+const SLASH_COMMAND_INDEX: { command: string; description: string }[] = [
+  { command: '/', description: 'Show all available slash commands' },
+  { command: '/backlog', description: 'Show the tasks in the backlog (state CREATED) of the pipeline' },
+  { command: '/clear', description: 'Clear the conversation history' },
+  { command: '/close', description: 'Close the assistant panel' },
+  { command: '/gi', description: 'Show the 5 most recent issues of the pipeline' },
+  { command: '/gl', description: 'Show the last 5 commit hashes and messages of the pipeline' },
+  { command: '/pr', description: 'Show the project structure of the pipeline' },
+  { command: '/pulls', description: 'Show the recent pull requests of the pipeline' },
+  { command: '/review', description: 'Review the last implemented task of the pipeline' },
+  { command: '/summary', description: 'Summarize what we discussed and suggest new tasks to address what we learned' },
+];
 
 interface PanelSettings {
   position: PanelPosition;
@@ -335,6 +355,14 @@ export class AssistantPanel {
       return true;
     }
 
+    // Slash command index: '/' or '//' inserts a text panel in the
+    // conversation area listing all available slash commands.
+    if (trimmed === '/' || trimmed === '//') {
+      this.addSlashCommandIndex();
+      this.resetInput();
+      return true;
+    }
+
     // Prompt template commands: paste the template into the input and
     // place the cursor at the end so the user can edit or accept with Enter.
     if (Object.prototype.hasOwnProperty.call(PIPELINE_TEMPLATE_COMMANDS, trimmed)) {
@@ -351,6 +379,32 @@ export class AssistantPanel {
     }
 
     return false;
+  }
+
+  /**
+   * Inserts a text panel into the conversation area listing all available
+   * slash commands (the slash command index).
+   */
+  private addSlashCommandIndex() {
+    const items = SLASH_COMMAND_INDEX.map((entry) => `
+      <div class="flex items-start gap-2 text-sm">
+        <span class="font-mono font-bold text-app-accent-2 shrink-0">${entry.command}</span>
+        <span class="text-app-muted">${entry.description}</span>
+      </div>
+    `).join('');
+
+    const el = document.createElement('div');
+    el.className = 'flex flex-col gap-1';
+    el.innerHTML = `
+      <div class="bg-app-bg p-3 rounded-2xl rounded-tl-none border border-app-border text-sm text-app-text max-w-[90%] shadow-sm">
+        <div class="font-black uppercase tracking-widest text-app-muted text-[10px] mb-2">Slash Commands</div>
+        <div class="flex flex-col gap-1.5">${items}</div>
+      </div>
+    `;
+
+    this.messageContainer?.appendChild(el);
+    this.currentAssistantMessage = null;
+    this.scrollToBottom();
   }
 
   private getPipelineIdFromUrl(): string | null {
