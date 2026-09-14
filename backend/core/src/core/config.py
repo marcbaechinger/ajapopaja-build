@@ -78,6 +78,13 @@ CODERBOT_RUN_TESTS = os.getenv("CODERBOT_RUN_TESTS", "true").lower() == "true"
 # `test_commands` which take precedence over this global configuration when set.
 CODERBOT_TEST_COMMANDS_JSON = os.getenv("CODERBOT_TEST_COMMANDS_JSON", "")
 
+# Timeout (seconds) for each post-run verification test command. Guards against
+# commands that spawn a long-running/daemonizing child (e.g. `npm run test`
+# without CI=true, which drops into vitest's watch mode and never exits). When
+# a command exceeds this limit it is terminated (the whole process group is
+# killed) and reported as a failure instead of hanging the server forever.
+CODERBOT_VERIFICATION_TIMEOUT = float(os.getenv("CODERBOT_VERIFICATION_TIMEOUT", "300"))
+
 # Git identity used for commits when none is configured in the environment
 # (e.g. inside the Docker image). Overridable via environment variables.
 GIT_USER_NAME = os.getenv("GIT_USER_NAME", "Ajapopaja Build")

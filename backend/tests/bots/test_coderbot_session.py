@@ -542,6 +542,52 @@ async def test_coderbot_run_verification_aggregates_exit_codes():
 
 
 @pytest.mark.asyncio
+async def test_coderbot_run_verification_timeout_terminates_process_group():
+    """A command that exceeds the timeout is killed (whole process group) and
+    reported as a failure instead of hanging forever."""
+    session = CoderBotSession(pipeline_id="p1", task_id="t1")
+    session.helper = MagicMock()
+    session.helper.sandbox_path = "/tmp/sandbox"
+    # A single configured command, so the timeout path is exercised exactly once.
+    session.pipeline = MagicMock(test_commands=[["npm", "run", "test"]])
+
+    hung_proc = AsyncMock()
+    hung_proc.pid = 4242
+    hung_proc.communicate = AsyncMock(side_effect=asyncio.TimeoutError())
+    hung_proc.returncode = None
+    hung_proc.wait = AsyncMock(return_value=0)
+
+    with (
+        patch(
+            "api.coderbot.session.asyncio.create_subprocess_exec",
+            new_callable=AsyncMock,
+            return_value=hung_proc,
+        ) as mock_exec,
+        patch("os.killpg") as mock_killpg,
+        patch.object(config, "CODERBOT_VERIFICATION_TIMEOUT", 3),
+    ):
+        results = await session._run_verification()
+
+    # The command must have been spawned in its own process group so its
+    # children can be killed together.
+    assert mock_exec.await_count == 1
+    kwargs = mock_exec.await_args.kwargs
+    assert kwargs.get("start_new_session") is True
+
+    # Both a SIGTERM and the escalation path must be attempted against the
+    # process group.
+    term_signals = [c.args for c in mock_killpg.call_args_list]
+    assert (4242, 15) in term_signals  # SIGTERM
+
+    # Verification must be reported as failed with a None exit code and a
+    # timeout message, and no hang occurs.
+    assert results["passed"] is False
+    assert len(results["commands"]) == 1
+    assert results["commands"][0]["exit_code"] is None
+    assert "timed out" in results["commands"][0]["output_tail"]
+
+
+@pytest.mark.asyncio
 async def test_coderbot_handle_agent_end_falls_back_after_first_commit(
     init_mock_db,
 ):
