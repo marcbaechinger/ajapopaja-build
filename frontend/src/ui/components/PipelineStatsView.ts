@@ -52,11 +52,11 @@ export class PipelineStatsView {
   }
 
   static calculateMetrics(tasks: Task[]): {
-    work: { avg: string, median: string }
+    work: { avg: string, median: string, total: string }
   } {
     const implemented = tasks.filter(t => t.status === TaskStatus.IMPLEMENTED);
     if (implemented.length === 0) return {
-      work: { avg: 'N/A', median: 'N/A' }
+      work: { avg: 'N/A', median: 'N/A', total: 'N/A' }
     };
 
     const workTimes = implemented
@@ -64,13 +64,17 @@ export class PipelineStatsView {
       .sort((a, b) => a - b);
 
     const getAvgMedian = (times: number[]) => {
-      if (times.length === 0) return { avg: 'N/A', median: 'N/A' };
+      if (times.length === 0) return { avg: 'N/A', median: 'N/A', total: 'N/A' };
       const total = times.reduce((sum, t) => sum + t, 0);
       const avg = total / times.length;
       const median = times.length % 2 === 0
         ? (times[times.length / 2 - 1] + times[times.length / 2]) / 2
         : times[Math.floor(times.length / 2)];
-      return { avg: this.formatDuration(avg), median: this.formatDuration(median) };
+      return {
+        avg: this.formatDuration(avg),
+        median: this.formatDuration(median),
+        total: this.formatDuration(total)
+      };
     };
 
     return { work: getAvgMedian(workTimes) };
@@ -150,7 +154,7 @@ export class PipelineStatsView {
     `).join('') : '';
 
     return `
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div class="bg-app-bg p-4 rounded-xl border border-app-border shadow-sm flex flex-col items-center justify-center text-center">
           <span class="text-xs font-bold text-app-muted uppercase tracking-widest mb-1">Total Tasks</span>
           <span class="text-4xl font-extrabold text-app-text">${total}</span>
@@ -162,6 +166,10 @@ export class PipelineStatsView {
         <div class="bg-app-bg p-4 rounded-xl border border-app-border shadow-sm flex flex-col items-center justify-center text-center">
           <span class="text-xs font-bold text-app-muted uppercase tracking-widest mb-1">Median Time IN_PROGRESS</span>
           <span class="text-2xl font-bold text-app-accent-2">${metrics.work.median}</span>
+        </div>
+        <div class="bg-app-bg p-4 rounded-xl border border-app-border shadow-sm flex flex-col items-center justify-center text-center">
+          <span class="text-xs font-bold text-app-muted uppercase tracking-widest mb-1">Total Time IN_PROGRESS</span>
+          <span class="text-2xl font-bold text-app-accent-2">${metrics.work.total}</span>
         </div>
       </div>
 
@@ -231,6 +239,8 @@ export class PipelineStatsView {
         ${chip('Avg Work', metrics.work.avg, 'bg-app-accent-1', 'text-app-accent-1')}
         <span class="h-3 w-px bg-app-border/60 hidden sm:block"></span>
         ${chip('Median Work', metrics.work.median, 'bg-app-accent-2', 'text-app-accent-2')}
+        <span class="h-3 w-px bg-app-border/60 hidden sm:block"></span>
+        ${chip('Total Work', metrics.work.total, 'bg-app-accent-2', 'text-app-accent-2')}
       </div>
     `;
   }

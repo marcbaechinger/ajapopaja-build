@@ -171,11 +171,11 @@ describe('PipelineStatsView', () => {
   describe('calculateMetrics', () => {
     it('returns N/A for empty tasks', () => {
       expect(PipelineStatsView.calculateMetrics([])).toEqual({
-        work: { avg: 'N/A', median: 'N/A' }
+        work: { avg: 'N/A', median: 'N/A', total: 'N/A' }
       });
     });
 
-    it('computes avg and median IN_PROGRESS time for implemented tasks', () => {
+    it('computes avg, median and total IN_PROGRESS time for implemented tasks', () => {
       const makeTask = (history: any): Task => ({ status: TaskStatus.IMPLEMENTED, history } as unknown as Task);
       const tasks = [
         makeTask([
@@ -191,16 +191,18 @@ describe('PipelineStatsView', () => {
       const metrics = PipelineStatsView.calculateMetrics(tasks);
       expect(metrics.work.avg).toBe('5s');
       expect(metrics.work.median).toBe('5s');
+      expect(metrics.work.total).toBe('10s');
     });
   });
 
   describe('render', () => {
-    it('shows total tasks, avg and median IN_PROGRESS (no lead time)', () => {
+    it('shows total tasks, avg, median and total IN_PROGRESS (no lead time)', () => {
       const html = PipelineStatsView.render([]);
 
       expect(html).toContain('Total Tasks');
       expect(html).toContain('Avg Time IN_PROGRESS');
       expect(html).toContain('Median Time IN_PROGRESS');
+      expect(html).toContain('Total Time IN_PROGRESS');
       expect(html).not.toContain('Avg Lead Time');
     });
 
@@ -213,7 +215,7 @@ describe('PipelineStatsView', () => {
   });
 
   describe('renderCompact', () => {
-    it('renders the three compact metric chips with correct values', () => {
+    it('renders the four compact metric chips with correct values', () => {
       const task: Task = {
         id: 'c1',
         title: 'Compact Task',
@@ -236,6 +238,8 @@ describe('PipelineStatsView', () => {
       expect(html).toContain('5s');          // avg IN_PROGRESS time
       expect(html).toContain('Median Work');
       expect(html).toContain('5s');          // median IN_PROGRESS time
+      expect(html).toContain('Total Work');
+      expect(html).toContain('5s');          // total IN_PROGRESS time
       expect(html).not.toContain('Avg Lead');
     });
 
