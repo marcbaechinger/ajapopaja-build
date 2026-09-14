@@ -542,8 +542,9 @@ export class AssistantPanel {
       </details>
     ` : '';
 
+    const maxWidthClass = isUser ? 'max-w-[80%]' : '';
     msgEl.innerHTML = `
-      <div class="relative max-w-[90%] ${isUser ? 'ml-auto' : ''}">
+      <div class="relative ${maxWidthClass} ${isUser ? 'ml-auto' : ''}">
         <div class="${isUser ? 'bg-app-accent-2 text-white rounded-tr-none' : (isError ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-app-bg border-app-border text-app-text rounded-tl-none')} 
                     p-3 rounded-2xl border text-sm prose-theme prose-xs prose-p:my-0 shadow-sm">
           ${thinkingHtml}
