@@ -17,104 +17,63 @@
 import { Task, TaskStatus } from '../../core/domain.ts';
 import { Icon } from './Icon.ts';
 
-export interface TaskDurations {
-  designTime: number;
-  implementationTime: number;
-  totalWorkTime: number;
-  leadTime: number;
-}
-
 export class PipelineStatsView {
-  static getTaskDurations(task: Task): TaskDurations {
-    let designTime = 0;
-    let implementationTime = 0;
-    let hasReachedProposed = false;
+  /**
+   * Calculate the total time a task spent IN_PROGRESS.
+   *
+   * Walks the task's status history (sorted by timestamp) and sums the time
+   * from each IN_PROGRESS transition until the task transitions out of it into
+   * any other status.
+   */
+  static getInProgressTime(task: Task): number {
+    let inProgressTime = 0;
     let lastInprogressStart: number | null = null;
-    let firstScheduledAt: number | null = null;
-    let implementationFinishedAt: number | null = null;
 
     if (!task.history || task.history.length === 0) {
-      return { designTime: 0, implementationTime: 0, totalWorkTime: 0, leadTime: 0 };
+      return 0;
     }
 
-    const sortedHistory = [...task.history].sort((a, b) => 
+    const sortedHistory = [...task.history].sort((a, b) =>
       new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
 
     for (const event of sortedHistory) {
       const timestamp = new Date(event.timestamp).getTime();
 
-      if (event.to_status === TaskStatus.SCHEDULED && firstScheduledAt === null) {
-        firstScheduledAt = timestamp;
-      }
-
-      if (event.to_status === TaskStatus.IMPLEMENTED) {
-        implementationFinishedAt = timestamp;
-      }
-
       if (event.to_status === TaskStatus.INPROGRESS) {
         lastInprogressStart = timestamp;
       } else if (lastInprogressStart !== null) {
-        const duration = timestamp - lastInprogressStart;
-        
-        if (event.to_status === TaskStatus.PROPOSED) {
-          designTime += duration;
-          hasReachedProposed = true;
-        } else if (hasReachedProposed) {
-          implementationTime += duration;
-        } else {
-          designTime += duration;
-        }
+        inProgressTime += timestamp - lastInprogressStart;
         lastInprogressStart = null;
-      }
-
-      // If it reaches PROPOSED not via an INPROGRESS transition (shouldn't happen but for robustness)
-      if (event.to_status === TaskStatus.PROPOSED) {
-        hasReachedProposed = true;
       }
     }
 
-    const leadTime = firstScheduledAt && implementationFinishedAt 
-      ? Math.max(0, implementationFinishedAt - firstScheduledAt) 
-      : 0;
-
-    return { 
-      designTime, 
-      implementationTime, 
-      totalWorkTime: designTime + implementationTime,
-      leadTime
-    };
+    return inProgressTime;
   }
 
-  static calculateMetrics(tasks: Task[]): { 
-    work: { avg: string, median: string },
-    lead: { avg: string, median: string }
+  static calculateMetrics(tasks: Task[]): {
+    work: { avg: string, median: string }
   } {
     const implemented = tasks.filter(t => t.status === TaskStatus.IMPLEMENTED);
-    if (implemented.length === 0) return { 
-      work: { avg: 'N/A', median: 'N/A' },
-      lead: { avg: 'N/A', median: 'N/A' }
+    if (implemented.length === 0) return {
+      work: { avg: 'N/A', median: 'N/A' }
     };
 
-    const durations = implemented.map(t => this.getTaskDurations(t));
-    
-    const workTimes = durations.map(d => d.totalWorkTime).sort((a, b) => a - b);
-    const leadTimes = durations.map(d => d.leadTime).filter(lt => lt > 0).sort((a, b) => a - b);
+    const workTimes = implemented
+      .map(t => this.getInProgressTime(t))
+      .sort((a, b) => a - b);
 
     const getAvgMedian = (times: number[]) => {
       if (times.length === 0) return { avg: 'N/A', median: 'N/A' };
       const total = times.reduce((sum, t) => sum + t, 0);
       const avg = total / times.length;
-      const median = times.length % 2 === 0 
-        ? (times[times.length / 2 - 1] + times[times.length / 2]) / 2 
+      const median = times.length % 2 === 0
+        ? (times[times.length / 2 - 1] + times[times.length / 2]) / 2
         : times[Math.floor(times.length / 2)];
       return { avg: this.formatDuration(avg), median: this.formatDuration(median) };
     };
 
-    return {
-      work: getAvgMedian(workTimes),
-      lead: getAvgMedian(leadTimes)
-    };
+    return { work: getAvgMedian(workTimes) };
   }
 
   static formatDuration(ms: number): string {
@@ -141,9 +100,10 @@ export class PipelineStatsView {
       [TaskStatus.DISCARDED]: 0,
       'DELETED': 0,
     };
-    
+
     let total = 0;
     tasks.forEach(t => {
+      // DELETED represents tasks deleted at the API layer and must not be excluded from the distribution.
       if (t.deleted) {
         statusCounts['DELETED']++;
       } else if (statusCounts[t.status] !== undefined) {
@@ -151,7 +111,7 @@ export class PipelineStatsView {
       }
       total++;
     });
-    
+
     const metrics = this.calculateMetrics(tasks);
 
     const colors: Record<string, string> = {
@@ -190,22 +150,18 @@ export class PipelineStatsView {
     `).join('') : '';
 
     return `
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <div class="bg-app-bg p-4 rounded-xl border border-app-border shadow-sm flex flex-col items-center justify-center text-center">
           <span class="text-xs font-bold text-app-muted uppercase tracking-widest mb-1">Total Tasks</span>
           <span class="text-4xl font-extrabold text-app-text">${total}</span>
         </div>
         <div class="bg-app-bg p-4 rounded-xl border border-app-border shadow-sm flex flex-col items-center justify-center text-center">
-          <span class="text-xs font-bold text-app-muted uppercase tracking-widest mb-1">Avg Active Work</span>
+          <span class="text-xs font-bold text-app-muted uppercase tracking-widest mb-1">Avg Time IN_PROGRESS</span>
           <span class="text-2xl font-bold text-app-accent-1">${metrics.work.avg}</span>
         </div>
         <div class="bg-app-bg p-4 rounded-xl border border-app-border shadow-sm flex flex-col items-center justify-center text-center">
-          <span class="text-xs font-bold text-app-muted uppercase tracking-widest mb-1">Median Active Work</span>
-          <span class="text-2xl font-bold text-app-accent-1">${metrics.work.median}</span>
-        </div>
-        <div class="bg-app-bg p-4 rounded-xl border border-app-border shadow-sm flex flex-col items-center justify-center text-center">
-          <span class="text-xs font-bold text-app-muted uppercase tracking-widest mb-1">Avg Lead Time</span>
-          <span class="text-2xl font-bold text-app-accent-2">${metrics.lead.avg}</span>
+          <span class="text-xs font-bold text-app-muted uppercase tracking-widest mb-1">Median Time IN_PROGRESS</span>
+          <span class="text-2xl font-bold text-app-accent-2">${metrics.work.median}</span>
         </div>
       </div>
 
@@ -275,8 +231,6 @@ export class PipelineStatsView {
         ${chip('Avg Work', metrics.work.avg, 'bg-app-accent-1', 'text-app-accent-1')}
         <span class="h-3 w-px bg-app-border/60 hidden sm:block"></span>
         ${chip('Median Work', metrics.work.median, 'bg-app-accent-2', 'text-app-accent-2')}
-        <span class="h-3 w-px bg-app-border/60 hidden sm:block"></span>
-        ${chip('Avg Lead', metrics.lead.avg, 'bg-green-500', 'text-green-400')}
       </div>
     `;
   }
