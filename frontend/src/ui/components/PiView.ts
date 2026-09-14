@@ -439,14 +439,14 @@ export class PiView {
 
     // "Open in Dialog" action: lets an embedding host pop this compact log out
     // into a full-size dialog (e.g. the CoderBotDialog). Only rendered when the
-    // host supplies an `onOpenDialog` callback.
+    // host supplies an `onOpenDialog` callback. The button shows only an icon;
+    // the "Open in Dialog" label is conveyed via its tooltip/aria-label.
     if (this.onOpenDialog) {
       const openDialogBtn = this.createButton(
         'open-dialog',
         'Open in Dialog',
-        `${Icon.render('documentation', { size: 14 })}
-            Open in Dialog`,
-        'px-3 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer',
+        this.cleanIcon(Icon.render('documentation', { size: 14, label: 'Open in Dialog' })),
+        'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center justify-center cursor-pointer',
         { id: 'open-dialog-btn' }
       );
       actions.appendChild(openDialogBtn);

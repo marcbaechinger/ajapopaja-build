@@ -1378,7 +1378,8 @@ describe('PiView keyboard tooltips', () => {
     withCb.render();
     const btn = mount.querySelector('#open-dialog-btn') as HTMLButtonElement;
     expect(btn).not.toBeNull();
-    expect(btn.textContent).toContain('Open in Dialog');
+    // The button is icon-only: its visible (non-svg) text does not show the label.
+    expect(btn.textContent).not.toContain('Open in Dialog');
     expect(btn.getAttribute('data-action')).toBe('open-dialog');
     withCb.destroy();
   });
