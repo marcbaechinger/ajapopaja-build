@@ -1546,6 +1546,8 @@ export class PipelineDetailView extends View {
     this.enginePiView = new PiView(this.context.coderBotService, mount, {
       logHeightClass: 'h-[38vh]',
       deferInitialRender: true,
+      // Pop this compact sidebar log back out into the full CoderBot dialog.
+      onOpenDialog: () => this.openCoderBotDialog(),
     });
     this.enginePiView.render();
     this.context.coderBotService?.reconnect?.();

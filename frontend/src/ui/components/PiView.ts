@@ -60,7 +60,8 @@ export interface PiViewOptions {
    * Supported action names:
    * 'toggle-follow' | 'copy-all-log' | 'focus-search' | 'next-error' |
    * 'prev-error' | 'clear-logs' | 'stop-bot' | 'toggle-thinking' |
-   * 'toggle-block-collapse' | 'toggle-error-visibility' | 'toggle-search'.
+   * 'toggle-block-collapse' | 'toggle-error-visibility' | 'toggle-search' |
+   * 'open-dialog'.
    */
   keyboardBindings?: Record<string, string>;
   /**
@@ -72,6 +73,15 @@ export interface PiViewOptions {
    * frame. Default false (renders synchronously, as before).
    */
   deferInitialRender?: boolean;
+
+  /**
+   * Optional callback invoked when the user activates the "Open in Dialog"
+   * action (via its toolbar button or its keyboard shortcut). An embedding host
+   * uses this to open the full-size dialog around this log (e.g. the
+   * `CoderBotDialog`). When omitted, the "Open in Dialog" button is not
+   * rendered and the shortcut is a no-op.
+   */
+  onOpenDialog?: () => void;
 }
 
 /** A button shown inside the empty-state placeholder. */
@@ -99,6 +109,7 @@ export class PiView {
   private showFooter: boolean;
   private logHeightClass: string;
   private deferInitialRender: boolean;
+  private onOpenDialog?: () => void;
   private unsubs: (() => void)[] = [];
 
   /**
@@ -186,6 +197,7 @@ export class PiView {
     this.logHeightClass = options.logHeightClass ?? 'h-[60vh]';
     this.deferInitialRender = options.deferInitialRender ?? false;
     this.emptyStateAction = options.emptyStateAction;
+    this.onOpenDialog = options.onOpenDialog;
     this.keyboardBindings = options.keyboardBindings ?? {};
     // Build the action->key lookup once, after overrides are merged over defaults.
     this.actionToKey = this.buildBindings();
@@ -425,6 +437,21 @@ export class PiView {
     );
     actions.appendChild(copyAllBtn);
 
+    // "Open in Dialog" action: lets an embedding host pop this compact log out
+    // into a full-size dialog (e.g. the CoderBotDialog). Only rendered when the
+    // host supplies an `onOpenDialog` callback.
+    if (this.onOpenDialog) {
+      const openDialogBtn = this.createButton(
+        'open-dialog',
+        'Open in Dialog',
+        `${Icon.render('documentation', { size: 14 })}
+            Open in Dialog`,
+        'px-3 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer',
+        { id: 'open-dialog-btn' }
+      );
+      actions.appendChild(openDialogBtn);
+    }
+
     const searchToggleBtn = this.createButton(
       'toggle-search',
       'Show search bar',
@@ -630,6 +657,8 @@ export class PiView {
       this.toggleSearchBar();
     } else if (action === 'copy-all-log') {
       this.copyAllLog();
+    } else if (action === 'open-dialog') {
+      this.onOpenDialog?.();
     }
   };
 
@@ -651,6 +680,7 @@ export class PiView {
       'toggle-block-collapse': 'b',
       'toggle-error-visibility': 'e',
       'toggle-search': 'k',
+      'open-dialog': 'o',
     };
     return { ...defaults, ...this.keyboardBindings };
   }
@@ -709,6 +739,9 @@ export class PiView {
         break;
       case 'toggle-search':
         this.toggleSearchBar();
+        break;
+      case 'open-dialog':
+        this.onOpenDialog?.();
         break;
       default:
         return;

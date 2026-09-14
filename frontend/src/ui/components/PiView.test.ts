@@ -1365,5 +1365,60 @@ describe('PiView keyboard tooltips', () => {
 
     view.destroy();
   });
+
+  it('renders an "Open in Dialog" button only when onOpenDialog is provided', () => {
+    const { service } = createStubService();
+
+    const plain = new PiView(service, mount);
+    plain.render();
+    expect(mount.querySelector('#open-dialog-btn')).toBeNull();
+    plain.destroy();
+
+    const withCb = new PiView(service, mount, { onOpenDialog: () => {} });
+    withCb.render();
+    const btn = mount.querySelector('#open-dialog-btn') as HTMLButtonElement;
+    expect(btn).not.toBeNull();
+    expect(btn.textContent).toContain('Open in Dialog');
+    expect(btn.getAttribute('data-action')).toBe('open-dialog');
+    withCb.destroy();
+  });
+
+  it('fires onOpenDialog when the "Open in Dialog" button is clicked', () => {
+    const onOpenDialog = vi.fn();
+    const { service } = createStubService();
+    const view = new PiView(service, mount, { onOpenDialog });
+    view.render();
+
+    (mount.querySelector('#open-dialog-btn') as HTMLButtonElement).click();
+    expect(onOpenDialog).toHaveBeenCalledTimes(1);
+
+    view.destroy();
+  });
+
+  it('annotates the "Open in Dialog" button with its keyboard shortcut', () => {
+    const { service } = createStubService();
+    const view = new PiView(service, mount, { onOpenDialog: () => {} });
+    view.render();
+
+    const btn = mount.querySelector('[data-action="open-dialog"]') as HTMLButtonElement;
+    expect(btn.title).toBe('Open in Dialog (o)');
+    expect(btn.getAttribute('aria-label')).toBe('Open in Dialog (o)');
+
+    view.destroy();
+  });
+
+  it('o keyboard shortcut opens the dialog', () => {
+    const onOpenDialog = vi.fn();
+    const { service } = createStubService();
+    const view = new PiView(service, mount, { onOpenDialog });
+    view.render();
+
+    mount.querySelector('#log-content-container')!.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'o', bubbles: true })
+    );
+    expect(onOpenDialog).toHaveBeenCalledTimes(1);
+
+    view.destroy();
+  });
 });
 
