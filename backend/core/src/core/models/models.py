@@ -266,6 +266,13 @@ class PullRequest(Document):
     patch: str  # The git diff output
     status: PullRequestStatus = PullRequestStatus.OPEN
     remote_pr_url: Optional[str] = None  # set only in gitea_pr mode
+    # How accepting this PR will apply the change, resolved at read time by the
+    # pull-request routes based on the pipeline's repo_uri and the global
+    # REMOTE_PR_MODE:
+    #   "merge"  -> applied directly in the local workspace/repo
+    #   "push"   -> committed to the cloned repo and pushed to the remote
+    #   "submit" -> committed to the cloned repo and sent as a pull request
+    apply_mode: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 

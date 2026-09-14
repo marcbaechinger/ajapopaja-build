@@ -81,7 +81,7 @@ describe('PullRequestDialog', () => {
     expect(footer.querySelector('#pr-accept-btn')).toBeNull();
   });
 
-  it('shows Accept & Apply for a plain open PR', async () => {
+  it('labels the accept button Merge for a plain open PR', async () => {
     const pr = {
       _id: 'pr3',
       pipeline_id: 'p1',
@@ -89,7 +89,8 @@ describe('PullRequestDialog', () => {
       summary: 'summary',
       branch_name: 'feature/x',
       patch: 'patch',
-      status: PullRequestStatus.OPEN
+      status: PullRequestStatus.OPEN,
+      apply_mode: 'merge'
     };
     const dialog = new PullRequestDialog({
       taskId: 't1',
@@ -102,8 +103,40 @@ describe('PullRequestDialog', () => {
     const footer = dialog['dialog'].querySelector('#dialog-footer-container') as HTMLElement;
     const acceptBtn = footer.querySelector('#pr-accept-btn') as HTMLButtonElement;
     expect(acceptBtn).not.toBeNull();
-    expect(acceptBtn.textContent).toContain('Accept');
+    expect(acceptBtn.textContent).toContain('Merge');
     expect(footer.querySelector('#pr-open-gitea-link')).toBeNull();
+  });
+
+  it('labels the accept button according to how the PR will be applied', async () => {
+    const cases: any[] = [
+      { apply_mode: 'push', label: 'Push' },
+      { apply_mode: 'submit', label: 'Submit' },
+    ];
+    for (const c of cases) {
+      const pr = {
+        _id: `lab-${c.label}`,
+        pipeline_id: 'p1',
+        task_id: 't1',
+        summary: 'summary',
+        branch_name: 'feature/x',
+        patch: 'patch',
+        status: PullRequestStatus.OPEN,
+        apply_mode: c.apply_mode
+      };
+      const dialog = new PullRequestDialog({
+        taskId: 't1',
+        pipelineId: 'p1',
+        context: makeContext(pr)
+      });
+
+      await vi.waitFor(() => expect(dialog['pr']).not.toBeNull());
+
+      const footer = dialog['dialog'].querySelector('#dialog-footer-container') as HTMLElement;
+      const acceptBtn = footer.querySelector('#pr-accept-btn') as HTMLButtonElement;
+      expect(acceptBtn).not.toBeNull();
+      expect(acceptBtn.textContent).toContain(c.label);
+      expect(footer.querySelector('#pr-open-gitea-link')).toBeNull();
+    }
   });
 
   it('shows Accept & Apply for a new OPEN PR even when the backend returns remote_pr_url null', async () => {
@@ -119,6 +152,7 @@ describe('PullRequestDialog', () => {
       branch_name: 'feature/x',
       patch: 'patch',
       status: PullRequestStatus.OPEN,
+      apply_mode: 'submit',
       remote_pr_url: null
     };
     const dialog = new PullRequestDialog({
@@ -133,7 +167,7 @@ describe('PullRequestDialog', () => {
     const footer = dialog['dialog'].querySelector('#dialog-footer-container') as HTMLElement;
     const acceptBtn = footer.querySelector('#pr-accept-btn') as HTMLButtonElement;
     expect(acceptBtn).not.toBeNull();
-    expect(acceptBtn.textContent).toContain('Accept');
+    expect(acceptBtn.textContent).toContain('Submit');
     expect(footer.querySelector('#pr-open-gitea-link')).toBeNull();
     expect(footer.innerHTML).not.toContain('Open in Gitea');
   });

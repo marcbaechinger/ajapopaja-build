@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { PullRequest, PullRequestStatus } from '../../core/domain.ts';
+import { PullRequest, PullRequestStatus, pullRequestAcceptLabel } from '../../core/domain.ts';
 import { Icon } from './Icon.ts';
 
 export class PullRequestSection {
@@ -63,7 +63,7 @@ export class PullRequestSection {
           <div class="flex gap-2 shrink-0">
              <button data-action-click="accept_pr" data-task-id="${pr.task_id}" data-pr-id="${pr.id}" class="px-4 py-2 bg-green-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-green-500 transition-all shadow-lg shadow-green-900/20 cursor-pointer flex items-center gap-2">
                ${Icon.render('check', { size: 14 })}
-               Accept
+               ${pullRequestAcceptLabel(pr)}
              </button>
              <button data-action-click="open_pr_dialog" data-task-id="${pr.task_id}" data-pr-id="${pr.id}" class="px-4 py-2 bg-app-accent-2 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-app-accent-2/80 transition-all shadow-lg shadow-app-accent-2/20 cursor-pointer flex items-center gap-2">
                ${Icon.render('git-pull-request', { size: 14 })}

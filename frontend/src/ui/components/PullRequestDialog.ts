@@ -15,7 +15,7 @@
  */
 
 import { BaseDialog } from './dialog_common.ts';
-import { PullRequest, PullRequestStatus } from '../../core/domain.ts';
+import { PullRequest, PullRequestStatus, pullRequestAcceptLabel } from '../../core/domain.ts';
 import type { AppContext } from '../../core/AppContext.ts';
 import { Icon } from './Icon.ts';
 
@@ -154,7 +154,7 @@ export class PullRequestDialog extends BaseDialog<void> {
             Close
           </button>
           <button id="pr-accept-btn" class="px-8 py-2 rounded bg-green-600 text-white text-xs font-black uppercase tracking-widest hover:bg-green-500 transition-all cursor-pointer shadow-lg shadow-green-900/20">
-            Accept & Apply
+            ${pullRequestAcceptLabel(this.pr)}
           </button>
         </div>
       </div>
@@ -204,6 +204,7 @@ export class PullRequestDialog extends BaseDialog<void> {
     const acceptBtn = this.dialog.querySelector('#pr-accept-btn') as HTMLButtonElement;
     const summaryInput = this.dialog.querySelector('#pr-summary-input') as HTMLTextAreaElement;
     const strategySelect = this.dialog.querySelector('#pr-failure-strategy') as HTMLSelectElement;
+    const acceptLabel = pullRequestAcceptLabel(this.pr);
     
     const commitMessage =
       summaryInput?.value || this.pr.subject || this.pr.summary;
@@ -220,7 +221,7 @@ export class PullRequestDialog extends BaseDialog<void> {
       console.error('Accept PR error:', error);
       alert(`Failed to accept Pull Request: ${error.message}`);
       acceptBtn.disabled = false;
-      acceptBtn.textContent = 'Accept & Apply';
+      acceptBtn.textContent = acceptLabel;
     }
   }
 

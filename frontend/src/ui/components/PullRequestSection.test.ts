@@ -35,16 +35,30 @@ describe('PullRequestSection', () => {
   it('includes only OPEN items as awaiting review', () => {
     const prs = [
       makePr({ _id: 'a', status: PullRequestStatus.SUBMITTED, remote_pr_url: 'https://host/o/r/pulls/1' }),
-      makePr({ _id: 'b', status: PullRequestStatus.OPEN }),
+      makePr({ _id: 'b', status: PullRequestStatus.OPEN, apply_mode: 'merge' }),
       makePr({ _id: 'c', status: PullRequestStatus.ACCEPTED }),
       makePr({ _id: 'd', status: PullRequestStatus.REJECTED })
     ];
     const html = PullRequestSection.render(prs);
     expect(html).toContain('task subject');
     expect(html).toContain('Review');
-    expect(html).toContain('Accept');
+    expect(html).toContain('Merge');
     // Submitted, accepted and rejected are not shown.
     expect(html).not.toContain('REJECTED');
+  });
+
+  it('labels the accept action according to how the PR will be applied', () => {
+    // Local workspace -> merge
+    const mergeHtml = PullRequestSection.render([makePr({ apply_mode: 'merge' })]);
+    expect(mergeHtml).toContain('Merge');
+    // Committed + pushed to the remote -> push
+    const pushHtml = PullRequestSection.render([makePr({ apply_mode: 'push' })]);
+    expect(pushHtml).toContain('Push');
+    expect(pushHtml).not.toContain('Merge');
+    // Committed + sent as a pull request -> submit
+    const submitHtml = PullRequestSection.render([makePr({ apply_mode: 'submit' })]);
+    expect(submitHtml).toContain('Submit');
+    expect(submitHtml).not.toContain('Merge');
   });
 
   it('renders an Accept button with the expected action and data attributes for OPEN PRs', () => {

@@ -287,6 +287,48 @@ def _is_gitea_pr_mode(pipeline: Pipeline) -> bool:
     return bool(pipeline.repo_uri and config.REMOTE_PR_MODE == "gitea_pr")
 
 
+def resolve_apply_mode(pipeline: Optional[Pipeline]) -> str:
+    """Classify how accepting this pull request will apply the change.
+
+    Returns one of:
+      * ``"merge"``  -- applied directly in the local workspace/repo (no remote)
+      * ``"push"``   -- committed to the cloned repo and pushed to the remote
+      * ``"submit"`` -- committed to the cloned repo and sent as a pull request
+
+    Local pipelines (no ``repo_uri``) always use the direct merge path; remote
+    pipelines use the global ``REMOTE_PR_MODE`` to decide between push and
+    submitting a pull request.
+    """
+    if not pipeline or not pipeline.repo_uri:
+        return "merge"
+    if config.REMOTE_PR_MODE == "gitea_pr":
+        return "submit"
+    return "push"
+
+
+async def _resolve_pipeline(pipeline_id: Optional[str]) -> Optional[Pipeline]:
+    """Fetch a pipeline by id, returning None when it cannot be resolved.
+
+    ``pipeline_id`` is stored on the PullRequest as a string, which may not be a
+    valid ``PydanticObjectId`` in every context (e.g. test fixtures). Guard
+    against validation/lookup errors so a single PR read never fails simply
+    because its owning pipeline cannot be fetched.
+    """
+    if not pipeline_id:
+        return None
+    try:
+        return await Pipeline.get(pipeline_id)
+    except Exception as e:
+        logger.warning(f"Could not resolve pipeline {pipeline_id} for apply mode: {e}")
+        return None
+
+
+async def _resolve_apply_mode(pipeline_id: Optional[str]) -> str:
+    """Resolve the apply mode for a pull request's pipeline, defaulting to
+    ``merge`` when the pipeline cannot be determined."""
+    return resolve_apply_mode(await _resolve_pipeline(pipeline_id))
+
+
 async def _submit_as_gitea_pr(repo, pipeline, pr, commit_message: str) -> str:
     """Push a feature branch and create a Gitea pull request for review.
 
@@ -326,7 +368,11 @@ async def _submit_as_gitea_pr(repo, pipeline, pr, commit_message: str) -> str:
 
 @router.get("/pipeline/{pipeline_id}", response_model=List[PullRequest])
 async def get_pipeline_pull_requests(pipeline_id: str):
-    return await PullRequest.find(PullRequest.pipeline_id == pipeline_id).to_list()
+    prs = await PullRequest.find(PullRequest.pipeline_id == pipeline_id).to_list()
+    apply_mode = await _resolve_apply_mode(pipeline_id)
+    for pr in prs:
+        pr.apply_mode = apply_mode
+    return prs
 
 
 @router.get("/task/{task_id}", response_model=Optional[PullRequest])
@@ -348,6 +394,8 @@ async def get_task_pull_request(task_id: str):
             .first_or_none()
         )
 
+    if pr:
+        pr.apply_mode = await _resolve_apply_mode(pr.pipeline_id)
     return pr
 
 
@@ -356,6 +404,7 @@ async def get_pull_request(pr_id: str):
     pr = await PullRequest.get(pr_id)
     if not pr:
         raise HTTPException(status_code=404, detail="Pull Request not found")
+    pr.apply_mode = await _resolve_apply_mode(pr.pipeline_id)
     return pr
 
 

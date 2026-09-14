@@ -195,6 +195,35 @@ def test_is_gitea_pr_mode_direct_flag(monkeypatch):
     assert pr_routes._is_gitea_pr_mode(pipeline) is False
 
 
+def test_resolve_apply_mode_local_defaults_to_merge(monkeypatch):
+    monkeypatch.setattr(pr_routes.config, "REMOTE_PR_MODE", "direct")
+    pipeline = MagicMock()
+    pipeline.repo_uri = None
+    assert pr_routes.resolve_apply_mode(pipeline) == "merge"
+    assert pr_routes.resolve_apply_mode(None) == "merge"
+
+
+def test_resolve_apply_mode_remote_direct_is_push(monkeypatch):
+    monkeypatch.setattr(pr_routes.config, "REMOTE_PR_MODE", "direct")
+    pipeline = MagicMock()
+    pipeline.repo_uri = "https://host/owner/repo.git"
+    assert pr_routes.resolve_apply_mode(pipeline) == "push"
+
+
+def test_resolve_apply_mode_remote_gitea_is_submit(monkeypatch):
+    monkeypatch.setattr(pr_routes.config, "REMOTE_PR_MODE", "gitea_pr")
+    pipeline = MagicMock()
+    pipeline.repo_uri = "https://host/owner/repo.git"
+    assert pr_routes.resolve_apply_mode(pipeline) == "submit"
+
+
+def test_resolve_apply_mode_remote_gitea_ignored_for_local(monkeypatch):
+    monkeypatch.setattr(pr_routes.config, "REMOTE_PR_MODE", "gitea_pr")
+    pipeline = MagicMock()
+    pipeline.repo_uri = None
+    assert pr_routes.resolve_apply_mode(pipeline) == "merge"
+
+
 @pytest.mark.asyncio
 async def test_submit_as_gitea_pr_flow():
     mock_repo = MagicMock()

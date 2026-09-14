@@ -186,6 +186,11 @@ export class PullRequest {
   patch: string = '';
   status: PullRequestStatus = PullRequestStatus.OPEN;
   remote_pr_url?: string;
+  // How accepting this PR applies the change (resolved by the backend):
+  // "merge"  -> applied directly in the local workspace/repo
+  // "push"   -> committed to the cloned repo and pushed to the remote
+  // "submit" -> committed to the cloned repo and sent as a pull request
+  apply_mode?: string;
   created_at?: string;
   updated_at?: string;
 
@@ -202,8 +207,20 @@ export class PullRequest {
     if (json.status !== undefined) this.status = json.status as PullRequestStatus;
     this.remote_pr_url =
       json.remote_pr_url != null ? String(json.remote_pr_url) : undefined;
+    if (json.apply_mode !== undefined) this.apply_mode = String(json.apply_mode);
     if (json.created_at !== undefined) this.created_at = String(json.created_at);
     if (json.updated_at !== undefined) this.updated_at = String(json.updated_at);
+  }
+}
+
+// Human-friendly label for the action of accepting a pull request, depending on
+// how the change will be applied (merge / push / submit).
+export function pullRequestAcceptLabel(pr: PullRequest): string {
+  switch (pr.apply_mode) {
+    case 'push': return 'Push';
+    case 'submit': return 'Submit';
+    case 'merge': return 'Merge';
+    default: return 'Merge';
   }
 }
 
