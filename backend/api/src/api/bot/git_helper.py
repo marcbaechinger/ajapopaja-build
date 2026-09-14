@@ -77,13 +77,38 @@ class SandboxGitHelper:
 
         return "main"
 
+    # SHA-1 of Git's empty tree object. Diffing against it yields the full
+    # content of the working tree/index as if every file were new, which is
+    # exactly what we need when the repository has no commits yet.
+    _EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
     def get_patch(self) -> str:
-        """Returns the diff between the default branch and current branch."""
+        """Returns the diff between the default branch and current branch.
+
+        On a freshly cloned repository that has no commits yet, the default
+        branch does not exist as a ref (it is "unborn"). Diffing against it
+        would fail with git's "ambiguous argument ... unknown revision". To
+        handle that, we check whether the base ref exists before diffing and
+        fall back to diffing against the empty tree so all new files are
+        captured in the patch.
+        """
         repo = self.get_repo()
         default_branch = self.get_default_branch()
-        # --binary is required so binary files (e.g. images) are included in the
-        # patch and can be applied later via `git apply --3way`.
-        return repo.git.diff(default_branch, binary=True)
+        # Check whether the base ref actually exists before diffing against it.
+        base_exists = False
+        try:
+            repo.commit(default_branch)
+            base_exists = True
+        except Exception:
+            base_exists = False
+
+        if base_exists:
+            # --binary is required so binary files (e.g. images) are included
+            # in the patch and can be applied later via `git apply --3way`.
+            return repo.git.diff(default_branch, binary=True)
+
+        # No commits yet: diff against the empty tree to include all files.
+        return repo.git.diff(self._EMPTY_TREE, binary=True)
 
     def cleanup(self):
         """Removes the sandbox directory."""

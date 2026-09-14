@@ -352,10 +352,20 @@ class CoderBotSession:
                 logger.info(f"Nothing to commit or commit failed: {e}")
 
             if commit_made:
-                # Use git diff to get a clean, structural patch without commit metadata.
-                # --binary is required so binary files (e.g. images) are included in the
-                # patch and can be applied later via `git apply --3way`.
-                patch = repo.git.diff("HEAD~1", "HEAD", binary=True)
+                # Use git diff to get a clean, structural patch without commit
+                # metadata. --binary is required so binary files (e.g. images)
+                # are included in the patch and can be applied later via
+                # `git apply --3way`.
+                #
+                # Guard against the first/only commit: when the repo was
+                # cloned empty and this is the very first commit, there is no
+                # HEAD~1 parent ref to diff against. Fall back to diffing the
+                # commit against the empty tree.
+                empty_tree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+                try:
+                    patch = repo.git.diff("HEAD~1", "HEAD", binary=True)
+                except Exception:
+                    patch = repo.git.diff(empty_tree, "HEAD", binary=True)
                 logger.info(f"Generated patch from commit. Length: {len(patch)}")
             else:
                 patch = self.helper.get_patch()

@@ -15,6 +15,8 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import git
+
 from api.bot.git_helper import SandboxGitHelper
 
 
@@ -101,3 +103,44 @@ def test_get_default_branch_ultimate_fallback(monkeypatch):
         mock_get_repo.return_value = mock_sandbox_repo
 
         assert helper.get_default_branch() == "main"
+
+
+def test_get_patch_uses_default_branch_when_base_ref_exists(monkeypatch):
+    """When the default branch ref exists, the patch is diffed against it."""
+    monkeypatch.delenv("DEFAULT_GIT_BRANCH", raising=False)
+    helper = SandboxGitHelper("coderbot", "task_id", Path("/fake/path"))
+
+    repo = MagicMock()
+    repo.commit.return_value = "base-commit"
+    repo.git.diff.return_value = "default-branch-patch"
+
+    with patch.object(SandboxGitHelper, "get_repo") as mock_get_repo:
+        mock_get_repo.return_value = repo
+        with patch.object(SandboxGitHelper, "get_default_branch", return_value="main"):
+            patch_str = helper.get_patch()
+
+    assert patch_str == "default-branch-patch"
+    repo.git.diff.assert_called_once_with("main", binary=True)
+
+
+def test_get_patch_falls_back_to_empty_tree_when_base_ref_unborn(monkeypatch):
+    """
+    When the repo has no commits yet (an unborn default branch), diffing is
+    done against Git's empty tree so all new files are captured instead of
+    failing with 'unknown revision'.
+    """
+    monkeypatch.delenv("DEFAULT_GIT_BRANCH", raising=False)
+    helper = SandboxGitHelper("coderbot", "task_id", Path("/fake/path"))
+
+    repo = MagicMock()
+    # Simulate an unresolved/invalid ref -> the default branch is unborn.
+    repo.commit.side_effect = git.BadName("main")
+    repo.git.diff.return_value = "empty-tree-patch"
+
+    with patch.object(SandboxGitHelper, "get_repo") as mock_get_repo:
+        mock_get_repo.return_value = repo
+        with patch.object(SandboxGitHelper, "get_default_branch", return_value="main"):
+            patch_str = helper.get_patch()
+
+    assert patch_str == "empty-tree-patch"
+    repo.git.diff.assert_called_once_with(SandboxGitHelper._EMPTY_TREE, binary=True)

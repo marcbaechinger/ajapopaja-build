@@ -514,6 +514,66 @@ async def test_coderbot_run_verification_aggregates_exit_codes():
 
 
 @pytest.mark.asyncio
+async def test_coderbot_handle_agent_end_falls_back_after_first_commit(
+    init_mock_db,
+):
+    """When the sandbox has only one commit (e.g. a freshly cloned empty repo),
+    diffing against 'HEAD~1' fails; the patch should fall back to diffing the
+    commit against the empty tree."""
+    task = Task(title="Test Task", pipeline_id="p1", design_doc="D", spec="S")
+    await task.insert()
+
+    session = CoderBotSession(pipeline_id="p1", task_id=str(task.id))
+    session.helper = MagicMock()
+    session.helper.branch_name = "branch"
+
+    repo = MagicMock()
+    repo.git.add = MagicMock()
+    repo.git.commit.return_value = "ok"  # commit succeeds
+
+    def fake_diff(*args, **kwargs):
+        if args[0] == "HEAD~1":
+            raise Exception("fatal: ambiguous argument 'HEAD~1': unknown revision")
+        return "fallback-patch"
+
+    repo.git.diff.side_effect = fake_diff
+    session.helper.get_repo.return_value = repo
+    session.helper.get_patch.return_value = "unused"
+
+    original = config.CODERBOT_RUN_TESTS
+    config.CODERBOT_RUN_TESTS = False
+    try:
+        with (
+            patch(
+                "api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock
+            ) as mock_broadcast,
+            patch(
+                "api.coderbot.session.Task.get", new_callable=AsyncMock
+            ) as mock_task_get,
+            patch("core.queries.task.transition_task", new_callable=AsyncMock),
+        ):
+            mock_task_get.return_value = task
+            await session._handle_agent_end(
+                [
+                    {
+                        "role": "assistant",
+                        "content": [{"type": "text", "text": "done."}],
+                    }
+                ]
+            )
+    finally:
+        config.CODERBOT_RUN_TESTS = original
+
+    # The fallback diff (against the empty tree) must have been produced.
+    prs = await PullRequest.find(PullRequest.task_id == str(task.id)).to_list()
+    assert len(prs) == 1
+    assert prs[0].patch == "fallback-patch\n"  # newline appended by session.py
+    # Ensure the fallback diff call used the empty tree as its base.
+    calls = [c.args for c in repo.git.diff.call_args_list]
+    assert ("4b825dc642cb6eb9a060e54bf8d69288fbee4904", "HEAD") in calls
+
+
+@pytest.mark.asyncio
 async def test_coderbot_handle_agent_end_runs_verification_and_annotates_pr(
     init_mock_db,
 ):
