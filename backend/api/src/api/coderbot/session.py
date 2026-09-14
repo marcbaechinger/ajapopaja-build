@@ -151,6 +151,7 @@ class CoderBotSession:
         self.model = model
         self.process: Optional[asyncio.subprocess.Process] = None
         self.helper: Optional[SandboxGitHelper] = None
+        self.pipeline: Optional[Pipeline] = None
         self.log_file: Optional[TextIO] = None
 
         timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
@@ -207,6 +208,23 @@ class CoderBotSession:
             self.process.terminate()
             logger.info(f"Terminated CoderBot process for task {self.task_id}")
 
+    def _build_test_instruction(self) -> str:
+        """Build the "Mandatory Verification" block listing the test commands
+        that are configured for this pipeline (falling back to the defaults)."""
+        commands = self.get_resolved_verification_commands()
+        lines = "\n".join(f"- `{' '.join(c)}`" for c in commands)
+        return (
+            f"### Mandatory Verification\n"
+            f"This repository is a monorepo. Before finishing, you MUST run the full project\n"
+            f"test suite exactly as documented in README.md, fix any failures your changes\n"
+            f"cause, and re-run until green. The required commands are:\n\n"
+            f"{lines}\n\n"
+            f"Do NOT report the task as complete until these tests pass (or, if a failure is\n"
+            f"pre-existing and unrelated to your change, explain it in your summary\n"
+            f"instead). Include the test commands you ran and their outcome in your final\n"
+            f"completion summary."
+        )
+
     async def get_initial_prompt(self, task: Task) -> str:
         design_doc = task.design_doc or "No design document provided."
         spec = task.spec or "No specification provided."
@@ -216,18 +234,28 @@ class CoderBotSession:
             f"### Task: {task.title}\n\n"
             f"### Specification\n{spec}\n\n"
             f"### Design Document\n{design_doc}\n\n"
-            f"{TEST_INSTRUCTION}"
+            f"{self._build_test_instruction()}"
         )
 
-    def _get_verification_commands(self):
-        """Resolves the argv lists for the post-run test verification.
+    def get_resolved_verification_commands(self) -> list:
+        """Resolve the argv lists for the post-run test verification.
 
-        Uses the ``CODERBOT_TEST_COMMANDS_JSON`` override when set and valid,
-        otherwise falls back to the README-documented default commands.
+        Priority:
+          1. Per-pipeline ``Pipeline.test_commands`` override when set.
+          2. Global ``CODERBOT_TEST_COMMANDS_JSON`` override when set.
+          3. The README-documented ``DEFAULT_TEST_COMMANDS``.
 
         Returns:
             A list of argv lists (e.g. ``[["sh", "-c", "..."], ...]``).
         """
+        pipeline_commands = getattr(self.pipeline, "test_commands", None)
+        if pipeline_commands:
+            return list(pipeline_commands)
+        return self._get_global_verification_commands()
+
+    def _get_global_verification_commands(self) -> list:
+        """Returns global config commands or the README-documented defaults."""
+
         raw = getattr(config, "CODERBOT_TEST_COMMANDS_JSON", "") or ""
         if raw:
             try:
@@ -248,6 +276,32 @@ class CoderBotSession:
                 )
         return list(DEFAULT_TEST_COMMANDS)
 
+    def _get_verification_commands(self, test_commands=None):
+        """Resolves the argv lists for the post-run test verification.
+
+        Historically this was driven solely by the global config override. It now
+        also honours a caller-provided per-pipeline override list (which takes
+        precedence over the global config). When neither is set/valid the
+        README-documented default commands are used.
+
+        Args:
+            test_commands: Optional list of argv lists from a Pipeline. When it
+                is a non-empty list of valid lists it wins over the global
+                ``CODERBOT_TEST_COMMANDS_JSON`` override.
+
+        Returns:
+            A list of argv lists (e.g. ``[["sh", "-c", "..."], ...]``).
+        """
+        if test_commands:
+            commands = [c for c in test_commands if isinstance(c, list) and c]
+            if commands:
+                return list(commands)
+            logger.warning(
+                "Pipeline test_commands is not a non-empty list; falling back "
+                "to global/test-command defaults."
+            )
+        return self._get_global_verification_commands()
+
     async def _run_verification(self) -> Dict[str, Any]:
         """Runs the project test commands in the sandbox and returns results.
 
@@ -259,7 +313,7 @@ class CoderBotSession:
             entry contains the argv, the exit code and the tail of its output.
         """
         results: Dict[str, Any] = {"commands": [], "passed": True}
-        for entry in self._get_verification_commands():
+        for entry in self.get_resolved_verification_commands():
             cmd_str = " ".join(entry)
             try:
                 proc = await asyncio.create_subprocess_exec(
@@ -514,6 +568,8 @@ class CoderBotSession:
             logger.error(error_msg)
             self._log_event({"type": "error", "message": error_msg})
             return
+
+        self.pipeline = pipeline
 
         logger.info(f"Setting up sandbox for task {self.task_id}")
         self.helper = SandboxGitHelper(

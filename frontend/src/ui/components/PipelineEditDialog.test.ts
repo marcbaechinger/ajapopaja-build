@@ -210,6 +210,52 @@ describe('PipelineEditDialog', () => {
     await showPromise;
   });
 
+  it('should pre-fill the test commands textarea from stored argv lists', async () => {
+    mockProps.pipeline!.test_commands = [
+      ['sh', '-c', 'make test'],
+      ['pytest', '-q'],
+    ];
+    const dialog = new PipelineEditDialog(mockProps);
+    const showPromise = dialog.show();
+
+    const textarea = document.querySelector('textarea[name="test_commands"]') as HTMLTextAreaElement;
+    expect(textarea.value).toBe('make test\npytest -q');
+
+    document.querySelector('#pipeline-edit-cancel')?.dispatchEvent(new MouseEvent('click'));
+    await showPromise;
+  });
+
+  it('should send test_commands parsed from the textarea on save', async () => {
+    const dialog = new PipelineEditDialog(mockProps);
+    const showPromise = dialog.show();
+
+    const textarea = document.querySelector('textarea[name="test_commands"]') as HTMLTextAreaElement;
+    textarea.value = 'make test\n\ncd backend && uv run pytest';
+
+    const saveBtn = document.querySelector('#pipeline-edit-save') as HTMLButtonElement;
+    saveBtn.click();
+    await showPromise;
+
+    const updateCall = (mockProps.context.pipelineClient.update as any).mock.calls[0];
+    expect(updateCall[2].test_commands).toEqual([
+      ['sh', '-c', 'make test'],
+      ['sh', '-c', 'cd backend && uv run pytest'],
+    ]);
+  });
+
+  it('should send an empty test_commands array when the textarea is blank', async () => {
+    const dialog = new PipelineEditDialog(mockProps);
+    const showPromise = dialog.show();
+
+    // textarea left empty
+    const saveBtn = document.querySelector('#pipeline-edit-save') as HTMLButtonElement;
+    saveBtn.click();
+    await showPromise;
+
+    const updateCall = (mockProps.context.pipelineClient.update as any).mock.calls[0];
+    expect(updateCall[2].test_commands).toEqual([]);
+  });
+
   it('should call update and close on save', async () => {
     const dialog = new PipelineEditDialog(mockProps);
     const showPromise = dialog.show();
@@ -340,6 +386,40 @@ describe('PipelineEditDialog', () => {
         repo_token: 'gittoken',
       });
       expect(createCall[0]).not.toHaveProperty('workspace_path');
+    });
+
+    it('should send test_commands on create when provided', async () => {
+      const props = mkCreateProps();
+      const dialog = new PipelineEditDialog(props);
+      const showPromise = dialog.show();
+
+      const nameInput = document.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
+      nameInput.value = 'New Pipe';
+      const textarea = document.querySelector('textarea[name="test_commands"]') as HTMLTextAreaElement;
+      textarea.value = 'make test';
+
+      const saveBtn = document.querySelector('#pipeline-edit-save') as HTMLButtonElement;
+      saveBtn.click();
+      await showPromise;
+
+      const createCall = (props.context.pipelineClient.create as any).mock.calls[0];
+      expect(createCall[0].test_commands).toEqual([['sh', '-c', 'make test']]);
+    });
+
+    it('should send null test_commands on create when textarea is blank', async () => {
+      const props = mkCreateProps();
+      const dialog = new PipelineEditDialog(props);
+      const showPromise = dialog.show();
+
+      const nameInput = document.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
+      nameInput.value = 'New Pipe';
+
+      const saveBtn = document.querySelector('#pipeline-edit-save') as HTMLButtonElement;
+      saveBtn.click();
+      await showPromise;
+
+      const createCall = (props.context.pipelineClient.create as any).mock.calls[0];
+      expect(createCall[0].test_commands).toBeNull();
     });
 
     it('should surface backend validation errors inline instead of alert', async () => {

@@ -18,6 +18,31 @@ from core.exceptions import EntityNotFoundError, ValidationError, VersionMismatc
 from core.models.models import Pipeline, PipelineStatus, Task
 
 
+def _validate_test_commands(test_commands: Optional[List[List[str]]]):
+    """Validate a list of argv lists for per-pipeline test commands.
+
+    Returns the validated (normalized) list. ``None`` and ``[]`` are allowed
+    (meaning “not configured” / “use global fallback”). Raises a
+    ``core.exceptions.ValidationError`` on malformed input.
+    """
+    if test_commands is None:
+        return test_commands
+    if not isinstance(test_commands, list):
+        raise ValidationError("test_commands must be a JSON list of command argv lists")
+    validated: List[List[str]] = []
+    for entry in test_commands:
+        if not isinstance(entry, list) or not entry:
+            raise ValidationError(
+                "Each test command must be a non-empty list of argv strings"
+            )
+        if not all(isinstance(a, str) and a for a in entry):
+            raise ValidationError(
+                "Each test command argv element must be a non-empty string"
+            )
+        validated.append(list(entry))
+    return validated
+
+
 async def get_all_pipelines(include_deleted: bool = False) -> List[Pipeline]:
     # Newest first: order by created_at descending across both branches.
     if include_deleted:
@@ -80,6 +105,7 @@ async def update_pipeline(
     repo_username: Optional[str] = None,
     repo_token: Optional[str] = None,
     doc_root: Optional[str] = None,
+    test_commands: Optional[List[List[str]]] = None,
 ) -> Pipeline:
     pipeline = await get_pipeline_by_id(pipeline_id)
 
@@ -105,6 +131,10 @@ async def update_pipeline(
         pipeline.repo_token = repo_token
     if doc_root is not None:
         pipeline.doc_root = doc_root
+    if test_commands is not None:
+        # Re-validate here (mirroring the model validator) so that invalid
+        # payloads are rejected with a clear ValidationError before saving.
+        pipeline.test_commands = _validate_test_commands(test_commands)
 
     pipeline.version += 1
     await pipeline.save()

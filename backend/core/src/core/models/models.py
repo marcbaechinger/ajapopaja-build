@@ -110,6 +110,10 @@ class Pipeline(Document):
     repo_username: Optional[str] = None
     repo_token: Optional[str] = None
     doc_root: str = "design"
+    # Pipeline-specific test verification commands (list of argv lists, e.g.
+    # [["sh", "-c", "cd backend && uv run pytest"]]). When empty, the global
+    # CODERBOT_TEST_COMMANDS_JSON / default commands are used as fallback.
+    test_commands: Optional[List[List[str]]] = None
     version: int = 1
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -156,6 +160,33 @@ class Pipeline(Document):
 
             return sanitize_relative_path(v)
         return v
+
+    @field_validator("test_commands")
+    @classmethod
+    def validate_test_commands(cls, v):
+        """Validate per-pipeline test commands (a list of argv lists).
+
+        - ``None`` means “not configured” and falls back to the global config.
+        - An empty list ``[]`` explicitly disables pipeline-specific commands
+          (the global config is used).
+        - Otherwise each entry must be a non-empty list of non-empty strings.
+        """
+        if v is None:
+            return v
+        if not isinstance(v, list):
+            raise ValueError("test_commands must be a JSON list of command argv lists")
+        validated: List[List[str]] = []
+        for entry in v:
+            if not isinstance(entry, list) or not entry:
+                raise ValueError(
+                    "Each test command must be a non-empty list of argv strings"
+                )
+            if not all(isinstance(a, str) and a for a in entry):
+                raise ValueError(
+                    "Each test command argv element must be a non-empty string"
+                )
+            validated.append(list(entry))
+        return validated
 
     @field_validator("repo_uri")
     @classmethod

@@ -32,6 +32,32 @@ type RepoTab = 'local' | 'remote';
 
 const READONLY_CLASS = ' opacity-60 cursor-not-allowed';
 
+/**
+ * Converts a stored argv list (e.g. `["sh", "-c", "cd backend && pytest"]`)
+ * back into a single editable command line for the dialog textarea. The common
+ * `["sh", "-c", cmd]` wrapping produced by the dialog is unwrapped so the user
+ * edits the raw shell command; anything else is space-joined for display.
+ */
+function argsToCommand(args: string[]): string {
+  if (args && args.length === 3 && args[0] === 'sh' && args[1] === '-c' && args[2]) {
+    return args[2];
+  }
+  return (args || []).join(' ');
+}
+
+/**
+ * Parses the textarea content (one shell command per line) into the stored
+ * argv-list format. Empty/blank lines are ignored. Returns `[]` when there are
+ * no commands (meaning “use the global/test-command fallback”).
+ */
+function parseTestCommands(value: string): string[][] {
+  const lines = (value || '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+  return lines.map((line) => ['sh', '-c', line]);
+}
+
 export class PipelineEditDialog extends BaseDialog<void> {
   private props: PipelineEditDialogProps;
   private pipeline: Pipeline;
@@ -167,6 +193,18 @@ export class PipelineEditDialog extends BaseDialog<void> {
     `;
   }
 
+  private renderTestCommands(): string {
+    const existing = (this.pipeline.test_commands || []).map(argsToCommand);
+    const value = existing.length > 0 ? existing.join('\n') : '';
+    return `
+      <div>
+        <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Test Commands (Optional)</label>
+        <textarea name="test_commands" rows="3" placeholder="One command per line, e.g.&#10;cd backend &amp;&amp; uv run pytest&#10;cd frontend &amp;&amp; CI=true npm run test" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1 font-mono">${value}</textarea>
+        <p class="text-[10px] text-app-muted">Commands run to verify a change. One per line. Leave empty to use the global default commands.</p>
+      </div>
+    `;
+  }
+
   protected renderBody(): string {
     if (!this.props) return '';
     const create = !this.isEditMode();
@@ -183,6 +221,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
           <button type="button" data-tab="remote" class="${this.tabClass('remote')}">Remote Repository</button>
         </div>
         ${this.activeTab === 'local' ? this.renderLocalTab(localReadonly, create) : this.renderRemoteTab(remoteReadonly, create)}
+        ${this.renderTestCommands()}
         <div id="pipeline-edit-error" class="hidden text-xs text-red-400 font-bold"></div>
         ${create ? '' : `
         <div class="flex col-span-2">
@@ -237,6 +276,9 @@ export class PipelineEditDialog extends BaseDialog<void> {
     const repoUriInput = this.dialog.querySelector('input[name="repo_uri"]') as HTMLInputElement;
     const repoUsernameInput = this.dialog.querySelector('input[name="repo_username"]') as HTMLInputElement;
     const repoTokenInput = this.dialog.querySelector('input[name="repo_token"]') as HTMLInputElement;
+    const testCommandsInput = this.dialog.querySelector('textarea[name="test_commands"]') as HTMLTextAreaElement;
+
+    const testCommands = parseTestCommands(testCommandsInput?.value || '');
 
     const btnLabel = create ? 'Create Pipeline' : 'Save Changes';
     saveBtn.disabled = true;
@@ -251,9 +293,11 @@ export class PipelineEditDialog extends BaseDialog<void> {
           repo_username?: string | null;
           repo_token?: string;
           doc_root?: string;
+          test_commands?: string[][] | null;
         } = {
           name: nameInput?.value.trim() || '',
           doc_root: docRootInput?.value.trim() || 'design',
+          test_commands: testCommands.length > 0 ? testCommands : null,
         };
 
         if (this.activeTab === 'remote') {
@@ -287,7 +331,10 @@ export class PipelineEditDialog extends BaseDialog<void> {
           repo_username?: string | null;
           repo_token?: string;
           doc_root?: string;
-        } = {};
+          test_commands?: string[][] | null;
+        } = {
+          test_commands: testCommands,
+        };
 
         if (remote) {
           // Remote tab is editable; local config is read-only (keep current values).

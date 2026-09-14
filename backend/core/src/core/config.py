@@ -72,8 +72,10 @@ CODERBOT_DEFAULT_MODEL: Optional[str] = os.getenv("CODERBOT_DEFAULT_MODEL")
 # Run the documented project test suite in the sandbox after Pi finishes.
 CODERBOT_RUN_TESTS = os.getenv("CODERBOT_RUN_TESTS", "true").lower() == "true"
 
-# Optional override of the test commands (JSON list of argv). When unset,
-# the README commands are used.
+# Optional global override of the test verification commands (JSON list of
+# argv lists, e.g. `[["sh", "-c", "cd backend && uv run pytest"]]`). When unset,
+# the README commands are used. A Pipeline may define its own per-pipeline
+# `test_commands` which take precedence over this global configuration when set.
 CODERBOT_TEST_COMMANDS_JSON = os.getenv("CODERBOT_TEST_COMMANDS_JSON", "")
 
 # Git identity used for commits when none is configured in the environment

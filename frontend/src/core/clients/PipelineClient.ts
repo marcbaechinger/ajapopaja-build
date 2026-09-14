@@ -48,6 +48,7 @@ export class PipelineClient extends BaseClient {
     repo_username?: string | null;
     repo_token?: string | null;
     doc_root?: string;
+    test_commands?: string[][] | null;
   }): Promise<Pipeline> {
     const response = await this.fetch(`${this.baseUrl}/pipelines/`, {
       method: 'POST',
@@ -57,7 +58,7 @@ export class PipelineClient extends BaseClient {
     return new Pipeline(await response.json());
   }
 
-  async update(id: string, version: number, partial: { name?: string, status?: PipelineStatus, workspace_path?: string | null, repo_uri?: string | null, repo_username?: string | null, repo_token?: string | null, doc_root?: string }): Promise<Pipeline> {
+  async update(id: string, version: number, partial: { name?: string, status?: PipelineStatus, workspace_path?: string | null, repo_uri?: string | null, repo_username?: string | null, repo_token?: string | null, doc_root?: string, test_commands?: string[][] | null }): Promise<Pipeline> {
     try {
       const response = await this.fetch(`${this.baseUrl}/pipelines/${id}`, {
         method: 'PATCH',

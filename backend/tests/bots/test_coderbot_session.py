@@ -483,6 +483,34 @@ def test_coderbot_get_verification_commands_invalid_override_falls_back():
     assert commands == list(DEFAULT_TEST_COMMANDS)
 
 
+def test_coderbot_pipeline_test_commands_override_global():
+    """Per-pipeline test_commands take precedence over the global override."""
+    session = CoderBotSession(pipeline_id="p1", task_id="t1")
+    session.pipeline = MagicMock(test_commands=[["make", "test"]])
+    with patch.object(config, "CODERBOT_TEST_COMMANDS_JSON", '[["global-cmd"]]'):
+        assert session.get_resolved_verification_commands() == [["make", "test"]]
+        # The explicit-arg form also honours the pipeline list when passed.
+        assert session._get_verification_commands([["make", "test"]]) == [
+            ["make", "test"]
+        ]
+
+
+def test_coderbot_pipeline_without_test_commands_uses_global():
+    """A pipeline without test_commands falls back to the global override."""
+    session = CoderBotSession(pipeline_id="p1", task_id="t1")
+    session.pipeline = MagicMock(test_commands=None)
+    with patch.object(config, "CODERBOT_TEST_COMMANDS_JSON", '[["global-cmd"]]'):
+        assert session.get_resolved_verification_commands() == [["global-cmd"]]
+
+
+def test_coderbot_pipeline_empty_test_commands_uses_global():
+    """An empty pipeline test_commands list falls back to the global override."""
+    session = CoderBotSession(pipeline_id="p1", task_id="t1")
+    session.pipeline = MagicMock(test_commands=[])
+    with patch.object(config, "CODERBOT_TEST_COMMANDS_JSON", '[["global-cmd"]]'):
+        assert session.get_resolved_verification_commands() == [["global-cmd"]]
+
+
 @pytest.mark.asyncio
 async def test_coderbot_run_verification_aggregates_exit_codes():
     """_run_verification aggregates exit codes from all commands."""

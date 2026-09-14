@@ -235,6 +235,78 @@ async def test_create_pipeline_valid_remote_with_credentials(
             assert body["has_repo_token"] is True
 
 
+@pytest.mark.asyncio
+async def test_create_pipeline_with_test_commands(async_client, init_mock_db):
+    """A pipeline may be created with per-pipeline test commands."""
+    from core.models.models import Pipeline
+
+    with patch(
+        "api.routes.pipeline.pipeline_queries.create_pipeline", new_callable=AsyncMock
+    ) as mock_create:
+        new_pipeline = Pipeline(name="WithTests", test_commands=[["pytest", "-q"]])
+        mock_create.return_value = new_pipeline
+        with patch("api.routes.pipeline.manager.broadcast", new_callable=AsyncMock):
+            response = await async_client.post(
+                "/api/pipelines/",
+                json={"name": "WithTests", "test_commands": [["pytest", "-q"]]},
+            )
+            assert response.status_code == status.HTTP_200_OK
+            assert response.json()["test_commands"] == [["pytest", "-q"]]
+            assert mock_create.called
+
+
+@pytest.mark.asyncio
+async def test_create_pipeline_invalid_test_commands_rejected(
+    async_client, init_mock_db
+):
+    """Malformed test_commands must be rejected (422) at the model level."""
+    with patch(
+        "api.routes.pipeline.pipeline_queries.create_pipeline", new_callable=AsyncMock
+    ) as mock_create:
+        response = await async_client.post(
+            "/api/pipelines/",
+            json={"name": "Bad", "test_commands": ["pytest -q"]},
+        )
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+        # The validation error must reference the test_commands field.
+        assert "test_commands" in str(response.json().get("detail"))
+        mock_create.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_update_pipeline_sets_test_commands(init_mock_db):
+    """update_pipeline persists valid test_commands on the stored pipeline."""
+    from core.models.models import Pipeline
+    from core.queries import pipeline as pipeline_queries
+
+    stored = Pipeline(name="Local", version=1)
+
+    with (
+        patch(
+            "core.queries.pipeline.get_pipeline_by_id",
+            new_callable=AsyncMock,
+            return_value=stored,
+        ),
+        patch.object(Pipeline, "save", new_callable=AsyncMock),
+    ):
+        await pipeline_queries.update_pipeline(
+            "p1", stored.version, test_commands=[["make", "test"]]
+        )
+        assert stored.test_commands == [["make", "test"]]
+
+        # Explicit empty list clears pipeline-specific commands (falls back global).
+        await pipeline_queries.update_pipeline("p1", stored.version, test_commands=[])
+        assert stored.test_commands == []
+
+
+def test_pipeline_model_rejects_empty_argv_strings():
+    """Each argv element must be a non-empty string."""
+    from core.models.models import Pipeline
+
+    with pytest.raises(Exception):
+        Pipeline(name="Bad", test_commands=[[""]])
+
+
 def test_validate_pipeline_input_local():
     """Query-level validation: local pipelines pass (workspace optional)."""
     from core.models.models import Pipeline

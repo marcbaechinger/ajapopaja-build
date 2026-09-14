@@ -64,6 +64,7 @@ async def update_pipeline(
     repo_username: Optional[str] = Body(None, embed=True),
     repo_token: Optional[str] = Body(None, embed=True),
     doc_root: Optional[str] = Body(None, embed=True),
+    test_commands: Optional[List[List[str]]] = Body(None, embed=True),
     current_user: User = Depends(get_current_user),
 ):
     updated_pipeline = await pipeline_queries.update_pipeline(
@@ -76,6 +77,7 @@ async def update_pipeline(
         repo_username=repo_username,
         repo_token=repo_token,
         doc_root=doc_root,
+        test_commands=test_commands,
     )
 
     await manager.broadcast(
