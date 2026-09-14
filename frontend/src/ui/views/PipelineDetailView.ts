@@ -1511,7 +1511,13 @@ export class PipelineDetailView extends View {
   private mountCoderBotPiView(mount: HTMLElement) {
     this.teardownEnginePiView();
     mount.innerHTML = '';
-    this.enginePiView = new PiView(this.context.coderBotService, mount, { logHeightClass: 'h-[38vh]' });
+    // Defer the initial (potentially large, already-loaded) session history so
+    // the rest of the pipeline detail view paints first; the log then fills in on
+    // the next animation frame for a snappy page render.
+    this.enginePiView = new PiView(this.context.coderBotService, mount, {
+      logHeightClass: 'h-[38vh]',
+      deferInitialRender: true,
+    });
     this.enginePiView.render();
     this.context.coderBotService?.reconnect?.();
   }

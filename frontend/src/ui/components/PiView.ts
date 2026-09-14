@@ -61,6 +61,15 @@ export interface PiViewOptions {
    * 'toggle-block-collapse' | 'toggle-error-visibility' | 'toggle-search'.
    */
   keyboardBindings?: Record<string, string>;
+  /**
+   * When true, the initial (potentially large) session history is rendered into
+   * the DOM on the next animation frame instead of synchronously during
+   * `render()`. This lets an embedding page (e.g. a pipeline detail view whose
+   * sidebar already has a completed session loaded in memory) paint its layout
+   * with the placeholder immediately, then fill in the log on the following
+   * frame. Default false (renders synchronously, as before).
+   */
+  deferInitialRender?: boolean;
 }
 
 /** A button shown inside the empty-state placeholder. */
@@ -87,7 +96,18 @@ export class PiView {
   private isFollowMode: boolean;
   private showFooter: boolean;
   private logHeightClass: string;
+  private deferInitialRender: boolean;
   private unsubs: (() => void)[] = [];
+
+  /**
+   * Pending `requestAnimationFrame` handle for a deferred initial render. While
+   * non-null, the initial history has not been flushed to the DOM yet and live
+   * block snapshots are coalesced into `pendingBlocks` to avoid a synchronous
+   * re-render that would defeat the deferral.
+   */
+  private renderFrameHandle: number | null = null;
+  /** Latest block snapshot received while an initial render was still pending. */
+  private pendingBlocks: RenderBlock[] | null = null;
 
   /** Whether `thinking` blocks are expanded (default: collapsed). */
   private thinkingExpanded: boolean = false;
@@ -146,6 +166,7 @@ export class PiView {
     this.showFooter = options.showFooter ?? true;
     this.isFollowMode = options.followInitially ?? true;
     this.logHeightClass = options.logHeightClass ?? 'h-[60vh]';
+    this.deferInitialRender = options.deferInitialRender ?? false;
     this.emptyStateAction = options.emptyStateAction;
     this.keyboardBindings = options.keyboardBindings ?? {};
     // Build the action->key lookup once, after overrides are merged over defaults.
@@ -178,6 +199,13 @@ export class PiView {
    * Unsubscribes from the service and detaches listeners.
    */
   destroy(): void {
+    // Cancel a deferred initial render that hasn't fired yet so we never render
+    // into DOM that is being torn down.
+    if (this.renderFrameHandle !== null) {
+      cancelAnimationFrame(this.renderFrameHandle);
+      this.renderFrameHandle = null;
+    }
+    this.pendingBlocks = null;
     this.unsubs.forEach((unsub) => {
       try {
         unsub();
@@ -839,16 +867,45 @@ export class PiView {
     this.blocksContainer = this.root.querySelector('#log-blocks');
     if (!this.blocksContainer || !this.logContainer) return;
 
-    const history = this.service.getHistory();
-    history.forEach((block) => this.applyBlock(block));
-    this.refreshErrorList();
-    this.scrollToBottom();
+    if (this.deferInitialRender) {
+      // When embedding a PiView into a page (e.g. the pipeline detail sidebar)
+      // whose session history is already loaded in memory, rendering every block
+      // synchronously here blocks the surrounding page layout. Defer the initial
+      // (potentially expensive) render so the enclosing view paints its layout
+      // with the placeholder first, then fills in the log on the next animation
+      // frame. Live snapshots arriving before that flush are coalesced.
+      this.renderFrameHandle = requestAnimationFrame(() => {
+        this.renderFrameHandle = null;
+        this.renderCurrentState();
+      });
+    } else {
+      this.renderCurrentState();
+    }
 
     this.unsubs.push(
       this.service.onBlocks((blocks) => {
         this.reconcile(blocks);
       })
     );
+  }
+
+  /**
+   * Renders whatever blocks are currently known. If a live snapshot was
+   * coalesced while an initial render was pending, it is reconciled in one pass;
+   * otherwise the current history is rendered.
+   */
+  private renderCurrentState() {
+    if (this.pendingBlocks) {
+      const blocks = this.pendingBlocks;
+      this.pendingBlocks = null;
+      this.reconcileNow(blocks);
+      return;
+    }
+    const history = this.service.getHistory();
+    history.forEach((block) => this.applyBlock(block));
+    this.updateEmptyState();
+    this.refreshErrorList();
+    this.scrollToBottom();
   }
 
   private initStateSync() {
@@ -867,6 +924,18 @@ export class PiView {
   }
 
   private reconcile(blocks: RenderBlock[]) {
+    if (this.renderFrameHandle !== null) {
+      // The deferred initial render has not flushed yet. Coalesce the snapshot
+      // so the pending animation frame renders the latest content in a single
+      // pass instead of re-rendering synchronously here (which would defeat the
+      // performance deferral).
+      this.pendingBlocks = blocks;
+      return;
+    }
+    this.reconcileNow(blocks);
+  }
+
+  private reconcileNow(blocks: RenderBlock[]) {
     // Remove blocks that have been dropped (e.g. after clearHistory).
     const seen = new Set(blocks.map((b) => b.id));
     for (const [id, el] of this.blockEls) {
