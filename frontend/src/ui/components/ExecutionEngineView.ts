@@ -47,8 +47,8 @@ export class ExecutionEngineView {
 
     return `
       <div class="flex flex-col min-h-0 h-full overflow-hidden pt-2">
-        ${ExecutionEngineView.sectionHeader('In Progress', inProgress.length, 'text-amber-400')}
-        ${ExecutionEngineView.sectionBody(inProgress, 'No active work.')}
+        ${ExecutionEngineView.sectionHeader('In Progress', inProgress.length, 'text-amber-400', 'inprogress')}
+        ${ExecutionEngineView.sectionBody(inProgress, 'No active work.', '', 'inprogress')}
 
         <div id="engine-piview-section" class="flex flex-col gap-1.5 mt-1">
           <div class="flex items-center justify-between px-1 pt-1">
@@ -59,8 +59,8 @@ export class ExecutionEngineView {
           </div>
         </div>
 
-        ${ExecutionEngineView.sectionHeader('Queue', queue.length, 'text-app-accent-1')}
-        ${ExecutionEngineView.sectionBody(queue, 'Nothing scheduled.', 'max-h-48 overflow-y-auto')}
+        ${ExecutionEngineView.sectionHeader('Queue', queue.length, 'text-app-accent-1', 'queue')}
+        ${ExecutionEngineView.sectionBody(queue, 'Nothing scheduled.', 'max-h-48 overflow-y-auto', 'queue')}
 
         <div id="sidebar-history" class="flex-1 min-h-0 mt-2 flex flex-col overflow-hidden">
           ${PipelineHistoryView.render(historyTasks, historyPage)}
@@ -69,28 +69,63 @@ export class ExecutionEngineView {
     `;
   }
 
-  private static sectionHeader(title: string, count: number, accent: string): string {
+  private static sectionHeader(title: string, count: number, accent: string, key?: string): string {
+    const headerAttr = key ? ` data-engine-header="${key}"` : '';
+    const countAttr = key ? ` data-engine-count="${key}"` : '';
     return `
-      <div class="flex items-center justify-between px-1 pt-1">
+      <div class="flex items-center justify-between px-1 pt-1"${headerAttr}>
         <span class="text-[10px] font-black uppercase tracking-widest ${accent}">${title}</span>
-        <span class="text-[10px] font-bold text-app-muted bg-app-surface border border-app-border rounded-full px-1.5 py-0.5">${count}</span>
+        <span${countAttr} class="text-[10px] font-bold text-app-muted bg-app-surface border border-app-border rounded-full px-1.5 py-0.5">${count}</span>
       </div>
     `;
   }
 
-  private static sectionBody(tasks: Task[], emptyMessage: string, listClass: string = ''): string {
+  private static sectionBody(tasks: Task[], emptyMessage: string, listClass: string = '', key?: string): string {
+    const sectionAttr = key ? ` data-engine-section="${key}"` : '';
     if (tasks.length === 0) {
       return `
-        <div class="px-1">
+        <div class="px-1"${sectionAttr}>
           <p class="text-[10px] italic text-app-muted/50 text-center border border-dashed border-app-border/40 rounded-lg py-3">${emptyMessage}</p>
         </div>
       `;
     }
     return `
-      <div class="flex flex-col gap-2 ${listClass}">
+      <div class="flex flex-col gap-2 ${listClass}"${sectionAttr}>
         ${tasks.map(t => ExecutionEngineItemView.render(t)).join('')}
       </div>
     `;
+  }
+
+  /**
+   * Removes a single task from the rendered In Progress section in place,
+   * keeping the rest of the ExecutionEngineView DOM (PiView mount, queue, history)
+   * untouched. Used when a task transitions out of IN_PROGRESS (e.g. to
+   * PULL_REQUEST_AVAILABLE) without a full task re-broadcast. Returns true when
+   * the item was found and removed.
+   */
+  static removeInProgressItem(container: HTMLElement, taskId: string): boolean {
+    const list = container.querySelector('[data-engine-section="inprogress"]');
+    if (!list) return false;
+
+    const item = list.querySelector(`[data-view-id="${taskId}"]`);
+    if (!item) return false;
+    item.remove();
+
+    const remaining = list.querySelectorAll('[data-view-id]').length;
+    const countEl = container.querySelector('[data-engine-count="inprogress"]');
+    if (countEl) {
+      countEl.textContent = String(remaining);
+    }
+
+    // Restore the empty state if the last in-progress item was just removed.
+    if (list.children.length === 0) {
+      list.innerHTML = `
+        <div class="px-1">
+          <p class="text-[10px] italic text-app-muted/50 text-center border border-dashed border-app-border/40 rounded-lg py-3">No active work.</p>
+        </div>
+      `;
+    }
+    return true;
   }
 }
 

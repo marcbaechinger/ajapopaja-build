@@ -250,7 +250,14 @@ export class PipelineDetailView extends View {
       // Insert a newly created PR precisely into its container instead of
       // re-running the full task refresh (which re-renders the whole prep column
       // and re-publishes every task, cascading UI re-renders page-wide).
-      'PULL_REQUEST_CREATED': () => { this.refreshPullRequests(); },
+      'PULL_REQUEST_CREATED': (p) => {
+        this.refreshPullRequests();
+        // The CoderBot also transitions the task IN_PROGRESS ->
+        // PULL_REQUEST_AVAILABLE, but only broadcasts the PR event (no task-status
+        // update). Detect it here and remove the task from the engine's In Progress
+        // list in place so the sidebar stays accurate without a full re-render.
+        this.removeTaskFromInProgressOnPullRequest(p?.task_id);
+      },
     };
 
     Object.entries(eventHandlers).forEach(([event, handler]) => {
@@ -290,6 +297,30 @@ export class PipelineDetailView extends View {
       }
     } catch (error) {
       console.error('Failed to fetch pull requests:', error);
+    }
+  }
+
+  /**
+   * When a CoderBot creates a pull request it also transitions the task
+   * IN_PROGRESS -> PULL_REQUEST_AVAILABLE, but that status change is only
+   * broadcast as a PULL_REQUEST_CREATED event (no task-status update flows
+   * through the DataManager). Reflect it in the local cache and remove the task
+   * from the ExecutionEngineView's In Progress list via a targeted, in-place DOM
+   * removal so the rest of the sidebar (PiView mount, queue, history) is not
+   * disturbed.
+   */
+  private removeTaskFromInProgressOnPullRequest(taskId?: string) {
+    if (!taskId) return;
+    const task = this.allLoadedTasks.find(t => t.id === taskId);
+    if (!task) return;
+    // Only act when the transition actually comes from IN_PROGRESS.
+    if (task.status !== TaskStatus.INPROGRESS) return;
+
+    task.status = TaskStatus.PULL_REQUEST_AVAILABLE;
+
+    const engine = this.container?.querySelector('#execution-engine-view');
+    if (engine) {
+      ExecutionEngineView.removeInProgressItem(engine as HTMLElement, taskId);
     }
   }
 
