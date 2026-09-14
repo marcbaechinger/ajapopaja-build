@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+import subprocess
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import git
@@ -19,6 +21,37 @@ import pytest
 
 from core.exceptions import EntityNotFoundError
 from core.utils import git_utils
+
+RUN_GIT_ENV = {
+    "GIT_AUTHOR_NAME": "Test User",
+    "GIT_AUTHOR_EMAIL": "test@example.com",
+    "GIT_COMMITTER_NAME": "Test User",
+    "GIT_COMMITTER_EMAIL": "test@example.com",
+}
+
+
+def _git(cwd, args):
+    return subprocess.run(
+        ["git"] + args,
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        text=True,
+        env={**os.environ, **RUN_GIT_ENV},
+    )
+
+
+def _make_origin(tmp_path):
+    """Create a non-empty bare remote repo and return its path."""
+    origin = tmp_path / "origin.git"
+    seed = tmp_path / "seed"
+    seed.mkdir()
+    _git(seed, ["init", "-b", "main"])
+    (seed / "readme.md").write_text("readme\n")
+    _git(seed, ["add", "."])
+    _git(seed, ["commit", "-m", "Initial commit"])
+    _git(tmp_path, ["clone", "--bare", str(seed), str(origin)])
+    return origin
 
 
 @pytest.mark.asyncio
@@ -418,3 +451,90 @@ def test_resolve_gitea_repo_scp():
 def test_resolve_gitea_repo_invalid():
     with pytest.raises(ValueError):
         git_utils.resolve_gitea_repo("https://host/repo.git")
+
+
+def _pipeline_with_repo_uri():
+    pipeline = MagicMock()
+    pipeline.repo_uri = "https://host/org/repo.git"
+    return pipeline
+
+
+def _patch_pipeline_and_repo(repo):
+    return patch(
+        "core.utils.git_utils.get_pipeline_and_repo",
+        new_callable=AsyncMock,
+        return_value=(_pipeline_with_repo_uri(), repo),
+    )
+
+
+@pytest.mark.asyncio
+async def test_drop_top_commit_success(tmp_path):
+    origin = _make_origin(tmp_path)
+    ws = tmp_path / "workspace"
+    _git(tmp_path, ["clone", str(origin), str(ws)])
+
+    (ws / "file.txt").write_text("extra change\n")
+    _git(ws, ["add", "."])
+    _git(ws, ["commit", "-m", "Local extra commit"])
+    head_before = _git(ws, ["rev-parse", "HEAD"]).stdout.strip()
+    count_before = int(_git(ws, ["rev-list", "--count", "HEAD"]).stdout.strip())
+
+    with _patch_pipeline_and_repo(git.Repo(str(ws))):
+        msg = await git_utils.drop_top_commit("p1")
+
+    assert "Successfully dropped" in msg
+    head_after = _git(ws, ["rev-parse", "HEAD"]).stdout.strip()
+    count_after = int(_git(ws, ["rev-list", "--count", "HEAD"]).stdout.strip())
+    assert head_after != head_before
+    assert count_after == count_before - 1
+
+
+@pytest.mark.asyncio
+async def test_drop_top_commit_remote_commit(tmp_path):
+    origin = _make_origin(tmp_path)
+    ws = tmp_path / "workspace"
+    _git(tmp_path, ["clone", str(origin), str(ws)])
+
+    (ws / "file.txt").write_text("extra change\n")
+    _git(ws, ["add", "."])
+    _git(ws, ["commit", "-m", "Local extra commit"])
+    _git(ws, ["push", "origin", "HEAD"])
+
+    with _patch_pipeline_and_repo(git.Repo(str(ws))):
+        msg = await git_utils.drop_top_commit("p1")
+
+    assert "already exists on the remote" in msg
+
+
+@pytest.mark.asyncio
+async def test_drop_top_commit_only_one_commit(tmp_path):
+    origin = _make_origin(tmp_path)
+    ws = tmp_path / "workspace"
+    ws.mkdir()
+    _git(ws, ["init", "-b", "main"])
+    (ws / "only.txt").write_text("only\n")
+    _git(ws, ["add", "."])
+    _git(ws, ["commit", "-m", "single root commit"])
+    _git(ws, ["remote", "add", "origin", str(origin)])
+    _git(ws, ["fetch", "origin"])
+
+    with _patch_pipeline_and_repo(git.Repo(str(ws))):
+        msg = await git_utils.drop_top_commit("p1")
+
+    assert "only a single commit" in msg
+
+
+@pytest.mark.asyncio
+async def test_drop_top_commit_no_remote():
+    pipeline = MagicMock()
+    pipeline.repo_uri = None
+    repo = MagicMock()
+    with patch(
+        "core.utils.git_utils.get_pipeline_and_repo",
+        new_callable=AsyncMock,
+        return_value=(pipeline, repo),
+    ):
+        msg = await git_utils.drop_top_commit("p1")
+
+    assert "no remote repo_uri" in msg
+    repo.remotes.origin.fetch.assert_not_called()

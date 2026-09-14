@@ -385,3 +385,21 @@ async def test_update_pipeline_only_overrides_token_when_non_empty(init_mock_db)
             "p1", stored.version, repo_token="new-token"
         )
         assert stored.repo_token == "new-token"
+
+
+@pytest.mark.asyncio
+async def test_drop_top_commit_endpoint(async_client, init_mock_db):
+    """POST /api/pipelines/{id}/drop_top_commit returns status and message."""
+    with patch(
+        "api.routes.pipeline.git_utils.drop_top_commit",
+        new_callable=AsyncMock,
+        return_value="Successfully dropped commit abc123.",
+    ) as mock_drop:
+        response = await async_client.post("/api/pipelines/p1/drop_top_commit")
+        assert response.status_code == status.HTTP_200_OK
+        body = response.json()
+        assert body == {
+            "status": "ok",
+            "message": "Successfully dropped commit abc123.",
+        }
+        mock_drop.assert_awaited_once_with("p1")

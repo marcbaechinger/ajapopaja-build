@@ -276,6 +276,60 @@ async def get_pipeline_and_repo(
     return pipeline, get_repo(str(workspace_path))
 
 
+async def drop_top_commit(
+    pipeline_id: str,
+    task_id: str | None = None,
+    use_sandbox: bool = False,
+) -> str:
+    """Drop the topmost local commit if it is not on the remote.
+
+    Applies only to remote pipelines (repo_uri configured) and removes only the
+    topmost commit. Aborts if the commit already exists on the remote or if the
+    repository holds a single commit (nothing to drop).
+
+    Returns a human-readable status message (prefixed with "Error" on failure).
+    """
+    try:
+        pipeline, repo = await get_pipeline_and_repo(pipeline_id, task_id, use_sandbox)
+        if not pipeline.repo_uri:
+            return (
+                "Error: Cannot drop commit. Pipeline has no remote repo_uri "
+                "configured; only remote pipelines support dropping commits."
+            )
+
+        repo.remotes.origin.fetch()
+
+        default_branch = current_default_branch(repo)
+        remote_ref = f"origin/{default_branch}"
+
+        head_commit = repo.head.commit
+        head_sha = head_commit.hexsha
+
+        remote_shas = {c.hexsha for c in repo.iter_commits(remote_ref)}
+
+        if head_sha in remote_shas:
+            return (
+                "Error: Cannot drop top commit. The commit already exists on the "
+                f"remote origin/{default_branch}."
+            )
+
+        if not head_commit.parents:
+            return (
+                "Error: Cannot drop top commit. The repository has only a single "
+                "commit, so there is nothing to drop."
+            )
+
+        repo.git.reset("--hard", "HEAD~1")
+        return (
+            f"Successfully dropped commit {head_sha}. "
+            f"HEAD is now at {repo.head.commit.hexsha}."
+        )
+    except git.exc.GitCommandError as e:
+        return f"Error executing git command: {e}"
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+
 async def get_repo_for_pipeline_by_task(task_id: str) -> git.Repo:
     """
     Fetches the task and its pipeline, then returns a git.Repo instance.

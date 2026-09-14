@@ -228,3 +228,25 @@ index 4cc0cd9..1040e40 100644
     assert hunks[2]["type"] == "deletion"
     assert hunks[2]["first_line"] == 33
     assert hunks[2]["last_line"] == 33
+
+
+@pytest.mark.asyncio
+async def test_assistant_tool_drop():
+    """git_drop_top_commit delegates to the utility and is WRITE_ACCESS."""
+    from unittest.mock import AsyncMock, patch
+
+    from api.assistant.tools.git_tools import git_drop_top_commit
+    from api.bot.tool_registry import registry
+
+    # Registered as a write-access tool.
+    reg = registry.get_tool("git_drop_top_commit")
+    assert reg is not None
+    assert reg.type == "write_access"
+
+    with patch(
+        "core.utils.git_utils.drop_top_commit",
+        new_callable=AsyncMock,
+        return_value="dropped ok",
+    ):
+        msg = await git_drop_top_commit("p1")
+    assert msg == "dropped ok"

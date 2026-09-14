@@ -21,6 +21,7 @@ from api.websocket_manager import WSMessage, manager
 from core.models.models import Pipeline, PipelineStatus, User
 from core.queries import pipeline as pipeline_queries
 from core.queries import task as task_queries
+from core.utils import git_utils
 
 router = APIRouter(prefix="/pipelines", tags=["pipelines"])
 
@@ -104,3 +105,13 @@ async def get_daily_pipeline_stats(
     pipeline_id: str, current_user: User = Depends(get_current_user)
 ):
     return await task_queries.get_daily_stats(pipeline_id)
+
+
+@router.post("/{pipeline_id}/drop_top_commit", response_model=dict)
+async def drop_top_commit(
+    pipeline_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Drop the topmost local commit that has not been pushed to the remote."""
+    msg = await git_utils.drop_top_commit(pipeline_id)
+    return {"status": "ok", "message": msg}

@@ -370,6 +370,34 @@ async def git_diff(
 
 
 @register_tool(tool_type=WRITE_ACCESS)
+async def git_drop_top_commit(
+    pipeline_id: str,
+    task_id: Optional[str] = None,
+    use_sandbox: bool = False,
+) -> str:
+    """
+    Drops the most recent local commit that has not been pushed to the remote.
+
+    Applies only to remote pipelines (repo_uri configured). Only the topmost
+    commit can be removed, and only if it does not already exist on the remote.
+    Because it rewrites the local git history, this tool requires explicit user
+    confirmation before execution.
+
+    Use this tool to quickly undo a local commit that was made in error and has
+    not yet been pushed to the remote.
+
+    Args:
+        pipeline_id: The ID of the pipeline to which the project belongs.
+        task_id: The ID of the task (optional, used for sandbox).
+        use_sandbox: If True, operate in the task's sandbox.
+
+    Returns:
+        A human-readable status message on success, or an error message.
+    """
+    return await git_utils.drop_top_commit(pipeline_id, task_id, use_sandbox)
+
+
+@register_tool(tool_type=WRITE_ACCESS)
 async def git_pull(
     pipeline_id: str,
     task_id: Optional[str] = None,
