@@ -56,13 +56,15 @@ describe('PipelineItemView', () => {
     expect(html).toContain('data-action-click="view_pipeline"');
   });
 
-  it('includes a compact stats section and a Recently Implemented collapsible placeholder', () => {
+  it('includes a compact stats section and a side-by-side Recently Implemented cell', () => {
     const item = new PipelineItemView({ pipeline, statsTasks, context: makeContext() });
     const html = item.render();
 
     expect(html).toContain('Recently Implemented');
     expect(html).toContain('id="recent-tasks-p1"');
-    expect(html).toContain('<details');
+    // The panel is a single row: general info/stats in the left cell, recent
+    // tasks in the right cell on the same grid line.
+    expect(html).toContain('grid-cols-1 lg:grid-cols-2');
     expect(html).toContain('Loading recent tasks...');
   });
 

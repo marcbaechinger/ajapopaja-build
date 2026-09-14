@@ -27,8 +27,10 @@ export interface PipelineItemOptions {
 /**
  * Renders a single Pipeline card for the dashboard list.
  *
- * The card shows the pipeline name/version/status, a compact stats row, and a
- * collapsible "Recently Implemented" summary populated from {@link statsTasks}.
+ * The card is laid out as a single row with two cells: the left cell shows the
+ * pipeline name/version/status, state badge, delete button and a compact stats
+ * row; the right cell shows the "Recently Implemented" list populated from
+ * {@link statsTasks}. Both cells sit on the same row to save vertical space.
  *
  * The recent list is derived locally from the full task set provided by
  * {@link DashboardView}. This intentionally avoids the backend
@@ -93,25 +95,28 @@ export class PipelineItemView {
 
   render(): string {
     return `
-      <div class="bg-app-bg p-4 rounded-lg border border-app-border flex flex-col gap-2.5 transition-all hover:border-app-accent-1 cursor-pointer group mb-4"
+      <div class="bg-app-bg p-4 rounded-lg border border-app-border transition-all hover:border-app-accent-1 cursor-pointer group mb-4"
            data-view-type="pipeline" data-view-id="${this.pipeline.id}"
            data-action-click="view_pipeline">
-        ${this.renderHeader()}
-
-        <div class="pt-0.5">
-          ${PipelineStatsView.renderCompact(this.statsTasks)}
-        </div>
-
-        <details class="recent-tasks mt-0.5 group/recent" open>
-          <summary class="flex items-center gap-1.5 cursor-pointer select-none text-[10px] font-bold uppercase tracking-widest text-app-muted hover:text-app-accent-2 transition-colors">
-            <svg class="w-3 h-3 transition-transform group-open/recent:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-            Recently Implemented
-            <span class="text-[9px] text-app-muted/60 font-normal normal-case">(last 5)</span>
-          </summary>
-          <div class="mt-1.5 pl-4 border-l border-app-border/40" id="${this.placeholderId}">
-            <span class="text-[11px] text-app-muted animate-pulse">Loading recent tasks...</span>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-3">
+          <div class="flex flex-col gap-2.5 min-w-0">
+            ${this.renderHeader()}
+            <div class="pt-0.5">
+              ${PipelineStatsView.renderCompact(this.statsTasks)}
+            </div>
           </div>
-        </details>
+
+          <div class="recent-tasks min-w-0 lg:border-l lg:border-app-border/40 lg:pl-6">
+            <div class="flex items-center gap-1.5 select-none text-[10px] font-bold uppercase tracking-widest text-app-muted">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+              Recently Implemented
+              <span class="text-[9px] text-app-muted/60 font-normal normal-case">(last 5)</span>
+            </div>
+            <div class="mt-2" id="${this.placeholderId}">
+              <span class="text-[11px] text-app-muted animate-pulse">Loading recent tasks...</span>
+            </div>
+          </div>
+        </div>
       </div>
     `;
   }
