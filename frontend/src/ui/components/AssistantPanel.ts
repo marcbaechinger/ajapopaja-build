@@ -542,9 +542,9 @@ export class AssistantPanel {
       </details>
     ` : '';
 
-    const maxWidthClass = isUser ? 'max-w-[80%]' : '';
+    const maxWidthClass = isUser ? 'max-w-[80%] ml-auto' : '';
     msgEl.innerHTML = `
-      <div class="relative ${maxWidthClass} ${isUser ? 'ml-auto' : ''}">
+      <div class="relative ${maxWidthClass}">
         <div class="${isUser ? 'bg-app-accent-2 text-white rounded-tr-none' : (isError ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-app-bg border-app-border text-app-text rounded-tl-none')} 
                     p-3 rounded-2xl border text-sm prose-theme prose-xs prose-p:my-0 shadow-sm">
           ${thinkingHtml}
@@ -711,7 +711,7 @@ export class AssistantPanel {
     if (messages.length === 0) {
       this.messageContainer!.innerHTML = `
           <div class="flex flex-col gap-1">
-             <div class="bg-app-bg p-3 rounded-2xl rounded-tl-none border border-app-border text-sm text-app-text max-w-[90%] shadow-sm">
+             <div class="bg-app-bg p-3 rounded-2xl rounded-tl-none border border-app-border text-sm text-app-text shadow-sm">
                Hello! I'm your AI assistant. How can I help you with your tasks or pipelines today?
              </div>
           </div>
