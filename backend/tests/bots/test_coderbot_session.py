@@ -711,6 +711,75 @@ async def test_coderbot_handle_agent_end_runs_verification_and_annotates_pr(
 
 
 @pytest.mark.asyncio
+async def test_coderbot_handle_agent_end_reports_task_id_and_commit_hashes(
+    init_mock_db,
+):
+    """The PR summary reports the task ID, the hash of the commit on which the
+    verification ran (HEAD after CoderBot's commit) and the base commit hash on
+    top of which the new commit was created."""
+    task = Task(title="Test Task", pipeline_id="p1", design_doc="D", spec="S")
+    await task.insert()
+
+    session = CoderBotSession(pipeline_id="p1", task_id=str(task.id))
+    session.helper = MagicMock()
+    session.helper.branch_name = "branch"
+
+    # Fake repo.head so the parent (first read) and head (second read) commit
+    # hashes are distinct and deterministic, mirroring _handle_agent_end's
+    # capture order.
+    hashes = iter(["parent-base-hash", "verified-head-hash"])
+
+    class _FakeCommit:
+        def __init__(self, hexsha):
+            self.hexsha = hexsha
+
+    class _FakeHead:
+        @property
+        def commit(self):
+            return _FakeCommit(next(hashes))
+
+    repo = MagicMock()
+    repo.git.add = MagicMock()
+    repo.git.commit.return_value = "ok"
+    repo.git.diff.return_value = "test-patch"
+    repo.head = _FakeHead()
+    session.helper.get_repo.return_value = repo
+
+    ok_proc = AsyncMock()
+    ok_proc.communicate = AsyncMock(return_value=(b"ok output\n", b""))
+    ok_proc.returncode = 0
+
+    with (
+        patch(
+            "api.coderbot.session.asyncio.create_subprocess_exec",
+            new_callable=AsyncMock,
+            return_value=ok_proc,
+        ),
+        patch("api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock),
+        patch("api.coderbot.session.Task.get", new_callable=AsyncMock) as mock_task_get,
+        patch("core.queries.task.transition_task", new_callable=AsyncMock),
+    ):
+        mock_task_get.return_value = task
+        await session._handle_agent_end(
+            [
+                {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "Task complete."}],
+                }
+            ]
+        )
+
+    prs = await PullRequest.find(PullRequest.task_id == str(task.id)).to_list()
+    assert len(prs) == 1
+    summary = prs[0].summary
+    assert "### Verification" in summary
+    assert f"Task ID: **{task.id}**" in summary
+    assert "Verified commit (HEAD): `verified-head-hash`" in summary
+    assert "Parent commit (base): `parent-base-hash`" in summary
+    assert "Status: **PASSED**" in summary
+
+
+@pytest.mark.asyncio
 async def test_coderbot_handle_agent_end_skips_verification_when_disabled(
     init_mock_db,
 ):

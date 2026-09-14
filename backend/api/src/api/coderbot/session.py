@@ -473,6 +473,14 @@ class CoderBotSession:
 
             logger.info(f"Summary extracted: {summary[:50]}...")
             repo = self.helper.get_repo()
+            # Capture the hash of the commit onto which CoderBot's new commit will
+            # be created (i.e. the previous HEAD). It may be None when the repo has
+            # no commits yet (fresh clone with an unborn branch).
+            try:
+                parent_commit_hash = repo.head.commit.hexsha
+            except Exception:
+                parent_commit_hash = None
+
             repo.git.add(A=True)
             commit_made = False
             try:
@@ -482,6 +490,13 @@ class CoderBotSession:
                 logger.info("Git commit created in sandbox.")
             except Exception as e:
                 logger.info(f"Nothing to commit or commit failed: {e}")
+
+            # The hash of the commit on which the verification is executed is the
+            # new (CoderBot) commit now at HEAD, when a commit was actually made.
+            try:
+                head_commit_hash = repo.head.commit.hexsha
+            except Exception:
+                head_commit_hash = None
 
             if commit_made:
                 # Use git diff to get a clean, structural patch without commit
@@ -540,29 +555,41 @@ class CoderBotSession:
             task = await Task.get(self.task_id)
             task_title = task.title if task else ""
 
+            # Include the task ID and the relevant commit hashes in the PR summary
+            # so a human can see exactly which version of the code was verified. The
+            # task ID, the hash of the commit the verification ran on (HEAD after
+            # CoderBot's commit) and the hash of the commit on top of which the new
+            # commit was created (the previous HEAD, if any) are reported.
             pr_summary = summary
+            summary_meta = [
+                "",
+                "### Verification",
+                f"Task ID: **{self.task_id}**",
+            ]
+            if head_commit_hash:
+                summary_meta.append(f"Verified commit (HEAD): `{head_commit_hash}`")
+            if parent_commit_hash:
+                summary_meta.append(f"Parent commit (base): `{parent_commit_hash}`")
             if verification_results and verification_results.get("commands"):
                 status = "PASSED" if verification_results.get("passed") else "FAILED"
-                lines = [
-                    "",
-                    "### Verification",
-                    f"Status: **{status}**",
-                ]
+                summary_meta.append(f"Status: **{status}**")
                 for entry in verification_results["commands"]:
                     exit_code = entry.get("exit_code")
-                    lines.append(f"- `{entry.get('cmd')}` -> exit code {exit_code}")
+                    summary_meta.append(
+                        f"- `{entry.get('cmd')}` -> exit code {exit_code}"
+                    )
                 if not verification_results.get("passed"):
                     for entry in verification_results["commands"]:
                         if entry.get("exit_code") not in (0, None):
                             tail = entry.get("output_tail", "").rstrip()
                             if tail:
-                                lines.append(
+                                summary_meta.append(
                                     f"\nOutput tail of `{entry.get('cmd')}`:\n"
                                     "```\n"
                                     f"{tail}"
                                     "\n```"
                                 )
-                pr_summary = summary + "\n".join(lines)
+            pr_summary = summary + "\n".join(summary_meta)
 
             pr = PullRequest(
                 pipeline_id=self.pipeline_id,
