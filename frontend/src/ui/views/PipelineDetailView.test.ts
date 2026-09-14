@@ -445,6 +445,140 @@ describe('PipelineDetailView Review Notifications', () => {
   });
 });
 
+
+describe('PipelineDetailView Pull Request Insert', () => {
+  let mockContext: any;
+  let container: HTMLElement;
+
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    LocalStorageManager.resetInstances();
+    vi.clearAllMocks();
+
+    mockContext = {
+      actionRegistry: {
+        register: vi.fn(),
+      },
+      wsClient: { on: vi.fn() },
+      dataManager: {
+        on: vi.fn().mockReturnValue(() => {}),
+        updateTask: vi.fn(),
+        updatePipeline: vi.fn(),
+      },
+      authService: {
+        getUser: vi.fn().mockReturnValue({ username: 'testuser' }),
+        getAccessToken: vi.fn().mockReturnValue('token'),
+      },
+      pipelineClient: { get: vi.fn().mockResolvedValue({ id: 'p1', name: 'Pipe 1' }) },
+      taskClient: {
+        listByPipeline: vi.fn().mockResolvedValue([]),
+        listCompletedByPipeline: vi.fn().mockResolvedValue({ tasks: [], total_count: 0 }),
+      },
+      pullRequestClient: {
+        getPullRequestsByPipeline: vi.fn().mockResolvedValue([]),
+      },
+      systemClient: {
+        getGitStatus: vi.fn().mockResolvedValue({}),
+        isOllamaAvailable: vi.fn().mockResolvedValue(true),
+      },
+    };
+
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn(() => null),
+      setItem: vi.fn(),
+    });
+  });
+
+  /**
+   * Simulates the PULL_REQUEST_CREATED websocket message arriving while the
+   * view is mounted, then waits for the (lightweight) async refresh to settle.
+   */
+  const handlePullRequestCreated = async (newPrs: any[]) => {
+    const wsHandler = mockContext.dataManager.on.mock.calls.find((c: any) => c[0] === 'ws:PULL_REQUEST_CREATED:p1');
+    expect(wsHandler).toBeDefined();
+    const handler = wsHandler[1];
+    mockContext.pullRequestClient.getPullRequestsByPipeline.mockResolvedValue(newPrs);
+    // The handler is async but the DataManager listener wrapper calls it without
+    // awaiting, so wait a tick for the fetch to resolve.
+    handler({ task_id: 't1' });
+    await new Promise(resolve => setTimeout(resolve, 0));
+  };
+
+  it('renders the pull request section inside a dedicated container', async () => {
+    const pr: any = {
+      id: 'pr1',
+      _id: 'pr1',
+      pipeline_id: 'p1',
+      task_id: 't1',
+      subject: 'My PR',
+      branch_name: 'feature/x',
+      status: 'open',
+      created_at: '2026-04-12T10:00:00Z',
+    };
+    mockContext.pullRequestClient.getPullRequestsByPipeline.mockResolvedValue([pr]);
+
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+
+    // loadPipeline() (async) fetches the PRs and re-renders the prep column via
+    // fetchPullRequests -> refreshTasks; wait for that to settle.
+    await new Promise(resolve => setTimeout(resolve, 0));
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    const section = container.querySelector('#pull-request-section');
+    expect(section).not.toBeNull();
+    expect(section!.innerHTML).toContain('My PR');
+  });
+
+  it('inserts a PULL_REQUEST_CREATED update precisely without re-rendering the rest of the page', async () => {
+    mockContext.pullRequestClient.getPullRequestsByPipeline.mockResolvedValue([]);
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await view.refreshTasks();
+
+    const selectedView = container.querySelector('#selected-task-view') as HTMLElement;
+    const engine = container.querySelector('#execution-engine-view') as HTMLElement;
+    const backlog = container.querySelector('#backlog-view') as HTMLElement;
+    const before = {
+      selected: selectedView.innerHTML,
+      engine: engine.innerHTML,
+      backlog: backlog.innerHTML,
+    };
+    const listCallsBefore = mockContext.taskClient.listByPipeline.mock.calls.length;
+
+    // A new PR arrives over the websocket.
+    const newPr: any = {
+      id: 'pr2',
+      _id: 'pr2',
+      pipeline_id: 'p1',
+      task_id: 't2',
+      subject: 'Freshly Created PR',
+      branch_name: 'feature/y',
+      status: 'open',
+      created_at: '2026-04-12T11:00:00Z',
+    };
+    await handlePullRequestCreated([newPr]);
+
+    // Only the pull request section was touched.
+    const section = container.querySelector('#pull-request-section');
+    expect(section!.innerHTML).toContain('Freshly Created PR');
+    expect(selectedView.innerHTML).toBe(before.selected);
+    expect(engine.innerHTML).toBe(before.engine);
+    expect(backlog.innerHTML).toBe(before.backlog);
+
+    // The lightweight insert never re-publishes tasks through the DataManager
+    // (which would have cascaded into per-task page-wide re-renders).
+    expect(mockContext.dataManager.updateTask).not.toHaveBeenCalled();
+    // And it does not trigger a heavy full-task refresh (no extra listByPipeline).
+    expect(mockContext.taskClient.listByPipeline.mock.calls.length).toBe(listCallsBefore);
+  });
+});
+
+
 describe('PipelineDetailView CoderBot Dialog', () => {
   let mockContext: any;
   let container: HTMLElement;

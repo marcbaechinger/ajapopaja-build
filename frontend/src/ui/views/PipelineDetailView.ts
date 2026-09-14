@@ -247,7 +247,10 @@ export class PipelineDetailView extends View {
       'ARCHBOT_COMPLETED': () => { this.archbotState = { status: 'none', taskId: null }; },
       'CODERBOT_STARTED': (p) => { this.coderbotState = { status: 'inProgress', taskId: p.task_id }; },
       'CODERBOT_COMPLETED': (p) => { this.coderbotState = { status: 'completed', taskId: p.task_id }; },
-      'PULL_REQUEST_CREATED': () => { this.fetchPullRequests(); },
+      // Insert a newly created PR precisely into its container instead of
+      // re-running the full task refresh (which re-renders the whole prep column
+      // and re-publishes every task, cascading UI re-renders page-wide).
+      'PULL_REQUEST_CREATED': () => { this.refreshPullRequests(); },
     };
 
     Object.entries(eventHandlers).forEach(([event, handler]) => {
@@ -264,6 +267,27 @@ export class PipelineDetailView extends View {
     try {
       this.pullRequests = await this.context.pullRequestClient.getPullRequestsByPipeline(this.pipelineId);
       this.refreshTasks(); // PRs are rendered in the preparation column
+    } catch (error) {
+      console.error('Failed to fetch pull requests:', error);
+    }
+  }
+
+  /**
+   * Fetches the pull requests and refreshes only the dedicated pull-request
+   * container in the preparation column. This avoids re-rendering the whole
+   * prep column and, crucially, avoids re-publishing every task through the
+   * DataManager (which would fire updateSingleTask per task and cascade into
+   * full backlog/selection/engine re-renders). Used for the intrusive
+   * PULL_REQUEST_CREATED websocket insert.
+   */
+  private async refreshPullRequests() {
+    try {
+      const prs = await this.context.pullRequestClient.getPullRequestsByPipeline(this.pipelineId);
+      this.pullRequests = prs;
+      const sectionEl = this.container?.querySelector('#pull-request-section');
+      if (sectionEl) {
+        sectionEl.innerHTML = PullRequestSection.render(this.pullRequests);
+      }
     } catch (error) {
       console.error('Failed to fetch pull requests:', error);
     }
@@ -1112,8 +1136,13 @@ export class PipelineDetailView extends View {
       const completedTasks = allTasks.filter(t => !t.deleted && ([TaskStatus.IMPLEMENTED, TaskStatus.SUBMITTED, TaskStatus.DISCARDED] as any[]).includes(t.status));
 
       // 1. Render Preparation Column (the main area keeps the PullRequest section only).
+      //    It is wrapped in a dedicated #pull-request-section container so a
+      //    PULL_REQUEST_CREATED event can update this section in place without
+      //    re-rendering any other part of the UI.
       prepContainer.innerHTML = `
-        ${PullRequestSection.render(this.pullRequests)}
+        <div id="pull-request-section">
+          ${PullRequestSection.render(this.pullRequests)}
+        </div>
       `;
 
       // Completed count (retained only if the element exists).
