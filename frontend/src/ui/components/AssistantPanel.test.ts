@@ -80,4 +80,63 @@ describe('AssistantPanel', () => {
     // Check visual feedback (green icon)
     expect(copyBtn.innerHTML).toContain('text-green-500');
   });
+
+  describe('slash commands', () => {
+    function submitInput(value: string) {
+      const input = document.querySelector('#assistant-input') as HTMLTextAreaElement;
+      const form = document.querySelector('#assistant-form') as HTMLFormElement;
+      input.value = value;
+      form.dispatchEvent(new Event('submit'));
+      return input;
+    }
+
+    it.each([
+      ['/projectstructure', 'Show me the project structure of pipeline PIPELINE_ID'],
+      ['/gl', 'Show me the commit hashes and message of the last 5 commits in pipeline PIPELINE_ID'],
+      ['/gi', 'Show 5 most recent issues of pipeline PIPELINE_ID'],
+      ['/review', 'Make a review of the last implemented task of pipeline PIPELINE_ID'],
+    ])('pastes template for %s', (command, expected) => {
+      const input = submitInput(command);
+
+      expect(input.value).toBe(expected);
+      // The command must not be sent to the assistant service.
+      expect(mockContext.assistantService.sendMessage).not.toHaveBeenCalled();
+      // Cursor should be placed at the end of the pasted template.
+      expect(input.selectionStart).toBe(expected.length);
+      expect(input.selectionEnd).toBe(expected.length);
+    });
+
+    it('clears history for /clear without sending a message', () => {
+      const input = submitInput('/clear');
+
+      expect(mockContext.assistantService.clearHistory).toHaveBeenCalled();
+      expect(mockContext.assistantService.sendMessage).not.toHaveBeenCalled();
+      expect(input.value).toBe('');
+    });
+
+    it('closes the panel for /close without sending a message', () => {
+      (global as any).window.location.hash = '#/pipeline/abc123';
+      // Open the panel then submit /close
+      window.dispatchEvent(new Event('toggle-assistant'));
+
+      submitInput('/close');
+
+      expect(mockContext.assistantService.sendMessage).not.toHaveBeenCalled();
+      expect(document.querySelector('#assistant-panel')?.className).not.toContain('pointer-events-auto');
+    });
+
+    it('substitutes the current pipeline id into the template', () => {
+      (global as any).window.location.hash = '#/pipeline/abc123';
+      const input = submitInput('/projectstructure');
+
+      expect(input.value).toBe('Show me the project structure of pipeline abc123');
+    });
+
+    it('sends a normal message that is not a slash command', () => {
+      const input = submitInput('Hello assistant');
+
+      expect(input.value).toBe('');
+      expect(mockContext.assistantService.sendMessage).toHaveBeenCalledWith('Hello assistant');
+    });
+  });
 });

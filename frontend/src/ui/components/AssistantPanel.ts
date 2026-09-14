@@ -61,6 +61,17 @@ marked.use({
 type PanelPosition = 'tl' | 'tc' | 'tr' | 'bl' | 'bc' | 'br' | 'center' | 'full';
 type PanelSize = 'normal' | 'expanded';
 
+/**
+ * Slash commands that paste a prompt template into the prompt input.
+ * The token PIPELINE_ID is substituted with the current pipeline id (when known).
+ */
+const PIPELINE_TEMPLATE_COMMANDS: Record<string, string> = {
+  '/projectstructure': 'Show me the project structure of pipeline PIPELINE_ID',
+  '/gl': 'Show me the commit hashes and message of the last 5 commits in pipeline PIPELINE_ID',
+  '/gi': 'Show 5 most recent issues of pipeline PIPELINE_ID',
+  '/review': 'Make a review of the last implemented task of pipeline PIPELINE_ID',
+};
+
 interface PanelSettings {
   position: PanelPosition;
   size: PanelSize;
@@ -279,10 +290,15 @@ export class AssistantPanel {
       const text = input.value.trim();
       if (!text) return;
 
+      if (this.handleSlashCommand(text)) {
+        return;
+      }
+
       this.addMessage('user', text);
       this.context.assistantService.sendMessage(text);
       input.value = '';
       input.rows = 1;
+      input.focus();
     });
 
     input.addEventListener('input', () => {
@@ -298,6 +314,56 @@ export class AssistantPanel {
 
     this.context.assistantService.onResponse((response) => this.handleResponse(response));
     this.messageContainer = this.container.querySelector('#assistant-messages');
+  }
+
+  /**
+   * Handles slash commands entered into the prompt input.
+   * Returns true when the command was handled (the message was NOT sent).
+   */
+  private handleSlashCommand(text: string): boolean {
+    const trimmed = text.trim();
+
+    // Action commands that mirror the header buttons.
+    if (trimmed === '/clear') {
+      this.context.assistantService.clearHistory();
+      this.resetInput();
+      return true;
+    }
+
+    if (trimmed === '/close') {
+      this.close();
+      return true;
+    }
+
+    // Prompt template commands: paste the template into the input and
+    // place the cursor at the end so the user can edit or accept with Enter.
+    if (Object.prototype.hasOwnProperty.call(PIPELINE_TEMPLATE_COMMANDS, trimmed)) {
+      const template = PIPELINE_TEMPLATE_COMMANDS[trimmed];
+      const pipelineId = this.getPipelineIdFromUrl();
+      const input = this.container.querySelector('#assistant-input') as HTMLTextAreaElement;
+      if (input) {
+        input.value = pipelineId ? template.replace('PIPELINE_ID', pipelineId) : template;
+        input.rows = 1;
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+      }
+      return true;
+    }
+
+    return false;
+  }
+
+  private getPipelineIdFromUrl(): string | null {
+    const match = window.location.hash.match(/#\/pipeline\/([a-f0-9]+)/);
+    return match ? match[1] : null;
+  }
+
+  private resetInput() {
+    const input = this.container.querySelector('#assistant-input') as HTMLTextAreaElement;
+    if (input) {
+      input.value = '';
+      input.rows = 1;
+    }
   }
 
   private toggle() {
