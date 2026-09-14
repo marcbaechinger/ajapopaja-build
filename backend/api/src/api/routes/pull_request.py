@@ -15,6 +15,7 @@
 import asyncio
 import logging
 import os
+import re
 import sys
 import tempfile
 from typing import List, Optional
@@ -159,6 +160,36 @@ async def format_workspace(workspace_path: str) -> None:
                 )
     except Exception as e:
         logger.warning(f"Failed to run ruff formatting: {e}")
+
+
+VERIFIED_HEAD_RE = re.compile(r"(Verified commit \(HEAD\): `)[0-9a-fA-F]{7,64}(`)")
+
+
+def retarget_verified_commit_hash(summary: str, new_commit_hash: str) -> str:
+    """Point the ``Verified commit (HEAD)`` line of a PR summary at the commit
+    that actually landed in the repository.
+
+    CoderBot records the hash of the temporary commit it created inside its
+    isolated sandbox in the verification section of the PR summary. That hash
+    only exists in the sandbox and is deleted with it; when the PR is later
+    accepted the patch is re-applied and committed in the workspace, which
+    produces a different, real commit hash. This helper rewrites the summary
+    (replacing the transient sandbox hash) so a human can find the exact commit
+    that was merged and correlate it with ``git log``. If the summary does not
+    contain such a line (e.g. older PRs), it is returned unchanged.
+
+    Args:
+        summary: The PR summary text.
+        new_commit_hash: The hash of the commit that actually got created in the
+            repository when the PR was accepted.
+
+    Returns:
+        The summary with the ``Verified commit (HEAD)`` hash replaced, or the
+        original summary when no verification line is present.
+    """
+    if not summary:
+        return summary
+    return VERIFIED_HEAD_RE.sub(rf"\g<1>{new_commit_hash}\g<2>", summary, count=1)
 
 
 def commit_changes(repo: git.Repo, pr: PullRequest, commit_message: str) -> str:
@@ -360,6 +391,13 @@ async def accept_pull_request(
             # Step 3: Commit changes
             commit_message = build_commit_message(request, pr)
             new_commit_hash = commit_changes(repo, pr, commit_message)
+
+            # CoderBot wrote the verification section of the summary at PR
+            # creation time using the hash of its temporary sandbox commit. That
+            # hash does not exist in the repository (the patch is re-applied here
+            # as a brand-new commit with a different hash), so point the
+            # "Verified commit (HEAD)" line at the commit that really landed.
+            pr.summary = retarget_verified_commit_hash(pr.summary, new_commit_hash)
 
             # Step 3b: Submit to the remote repo. In gitea_pr mode we push a
             # feature branch and create a Gitea pull request instead of merging.

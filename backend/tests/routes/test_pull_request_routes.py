@@ -102,6 +102,32 @@ async def test_reject_pull_request_unauthenticated(async_client, init_mock_db):
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
+def test_retarget_verified_commit_hash_replaces_sandbox_hash():
+    head = "70ce091c2163f5561a8468bfd14c0e880bd5e283"
+    sandbox = "3e80ca4f2777bd1180dbab8717ad514fa6f5853c"
+    base = "2991321c02a5c5ae8776c2e352dc513f14fa1936"
+    summary = (
+        "Done.\n"
+        "\n"
+        "### Verification\n"
+        "Task ID: **abc123**\n"
+        f"Verified commit (HEAD): `{sandbox}`\n"
+        f"Parent commit (base): `{base}`\n"
+        "Status: **PASSED**"
+    )
+    refined = pr_routes.retarget_verified_commit_hash(summary, head)
+    assert f"Verified commit (HEAD): `{head}`" in refined
+    # Only the Verified/HEAD hash is rewritten; the parent base hash is untouched.
+    assert f"Parent commit (base): `{base}`" in refined
+    assert sandbox not in refined
+
+
+def test_retarget_verified_commit_hash_noop_without_verification_line():
+    summary = "Just a summary without a verification section."
+    assert pr_routes.retarget_verified_commit_hash(summary, "abc123") == summary
+    assert pr_routes.retarget_verified_commit_hash("", "abc123") == ""
+
+
 def test_commit_changes_passes_git_identity_env():
     mock_repo = MagicMock()
     mock_repo.head.commit.hexsha = "abc1234"
@@ -289,6 +315,79 @@ async def test_accept_pull_request_gitea_pr_mode(async_client, init_mock_db):
         remote_pr_url="https://host/owner/repo/pulls/9",
     )
     mock_keep.assert_awaited_once()
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_accept_pull_request_retargets_verified_commit_in_summary(
+    async_client, init_mock_db
+):
+    mock_user = AsyncMock()
+    mock_user.username = "testuser"
+    app.dependency_overrides[get_current_user] = lambda: mock_user
+
+    pr_id = ObjectId()
+    sandbox = "3e80ca4f2777bd1180dbab8717ad514fa6f5853c"
+    head = "70ce091c2163f5561a8468bfd14c0e880bd5e283"
+    base = "2991321c02a5c5ae8776c2e352dc513f14fa1936"
+    mock_pr = PullRequest(
+        id=pr_id,
+        pipeline_id="pipe_123",
+        task_id="task_123",
+        summary=(
+            "### Verification\n"
+            f"Verified commit (HEAD): `{sandbox}`\n"
+            f"Parent commit (base): `{base}`\n"
+            "Status: **PASSED**"
+        ),
+        branch_name="feature/x",
+        patch="patch",
+        status=PullRequestStatus.OPEN,
+    )
+    mock_pipeline = MagicMock()
+    mock_pipeline.workspace_abs_path = "/tmp/remote_repo"
+    mock_repo = MagicMock()
+    mock_task = MagicMock()
+    mock_task.id = "task_123"
+
+    with (
+        patch("api.routes.pull_request.PullRequest.get") as mock_get_pr,
+        patch("api.routes.pull_request.Pipeline.get") as mock_get_pipe,
+        patch("api.routes.pull_request.git_utils.get_repo", return_value=mock_repo),
+        patch(
+            "api.routes.pull_request.validate_workspace_clean",
+            new_callable=AsyncMock,
+        ),
+        patch("api.routes.pull_request.apply_patch", new_callable=AsyncMock),
+        patch("api.routes.pull_request.format_workspace", new_callable=AsyncMock),
+        patch(
+            "api.routes.pull_request.commit_changes",
+            return_value=head,
+        ),
+        patch("api.routes.pull_request.Task.get", return_value=mock_task),
+        patch(
+            "api.routes.pull_request.update_pull_request_status",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "api.routes.pull_request.update_task_status",
+            new_callable=AsyncMock,
+        ) as mock_update_task,
+        patch.object(pr_routes.config, "REMOTE_PR_MODE", "direct"),
+    ):
+        mock_get_pr.return_value = mock_pr
+        mock_get_pipe.return_value = mock_pipeline
+
+        response = await async_client.post(f"/api/pull_requests/{pr_id}/accept")
+
+    assert response.status_code == 200
+    # The summary is rewritten to reference the commit that actually landed.
+    assert f"Verified commit (HEAD): `{head}`" in mock_pr.summary
+    assert sandbox not in mock_pr.summary
+    assert f"Parent commit (base): `{base}`" in mock_pr.summary
+    # The real commit hash is recorded on the task.
+    captured = mock_update_task.await_args.args[1]
+    assert captured == head
     app.dependency_overrides.clear()
 
 

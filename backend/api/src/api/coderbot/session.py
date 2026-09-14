@@ -560,6 +560,15 @@ class CoderBotSession:
             # task ID, the hash of the commit the verification ran on (HEAD after
             # CoderBot's commit) and the hash of the commit on top of which the new
             # commit was created (the previous HEAD, if any) are reported.
+            #
+            # NOTE: the "Verified commit (HEAD)" is the hash of the commit created
+            # and tested inside CoderBot's isolated sandbox. That sandbox (and its
+            # commit) is deleted when the session ends, and when the PR is later
+            # accepted the patch is re-applied and committed in the repository,
+            # which yields a *different* commit hash. So this value is only
+            # meaningful while the PR is pending review; the acceptance endpoint
+            # rewrites this line to point at the actual commit that lands in the
+            # repository.
             pr_summary = summary
             summary_meta = [
                 "",
