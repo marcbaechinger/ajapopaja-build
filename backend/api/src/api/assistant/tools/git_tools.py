@@ -25,6 +25,7 @@ from .shared_utils import sanitize_and_resolve_path
 
 # Tool Categories
 READ_ONLY = "read_only"
+WRITE_ACCESS = "write_access"
 
 
 @register_tool(tool_type=READ_ONLY)
@@ -362,6 +363,41 @@ async def git_diff(
             args.extend(["--", str(full_path)])
 
         return repo.git.diff(*args)
+    except git.exc.GitCommandError as e:
+        return f"Error executing git command: {e}"
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+
+@register_tool(tool_type=WRITE_ACCESS)
+async def git_pull(
+    pipeline_id: str,
+    task_id: Optional[str] = None,
+    use_sandbox: bool = False,
+) -> str:
+    """
+    Fetches the latest changes from the remote origin and pulls them into the
+    current working tree.
+
+    This tool updates the local checkout to stay in sync with the remote
+    repository. Because it modifies the local git state, it requires explicit
+    user confirmation before execution.
+
+    Use this tool when you need to incorporate recent upstream changes made by
+    other collaborators, or before rebasing/merging to ensure you are working
+    against the latest code.
+
+    Args:
+        pipeline_id: The ID of the pipeline to which the project belongs.
+        task_id: The ID of the task (optional, used for sandbox).
+        use_sandbox: If True, operate in the task's sandbox.
+
+    Returns:
+        The output of the git pull command, or an error message on failure.
+    """
+    try:
+        repo = await git_utils.get_repo_for_pipeline(pipeline_id, task_id, use_sandbox)
+        return repo.git.pull()
     except git.exc.GitCommandError as e:
         return f"Error executing git command: {e}"
     except Exception as e:
