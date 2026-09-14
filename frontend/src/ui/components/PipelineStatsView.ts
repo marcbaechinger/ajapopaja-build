@@ -98,8 +98,11 @@ export class PipelineStatsView {
     const statusCounts: Record<string, number> = {
       [TaskStatus.CREATED]: 0,
       [TaskStatus.SCHEDULED]: 0,
+      [TaskStatus.PROPOSED]: 0,
       [TaskStatus.INPROGRESS]: 0,
       [TaskStatus.IMPLEMENTED]: 0,
+      [TaskStatus.PULL_REQUEST_AVAILABLE]: 0,
+      [TaskStatus.SUBMITTED]: 0,
       [TaskStatus.FAILED]: 0,
       [TaskStatus.DISCARDED]: 0,
       'DELETED': 0,
@@ -121,8 +124,11 @@ export class PipelineStatsView {
     const colors: Record<string, string> = {
       [TaskStatus.CREATED]: 'bg-slate-600',
       [TaskStatus.SCHEDULED]: 'bg-blue-600',
+      [TaskStatus.PROPOSED]: 'bg-purple-600',
       [TaskStatus.INPROGRESS]: 'bg-amber-600',
       [TaskStatus.IMPLEMENTED]: 'bg-green-600',
+      [TaskStatus.PULL_REQUEST_AVAILABLE]: 'bg-cyan-600',
+      [TaskStatus.SUBMITTED]: 'bg-teal-600',
       [TaskStatus.FAILED]: 'bg-red-600',
       [TaskStatus.DISCARDED]: 'bg-slate-800',
       'DELETED': 'bg-red-900',

@@ -212,6 +212,39 @@ describe('PipelineStatsView', () => {
 
       expect(html).toContain('DELETED');
     });
+
+    it('sum of distribution counts equals the total for every task state', () => {
+      const statuses = [
+        TaskStatus.CREATED,
+        TaskStatus.SCHEDULED,
+        TaskStatus.PROPOSED,
+        TaskStatus.INPROGRESS,
+        TaskStatus.IMPLEMENTED,
+        TaskStatus.PULL_REQUEST_AVAILABLE,
+        TaskStatus.SUBMITTED,
+        TaskStatus.FAILED,
+        TaskStatus.DISCARDED,
+      ];
+      const tasks = [
+        ...statuses.map((status, i) => ({ id: `t${i}`, title: status, status, deleted: false })),
+        { id: 'del', title: 'Deleted', status: TaskStatus.CREATED, deleted: true },
+      ] as Task[];
+
+      const html = PipelineStatsView.render(tasks);
+
+      // Total shown in the Total Tasks tile.
+      const totalMatch = html.match(/Total Tasks<\/span>\s*<span[^>]*>([^<]+)<\/span>/);
+      expect(totalMatch).not.toBeNull();
+      const total = Number(totalMatch![1]);
+      expect(total).toBe(tasks.length);
+
+      // Sum the counts rendered inside each distribution bar.
+      const counts = [...html.matchAll(/<span>([0-9]+) <span class="opacity-60[^"]*">\(([0-9.]+)%\)<\/span><\/span>/g)]
+        .map(m => Number(m[1]));
+      const sum = counts.reduce((acc, c) => acc + c, 0);
+      expect(counts.length).toBe(statuses.length + 1); // all 9 states + DELETED
+      expect(sum).toBe(total);
+    });
   });
 
   describe('renderCompact', () => {
