@@ -34,7 +34,7 @@ def test_read_session_history_replays_rpc_events(tmp_path):
         },
         {"type": "error", "message": "boom"},
     ]
-    log.write_text("\n".join(json.dumps(l) for l in lines) + "\n")
+    log.write_text("\n".join(json.dumps(line) for line in lines) + "\n")
 
     with patch.object(session_module.config, "SANDBOX_ROOT", tmp_path):
         events = read_session_history("t1")

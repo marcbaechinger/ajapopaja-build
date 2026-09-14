@@ -618,9 +618,7 @@ async def test_coderbot_handle_agent_end_falls_back_after_first_commit(
     config.CODERBOT_RUN_TESTS = False
     try:
         with (
-            patch(
-                "api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock
-            ) as mock_broadcast,
+            patch("api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock),
             patch(
                 "api.coderbot.session.Task.get", new_callable=AsyncMock
             ) as mock_task_get,
@@ -679,9 +677,7 @@ async def test_coderbot_handle_agent_end_runs_verification_and_annotates_pr(
             "api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock
         ) as mock_broadcast,
         patch("api.coderbot.session.Task.get", new_callable=AsyncMock) as mock_task_get,
-        patch(
-            "core.queries.task.transition_task", new_callable=AsyncMock
-        ) as mock_transition,
+        patch("core.queries.task.transition_task", new_callable=AsyncMock),
     ):
         mock_task_get.return_value = task
         await session._handle_agent_end(
