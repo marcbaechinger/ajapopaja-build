@@ -85,6 +85,25 @@ class AssistantSession:
         # Execute the tool
         result = await self._execute_tool(tool_call)
 
+        # If the tool started an asynchronous test run, register a completion
+        # handler so the aggregate result is delivered back as the tool response
+        # as soon as the run finishes (without blocking the tool call itself).
+        if (
+            isinstance(result, dict)
+            and result.get("status") == "started"
+            and result.get("run_id")
+        ):
+            from api.assistant.tools.test_runner import TestRunner
+
+            tool_ref = {
+                "id": tool_call.get("id", "legacy_id"),
+                "type": "function",
+                "function": tool_call.get("function", {}),
+            }
+            TestRunner.register_on_complete(
+                result["run_id"], self._deliver_test_result, tool_ref
+            )
+
         # Append tool result to history
         self.history.append(
             ChatMessage(
@@ -102,6 +121,25 @@ class AssistantSession:
         await self._save_history()
 
         # Continue LLM loop
+        await self._run_llm_loop()
+
+    async def _deliver_test_result(
+        self, results: Dict[str, Any], tool_ref: Optional[Dict[str, Any]] = None
+    ):
+        """Delivers an asynchronously-completed test run back to the LLM loop.
+
+        Appends a ``role="tool"`` message carrying the serialized test result
+        (bound to the original tool callback via ``tool_ref``) and resumes the
+        loop so the assistant can react to the outcome.
+        """
+        self.history.append(
+            ChatMessage(
+                role="tool",
+                content=json.dumps(results),
+                tool_calls=[tool_ref] if tool_ref is not None else None,
+            )
+        )
+        await self._save_history()
         await self._run_llm_loop()
 
     async def reject_tool(self, tool_call_id: str):

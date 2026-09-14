@@ -12,16 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import asyncio
 import os
 import shutil
 import tempfile
 
+import git
 import pytest
 
 from api.assistant.tools.file_tools import (
     list_project_structure,
     read_source_file,
 )
+from api.assistant.tools.pipeline_tools import run_tests
+from api.assistant.tools.test_runner import TestRunner
 from core.models.models import Pipeline
 
 
@@ -154,3 +158,82 @@ async def test_read_source_file_with_range(init_mock_db):
         # File not found
         result = await read_source_file(pipeline_id, "nonexistent.txt", 1, 5)
         assert "Error: File 'nonexistent.txt' does not exist." in result
+
+
+@pytest.mark.asyncio
+async def test_run_tests_no_test_commands(init_mock_db):
+    """run_tests reports a no_tests status when a pipeline has no commands."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pipeline = Pipeline(name="No Tests Pipeline", workspace_path=tmp_dir)
+        await pipeline.insert()
+
+        result = await run_tests(str(pipeline.id))
+        assert result["status"] == "no_tests"
+        assert "no test commands" in result["message"]
+
+
+@pytest.mark.asyncio
+async def test_run_tests_started_and_reports_result_async(init_mock_db):
+    """run_tests returns immediately and delivers the result via TestRunner."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        # run_tests resolves the workspace via git_utils, which requires a repo.
+        git.Repo.init(tmp_dir)
+
+        pipeline = Pipeline(
+            name="Tests Pipeline",
+            workspace_path=tmp_dir,
+            test_commands=[["sh", "-c", "echo hi && exit 0"]],
+        )
+        await pipeline.insert()
+
+        finished = asyncio.Event()
+        captured = {}
+
+        async def on_complete(results, tool_ref):
+            captured["results"] = results
+            captured["tool_ref"] = tool_ref
+            finished.set()
+
+        result = await run_tests(str(pipeline.id))
+        assert result["status"] == "started"
+        assert result.get("run_id")
+
+        # Register the completion handler before yielding control back to the
+        # event loop so the background task is guaranteed to observe it.
+        TestRunner.register_on_complete(
+            result["run_id"], on_complete, {"id": "legacy_id"}
+        )
+
+        await asyncio.wait_for(finished.wait(), timeout=30)
+        assert captured["results"]["passed"] is True
+        assert captured["results"]["commands"][0]["exit_code"] == 0
+        assert captured["results"]["run_id"] == result["run_id"]
+        assert captured["tool_ref"]["id"] == "legacy_id"
+
+
+@pytest.mark.asyncio
+async def test_run_tests_reports_failure_when_command_fails(init_mock_db):
+    """A non-zero exit code is surfaced as a failed aggregate result."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        git.Repo.init(tmp_dir)
+        pipeline = Pipeline(
+            name="Failing Tests Pipeline",
+            workspace_path=tmp_dir,
+            test_commands=[["sh", "-c", "exit 1"]],
+        )
+        await pipeline.insert()
+
+        finished = asyncio.Event()
+        captured = {}
+
+        async def on_complete(results, tool_ref):
+            captured["results"] = results
+            finished.set()
+
+        result = await run_tests(str(pipeline.id))
+        assert result["status"] == "started"
+        TestRunner.register_on_complete(result["run_id"], on_complete)
+
+        await asyncio.wait_for(finished.wait(), timeout=30)
+        assert captured["results"]["passed"] is False
+        assert captured["results"]["commands"][0]["exit_code"] == 1

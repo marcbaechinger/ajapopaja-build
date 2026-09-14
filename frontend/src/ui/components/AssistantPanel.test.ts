@@ -98,6 +98,7 @@ describe('AssistantPanel', () => {
       ['/backlog', 'Show me the tasks in the backlog (state CREATED) of pipeline PIPELINE_ID'],
       ['/pulls', 'Show me the recent pull request of pipeline PIPELINE_ID'],
       ['/summary', 'Summarize what we discussed and suggest new tasks to address what we learned (for pipeline PIPELINE_ID)'],
+      ['/test', 'Run the tests for pipeline PIPELINE_ID'],
     ])('pastes template for %s', (command, expected) => {
       const input = submitInput(command);
 
@@ -136,6 +137,7 @@ describe('AssistantPanel', () => {
         expect(document.body.textContent).toContain('Slash Commands');
         expect(document.body.textContent).toContain('/backlog');
         expect(document.body.textContent).toContain('/pulls');
+        expect(document.body.textContent).toContain('/test');
         expect(mockContext.assistantService.sendMessage).not.toHaveBeenCalled();
         expect(input.value).toBe('');
       }

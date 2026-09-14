@@ -73,6 +73,7 @@ const PIPELINE_TEMPLATE_COMMANDS: Record<string, string> = {
   '/pulls': 'Show me the recent pull request of pipeline PIPELINE_ID',
   '/review': 'Make a review of the last implemented task of pipeline PIPELINE_ID',
   '/summary': 'Summarize what we discussed and suggest new tasks to address what we learned (for pipeline PIPELINE_ID)',
+  '/test': 'Run the tests for pipeline PIPELINE_ID',
 };
 
 /**
@@ -90,6 +91,7 @@ const SLASH_COMMAND_INDEX: { command: string; description: string }[] = [
   { command: '/pulls', description: 'Show the recent pull requests of the pipeline' },
   { command: '/review', description: 'Review the last implemented task of the pipeline' },
   { command: '/summary', description: 'Summarize what we discussed and suggest new tasks to address what we learned' },
+  { command: '/test', description: 'Run the test suite for the pipeline' },
 ];
 
 interface PanelSettings {
