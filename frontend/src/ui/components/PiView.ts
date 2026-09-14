@@ -17,6 +17,8 @@
 import type { RenderBlock } from '../../core/CoderBotService.ts';
 import { Icon } from './Icon.ts';
 import { KeybindingManager } from './KeybindingManager.ts';
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 import './Keybinding.css';
 
 /**
@@ -159,6 +161,22 @@ export class PiView {
 
   /** Ordered list of error block elements currently in the DOM. */
   private errorEls: HTMLElement[] = [];
+
+  /**
+   * IDs of blocks that have been converted to styled Markdown HTML via the
+   * per-block "Format as markup" button.
+   */
+  private formattedBlocks: Set<string> = new Set();
+
+  /**
+   * Snapshot of a formatted block's original content nodes (header/body/etc.,
+   * excluding the action buttons) so they can be restored when the user toggles
+   * the Markdown rendering back off.
+   */
+  private formattedContent: Map<string, Node[]> = new Map();
+
+  /** Raw (unrendered) text captured per formatted block, used for re-rendering. */
+  private formattedRawText: Map<string, string> = new Map();
 
   constructor(service: PiSessionService, mount: HTMLElement, options: PiViewOptions = {}) {
     this.service = service;
@@ -582,6 +600,13 @@ export class PiView {
       this.copyBlock(id);
       return;
     }
+    // Per-block "Format as markup" button.
+    const formatBlockBtn = target.closest('[data-format-block]');
+    if (formatBlockBtn) {
+      const id = (formatBlockBtn as HTMLElement).getAttribute('data-format-block') ?? '';
+      this.toggleFormatBlock(id);
+      return;
+    }
     const actionBtn = target.closest('[data-action]');
     if (!actionBtn) return;
     const action = actionBtn.getAttribute('data-action');
@@ -942,6 +967,11 @@ export class PiView {
       if (!seen.has(id)) {
         el.remove();
         this.blockEls.delete(id);
+        this.blockTimestamps.delete(id);
+        // Drop any Markdown-formatting state for the removed block.
+        this.formattedBlocks.delete(id);
+        this.formattedContent.delete(id);
+        this.formattedRawText.delete(id);
       }
     }
     blocks.forEach((block) => this.applyBlock(block));
@@ -1071,11 +1101,13 @@ export class PiView {
     }
     // Shared per-block chrome: positioning context + copy button (on hover).
     el.classList.add('relative', 'group');
-    this.attachCopyButton(el, block);
+    el.setAttribute('data-block-id', block.id);
+    this.attachBlockActions(el, block);
     return el;
   }
 
-  private attachCopyButton(el: HTMLElement, block: RenderBlock) {
+  private attachBlockActions(el: HTMLElement, block: RenderBlock) {
+    // Copy button (top-right).
     const copyBtn = document.createElement('button');
     copyBtn.type = 'button';
     copyBtn.className =
@@ -1085,6 +1117,20 @@ export class PiView {
     copyBtn.setAttribute('data-copy-block', block.id);
     copyBtn.innerHTML = this.cleanIcon(Icon.render('copy', { size: 12, label: 'Copy block' }));
     el.appendChild(copyBtn);
+
+    // "Format as markup" button, to the left of the copy button. Converts the
+    // block's Markdown content into styled HTML (and back again on re-click).
+    const formatBtn = document.createElement('button');
+    formatBtn.type = 'button';
+    formatBtn.className =
+      'piview-format absolute top-1 right-8 z-10 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 hover:bg-black/80 text-cyan-300 hover:text-white cursor-pointer';
+    formatBtn.title = 'Format as markup';
+    formatBtn.setAttribute('aria-label', 'Format as markup');
+    formatBtn.setAttribute('data-format-block', block.id);
+    formatBtn.innerHTML = this.cleanIcon(
+      Icon.render('documentation', { size: 12, label: 'Format as markup' })
+    );
+    el.appendChild(formatBtn);
   }
 
   /** Removes inter-tag whitespace so an SVG icon never leaks text nodes (e.g. into <pre>). */
@@ -1110,6 +1156,12 @@ export class PiView {
   }
 
   private updateBlockEl(el: HTMLElement, block: RenderBlock) {
+    // While a block is rendered as styled Markdown, keep that rendering in sync
+    // with any newly streamed content instead of touching the raw nodes.
+    if (this.formattedBlocks.has(block.id)) {
+      this.refreshFormattedEl(el, block.id, block);
+      return;
+    }
     const header = el.querySelector('[data-role="header"]') as HTMLElement | null;
     if (header && block.kind !== 'thinking') {
       const value = block.kind === 'verification' ? (block.text ?? '') : (block.header ?? '');
@@ -1131,18 +1183,117 @@ export class PiView {
       }
     } else {
       const txt = block.text ?? block.header ?? '';
-      // Preserve the per-block copy button while replacing text content.
-      const copyBtn = el.querySelector('.piview-copy') as HTMLElement | null;
-      if (copyBtn) copyBtn.remove();
+      // Preserve the per-block action buttons while replacing text content.
+      const actionBtns = Array.from(
+        el.querySelectorAll('.piview-copy, .piview-format')
+      ) as HTMLElement[];
+      actionBtns.forEach((btn) => btn.remove());
       if (el.textContent !== txt) {
         el.textContent = txt;
       }
-      if (copyBtn) el.appendChild(copyBtn);
+      actionBtns.forEach((btn) => el.appendChild(btn));
     }
     // Apply error tinting to error blocks.
     if (block.kind === 'error' && !el.classList.contains('text-red-400')) {
       el.classList.add('text-red-400');
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Per-block "Format as markup" (Markdown -> styled HTML toggle)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Toggles a single block between its raw text and a Markdown-rendered, styled
+   * HTML representation (using `marked` + `dompurify`). A second click restores
+   * the original content nodes exactly as they were.
+   */
+  private toggleFormatBlock(id: string) {
+    const wrapper = this.blockEls.get(id);
+    if (!wrapper) return;
+    if (this.formattedBlocks.has(id)) {
+      this.revertFormat(wrapper, id);
+    } else {
+      const block = this.findBlock(id);
+      const text = block ? this.blockToText(block) : this.extractText(wrapper);
+      if (!text) return;
+      this.applyFormat(wrapper, id, text);
+    }
+  }
+
+  private findBlock(id: string): RenderBlock | undefined {
+    return this.service.getHistory().find((b) => b.id === id);
+  }
+
+  /** Returns the Markdown-renderable text for a block (header omitted for thinking). */
+  private blockToText(block: RenderBlock): string {
+    if (block.kind === 'verification') {
+      return [block.text ?? '', ...(block.sub ?? [])].join('\n');
+    }
+    if (block.kind === 'thinking') {
+      return block.text ?? '';
+    }
+    return [block.header ?? '', block.text ?? ''].filter(Boolean).join('\n');
+  }
+
+  /** Extracts block text directly from the rendered DOM (excluding action buttons). */
+  private extractText(wrapper: HTMLElement): string {
+    const clone = wrapper.cloneNode(true) as HTMLElement;
+    clone.querySelectorAll('.piview-copy, .piview-format').forEach((b) => b.remove());
+    return (clone.textContent ?? '').trim();
+  }
+
+  /** Converts Markdown to sanitized, styled HTML. */
+  private renderMarkdown(text: string): string {
+    const rawHtml = marked.parse(text, { async: false }) as string;
+    return DOMPurify.sanitize(rawHtml);
+  }
+
+  private applyFormat(wrapper: HTMLElement, id: string, text: string) {
+    // Snapshot the original content nodes (excluding action buttons) so we can
+    // restore the block exactly when the rendering is toggled back off.
+    const contentNodes = Array.from(wrapper.childNodes).filter((n) => {
+      if (n.nodeType !== Node.ELEMENT_NODE) return true;
+      const cls = (n as HTMLElement).className || '';
+      return !cls.includes('piview-copy') && !cls.includes('piview-format');
+    });
+    this.formattedContent.set(id, contentNodes);
+    this.formattedRawText.set(id, text);
+    contentNodes.forEach((n) => n.remove());
+
+    const formatted = document.createElement('div');
+    formatted.className = 'piview-formatted prose-theme';
+    formatted.setAttribute('data-role', 'formatted');
+    formatted.innerHTML = this.renderMarkdown(text);
+    wrapper.appendChild(formatted);
+    wrapper.classList.add('piview-formatted-active');
+    this.formattedBlocks.add(id);
+    this.showToast('Rendered Markdown');
+  }
+
+  private revertFormat(wrapper: HTMLElement, id: string) {
+    this.formattedBlocks.delete(id);
+    const formatted = wrapper.querySelector('[data-role="formatted"]');
+    formatted?.remove();
+    wrapper.classList.remove('piview-formatted-active');
+    (this.formattedContent.get(id) ?? []).forEach((n) => wrapper.appendChild(n));
+    this.formattedContent.delete(id);
+    this.formattedRawText.delete(id);
+    this.showToast('Showing raw text');
+  }
+
+  /** Re-renders a formatted block when new content is streamed into it. */
+  private refreshFormattedEl(wrapper: HTMLElement, id: string, block: RenderBlock) {
+    const text = this.blockToText(block);
+    this.formattedRawText.set(id, text);
+    let formatted = wrapper.querySelector('[data-role="formatted"]') as HTMLElement | null;
+    if (!formatted) {
+      formatted = document.createElement('div');
+      formatted.className = 'piview-formatted prose-theme';
+      formatted.setAttribute('data-role', 'formatted');
+      wrapper.appendChild(formatted);
+    }
+    formatted.innerHTML = this.renderMarkdown(text);
   }
 
   // ---------------------------------------------------------------------------
@@ -1507,6 +1658,10 @@ export class PiView {
     if (!wrapper) return '';
     const time = this.blockTimestamps.get(id);
     const timeStr = time !== undefined ? this.formatCopyTime(time) : '';
+    // Prefer the original raw text when the block is rendered as Markdown.
+    if (this.formattedBlocks.has(id)) {
+      return [timeStr, this.formattedRawText.get(id) ?? ''].filter(Boolean).join('\n');
+    }
     const structured = wrapper.querySelector('[data-role="body"]');
     let headerText = '';
     let bodyText = '';

@@ -371,3 +371,14 @@ mark.piview-search-current {
   color: #000;
   outline: 1px solid rgba(255, 255, 255, 0.7);
 }
+
+/* Markdown-rendered blocks ("Format as markup" toggle) */
+.piview-formatted {
+  @apply prose-theme text-[12px] leading-relaxed;
+}
+
+.piview-formatted-active.piview-collapsible,
+.piview-formatted-active.piview-toolverify {
+  @apply bg-black/20;
+}
+

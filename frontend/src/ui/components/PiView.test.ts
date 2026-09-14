@@ -1280,5 +1280,90 @@ describe('PiView keyboard tooltips', () => {
 
     view.destroy();
   });
+
+  it('adds a "Format as markup" button to each block that renders Markdown HTML', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+    emitBlocks([{ id: 'm1', kind: 'text', text: '**bold** and *italic*' }]);
+
+    const blockEl = mount.querySelector('#log-blocks > div') as HTMLElement;
+    const formatBtn = blockEl.querySelector('.piview-format') as HTMLButtonElement;
+    expect(formatBtn).not.toBeNull();
+    expect(formatBtn.getAttribute('aria-label')).toBe('Format as markup');
+
+    formatBtn.click();
+    const formatted = blockEl.querySelector('.piview-formatted') as HTMLElement;
+    expect(formatted).not.toBeNull();
+    expect(formatted.querySelector('strong')?.textContent).toBe('bold');
+    expect(formatted.querySelector('em')?.textContent).toBe('italic');
+  });
+
+  it('toggles the block back to raw text when clicking the format button again', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+    emitBlocks([{ id: 'm2', kind: 'text', text: '# Heading\n\n**bold**' }]);
+
+    const blockEl = mount.querySelector('#log-blocks > div') as HTMLElement;
+    const formatBtn = blockEl.querySelector('.piview-format') as HTMLButtonElement;
+
+    formatBtn.click();
+    expect(blockEl.querySelector('.piview-formatted')).not.toBeNull();
+    expect(blockEl.querySelector('h1')?.textContent).toBe('Heading');
+
+    formatBtn.click();
+    expect(blockEl.querySelector('.piview-formatted')).toBeNull();
+    expect(blockEl.textContent).toContain('# Heading');
+  });
+
+  it('sanitizes Markdown HTML so unsafe scripts are not executed', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+    emitBlocks([{ id: 'm3', kind: 'text', text: 'hello <script>alert(1)</script> world' }]);
+
+    const blockEl = mount.querySelector('#log-blocks > div') as HTMLElement;
+    (blockEl.querySelector('.piview-format') as HTMLButtonElement).click();
+
+    const formatted = blockEl.querySelector('.piview-formatted') as HTMLElement;
+    expect(formatted).not.toBeNull();
+    expect(formatted.querySelector('script')).toBeNull();
+    expect(blockEl.textContent).toContain('hello');
+  });
+
+  it('keeps a formatted block in sync with newly streamed content', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+    emitBlocks([{ id: 'm4', kind: 'text', text: '**one**' }]);
+
+    const blockEl = mount.querySelector('#log-blocks > div') as HTMLElement;
+    (blockEl.querySelector('.piview-format') as HTMLButtonElement).click();
+    expect(blockEl.querySelector('.piview-formatted')?.textContent).toContain('one');
+
+    // Stream in a new delta and ensure the Markdown rendering updates.
+    emitBlocks([{ id: 'm4', kind: 'text', text: '**one** and **two**' }]);
+    expect(blockEl.querySelector('.piview-formatted')?.textContent).toContain('two');
+  });
+
+  it('copying a formatted block still returns the raw Markdown', async () => {
+    const writeText = vi.fn(async (_text: string) => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+    emitBlocks([{ id: 'm5', kind: 'text', text: '# Title\n\n**bold**' }]);
+
+    const blockEl = mount.querySelector('#log-blocks > div') as HTMLElement;
+    (blockEl.querySelector('.piview-format') as HTMLButtonElement).click();
+    (blockEl.querySelector('.piview-copy') as HTMLButtonElement).click();
+    expect(writeText).toHaveBeenCalledTimes(1);
+    const copied = writeText.mock.calls[0][0] as string;
+    expect(copied).toContain('# Title');
+    expect(copied).toContain('**bold**');
+
+    view.destroy();
+  });
 });
 
