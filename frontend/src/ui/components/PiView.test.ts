@@ -249,7 +249,7 @@ describe('PiView', () => {
     expect(service.clearHistory).toHaveBeenCalled();
   });
 
-  it('thinking blocks are collapsed by default and toggle button expands them', () => {
+  it('thinking blocks are expanded by default and toggle button collapses them', () => {
     const { service, emitBlocks } = createStubService();
     const view = new PiView(service, mount);
     view.render();
@@ -258,31 +258,31 @@ describe('PiView', () => {
 
     const thinkingEl = mount.querySelector('.piview-thinking') as HTMLElement;
     const body = thinkingEl.querySelector('[data-role="body"]') as HTMLElement;
-    // Collapsed by default.
-    expect(body.classList.contains('hidden')).toBe(true);
+    // Expanded by default.
+    expect(body.classList.contains('hidden')).toBe(false);
     // Header still shows a label.
     expect(thinkingEl.querySelector('[data-role="header"]')?.textContent).toContain('Thinking');
 
     const toggleBtn = mount.querySelector('#thinking-toggle-btn') as HTMLButtonElement;
-    expect(toggleBtn.getAttribute('aria-pressed')).toBe('false');
-    expect(toggleBtn.getAttribute('aria-label')).toContain('Expand');
-
-    // Expand all via the toggle button.
-    toggleBtn.click();
-    expect(body.classList.contains('hidden')).toBe(false);
     expect(toggleBtn.getAttribute('aria-pressed')).toBe('true');
     expect(toggleBtn.getAttribute('aria-label')).toContain('Collapse');
 
-    // New thinking blocks follow the expanded mode.
+    // Collapse all via the toggle button.
+    toggleBtn.click();
+    expect(body.classList.contains('hidden')).toBe(true);
+    expect(toggleBtn.getAttribute('aria-pressed')).toBe('false');
+    expect(toggleBtn.getAttribute('aria-label')).toContain('Expand');
+
+    // New thinking blocks follow the collapsed mode.
     emitBlocks([{ id: 'think', kind: 'thinking', text: 'hmm' }, { id: 'think2', kind: 'thinking', text: 'more' }]);
     const body1 = mount.querySelectorAll('.piview-thinking')[0].querySelector('[data-role="body"]') as HTMLElement;
     const body2 = mount.querySelectorAll('.piview-thinking')[1].querySelector('[data-role="body"]') as HTMLElement;
-    expect(body1.classList.contains('hidden')).toBe(false);
-    expect(body2.classList.contains('hidden')).toBe(false);
-
-    // Collapse again via the toggle.
-    toggleBtn.click();
+    expect(body1.classList.contains('hidden')).toBe(true);
     expect(body2.classList.contains('hidden')).toBe(true);
+
+    // Expand again via the toggle.
+    toggleBtn.click();
+    expect(body2.classList.contains('hidden')).toBe(false);
   });
 
   it('individual thinking header click toggles that block only', () => {
@@ -296,19 +296,19 @@ describe('PiView', () => {
     const b1 = t1.querySelector('[data-role="body"]') as HTMLElement;
     const b2 = (mount.querySelectorAll('.piview-thinking')[1]).querySelector('[data-role="body"]') as HTMLElement;
 
-    // Both collapsed by default.
-    expect(b1.classList.contains('hidden')).toBe(true);
-    expect(b2.classList.contains('hidden')).toBe(true);
+    // Both expanded by default.
+    expect(b1.classList.contains('hidden')).toBe(false);
+    expect(b2.classList.contains('hidden')).toBe(false);
 
-    // Expand the first block via its header.
+    // Collapse the first block via its header.
     const header = t1.querySelector('[data-role="header"]') as HTMLElement;
     header.click();
-    expect(b1.classList.contains('hidden')).toBe(false);
-    expect(b2.classList.contains('hidden')).toBe(true);
-
-    // Re-collapse via header.
-    header.click();
     expect(b1.classList.contains('hidden')).toBe(true);
+    expect(b2.classList.contains('hidden')).toBe(false);
+
+    // Re-expand via header.
+    header.click();
+    expect(b1.classList.contains('hidden')).toBe(false);
   });
 
   it('destroy() unsubscribes from all service listeners', () => {
@@ -1204,7 +1204,7 @@ describe('PiView keyboard tooltips', () => {
       ['toggle-follow', 'Follow Mode: ON (f)'],
       ['clear-logs', 'Clear (x)'],
       ['stop-bot', 'Stop Bot (s)'],
-      ['toggle-thinking', 'Expand all thinking blocks (t)'],
+      ['toggle-thinking', 'Collapse all thinking blocks (t)'],
       ['toggle-block-collapse', 'Collapse all blocks (b)'],
       ['toggle-error-visibility', 'Hide error blocks (e)'],
       ['prev-error', 'Previous error (N)'],
@@ -1258,8 +1258,8 @@ describe('PiView keyboard tooltips', () => {
     // Thinking toggle flips its label while keeping the shortcut.
     (mount.querySelector('#thinking-toggle-btn') as HTMLButtonElement).click();
     const thinking = mount.querySelector('[data-action="toggle-thinking"]') as HTMLButtonElement;
-    expect(thinking.title).toBe('Collapse all thinking blocks (t)');
-    expect(thinking.getAttribute('aria-label')).toBe('Collapse all thinking blocks (t)');
+    expect(thinking.title).toBe('Expand all thinking blocks (t)');
+    expect(thinking.getAttribute('aria-label')).toBe('Expand all thinking blocks (t)');
 
     view.destroy();
   });

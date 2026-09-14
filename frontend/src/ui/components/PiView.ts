@@ -111,8 +111,8 @@ export class PiView {
   /** Latest block snapshot received while an initial render was still pending. */
   private pendingBlocks: RenderBlock[] | null = null;
 
-  /** Whether `thinking` blocks are expanded (default: collapsed). */
-  private thinkingExpanded: boolean = false;
+  /** Whether `thinking` blocks are expanded (default: expanded). */
+  private thinkingExpanded: boolean = true;
 
   /** Whether `tool`/`verification` blocks are collapsed (default: expanded). */
   private blocksCollapsed: boolean = false;
