@@ -67,6 +67,7 @@ type PanelSize = 'normal' | 'expanded';
  */
 const PIPELINE_TEMPLATE_COMMANDS: Record<string, string> = {
   '/backlog': 'Show me the tasks in the backlog (state CREATED) of pipeline PIPELINE_ID',
+  '/gd': 'Drop the top commit (that has not been pushed to the remote) of pipeline PIPELINE_ID',
   '/gi': 'Show 5 most recent issues of pipeline PIPELINE_ID',
   '/gl': 'Show me the commit hashes and message of the last 5 commits in pipeline PIPELINE_ID',
   '/pr': 'Show me the project structure of pipeline PIPELINE_ID',
@@ -85,6 +86,7 @@ const SLASH_COMMAND_INDEX: { command: string; description: string }[] = [
   { command: '/backlog', description: 'Show the tasks in the backlog (state CREATED) of the pipeline' },
   { command: '/clear', description: 'Clear the conversation history' },
   { command: '/close', description: 'Close the assistant panel' },
+  { command: '/gd', description: 'Drop the top local commit (that has not been pushed to the remote) of the pipeline' },
   { command: '/gi', description: 'Show the 5 most recent issues of the pipeline' },
   { command: '/gl', description: 'Show the last 5 commit hashes and messages of the pipeline' },
   { command: '/pr', description: 'Show the project structure of the pipeline' },
