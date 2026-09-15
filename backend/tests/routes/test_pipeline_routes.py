@@ -307,6 +307,40 @@ def test_pipeline_model_rejects_empty_argv_strings():
         Pipeline(name="Bad", test_commands=[[""]])
 
 
+@pytest.mark.asyncio
+async def test_update_pipeline_sets_lint_commands(init_mock_db):
+    """update_pipeline persists valid lint_commands on the stored pipeline."""
+    from core.models.models import Pipeline
+    from core.queries import pipeline as pipeline_queries
+
+    stored = Pipeline(name="Local", version=1)
+
+    with (
+        patch(
+            "core.queries.pipeline.get_pipeline_by_id",
+            new_callable=AsyncMock,
+            return_value=stored,
+        ),
+        patch.object(Pipeline, "save", new_callable=AsyncMock),
+    ):
+        await pipeline_queries.update_pipeline(
+            "p1", stored.version, lint_commands=[["make", "lint"]]
+        )
+        assert stored.lint_commands == [["make", "lint"]]
+
+        # Explicit empty list clears pipeline-specific lint commands.
+        await pipeline_queries.update_pipeline("p1", stored.version, lint_commands=[])
+        assert stored.lint_commands == []
+
+
+def test_pipeline_model_rejects_empty_argv_strings_lint():
+    """Each lint command argv element must be a non-empty string."""
+    from core.models.models import Pipeline
+
+    with pytest.raises(Exception):
+        Pipeline(name="Bad", lint_commands=[[""]])
+
+
 def test_validate_pipeline_input_local():
     """Query-level validation: local pipelines pass (workspace optional)."""
     from core.models.models import Pipeline

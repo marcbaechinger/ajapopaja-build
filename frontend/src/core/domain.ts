@@ -140,6 +140,7 @@ export class Pipeline {
   has_repo_token?: boolean;
   doc_root: string = 'design';
   test_commands?: string[][] | null;
+  lint_commands?: string[][] | null;
   version: number = 1;
   created_at?: string;
   updated_at?: string;
@@ -160,6 +161,7 @@ export class Pipeline {
     if (json.has_repo_token !== undefined) this.has_repo_token = Boolean(json.has_repo_token);
     if (json.doc_root !== undefined) this.doc_root = String(json.doc_root);
     if (json.test_commands !== undefined) this.test_commands = Array.isArray(json.test_commands) ? json.test_commands : null;
+    if (json.lint_commands !== undefined) this.lint_commands = Array.isArray(json.lint_commands) ? json.lint_commands : null;
     if (json.version !== undefined) this.version = Number(json.version);
     if (json.created_at !== undefined) this.created_at = String(json.created_at);
     if (json.updated_at !== undefined) this.updated_at = String(json.updated_at);

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends
 
@@ -66,6 +66,7 @@ async def update_pipeline(
     repo_token: Optional[str] = Body(None, embed=True),
     doc_root: Optional[str] = Body(None, embed=True),
     test_commands: Optional[List[List[str]]] = Body(None, embed=True),
+    lint_commands: Optional[List[List[str]]] = Body(None, embed=True),
     current_user: User = Depends(get_current_user),
 ):
     updated_pipeline = await pipeline_queries.update_pipeline(
@@ -79,6 +80,7 @@ async def update_pipeline(
         repo_token=repo_token,
         doc_root=doc_root,
         test_commands=test_commands,
+        lint_commands=lint_commands,
     )
 
     await manager.broadcast(
@@ -98,6 +100,77 @@ async def delete_pipeline(
         WSMessage(type="PIPELINE_DELETED", payload={"pipeline_id": pipeline_id})
     )
     return {"status": "ok"}
+
+
+@router.post("/{pipeline_id}/run/lint", response_model=dict)
+async def run_lint(
+    pipeline_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Run the configured lint commands for a pipeline asynchronously.
+
+    When the pipeline has no lint commands defined, returns a ``no_commands``
+    status immediately. Otherwise the command sequence is dispatched via the
+    shared ``CommandRunner`` in a background task (so the call returns promptly)
+    and the aggregate result is reported back through the registered completion
+    handler when it finishes.
+    """
+    pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
+    commands = [c for c in (pipeline.lint_commands or []) if isinstance(c, list) and c]
+    return await _run_pipeline_commands(pipeline_id, commands)
+
+
+@router.post("/{pipeline_id}/run/test", response_model=dict)
+async def run_test(
+    pipeline_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Run the configured test commands for a pipeline asynchronously.
+
+    When the pipeline has no test commands defined, returns a ``no_commands``
+    status immediately. Otherwise the command sequence is dispatched via the
+    shared ``CommandRunner`` in a background task (so the call returns promptly)
+    and the aggregate result is reported back through the registered completion
+    handler when it finishes.
+    """
+    pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
+    commands = [c for c in (pipeline.test_commands or []) if isinstance(c, list) and c]
+    return await _run_pipeline_commands(pipeline_id, commands)
+
+
+async def _run_pipeline_commands(pipeline_id: str, commands: List[List[str]]) -> Dict:
+    """Dispatches a command sequence for a pipeline via the shared CommandRunner.
+
+    Returns immediately with a ``started`` status and a ``run_id``; the result
+    is delivered asynchronously through the runner's completion handler. When
+    ``commands`` is empty, returns a ``no_commands`` status.
+    """
+    if not commands:
+        return {
+            "status": "no_commands",
+            "pipeline_id": pipeline_id,
+        }
+
+    import asyncio
+    import uuid
+
+    from api.assistant.tools.command_runner import CommandRunner
+
+    # Resolve the workspace working directory (cloning remote repos on first
+    # use). Commands run against the pipeline workspace.
+    pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
+    _, _repo = await git_utils.get_pipeline_and_repo(pipeline_id)
+    workspace_path = str(pipeline.workspace_abs_path)
+
+    run_id = uuid.uuid4().hex
+    asyncio.create_task(CommandRunner.dispatch(run_id, commands, workspace_path))
+
+    return {
+        "status": "started",
+        "run_id": run_id,
+        "message": f"Command run for pipeline {pipeline_id} started; "
+        "result will be reported when complete.",
+    }
 
 
 @router.get("/{pipeline_id}/stats/daily")

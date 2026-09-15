@@ -37,6 +37,33 @@ from core.utils.path_utils import (
 )
 
 
+def _validate_command_lists(
+    v: Optional[List[List[str]]], field_name: str, kind: str
+) -> Optional[List[List[str]]]:
+    """Validate a per-pipeline command list (a list of argv lists).
+
+    ``None`` means “not configured”. An empty list ``[]`` explicitly disables
+    pipeline-specific commands. Otherwise each entry must be a non-empty list of
+    non-empty strings. The normalized list is returned.
+    """
+    if v is None:
+        return v
+    if not isinstance(v, list):
+        raise ValueError(f"{field_name} must be a JSON list of command argv lists")
+    validated: List[List[str]] = []
+    for entry in v:
+        if not isinstance(entry, list) or not entry:
+            raise ValueError(
+                f"Each {kind} command must be a non-empty list of argv strings"
+            )
+        if not all(isinstance(a, str) and a for a in entry):
+            raise ValueError(
+                f"Each {kind} command argv element must be a non-empty string"
+            )
+        validated.append(list(entry))
+    return validated
+
+
 class TaskStatus(str, Enum):
     CREATED = "created"
     SCHEDULED = "scheduled"
@@ -114,6 +141,11 @@ class Pipeline(Document):
     # [["sh", "-c", "cd backend && uv run pytest"]]). When empty, the global
     # CODERBOT_TEST_COMMANDS_JSON / default commands are used as fallback.
     test_commands: Optional[List[List[str]]] = None
+    # Pipeline-specific lint commands (list of argv lists, e.g.
+    # [["sh", "-c", "cd frontend && npm run lint"]]). These are run by the
+    # ``run_lint`` assistant tool / lint endpoint. ``None``/empty means
+    # "not configured".
+    lint_commands: Optional[List[List[str]]] = None
     version: int = 1
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -171,22 +203,18 @@ class Pipeline(Document):
           (the global config is used).
         - Otherwise each entry must be a non-empty list of non-empty strings.
         """
-        if v is None:
-            return v
-        if not isinstance(v, list):
-            raise ValueError("test_commands must be a JSON list of command argv lists")
-        validated: List[List[str]] = []
-        for entry in v:
-            if not isinstance(entry, list) or not entry:
-                raise ValueError(
-                    "Each test command must be a non-empty list of argv strings"
-                )
-            if not all(isinstance(a, str) and a for a in entry):
-                raise ValueError(
-                    "Each test command argv element must be a non-empty string"
-                )
-            validated.append(list(entry))
-        return validated
+        return _validate_command_lists(v, "test_commands", "test")
+
+    @field_validator("lint_commands")
+    @classmethod
+    def validate_lint_commands(cls, v):
+        """Validate per-pipeline lint commands (a list of argv lists).
+
+        - ``None`` means “not configured”.
+        - An empty list ``[]`` disables pipeline-specific lint commands.
+        - Otherwise each entry must be a non-empty list of non-empty strings.
+        """
+        return _validate_command_lists(v, "lint_commands", "lint")
 
     @field_validator("repo_uri")
     @classmethod

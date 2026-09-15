@@ -25,7 +25,7 @@ from api.assistant.tools.file_tools import (
     list_project_structure,
     read_source_file,
 )
-from api.assistant.tools.pipeline_tools import run_tests
+from api.assistant.tools.pipeline_tools import run_lint, run_tests
 from core.models.models import Pipeline
 
 
@@ -158,6 +158,54 @@ async def test_read_source_file_with_range(init_mock_db):
         # File not found
         result = await read_source_file(pipeline_id, "nonexistent.txt", 1, 5)
         assert "Error: File 'nonexistent.txt' does not exist." in result
+
+
+@pytest.mark.asyncio
+async def test_run_lint_no_lint_commands(init_mock_db):
+    """run_lint reports a no_lint status when a pipeline has no commands."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pipeline = Pipeline(name="No Lint Pipeline", workspace_path=tmp_dir)
+        await pipeline.insert()
+
+        result = await run_lint(str(pipeline.id))
+        assert result["status"] == "no_lint"
+        assert "no lint commands" in result["message"]
+
+
+@pytest.mark.asyncio
+async def test_run_lint_started_and_reports_result_async(init_mock_db):
+    """run_lint returns immediately and delivers the result via CommandRunner."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        git.Repo.init(tmp_dir)
+
+        pipeline = Pipeline(
+            name="Lint Pipeline",
+            workspace_path=tmp_dir,
+            lint_commands=[["sh", "-c", "echo linting && exit 0"]],
+        )
+        await pipeline.insert()
+
+        finished = asyncio.Event()
+        captured = {}
+
+        async def on_complete(results, tool_ref):
+            captured["results"] = results
+            captured["tool_ref"] = tool_ref
+            finished.set()
+
+        result = await run_lint(str(pipeline.id))
+        assert result["status"] == "started"
+        assert result.get("run_id")
+
+        CommandRunner.register_on_complete(
+            result["run_id"], on_complete, {"id": "legacy_id"}
+        )
+
+        await asyncio.wait_for(finished.wait(), timeout=30)
+        assert captured["results"]["passed"] is True
+        assert captured["results"]["commands"][0]["exit_code"] == 0
+        assert captured["results"]["run_id"] == result["run_id"]
+        assert captured["tool_ref"]["id"] == "legacy_id"
 
 
 @pytest.mark.asyncio

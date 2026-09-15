@@ -62,19 +62,58 @@ async def run_tests(pipeline_id: str) -> Dict[str, Any]:
         pipeline_id: The identifier of the pipeline whose tests to run.
     """
     pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
-
-    # Tests are considered defined only when a non-empty list of argv lists is
-    # configured. ``None``/empty means "not configured" -> report no tests.
-    commands = [c for c in (pipeline.test_commands or []) if isinstance(c, list) and c]
+    commands = _resolved_commands(pipeline.test_commands)
     if not commands:
         return {
             "status": "no_tests",
             "message": f"Pipeline {pipeline_id} has no test commands defined.",
         }
+    return await _dispatch_pipeline_run(pipeline_id, commands, "test")
 
+
+@register_tool(tool_type=WRITE_ACCESS)
+async def run_lint(pipeline_id: str) -> Dict[str, Any]:
+    """
+    Runs the configured lint suite for a pipeline.
+
+    If the pipeline has no lint commands defined, returns a ``no_lint`` status
+    immediately. Otherwise the lint suite is executed asynchronously against the
+    pipeline workspace (in its own background task so a long-running run never
+    blocks this call) and the result is reported back through the assistant when
+    it completes.
+
+    Args:
+        pipeline_id: The identifier of the pipeline whose lint commands to run.
+    """
+    pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
+    commands = _resolved_commands(pipeline.lint_commands)
+    if not commands:
+        return {
+            "status": "no_lint",
+            "message": f"Pipeline {pipeline_id} has no lint commands defined.",
+        }
+    return await _dispatch_pipeline_run(pipeline_id, commands, "lint")
+
+
+def _resolved_commands(commands):
+    """Filters a stored command list down to non-empty argv lists.
+
+    ``None``/empty means "not configured" -> no commands to run.
+    """
+    return [c for c in (commands or []) if isinstance(c, list) and c]
+
+
+async def _dispatch_pipeline_run(
+    pipeline_id: str, commands: List[List[str]], kind: str
+) -> Dict[str, Any]:
+    """
+    Schedules a command sequence against a pipeline's workspace as a background
+    task and returns immediately with a ``started`` status and a ``run_id``.
+    """
     # Resolve the workspace working directory (cloning remote repos on first
-    # use). Tests are run against this pipeline workspace, not a task sandbox.
+    # use). Commands run against this pipeline workspace, not a task sandbox.
     _, _repo = await git_utils.get_pipeline_and_repo(pipeline_id)
+    pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
     workspace_path = str(pipeline.workspace_abs_path)
 
     run_id = uuid.uuid4().hex
@@ -86,6 +125,6 @@ async def run_tests(pipeline_id: str) -> Dict[str, Any]:
     return {
         "status": "started",
         "run_id": run_id,
-        "message": f"Test run for pipeline {pipeline_id} started; "
+        "message": f"{kind.capitalize()} run for pipeline {pipeline_id} started; "
         "result will be reported when complete.",
     }

@@ -30,6 +30,8 @@ export interface PipelineEditDialogProps {
 
 type RepoTab = 'local' | 'remote';
 
+type CommandsTab = 'test' | 'lint';
+
 const READONLY_CLASS = ' opacity-60 cursor-not-allowed';
 
 /**
@@ -63,6 +65,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
   private pipeline: Pipeline;
   private pipelineId?: string;
   private activeTab: RepoTab;
+  private activeCmdTab: CommandsTab = 'test';
 
   constructor(props: PipelineEditDialogProps) {
     // We need to set props BEFORE super() if renderBody uses them,
@@ -193,14 +196,59 @@ export class PipelineEditDialog extends BaseDialog<void> {
     `;
   }
 
-  private renderTestCommands(): string {
-    const existing = (this.pipeline.test_commands || []).map(argsToCommand);
+  private cmdTabClass(tab: CommandsTab): string {
+    const base = 'px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all cursor-pointer border-b-2';
+    return tab === this.activeCmdTab
+      ? `${base} border-app-accent-1 text-app-accent-1`
+      : `${base} border-transparent text-app-muted hover:text-app-text`;
+  }
+
+  private renderCommandTextarea(
+    name: string,
+    label: string,
+    commands: string[][],
+    placeholder: string,
+    hint: string
+  ): string {
+    const existing = (commands || []).map(argsToCommand);
     const value = existing.length > 0 ? existing.join('\n') : '';
     return `
       <div>
-        <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Test Commands (Optional)</label>
-        <textarea name="test_commands" rows="3" placeholder="One command per line, e.g.&#10;cd backend &amp;&amp; uv run pytest&#10;cd frontend &amp;&amp; CI=true npm run test" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1 font-mono">${value}</textarea>
-        <p class="text-[10px] text-app-muted">Commands run to verify a change. One per line. Leave empty to use the global default commands.</p>
+        <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">${label} (Optional)</label>
+        <textarea name="${name}" rows="3" placeholder="${placeholder}" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1 font-mono">${value}</textarea>
+        <p class="text-[10px] text-app-muted">${hint}</p>
+      </div>
+    `;
+  }
+
+  private renderTestCommands(): string {
+    return this.renderCommandTextarea(
+      'test_commands',
+      'Test Commands',
+      this.pipeline.test_commands || [],
+      'One command per line, e.g.&#10;cd backend &amp;&amp; uv run pytest&#10;cd frontend &amp;&amp; CI=true npm run test',
+      'Commands run to verify a change. One per line. Leave empty to use the global default commands.'
+    );
+  }
+
+  private renderLintCommands(): string {
+    return this.renderCommandTextarea(
+      'lint_commands',
+      'Lint Commands',
+      this.pipeline.lint_commands || [],
+      'One command per line, e.g.&#10;cd backend &amp;&amp; uv run ruff check&#10;cd frontend &amp;&amp; npm run lint',
+      'Commands run to lint the project. One per line. Leave empty to skip linting.'
+    );
+  }
+
+  private renderCommandsTabs(): string {
+    return `
+      <div class="flex flex-col gap-3">
+        <div class="flex gap-1 border-b border-app-border">
+          <button type="button" data-cmd-tab="test" class="${this.cmdTabClass('test')}">Test</button>
+          <button type="button" data-cmd-tab="lint" class="${this.cmdTabClass('lint')}">Lint</button>
+        </div>
+        ${this.activeCmdTab === 'test' ? this.renderTestCommands() : this.renderLintCommands()}
       </div>
     `;
   }
@@ -221,7 +269,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
           <button type="button" data-tab="remote" class="${this.tabClass('remote')}">Remote Repository</button>
         </div>
         ${this.activeTab === 'local' ? this.renderLocalTab(localReadonly, create) : this.renderRemoteTab(remoteReadonly, create)}
-        ${this.renderTestCommands()}
+        ${this.renderCommandsTabs()}
         <div id="pipeline-edit-error" class="hidden text-xs text-red-400 font-bold"></div>
         ${create ? '' : `
         <div class="flex col-span-2">
@@ -254,6 +302,16 @@ export class PipelineEditDialog extends BaseDialog<void> {
         }
       });
     });
+
+    this.dialog.querySelectorAll<HTMLButtonElement>('[data-cmd-tab]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const tab = btn.dataset.cmdTab as CommandsTab;
+        if (tab && tab !== this.activeCmdTab) {
+          this.activeCmdTab = tab;
+          this.reRender();
+        }
+      });
+    });
   }
 
   private showError(message: string) {
@@ -277,8 +335,20 @@ export class PipelineEditDialog extends BaseDialog<void> {
     const repoUsernameInput = this.dialog.querySelector('input[name="repo_username"]') as HTMLInputElement;
     const repoTokenInput = this.dialog.querySelector('input[name="repo_token"]') as HTMLInputElement;
     const testCommandsInput = this.dialog.querySelector('textarea[name="test_commands"]') as HTMLTextAreaElement;
+    const lintCommandsInput = this.dialog.querySelector('textarea[name="lint_commands"]') as HTMLTextAreaElement;
 
-    const testCommands = parseTestCommands(testCommandsInput?.value || '');
+    // When saving from the other command tab the hidden textarea is not
+    // rendered, so fall back to the stored pipeline value to avoid silently
+    // dropping the commands the user configured earlier.
+    const testText =
+      testCommandsInput?.value ??
+      (this.pipeline.test_commands || []).map(argsToCommand).join('\n');
+    const lintText =
+      lintCommandsInput?.value ??
+      (this.pipeline.lint_commands || []).map(argsToCommand).join('\n');
+
+    const testCommands = parseTestCommands(testText);
+    const lintCommands = parseTestCommands(lintText);
 
     const btnLabel = create ? 'Create Pipeline' : 'Save Changes';
     saveBtn.disabled = true;
@@ -294,10 +364,12 @@ export class PipelineEditDialog extends BaseDialog<void> {
           repo_token?: string;
           doc_root?: string;
           test_commands?: string[][] | null;
+          lint_commands?: string[][] | null;
         } = {
           name: nameInput?.value.trim() || '',
           doc_root: docRootInput?.value.trim() || 'design',
           test_commands: testCommands.length > 0 ? testCommands : null,
+          lint_commands: lintCommands.length > 0 ? lintCommands : null,
         };
 
         if (this.activeTab === 'remote') {
@@ -332,8 +404,10 @@ export class PipelineEditDialog extends BaseDialog<void> {
           repo_token?: string;
           doc_root?: string;
           test_commands?: string[][] | null;
+          lint_commands?: string[][] | null;
         } = {
           test_commands: testCommands,
+          lint_commands: lintCommands,
         };
 
         if (remote) {

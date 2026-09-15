@@ -256,6 +256,75 @@ describe('PipelineEditDialog', () => {
     expect(updateCall[2].test_commands).toEqual([]);
   });
 
+  const switchToCmdTab = (tab: 'test' | 'lint') => {
+    const btn = document.querySelector(`[data-cmd-tab="${tab}"]`) as HTMLButtonElement;
+    btn.click();
+  };
+
+  it('should pre-fill the lint commands textarea from stored argv lists', async () => {
+    mockProps.pipeline!.lint_commands = [
+      ['sh', '-c', 'make lint'],
+      ['ruff', 'check'],
+    ];
+    const dialog = new PipelineEditDialog(mockProps);
+    const showPromise = dialog.show();
+
+    switchToCmdTab('lint');
+    const textarea = document.querySelector('textarea[name="lint_commands"]') as HTMLTextAreaElement;
+    expect(textarea.value).toBe('make lint\nruff check');
+
+    document.querySelector('#pipeline-edit-cancel')?.dispatchEvent(new MouseEvent('click'));
+    await showPromise;
+  });
+
+  it('should send lint_commands parsed from the textarea on save', async () => {
+    const dialog = new PipelineEditDialog(mockProps);
+    const showPromise = dialog.show();
+
+    switchToCmdTab('lint');
+    const textarea = document.querySelector('textarea[name="lint_commands"]') as HTMLTextAreaElement;
+    textarea.value = 'make lint\n\ncd frontend && npm run lint';
+
+    const saveBtn = document.querySelector('#pipeline-edit-save') as HTMLButtonElement;
+    saveBtn.click();
+    await showPromise;
+
+    const updateCall = (mockProps.context.pipelineClient.update as any).mock.calls[0];
+    expect(updateCall[2].lint_commands).toEqual([
+      ['sh', '-c', 'make lint'],
+      ['sh', '-c', 'cd frontend && npm run lint'],
+    ]);
+  });
+
+  it('should send an empty lint_commands array when the lint textarea is blank', async () => {
+    const dialog = new PipelineEditDialog(mockProps);
+    const showPromise = dialog.show();
+
+    switchToCmdTab('lint');
+    const saveBtn = document.querySelector('#pipeline-edit-save') as HTMLButtonElement;
+    saveBtn.click();
+    await showPromise;
+
+    const updateCall = (mockProps.context.pipelineClient.update as any).mock.calls[0];
+    expect(updateCall[2].lint_commands).toEqual([]);
+  });
+
+  it('should preserve test_commands when saving from the lint tab', async () => {
+    mockProps.pipeline!.test_commands = [['sh', '-c', 'make test']];
+    const dialog = new PipelineEditDialog(mockProps);
+    const showPromise = dialog.show();
+
+    // From the lint tab the test textarea is not rendered; the stored value
+    // must still be parsed from the pipeline and sent on save.
+    switchToCmdTab('lint');
+    const saveBtn = document.querySelector('#pipeline-edit-save') as HTMLButtonElement;
+    saveBtn.click();
+    await showPromise;
+
+    const updateCall = (mockProps.context.pipelineClient.update as any).mock.calls[0];
+    expect(updateCall[2].test_commands).toEqual([['sh', '-c', 'make test']]);
+  });
+
   it('should call update and close on save', async () => {
     const dialog = new PipelineEditDialog(mockProps);
     const showPromise = dialog.show();
