@@ -15,57 +15,7 @@
 from typing import List, Optional
 
 from core.exceptions import EntityNotFoundError, ValidationError, VersionMismatchError
-from core.models.models import Pipeline, PipelineStatus, Task
-
-
-def _validate_test_commands(test_commands: Optional[List[List[str]]]):
-    """Validate a list of argv lists for per-pipeline test commands.
-
-    Returns the validated (normalized) list. ``None`` and ``[]`` are allowed
-    (meaning “not configured” / “use global fallback”). Raises a
-    ``core.exceptions.ValidationError`` on malformed input.
-    """
-    if test_commands is None:
-        return test_commands
-    if not isinstance(test_commands, list):
-        raise ValidationError("test_commands must be a JSON list of command argv lists")
-    validated: List[List[str]] = []
-    for entry in test_commands:
-        if not isinstance(entry, list) or not entry:
-            raise ValidationError(
-                "Each test command must be a non-empty list of argv strings"
-            )
-        if not all(isinstance(a, str) and a for a in entry):
-            raise ValidationError(
-                "Each test command argv element must be a non-empty string"
-            )
-        validated.append(list(entry))
-    return validated
-
-
-def _validate_lint_commands(lint_commands: Optional[List[List[str]]]):
-    """Validate a list of argv lists for per-pipeline lint commands.
-
-    Returns the validated (normalized) list. ``None`` and ``[]`` are allowed
-    (meaning “not configured”). Raises a ``core.exceptions.ValidationError`` on
-    malformed input.
-    """
-    if lint_commands is None:
-        return lint_commands
-    if not isinstance(lint_commands, list):
-        raise ValidationError("lint_commands must be a JSON list of command argv lists")
-    validated: List[List[str]] = []
-    for entry in lint_commands:
-        if not isinstance(entry, list) or not entry:
-            raise ValidationError(
-                "Each lint command must be a non-empty list of argv strings"
-            )
-        if not all(isinstance(a, str) and a for a in entry):
-            raise ValidationError(
-                "Each lint command argv element must be a non-empty string"
-            )
-        validated.append(list(entry))
-    return validated
+from core.models.models import Pipeline, PipelineStatus, Task, _validate_command_lists
 
 
 async def get_all_pipelines(include_deleted: bool = False) -> List[Pipeline]:
@@ -160,11 +110,15 @@ async def update_pipeline(
     if test_commands is not None:
         # Re-validate here (mirroring the model validator) so that invalid
         # payloads are rejected with a clear ValidationError before saving.
-        pipeline.test_commands = _validate_test_commands(test_commands)
+        pipeline.test_commands = _validate_command_lists(
+            test_commands, "test_commands", "test", ValidationError
+        )
     if lint_commands is not None:
         # Re-validate here (mirroring the model validator) so that invalid
         # payloads are rejected with a clear ValidationError before saving.
-        pipeline.lint_commands = _validate_lint_commands(lint_commands)
+        pipeline.lint_commands = _validate_command_lists(
+            lint_commands, "lint_commands", "lint", ValidationError
+        )
 
     pipeline.version += 1
     await pipeline.save()

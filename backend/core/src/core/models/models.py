@@ -38,26 +38,33 @@ from core.utils.path_utils import (
 
 
 def _validate_command_lists(
-    v: Optional[List[List[str]]], field_name: str, kind: str
+    v: Optional[List[List[str]]],
+    field_name: str,
+    kind: str,
+    error_type: type = ValueError,
 ) -> Optional[List[List[str]]]:
     """Validate a per-pipeline command list (a list of argv lists).
 
     ``None`` means “not configured”. An empty list ``[]`` explicitly disables
     pipeline-specific commands. Otherwise each entry must be a non-empty list of
     non-empty strings. The normalized list is returned.
+
+    ``field_name`` and ``kind`` are used only for the wording of error messages,
+    while ``error_type`` is the exception class raised on malformed input (it
+    defaults to :class:`ValueError`, which the Pydantic validators rely on).
     """
     if v is None:
         return v
     if not isinstance(v, list):
-        raise ValueError(f"{field_name} must be a JSON list of command argv lists")
+        raise error_type(f"{field_name} must be a JSON list of command argv lists")
     validated: List[List[str]] = []
     for entry in v:
         if not isinstance(entry, list) or not entry:
-            raise ValueError(
+            raise error_type(
                 f"Each {kind} command must be a non-empty list of argv strings"
             )
         if not all(isinstance(a, str) and a for a in entry):
-            raise ValueError(
+            raise error_type(
                 f"Each {kind} command argv element must be a non-empty string"
             )
         validated.append(list(entry))
