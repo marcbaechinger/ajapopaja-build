@@ -665,7 +665,6 @@ export class PipelineDetailView extends View {
         return;
       }
 
-      console.log(`[title-save] ${taskId} (version=${version}): saving title -> "${newTitle}"`);
       try {
         await this.context.taskClient.updateDetails(taskId, version, { title: newTitle });
         // After a successful save, leave title edit mode and move the cursor
@@ -1437,59 +1436,12 @@ export class PipelineDetailView extends View {
   }
 
   /**
-   * Serialises a Task excluding the fields that are expected to change on every
-   * save (``title``, ``version``, ``updated_at``) so we can tell whether an
-   * update is a pure title change or touches other data.
+   * Returns whether an incoming task update is a pure title change (i.e. every
+   * field other than title / version / updated_at is unchanged), so callers can
+   * avoid re-rendering the whole view and preserve unrelated unsaved edits.
    */
-  private comparableTask(t: Task): string {
-    const { title, version, updated_at, ...rest } = t as any;
-    return JSON.stringify(rest);
-  }
-
-  /**
-   * Logs an exhaustive field-by-field diff (ignoring title / version /
-   * updated_at) between the previously cached task and the freshly received
-   * task. Used to debug why a title-only save still falls through to a full
-   * TaskItem re-render (which wipes any unsaved Specification / Design Doc
-   * edits).
-   */
-  private logTitleChangeDiff(prev: Task, next: Task): void {
-    try {
-      const prevRest = { ...(prev as any) };
-      const nextRest = { ...(next as any) };
-      delete prevRest.title; delete prevRest.version; delete prevRest.updated_at;
-      delete nextRest.title; delete nextRest.version; delete nextRest.updated_at;
-
-      const keys = Array.from(new Set([...Object.keys(prevRest), ...Object.keys(nextRest)]));
-      const diff: Array<{ key: string; cached: unknown; received: unknown }> = [];
-      for (const key of keys) {
-        const a = (prev as any)[key];
-        const b = (next as any)[key];
-        if (JSON.stringify(a) !== JSON.stringify(b)) {
-          diff.push({ key, cached: a, received: b });
-        }
-      }
-      console.groupCollapsed(`[title-save] ${next.id} title diff -> re-render needed`);
-      console.log('cached title:', prev.title, '-> received title:', next.title);
-      if (diff.length === 0) {
-        // Non-field changes (e.g. JSON key order / undefined-vs-null nuance).
-        console.log('No differing non-title fields, but comparable string differs:', {
-          cachedCompare: this.comparableTask(prev),
-          receivedCompare: this.comparableTask(next),
-        });
-      } else {
-        console.log('Non-title fields that differ (these force a full re-render):');
-        diff.forEach(d => console.log(`  ${d.key}:`, { cached: d.cached, received: d.received }));
-      }
-      console.groupEnd();
-    } catch (e) {
-      console.error('[title-save] diff logging failed:', e);
-    }
-  }
-
   private isTitleOnlyChange(prev: Task, next: Task): boolean {
     if (prev.title === next.title) {
-      console.log(`[title-save] ${next.id}: received update but title unchanged ("${prev.title}") -> treating as full re-render`);
       return false;
     }
     const comparable = (t: Task) => {
@@ -1497,11 +1449,6 @@ export class PipelineDetailView extends View {
       return rest;
     };
     const onlyTitle = JSON.stringify(comparable(prev)) === JSON.stringify(comparable(next));
-    if (!onlyTitle) {
-      this.logTitleChangeDiff(prev, next);
-    } else {
-      console.log(`[title-save] ${next.id}: title-only change ("${prev.title}" -> "${next.title}"), updating title in place`);
-    }
     return onlyTitle;
   }
 
@@ -1560,14 +1507,9 @@ export class PipelineDetailView extends View {
     if (prev) {
       const onlyTitle = this.isTitleOnlyChange(prev, task);
       if (onlyTitle) {
-        console.log(`[title-save] ${taskId}: title-only change detected -> updating title in place (spec/design edits preserved)`);
         this.updateTitleOnly(task);
         return;
       }
-      console.log(
-        `[title-save] ${taskId}: FALLING THROUGH TO FULL TaskItem re-render (` +
-        `title changed from "${prev.title}" to "${task.title}"). Unsaved spec/design edits WILL be lost.`
-      );
     }
 
     const targetColumnId = this.getTaskColumnId(task);
