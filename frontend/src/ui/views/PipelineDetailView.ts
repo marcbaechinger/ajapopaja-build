@@ -1417,18 +1417,73 @@ export class PipelineDetailView extends View {
     }
   }
 
+  /**
+   * True when a task update changes only the title (plus the always-changing
+   * ``version`` / ``updated_at`` metadata). In that case re-rendering the whole
+   * TaskItem (or the backlog / selection / engine views) would wipe any
+   * in-progress edits in other text fields (e.g. an unsaved Specification), so
+   * we update just the title-related DOM instead.
+   */
+  private isTitleOnlyChange(prev: Task, next: Task): boolean {
+    if (prev.title === next.title) return false;
+    const comparable = (t: Task) => {
+      const { title, version, updated_at, ...rest } = t as any;
+      return rest;
+    };
+    return JSON.stringify(comparable(prev)) === JSON.stringify(comparable(next));
+  }
+
+  /**
+   * Updates only the title-related DOM for a task in place across every
+   * rendered instance (TaskItem, backlog / engine sidebar rows, history feed),
+   * skipping the heavy full-view refreshes that would discard unrelated edits.
+   */
+  private updateTitleOnly(task: Task) {
+    const taskId = task.id ?? '';
+    if (!taskId || !this.container) return;
+
+    if (this.selectedTask?.id === taskId) {
+      this.selectedTask = task;
+    }
+
+    // Full TaskItem cards (e.g. the selected task view): switch the edit form
+    // back to the rendered title and refresh the version, without a re-render.
+    this.container
+      .querySelectorAll<HTMLElement>(`[data-view-id="${taskId}"]`)
+      .forEach((el) => TaskItem.updateTitleInPlace(el, task));
+
+    // Compact sidebar/history rows (BacklogTaskView, ExecutionEngineItemView,
+    // HistoryItemView): refresh the rendered title text in place.
+    this.container
+      .querySelectorAll<HTMLElement>(`[data-task-id="${taskId}"]`)
+      .forEach((el) => {
+        const titleEl = el.querySelector<HTMLElement>('span.text-[11px].font-bold, span.font-medium.text-app-text');
+        if (titleEl) titleEl.textContent = task.title;
+      });
+  }
+
   private updateSingleTask(task: Task) {
     const taskId = task.id ?? '';
     if (!taskId) return;
 
-    // Update local cache
+    // Update local cache, capturing the previous state so we can detect a
+    // title-only change (which must not trigger a full re-render).
     const index = this.allLoadedTasks.findIndex(t => t.id === taskId);
+    const prev = index !== -1 ? this.allLoadedTasks[index] : null;
     if (index !== -1) {
       this.allLoadedTasks[index] = task;
     } else {
       this.allLoadedTasks.push(task);
     }
     this.updateHeader();
+
+    // A title-only update must not re-render the TaskItem / views, otherwise
+    // unrelated unsaved text edits (e.g. an open Specification editor) get
+    // wiped. Update just the title DOM in place instead.
+    if (prev && this.isTitleOnlyChange(prev, task)) {
+      this.updateTitleOnly(task);
+      return;
+    }
 
     const targetColumnId = this.getTaskColumnId(task);
     const loc = this.findTaskElementInColumns(taskId);

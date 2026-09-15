@@ -24,6 +24,36 @@ import { renderDesignDocSection } from './DesignDocSection.ts';
 import { Icon } from './Icon.ts';
 
 export class TaskItem {
+  /**
+   * Updates only the title-related DOM of an already-rendered TaskItem in
+   * place, without re-rendering the rest of the card. This keeps any unrelated
+   * in-progress edits in the card (e.g. an unsaved Specification or Design Doc
+   * text) intact when the title is saved, instead of wiping them with a full
+   * re-render.
+   *
+   * Specifically it:
+   * - sets the newly saved title as the displayed text,
+   * - switches back from the edit input to the rendered title,
+   * - refreshes the optimistic-concurrency ``data-version`` used by save actions.
+   *
+   * It is a no-op when ``element`` is not (or no longer) a TaskItem root that
+   * contains a ``.title-container``.
+   */
+  static updateTitleInPlace(element: Element, task: Task): void {
+    const container = element.querySelector('.title-container');
+    if (!container) return;
+    container.setAttribute('data-version', String(task.version ?? 1));
+
+    const view = container.querySelector('.title-view');
+    const titleEl = view?.querySelector('span.font-medium');
+    if (titleEl) {
+      titleEl.textContent = task.title;
+    }
+    // Switch the edit form back to the rendered title.
+    container.querySelector('.title-edit')?.classList.add('hidden');
+    view?.classList.remove('hidden');
+  }
+
   static render(
     task: Task,
     showOrdering: boolean = true,
