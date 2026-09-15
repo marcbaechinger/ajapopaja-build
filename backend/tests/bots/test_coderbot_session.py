@@ -527,7 +527,7 @@ async def test_coderbot_run_verification_aggregates_exit_codes():
     fail_proc.returncode = 1
 
     with patch(
-        "api.coderbot.session.asyncio.create_subprocess_exec",
+        "api.assistant.tools.command_runner.asyncio.create_subprocess_exec",
         new_callable=AsyncMock,
         side_effect=[success_proc, fail_proc],
     ) as mock_exec:
@@ -559,7 +559,7 @@ async def test_coderbot_run_verification_timeout_terminates_process_group():
 
     with (
         patch(
-            "api.coderbot.session.asyncio.create_subprocess_exec",
+            "api.assistant.tools.command_runner.asyncio.create_subprocess_exec",
             new_callable=AsyncMock,
             return_value=hung_proc,
         ) as mock_exec,

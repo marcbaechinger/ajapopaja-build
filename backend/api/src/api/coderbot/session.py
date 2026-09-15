@@ -15,13 +15,12 @@
 import asyncio
 import json
 import logging
-import os
 import re
-import signal
 import traceback
 from datetime import UTC, datetime
 from typing import Any, Dict, Optional, TextIO
 
+from api.assistant.tools.command_runner import run_command_sequence
 from api.websocket_manager import WSMessage, manager as ws_manager
 from core import config
 from core.models.models import (
@@ -304,129 +303,26 @@ class CoderBotSession:
             )
         return self._get_global_verification_commands()
 
-    async def _terminate_proc_tree(self, proc, cmd_str: str) -> None:
-        """Terminates a verification subprocess and its whole process group.
-
-        ``sh -c`` spawns a child shell that in turn spawns grandchildren (e.g. a
-        vitest watcher). Terminating only the top-level shell could leave an
-        orphaned child running and, worse, a pipe that keeps ``communicate()``
-        from returning. We therefore start every verification command in its own
-        process group (``start_new_session``) and kill the group so all
-        descendants die together.
-        """
-        # Try a graceful TERM to the whole group first.
-        try:
-            os.killpg(proc.pid, signal.SIGTERM)
-        except (ProcessLookupError, PermissionError, AttributeError):
-            logger.warning(
-                "Could not SIGTERM verification process group for '%s'.", cmd_str
-            )
-        try:
-            await asyncio.wait_for(proc.wait(), timeout=5)
-            return
-        except (asyncio.TimeoutError, ProcessLookupError):
-            pass
-        # Escalate to SIGKILL if it did not die in time.
-        try:
-            os.killpg(proc.pid, signal.SIGKILL)
-        except (ProcessLookupError, PermissionError, AttributeError):
-            logger.warning(
-                "Could not SIGKILL verification process group for '%s'.", cmd_str
-            )
-        try:
-            await asyncio.wait_for(proc.wait(), timeout=5)
-        except asyncio.TimeoutError:
-            logger.error(
-                "Verification command '%s' did not die after SIGKILL.", cmd_str
-            )
-
-    async def _run_verification_command(self, entry: list) -> Dict[str, Any]:
-        """Runs a single verification command under a timeout.
-
-        The command is spawned in its own process group so that, if it runs
-        past ``CODERBOT_VERIFICATION_TIMEOUT`` (e.g. `npm run test` without
-        ``CI=true`` dropping into vitest's watch mode), the whole tree can be
-        terminated instead of the server hanging on ``communicate()`` forever.
-
-        Returns a command result dict with a non-zero/None exit code and an
-        output tail on timeout/failure.
-        """
-        cmd_str = " ".join(entry)
-        proc = None
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *entry,
-                cwd=str(self.helper.sandbox_path),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-                # Own process group so descendants can be killed together.
-                start_new_session=True,
-            )
-            timeout = float(getattr(config, "CODERBOT_VERIFICATION_TIMEOUT", 300))
-            out, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-            tail = out.decode(errors="replace")[-2000:]
-            exit_code = proc.returncode
-            logger.info(
-                "Verification command '%s' finished with exit code %s.",
-                cmd_str,
-                exit_code,
-            )
-            return {
-                "cmd": cmd_str,
-                "exit_code": exit_code,
-                "output_tail": tail,
-            }
-        except asyncio.TimeoutError:
-            logger.error(
-                "Verification command '%s' timed out after %ss; "
-                "terminating it and its children.",
-                cmd_str,
-                float(getattr(config, "CODERBOT_VERIFICATION_TIMEOUT", 300)),
-            )
-            if proc is not None:
-                await self._terminate_proc_tree(proc, cmd_str)
-            return {
-                "cmd": cmd_str,
-                "exit_code": None,
-                "output_tail": (
-                    f"Verification command timed out after "
-                    f"{float(getattr(config, 'CODERBOT_VERIFICATION_TIMEOUT', 300))}s "
-                    f"and was terminated."
-                ),
-            }
-        except Exception as e:
-            logger.error(
-                "Verification command failed to run (%s): %s",
-                cmd_str,
-                e,
-                exc_info=True,
-            )
-            return {
-                "cmd": cmd_str,
-                "exit_code": None,
-                "output_tail": str(e)[-2000:],
-            }
-
     async def _run_verification(self) -> Dict[str, Any]:
         """Runs the project test commands in the sandbox and returns results.
 
         The PR is created regardless of the outcome, but the returned dict flags
         any failing command so a human can see the suite was red.
 
+        Delegates execution to ``CommandRunner.run_command_sequence`` (shared
+        with the assistant ``run_tests``/``run_lint`` pipeline tools) so the
+        sandboxed test-running logic lives in a single place. Each command runs
+        in its own process group under ``CODERBOT_VERIFICATION_TIMEOUT``; a
+        command only counts as green when it exited with code 0 (timeouts and
+        spawn failures record a ``None`` exit code which marks the verification
+        as failed).
+
         Returns:
             A dict ``{"commands": [...], "passed": bool}`` where each command
             entry contains the argv, the exit code and the tail of its output.
         """
-        results: Dict[str, Any] = {"commands": [], "passed": True}
-        for entry in self.get_resolved_verification_commands():
-            result = await self._run_verification_command(entry)
-            results["commands"].append(result)
-            # A command is only green when it exited with code 0. Timeouts and
-            # spawn failures record a None exit code which therefore also marks
-            # the verification as failed.
-            if result["exit_code"] != 0:
-                results["passed"] = False
-        return results
+        commands = self.get_resolved_verification_commands()
+        return await run_command_sequence(commands, str(self.helper.sandbox_path))
 
     async def _broadcast_rpc(self, event: Dict[str, Any]):
         """Broadcasts a parsed Pi RPC event to connected websocket clients.
