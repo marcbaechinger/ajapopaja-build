@@ -244,7 +244,7 @@ describe('CoderBotService RPC stream', () => {
       bot_type: 'coderbot',
     });
     const notices = history.filter(
-      (b) => b.kind === 'notice' && /verification/i.test(b.text),
+      (b) => b.kind === 'notice' && /verification/i.test(b.text ?? ''),
     );
     expect(notices).toHaveLength(1);
     expect(notices[0].text).toContain('running');
@@ -257,7 +257,7 @@ describe('CoderBotService RPC stream', () => {
       bot_type: 'docbot',
     });
     const notices = history.filter(
-      (b) => b.kind === 'notice' && /verification/i.test(b.text),
+      (b) => b.kind === 'notice' && /verification/i.test(b.text ?? ''),
     );
     expect(notices).toHaveLength(0);
   });

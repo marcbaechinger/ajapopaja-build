@@ -415,7 +415,7 @@ describe('PipelineDetailView save_title no-op', () => {
     const titleContainer = makeTitleContainer('t1', 'Existing Title');
     const event = { preventDefault: vi.fn(), stopPropagation: vi.fn() };
 
-    await saveTitle(<any>event, titleContainer);
+    await saveTitle(event as any, titleContainer);
 
     expect(mockContext.taskClient.updateDetails).not.toHaveBeenCalled();
     expect(event.preventDefault).toHaveBeenCalled();
@@ -432,7 +432,7 @@ describe('PipelineDetailView save_title no-op', () => {
     input.value = 'Brand New Title';
     const event = { preventDefault: vi.fn(), stopPropagation: vi.fn() };
 
-    await saveTitle(<any>event, titleContainer);
+    await saveTitle(event as any, titleContainer);
 
     expect(mockContext.taskClient.updateDetails).toHaveBeenCalledTimes(1);
     expect(mockContext.taskClient.updateDetails).toHaveBeenCalledWith('t1', 1, { title: 'Brand New Title' });

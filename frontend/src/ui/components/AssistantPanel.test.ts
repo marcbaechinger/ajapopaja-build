@@ -120,7 +120,7 @@ describe('AssistantPanel', () => {
     });
 
     it('closes the panel for /close without sending a message', () => {
-      (global as any).window.location.hash = '#/pipeline/abc123';
+      window.location.hash = '#/pipeline/abc123';
       // Open the panel then submit /close
       window.dispatchEvent(new Event('toggle-assistant'));
 
@@ -145,7 +145,7 @@ describe('AssistantPanel', () => {
     );
 
     it('substitutes the current pipeline id into the template', () => {
-      (global as any).window.location.hash = '#/pipeline/abc123';
+      window.location.hash = '#/pipeline/abc123';
       const input = submitInput('/pr');
 
       expect(input.value).toBe('Show me the project structure of pipeline abc123');
