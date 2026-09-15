@@ -106,10 +106,20 @@ describe('PullRequestSection', () => {
     expect(html).not.toBe('');
   });
 
-  it('renders the summary text inside the hidden container and escapes HTML', () => {
-    const html = PullRequestSection.render([makePr({ summary: 'Changes <b>bolded</b> & more' })]);
-    expect(html).toContain('Changes &lt;b&gt;bolded&lt;/b&gt; &amp; more');
-    expect(html).not.toContain('<b>bolded</b>');
+  it('renders the summary as sanitized Markdown inside the hidden container', () => {
+    const html = PullRequestSection.render([makePr({ summary: 'Changes **bolded** & more' })]);
+    // Markdown is parsed to HTML and the raw markdown escapes are gone.
+    expect(html).toContain('<strong>bolded</strong>');
+    // The '&' is escaped in the resulting HTML.
+    expect(html).toContain('&amp;');
+    expect(html).not.toContain('**bolded**');
+  });
+
+  it('sanitizes dangerous HTML in the summary', () => {
+    const html = PullRequestSection.render([makePr({ summary: '# Heading\n\n**Safe** <script>alert("xss")</script>' })]);
+    expect(html).toContain('<h1>Heading</h1>');
+    expect(html).toContain('<strong>Safe</strong>');
+    expect(html).not.toContain('<script>');
   });
 
   it('renders no summary toggle when the PR has no summary', () => {

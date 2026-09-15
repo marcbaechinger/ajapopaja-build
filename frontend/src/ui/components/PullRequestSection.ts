@@ -16,6 +16,7 @@
 
 import { PullRequest, PullRequestStatus, pullRequestAcceptLabel } from '../../core/domain.ts';
 import { Icon } from './Icon.ts';
+import { renderMarkdown } from './utils/markdown.ts';
 
 export class PullRequestSection {
   static render(prs: PullRequest[]): string {
@@ -81,19 +82,10 @@ export class PullRequestSection {
             ${Icon.render('chevronRight', { size: 14, className: 'transform transition-transform' })}
             Summary
           </button>
-          <div class="pr-summary hidden mt-2 text-sm text-app-text/90 leading-relaxed whitespace-pre-wrap">${this.escapeHtml(pr.summary)}</div>
+          <div class="pr-summary hidden mt-2 text-sm prose-theme prose-sm max-w-none">${renderMarkdown(pr.summary)}</div>
         </div>
         ` : ''}
       </div>
     `;
-  }
-
-  private static escapeHtml(text: string): string {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
   }
 }
