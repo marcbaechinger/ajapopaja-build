@@ -23,7 +23,6 @@ export type BlockKind =
   | 'text'
   | 'thinking'
   | 'tool'
-  | 'edit'
   | 'bash'
   | 'notice'
   | 'error'
