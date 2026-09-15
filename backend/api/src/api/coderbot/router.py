@@ -36,8 +36,8 @@ async def get_coderbot_session():
 @router.get("/session/{task_id}/history")
 async def get_coderbot_session_history(task_id: str):
     """Replay the persisted RPC events of a CoderBot session for a task."""
-    events = read_session_history(task_id)
-    return {"task_id": task_id, "events": events}
+    events, start_time = read_session_history(task_id)
+    return {"task_id": task_id, "events": events, "start_time": start_time}
 
 
 @router.post("/trigger/{task_id}")

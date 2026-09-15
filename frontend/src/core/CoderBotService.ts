@@ -88,6 +88,13 @@ export class CoderBotService {
   private loadedSessionKey: string | null = null;
   /** In-flight history load so concurrent reconnects share one fetch. */
   private historyLoadPromise: Promise<void> | null = null;
+  /**
+   * Wall-clock start (epoch ms) of the current/last session, as reported by the
+   * backend so the "Running since" elapsed-time display can resume from the real
+   * session start instead of when the PiView was created.
+   */
+  private sessionStartTime: number | null = null;
+  private startTimeListeners: Set<(startTime: number | null) => void> = new Set();
 
   private static readonly SESSION_STORAGE_KEY = 'ajapopaja:coderbot:session';
 
@@ -104,6 +111,9 @@ export class CoderBotService {
       if (taskId !== this.currentTaskId) {
         this.clearHistory();
         this.currentTaskId = taskId;
+        // A brand-new session is beginning; seed a local start reference until
+        // the server-reported start time is loaded with the history.
+        this.setSessionStartTime(Date.now());
       }
       this.currentPipelineId = msg.payload?.pipeline_id ?? this.currentPipelineId;
       this.setSessionActive(true);
@@ -550,6 +560,32 @@ export class CoderBotService {
     return { pipelineId: this.currentPipelineId, taskId: this.currentTaskId, active: this.isSessionActive };
   }
 
+  /** Returns the wall-clock start (epoch ms) of the current session, or null. */
+  public getSessionStartTime(): number | null {
+    return this.sessionStartTime;
+  }
+
+  /**
+   * Subscribe to session start-time updates (e.g. once the server-reported start
+   * time is loaded from the history/session endpoints after a mount).
+   */
+  public onSessionStartTimeChange(listener: (startTime: number | null) => void): () => void {
+    this.startTimeListeners.add(listener);
+    return () => this.startTimeListeners.delete(listener);
+  }
+
+  private setSessionStartTime(startTime: number | null) {
+    this.sessionStartTime = startTime;
+    this.startTimeListeners.forEach((l) => l(startTime));
+  }
+
+  /** Coerces a backend ISO-8601 start time to epoch ms, or null when absent. */
+  private parseStartTime(iso?: string | null): number | null {
+    if (!iso) return null;
+    const ms = new Date(iso).getTime();
+    return Number.isNaN(ms) ? null : ms;
+  }
+
   /** Refreshes the session from the backend (e.g. after a page reload). */
   public async refreshSession(): Promise<{ pipelineId: string | null; taskId: string | null; active: boolean } | null> {
     try {
@@ -558,6 +594,7 @@ export class CoderBotService {
         this.currentPipelineId = session.pipeline_id ?? this.currentPipelineId;
         this.currentTaskId = session.task_id;
         this.setSessionActive(!!session.is_active);
+        this.setSessionStartTime(this.parseStartTime(session.start_time));
         this.persistSession();
       } else {
         this.setSessionActive(false);
@@ -602,11 +639,16 @@ export class CoderBotService {
   private async loadHistory(taskId: string, key: string): Promise<void> {
     try {
       let events: any[] = [];
+      let startTime: number | null = null;
       try {
-        events = await this.fetchSessionHistory(taskId);
+        const history = await this.fetchSessionHistory(taskId);
+        events = history.events ?? [];
+        startTime = this.parseStartTime(history.start_time);
       } catch (e) {
         console.error('Failed to load CoderBot session history', e);
       }
+
+      if (startTime !== null) this.setSessionStartTime(startTime);
 
       // Rebuild the activity log by replaying the same reducer over the persisted
       // events, so past output of this session is preserved after a reload.
@@ -656,7 +698,7 @@ export class CoderBotService {
     }
   }
 
-  private async fetchSession(): Promise<{ pipeline_id?: string; task_id?: string; is_active?: boolean } | null> {
+  private async fetchSession(): Promise<{ pipeline_id?: string; task_id?: string; is_active?: boolean; start_time?: string | null } | null> {
     const token = this.authService.getAccessToken();
     const response = await fetch('/api/coderbot/session', {
       headers: { 'Authorization': `Bearer ${token}` },
@@ -665,14 +707,17 @@ export class CoderBotService {
     return await response.json();
   }
 
-  private async fetchSessionHistory(taskId: string): Promise<any[]> {
+  private async fetchSessionHistory(taskId: string): Promise<{ events: any[]; start_time?: string | null }> {
     const token = this.authService.getAccessToken();
     const response = await fetch(`/api/coderbot/session/${taskId}/history`, {
       headers: { 'Authorization': `Bearer ${token}` },
     });
-    if (!response.ok) return [];
+    if (!response.ok) return { events: [] };
     const data = await response.json();
-    return Array.isArray(data?.events) ? data.events : [];
+    return {
+      events: Array.isArray(data?.events) ? data.events : [],
+      start_time: data?.start_time,
+    };
   }
 
   private setSessionActive(active: boolean) {

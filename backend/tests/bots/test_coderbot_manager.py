@@ -190,11 +190,13 @@ async def test_get_active_session_returns_active_session():
     mock = MagicMock()
     mock.pipeline_id = "p1"
     mock.task_id = "t1"
+    mock.start_time = None
     manager._active_session = mock
     assert manager.get_active_session() == {
         "pipeline_id": "p1",
         "task_id": "t1",
         "is_active": True,
+        "start_time": None,
     }
 
 
@@ -204,9 +206,29 @@ async def test_get_active_session_returns_last_session_inactive():
     mock = MagicMock()
     mock.pipeline_id = "p1"
     mock.task_id = "t1"
+    mock.start_time = None
     manager._last_session = mock
     assert manager.get_active_session() == {
         "pipeline_id": "p1",
         "task_id": "t1",
         "is_active": False,
+        "start_time": None,
+    }
+
+
+@pytest.mark.asyncio
+async def test_get_active_session_includes_start_time():
+    from datetime import UTC, datetime
+
+    manager = CoderBotManager()
+    mock = MagicMock()
+    mock.pipeline_id = "p1"
+    mock.task_id = "t1"
+    mock.start_time = datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
+    manager._active_session = mock
+    assert manager.get_active_session() == {
+        "pipeline_id": "p1",
+        "task_id": "t1",
+        "is_active": True,
+        "start_time": "2026-01-02T03:04:05+00:00",
     }

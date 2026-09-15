@@ -310,6 +310,48 @@ describe('CoderBotService session tracking / reconnect', () => {
     expect(texts()).toHaveLength(1);
   });
 
+  it('adopts the server-reported session start time from history', async () => {
+    ws.dispatch('CODERBOT_STARTED', { task_id: 't1', pipeline_id: 'p1' });
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ events: [], start_time: '2026-02-03T04:05:00Z' }),
+    });
+
+    await service.reconnect({ pipelineId: 'p1', taskId: 't1', active: true });
+    expect(service.getSessionStartTime()).toBe(Date.parse('2026-02-03T04:05:00Z'));
+  });
+
+  it('adopts the server-reported session start time from the /session endpoint', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          pipeline_id: 'p1',
+          task_id: 't1',
+          is_active: true,
+          start_time: '2026-02-03T04:05:00Z',
+        }),
+    });
+
+    await service.refreshSession();
+    expect(service.getSessionStartTime()).toBe(Date.parse('2026-02-03T04:05:00Z'));
+  });
+
+  it('notifies start-time listeners when a server-reported start time arrives', async () => {
+    const spy = vi.fn();
+    service.onSessionStartTimeChange(spy);
+    ws.dispatch('CODERBOT_STARTED', { task_id: 't1', pipeline_id: 'p1' });
+    // The local seed fires immediately with a non-null time.
+    expect(spy).toHaveBeenCalled();
+
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ events: [], start_time: '2026-02-03T04:05:00Z' }),
+    });
+    await service.reconnect({ pipelineId: 'p1', taskId: 't1', active: true });
+    expect(service.getSessionStartTime()).toBe(Date.parse('2026-02-03T04:05:00Z'));
+  });
+
   it('restores a persisted session on construction', () => {
     localStorage.setItem('ajapopaja:coderbot:session', JSON.stringify({ pipeline_id: 'p9', task_id: 't9', active: false }));
     const s = makeService();

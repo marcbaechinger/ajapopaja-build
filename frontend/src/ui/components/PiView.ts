@@ -31,6 +31,10 @@ export interface PiSessionService {
   getHistory(): RenderBlock[];
   getCurrentTaskId(): string | null;
   isActive(): boolean;
+  /** Wall-clock start (epoch ms) of the session, when known. */
+  getSessionStartTime(): number | null;
+  /** Subscribe to session start-time updates (e.g. post-history-load). */
+  onSessionStartTimeChange(listener: (startTime: number | null) => void): () => void;
   clearHistory(): void;
   stopSession(taskId: string): Promise<unknown>;
   onBlocks(listener: (blocks: RenderBlock[]) => void): () => void;
@@ -982,11 +986,29 @@ export class PiView {
     this.updateStopButtonVisibility(active);
     this.syncSessionState(active);
 
+    // Resume the "Running since" timer from the session's actual start time
+    // (captured server-side) rather than from the moment this PiView was created,
+    // so re-attaching to a running session keeps the real elapsed time.
+    const start = this.service.getSessionStartTime();
+    if (start !== null && active) {
+      this.setStartTimeReference(start);
+    }
+
     // Subscribe to state changes
     this.unsubs.push(
       this.service.onSessionStateChange((active) => {
         this.updateStopButtonVisibility(active);
         this.syncSessionState(active);
+      })
+    );
+
+    // When the server-reported start time is loaded asynchronously (e.g. history
+    // fetched on mount), adopt it so the displayed elapsed time resumes correctly.
+    this.unsubs.push(
+      this.service.onSessionStartTimeChange((start) => {
+        if (start !== null && this.sessionActive) {
+          this.setStartTimeReference(start);
+        }
       })
     );
   }
@@ -1614,7 +1636,10 @@ export class PiView {
     this.sessionActive = active;
     if (active) {
       this.hasRunSession = true;
-      if (this.startTime === null) this.startTime = Date.now();
+      if (this.startTime === null) {
+        // Prefer the server-reported session start time; fall back to now.
+        this.startTime = this.service.getSessionStartTime() ?? Date.now();
+      }
       this.updateStatusDot();
       this.startStatusTimer();
     } else {
@@ -1626,6 +1651,17 @@ export class PiView {
       this.updateStatusDot();
     }
     this.updateEmptyState();
+    this.updateStatusText();
+  }
+
+  /**
+   * (Re)anchors the running-timer to an authoritative session start time. Only
+   * meaningful while a session is active; updates the displayed elapsed time.
+   */
+  private setStartTimeReference(ts: number) {
+    if (!this.sessionActive) return;
+    this.startTime = ts;
+    this.startStatusTimer();
     this.updateStatusText();
   }
 

@@ -46,6 +46,11 @@ class CoderBotManager:
             "pipeline_id": session.pipeline_id,
             "task_id": session.task_id,
             "is_active": session is self._active_session,
+            # Expose the session's wall-clock start time so the UI can resume its
+            # elapsed-time display from the real session start on re-attach.
+            "start_time": (
+                session.start_time.isoformat() if session.start_time else None
+            ),
         }
 
     def set_default_model(self, model: Optional[str]) -> None:

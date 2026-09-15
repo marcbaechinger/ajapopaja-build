@@ -35,6 +35,8 @@ function createStubService(overrides: Partial<PiSessionService> = {}) {
     getHistory: vi.fn(() => []),
     getCurrentTaskId: vi.fn(() => null),
     isActive: vi.fn(() => false),
+    getSessionStartTime: vi.fn(() => null),
+    onSessionStartTimeChange: vi.fn(() => () => {}),
     clearHistory: vi.fn(),
     stopSession: vi.fn(async () => {}),
     onBlocks: vi.fn((l) => {
@@ -467,6 +469,52 @@ describe('PiView', () => {
 
     vi.advanceTimersByTime(2000);
     expect(text.textContent).toContain('00:00:02');
+
+    view.destroy();
+    vi.useRealTimers();
+  });
+
+  it('resumes the running timer from the server-reported session start time', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-02-03T04:05:10Z'));
+    const startMs = Date.parse('2026-02-03T04:05:00Z'); // 10s before "now".
+    const { service } = createStubService({
+      isActive: vi.fn(() => true),
+      getSessionStartTime: vi.fn(() => startMs),
+    });
+    const view = new PiView(service, mount);
+    view.render();
+
+    const text = mount.querySelector('#piview-status-text') as HTMLElement;
+    expect(text.textContent).toContain('00:00:10');
+
+    view.destroy();
+    vi.useRealTimers();
+  });
+
+  it('adopts the session start time once the server reports it after history loads', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-02-03T04:05:10Z'));
+    const { service } = createStubService({
+      isActive: vi.fn(() => true),
+      getSessionStartTime: vi.fn(() => null),
+    });
+    const view = new PiView(service, mount);
+    view.render();
+
+    // Before the server start time arrives the timer is anchored at creation time.
+    let text = mount.querySelector('#piview-status-text') as HTMLElement;
+    expect(text.textContent).toContain('00:00:00');
+
+    // The asynchronous history load reports the real session start (10s ago).
+    const startMs = Date.parse('2026-02-03T04:05:00Z');
+    const startListeners = (service.onSessionStartTimeChange as any).mock.calls.map(
+      (c: any) => c[0]
+    );
+    startListeners.forEach((l: any) => l(startMs));
+
+    text = mount.querySelector('#piview-status-text') as HTMLElement;
+    expect(text.textContent).toContain('00:00:10');
 
     view.destroy();
     vi.useRealTimers();

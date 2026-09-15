@@ -621,6 +621,8 @@ describe('PipelineDetailView CoderBot Dialog', () => {
         getHistory: vi.fn(() => []),
         getCurrentTaskId: vi.fn(() => null),
         isActive: vi.fn(() => false),
+        getSessionStartTime: vi.fn(() => null),
+        onSessionStartTimeChange: vi.fn(() => () => {}),
         clearHistory: vi.fn(),
         stopSession: vi.fn().mockResolvedValue({}),
         onBlocks: vi.fn(() => () => {}),
