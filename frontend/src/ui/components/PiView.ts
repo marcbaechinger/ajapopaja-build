@@ -428,14 +428,12 @@ export class PiView {
     );
     actions.appendChild(nextErrorBtn);
 
-    const copyAllBtn = this.createButton(
-      'copy-all-log',
-      'Copy entire log',
-      Icon.render('copyRects', { size: 14, label: 'Copy entire log' }),
-      'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer',
-      { id: 'copy-all-btn' }
-    );
-    actions.appendChild(copyAllBtn);
+    // Right-aligned group of footer buttons, ordered left-to-right: the
+    // "Open in Dialog" button, the "Copy entire log" button, and the search
+    // toggle. Move them out of the left-side action group so the frequently used
+    // actions are grouped together on the right edge of the action bar.
+    const rightActions = document.createElement('div');
+    rightActions.className = 'flex gap-2';
 
     // "Open in Dialog" action: lets an embedding host pop this compact log out
     // into a full-size dialog (e.g. the CoderBotDialog). Only rendered when the
@@ -449,8 +447,17 @@ export class PiView {
         'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center justify-center cursor-pointer',
         { id: 'open-dialog-btn' }
       );
-      actions.appendChild(openDialogBtn);
+      rightActions.appendChild(openDialogBtn);
     }
+
+    const copyAllBtn = this.createButton(
+      'copy-all-log',
+      'Copy entire log',
+      Icon.render('copyRects', { size: 14, label: 'Copy entire log' }),
+      'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer',
+      { id: 'copy-all-btn' }
+    );
+    rightActions.appendChild(copyAllBtn);
 
     const searchToggleBtn = this.createButton(
       'toggle-search',
@@ -459,9 +466,12 @@ export class PiView {
       'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer',
       { id: 'search-toggle-btn', ariaPressed: false }
     );
-    // Main action buttons on the left, search toggle right-aligned.
+    rightActions.appendChild(searchToggleBtn);
+
+    // Main action buttons on the left, the (open-dialog / copy / search)
+    // group right-aligned.
     actionsRow.appendChild(actions);
-    actionsRow.appendChild(searchToggleBtn);
+    actionsRow.appendChild(rightActions);
 
     footer.appendChild(actionsRow);
 
