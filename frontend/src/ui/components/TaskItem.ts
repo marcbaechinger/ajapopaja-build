@@ -111,14 +111,14 @@ export class TaskItem {
               ${Icon.render('chevronRight', { size: 16, className: `transform transition-transform ${isCollapsed ? '' : 'rotate-90'}` })}
             </div>
             <div class="title-container flex flex-col" data-task-id="${taskId}" data-version="${task.version}">
-              <div class="title-view flex items-center gap-2 ${isEditableTitle ? 'cursor-pointer group/title' : ''}">
+              <div class="title-view flex items-center gap-2 ${isEditableTitle ? 'cursor-pointer group/title' : ''}" ${isEditableTitle ? 'data-action-click="edit_title"' : ''}>
                 <span class="font-medium text-app-text text-lg">${task.title}</span>
                 ${isEditableTitle ? Icon.render('edit', { size: 12, dataAttrs: titleEditAttributes, className: 'text-app-muted opacity-0 group-hover/title:opacity-100 transition-opacity' }) : ''}
               </div>
               ${isEditableTitle ? `
                 <div class="title-edit hidden flex flex-col gap-2 mt-1">
                   <input type="text" class="w-full bg-app-bg border border-app-border rounded px-2 py-1 text-lg text-app-text outline-none focus:ring-1 focus:ring-app-accent-1" 
-                         value="${task.title.replace(/"/g, '&quot;')}" placeholder="Task title">
+                         value="${task.title.replace(/"/g, '&quot;')}" placeholder="Task title" data-action-keydown="save_title">
                   <div class="flex gap-2 justify-end">
                     <button data-action-click="cancel_title_edit" class="text-[10px] text-app-muted hover:text-app-text px-2 py-1 cursor-pointer">Cancel</button>
                     <button data-action-click="save_title" class="text-[10px] bg-app-accent-1 text-white px-3 py-1 rounded hover:brightness-110 cursor-pointer">Save</button>
