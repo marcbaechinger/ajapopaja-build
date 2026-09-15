@@ -654,6 +654,10 @@ export class PipelineDetailView extends View {
       console.log(`[title-save] ${taskId} (version=${version}): saving title -> "${newTitle}"`);
       try {
         await this.context.taskClient.updateDetails(taskId, version, { title: newTitle });
+        // After a successful save, leave title edit mode and move the cursor
+        // into the Specification textarea so the user can keep describing the
+        // task seamlessly.
+        this.focusSpecAfterTitleSave(container);
         // WS will refresh
       } catch (error) {
         alert('Failed to save title');
@@ -1614,6 +1618,34 @@ export class PipelineDetailView extends View {
     if (this.pendingSpecEditTaskId && fresh.id === this.pendingSpecEditTaskId) {
       this.enterSpecEditMode();
     }
+  }
+
+  /**
+   * Transitions the just-saved title from edit mode back to view mode and then
+   * focuses the task's Specification textarea (opening it for editing) so the
+   * user can continue seamlessly by specifying the task, without the previous
+   * collapse/expand action interfering.
+   */
+  private focusSpecAfterTitleSave(titleContainer: HTMLElement) {
+    if (!this.container) return;
+
+    // 1) Switch the title edit form back to the rendered title view.
+    titleContainer.querySelector('.title-edit')?.classList.add('hidden');
+    titleContainer.querySelector('.title-view')?.classList.remove('hidden');
+
+    // 2) Locate the task card owning this title and open its Specification.
+    const taskId = titleContainer.closest('[data-view-id]')?.getAttribute('data-view-id');
+    if (!taskId) return;
+    const taskEl = this.container.querySelector(`[data-view-id="${taskId}"]`) as HTMLElement | null;
+    if (!taskEl) return;
+    const specContainer = taskEl.querySelector('.spec-container') as HTMLElement | null;
+    if (!specContainer) return;
+
+    specContainer.querySelector('.spec-view')?.classList.add('hidden');
+    specContainer.querySelector('[data-action-click="toggle_spec_expand"]')?.classList.add('hidden');
+    specContainer.querySelector('.spec-edit')?.classList.remove('hidden');
+    const textarea = specContainer.querySelector('textarea') as HTMLTextAreaElement | null;
+    if (textarea) textarea.focus();
   }
 
   /**
