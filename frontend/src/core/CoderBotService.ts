@@ -131,6 +131,14 @@ export class CoderBotService {
         this.addVerificationBlock(msg.payload.result);
       }
     });
+
+    // Broadcast emitted right before the post-run verification commands start,
+    // so PiView can tell the user the mandatory test suite is now running.
+    this.wsClient.on('CODERBOT_VERIFICATION_STARTED', (msg) => {
+      if (msg.payload?.bot_type === 'coderbot') {
+        this.addBlock({ kind: 'notice', text: '● Verification: running tests…' });
+      }
+    });
   }
 
   // ---------------------------------------------------------------------------

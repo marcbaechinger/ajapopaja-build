@@ -699,6 +699,33 @@ async def test_coderbot_handle_agent_end_runs_verification_and_annotates_pr(
     assert verif_msgs, "Expected a CODERBOT_VERIFICATION broadcast"
     assert verif_msgs[0].args[0].payload["result"]["passed"] is False
 
+    # A CODERBOT_VERIFICATION_STARTED event must be broadcast before the tests
+    # run so the frontend can tell the user the verification is starting.
+    started_msgs = [
+        c
+        for c in mock_broadcast.await_args_list
+        if isinstance(c.args[0], WSMessage)
+        and c.args[0].type == "CODERBOT_VERIFICATION_STARTED"
+    ]
+    assert started_msgs, "Expected a CODERBOT_VERIFICATION_STARTED broadcast"
+    assert started_msgs[0].args[0].payload["task_id"] == str(task.id)
+    assert started_msgs[0].args[0].payload["pipeline_id"] == "p1"
+
+    # The start notification must be emitted before the verification itself.
+    started_idx = next(
+        i
+        for i, c in enumerate(mock_broadcast.await_args_list)
+        if isinstance(c.args[0], WSMessage)
+        and c.args[0].type == "CODERBOT_VERIFICATION_STARTED"
+    )
+    verif_idx = next(
+        i
+        for i, c in enumerate(mock_broadcast.await_args_list)
+        if isinstance(c.args[0], WSMessage)
+        and c.args[0].type == "CODERBOT_VERIFICATION"
+    )
+    assert started_idx < verif_idx
+
     # The PR must be created with an annotated summary flagging the failure.
     prs = await PullRequest.find(PullRequest.task_id == str(task.id)).to_list()
     assert len(prs) == 1

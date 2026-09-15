@@ -218,6 +218,31 @@ describe('CoderBotService RPC stream', () => {
     });
     expect(history.filter((b) => b.kind === 'verification')).toHaveLength(0);
   });
+
+  it('renders a notice when CODERBOT_VERIFICATION_STARTED is received', () => {
+    ws.dispatch('CODERBOT_VERIFICATION_STARTED', {
+      task_id: 't1',
+      pipeline_id: 'p1',
+      bot_type: 'coderbot',
+    });
+    const notices = history.filter(
+      (b) => b.kind === 'notice' && /verification/i.test(b.text),
+    );
+    expect(notices).toHaveLength(1);
+    expect(notices[0].text).toContain('running');
+  });
+
+  it('ignores CODERBOT_VERIFICATION_STARTED for non-coderbot bot types', () => {
+    ws.dispatch('CODERBOT_VERIFICATION_STARTED', {
+      task_id: 't1',
+      pipeline_id: 'p1',
+      bot_type: 'docbot',
+    });
+    const notices = history.filter(
+      (b) => b.kind === 'notice' && /verification/i.test(b.text),
+    );
+    expect(notices).toHaveLength(0);
+  });
 });
 
 describe('CoderBotService session tracking / reconnect', () => {

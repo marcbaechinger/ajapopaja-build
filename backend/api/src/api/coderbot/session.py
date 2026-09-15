@@ -529,6 +529,19 @@ class CoderBotSession:
             # but its summary flags any failing command.
             verification_results = None
             if config.CODERBOT_RUN_TESTS:
+                # Broadcast that the post-run verification is starting so PiView
+                # can tell the user the mandatory test suite is running, before we
+                # kick off the (potentially slow) test commands.
+                await ws_manager.broadcast(
+                    WSMessage(
+                        type="CODERBOT_VERIFICATION_STARTED",
+                        payload={
+                            "task_id": self.task_id,
+                            "pipeline_id": self.pipeline_id,
+                            "bot_type": "coderbot",
+                        },
+                    )
+                )
                 verification_results = await self._run_verification()
                 self._log_event(
                     {"type": "coderbot_verification", "result": verification_results}
