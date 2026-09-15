@@ -639,17 +639,26 @@ export class CoderBotService {
 
   private async loadHistory(taskId: string, key: string): Promise<void> {
     try {
-      let events: any[] = [];
-      let startTime: number | null = null;
+      // The session start time is now delivered by the /session endpoint straight
+      // from the backend's in-memory CoderBotManager (no longer read back from the
+      // session log files), so it is adopted here cheaply rather than through the
+      // history replay. Doing it first means the running-since display is anchored
+      // to the real session start as soon as the history load resolves.
       try {
-        const history = await this.fetchSessionHistory(taskId);
-        events = history.events ?? [];
-        startTime = this.parseStartTime(history.start_time);
+        const session = await this.fetchSession();
+        if (session?.start_time) {
+          this.setSessionStartTime(this.parseStartTime(session.start_time));
+        }
+      } catch (e) {
+        console.error('Failed to adopt CoderBot session start time', e);
+      }
+
+      let events: any[] = [];
+      try {
+        events = await this.fetchSessionHistory(taskId);
       } catch (e) {
         console.error('Failed to load CoderBot session history', e);
       }
-
-      if (startTime !== null) this.setSessionStartTime(startTime);
 
       // Rebuild the activity log by replaying the same reducer over the persisted
       // events, so past output of this session is preserved after a reload.
@@ -708,17 +717,14 @@ export class CoderBotService {
     return await response.json();
   }
 
-  private async fetchSessionHistory(taskId: string): Promise<{ events: any[]; start_time?: string | null }> {
+  private async fetchSessionHistory(taskId: string): Promise<any[]> {
     const token = this.authService.getAccessToken();
     const response = await fetch(`/api/coderbot/session/${taskId}/history`, {
       headers: { 'Authorization': `Bearer ${token}` },
     });
-    if (!response.ok) return { events: [] };
+    if (!response.ok) return [];
     const data = await response.json();
-    return {
-      events: Array.isArray(data?.events) ? data.events : [],
-      start_time: data?.start_time,
-    };
+    return Array.isArray(data?.events) ? data.events : [];
   }
 
   private setSessionActive(active: boolean) {

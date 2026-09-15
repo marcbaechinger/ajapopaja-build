@@ -304,13 +304,14 @@ describe('CoderBotService session tracking / reconnect', () => {
     expect(texts()).toHaveLength(1);
     expect(LAST(texts()).text).toBe('hello');
 
-    // A subsequent reconnect for the same session must not replay duplicates.
+    // A subsequent reconnect for the same session must not replay duplicates:
+    // history (and the session start-time lookup) are deduped after the first load.
     await service.reconnect({ pipelineId: 'p1', taskId: 't1', active: true });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2); // one /session + one /history
     expect(texts()).toHaveLength(1);
   });
 
-  it('adopts the server-reported session start time from history', async () => {
+  it('adopts the server-reported session start time from the /session endpoint after reconnect', async () => {
     ws.dispatch('CODERBOT_STARTED', { task_id: 't1', pipeline_id: 'p1' });
     fetchMock.mockResolvedValue({
       ok: true,
@@ -346,7 +347,7 @@ describe('CoderBotService session tracking / reconnect', () => {
 
     fetchMock.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ events: [], start_time: '2026-02-03T04:05:00Z' }),
+      json: () => Promise.resolve({ start_time: '2026-02-03T04:05:00Z' }),
     });
     await service.reconnect({ pipelineId: 'p1', taskId: 't1', active: true });
     expect(service.getSessionStartTime()).toBe(Date.parse('2026-02-03T04:05:00Z'));
@@ -358,13 +359,14 @@ describe('CoderBotService session tracking / reconnect', () => {
     expect(s.service.getCurrentSession()).toEqual({ pipelineId: 'p9', taskId: 't9', active: false });
   });
 
-  it('reconnect storms share a single history fetch', async () => {
+  it('reconnect storms share a single history load', async () => {
     ws.dispatch('CODERBOT_STARTED', { task_id: 't1', pipeline_id: 'p1' });
     const a = service.reconnect({ pipelineId: 'p1', taskId: 't1', active: true });
     const b = service.reconnect({ pipelineId: 'p1', taskId: 't1', active: true });
     const c = service.reconnect({ pipelineId: 'p1', taskId: 't1', active: true });
     await Promise.all([a, b, c]);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // One shared in-flight load -> one /session + one /history fetch total.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('does not notify session state listeners when active is unchanged', () => {

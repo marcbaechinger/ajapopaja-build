@@ -102,52 +102,25 @@ def slugify(task_id: str) -> str:
     return sanitized
 
 
-def _read_start_time(log_dir) -> Optional[str]:
-    """Read the start timestamp of the most recent CoderBot session for a task.
-
-    Each session logs a ``session_start`` event (with the timestamp attached by
-    ``_log_event``) as its first line. Because log files are named with a
-    monotonically increasing timestamp, the newest log file holds the most recent
-    session; within that file the ``session_start`` line captures when the session
-    began. The wall-clock timestamp (ISO-8601 string) is returned so the UI can
-    resume its "Running since" elapsed-time display across re-mounts.
-    """
-    if not log_dir.exists():
-        return None
-
-    for log_file in sorted(log_dir.glob("coderbot_*.jsonl"), reverse=True):
-        try:
-            with open(log_file, "r", encoding="utf-8") as fh:
-                for line in fh:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        data = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-                    if data.get("type") == "session_start":
-                        return data.get("timestamp")
-        except Exception as e:
-            logger.error(f"Failed to read CoderBot log {log_file}: {e}")
-    return None
-
-
-def read_session_history(task_id: str) -> tuple:
+def read_session_history(task_id: str) -> list:
     """Replay the persisted Pi RPC events of a CoderBot session for a task.
 
     Each session writes its events as JSONL lines (``type == "pi_rpc_event"``)
-    under ``SANDBOX_ROOT/logs/{slugify(task_id)}``. Returns a ``(events, start_time)``
-    tuple where ``events`` is the ordered list of raw RPC events (the same shape the
-    ``CODERBOT_RPC_EVENT`` websocket message carries) so the client can reduce them
-    into its activity log, and ``start_time`` is the ISO-8601 timestamp of when the
-    most recent session started. Reads the most recent log file(s) so the latest run
-    of a task wins.
+    under ``SANDBOX_ROOT/logs/{slugify(task_id)}``. Returns the ordered list of raw
+    RPC events (the same shape the ``CODERBOT_RPC_EVENT`` websocket message carries)
+    so the client can reduce them into its activity log. Reads the most recent log
+    file(s) so the latest run of a task wins.
+
+    Note: the session start time is deliberately NOT read back from the files here.
+    It is delivered for the active (or last) session via the ``/coderbot/session``
+    endpoint straight from the in-memory :class:`CoderBotManager`, which lets the
+    history replay avoid the extra, comparatively expensive file scan that used to
+    be needed just to recover the start timestamp.
     """
     log_dir = config.SANDBOX_ROOT / "logs" / slugify(task_id)
     events: list = []
     if not log_dir.exists():
-        return events, None
+        return events
 
     for log_file in sorted(log_dir.glob("coderbot_*.jsonl"), reverse=True):
         try:
@@ -166,7 +139,7 @@ def read_session_history(task_id: str) -> tuple:
                         events.append(data["event"])
         except Exception as e:
             logger.error(f"Failed to read CoderBot log {log_file}: {e}")
-    return events, _read_start_time(log_dir)
+    return events
 
 
 class CoderBotSession:

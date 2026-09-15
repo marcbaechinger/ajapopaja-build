@@ -37,49 +37,13 @@ def test_read_session_history_replays_rpc_events(tmp_path):
     log.write_text("\n".join(json.dumps(line) for line in lines) + "\n")
 
     with patch.object(session_module.config, "SANDBOX_ROOT", tmp_path):
-        events, start_time = read_session_history("t1")
+        events = read_session_history("t1")
 
     assert len(events) == 2
     assert events[0]["type"] == "agent_start"
     assert events[1]["type"] == "message_update"
-    # No session_start line present, so no start time is reported.
-    assert start_time is None
 
 
 def test_read_session_history_empty_when_no_log(tmp_path):
     with patch.object(session_module.config, "SANDBOX_ROOT", tmp_path):
-        assert read_session_history("t1") == ([], None)
-
-
-def test_read_session_history_reports_latest_session_start_time(tmp_path):
-    task_dir = tmp_path / "logs" / "t1"
-    task_dir.mkdir(parents=True)
-    # Two runs for the same task; the newest file wins for the start time.
-    older = task_dir / "coderbot_20260101_000000.jsonl"
-    older.write_text(
-        json.dumps(
-            {
-                "type": "session_start",
-                "timestamp": "2026-01-01T00:00:00+00:00",
-                "task_id": "t1",
-            }
-        )
-        + "\n"
-    )
-    newer = task_dir / "coderbot_20260102_000000.jsonl"
-    newer.write_text(
-        json.dumps(
-            {
-                "type": "session_start",
-                "timestamp": "2026-01-02T00:00:00+00:00",
-                "task_id": "t1",
-            }
-        )
-        + "\n"
-    )
-
-    with patch.object(session_module.config, "SANDBOX_ROOT", tmp_path):
-        events, start_time = read_session_history("t1")
-
-    assert events == []
-    assert start_time == "2026-01-02T00:00:00+00:00"
+        assert read_session_history("t1") == []
