@@ -20,12 +20,12 @@ import tempfile
 import git
 import pytest
 
+from api.assistant.tools.command_runner import CommandRunner
 from api.assistant.tools.file_tools import (
     list_project_structure,
     read_source_file,
 )
 from api.assistant.tools.pipeline_tools import run_tests
-from api.assistant.tools.test_runner import TestRunner
 from core.models.models import Pipeline
 
 
@@ -174,7 +174,7 @@ async def test_run_tests_no_test_commands(init_mock_db):
 
 @pytest.mark.asyncio
 async def test_run_tests_started_and_reports_result_async(init_mock_db):
-    """run_tests returns immediately and delivers the result via TestRunner."""
+    """run_tests returns immediately and delivers the result via CommandRunner."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         # run_tests resolves the workspace via git_utils, which requires a repo.
         git.Repo.init(tmp_dir)
@@ -200,7 +200,7 @@ async def test_run_tests_started_and_reports_result_async(init_mock_db):
 
         # Register the completion handler before yielding control back to the
         # event loop so the background task is guaranteed to observe it.
-        TestRunner.register_on_complete(
+        CommandRunner.register_on_complete(
             result["run_id"], on_complete, {"id": "legacy_id"}
         )
 
@@ -232,7 +232,7 @@ async def test_run_tests_reports_failure_when_command_fails(init_mock_db):
 
         result = await run_tests(str(pipeline.id))
         assert result["status"] == "started"
-        TestRunner.register_on_complete(result["run_id"], on_complete)
+        CommandRunner.register_on_complete(result["run_id"], on_complete)
 
         await asyncio.wait_for(finished.wait(), timeout=30)
         assert captured["results"]["passed"] is False

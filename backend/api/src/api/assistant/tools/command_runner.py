@@ -12,14 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Async test runner shared between the ``run_tests`` assistant tool and the
-CoderBot post-run verification hook.
+"""Async command runner shared between assistant tools (e.g. the ``run_tests``
+tool) and the CoderBot post-run verification hook.
 
 It runs each configured argv list against a workspace in its own process group
 (so runaway commands and their descendants can be killed together) under a
 timeout from ``config.CODERBOT_VERIFICATION_TIMEOUT``. Execution happens in a
-dedicated background ``asyncio`` task so a long-running test suite never blocks
-the event-loop thread of the tool call that scheduled it.
+dedicated background ``asyncio`` task so a long-running command sequence never
+blocks the event-loop thread of the tool call that scheduled it.
 """
 
 import asyncio
@@ -49,7 +49,7 @@ async def _terminate_proc_tree(proc, cmd_str: str) -> None:
     try:
         os.killpg(proc.pid, signal.SIGTERM)
     except (ProcessLookupError, PermissionError, AttributeError):
-        logger.warning("Could not SIGTERM test process group for '%s'.", cmd_str)
+        logger.warning("Could not SIGTERM command process group for '%s'.", cmd_str)
     try:
         await asyncio.wait_for(proc.wait(), timeout=5)
         return
@@ -59,11 +59,11 @@ async def _terminate_proc_tree(proc, cmd_str: str) -> None:
     try:
         os.killpg(proc.pid, signal.SIGKILL)
     except (ProcessLookupError, PermissionError, AttributeError):
-        logger.warning("Could not SIGKILL test process group for '%s'.", cmd_str)
+        logger.warning("Could not SIGKILL command process group for '%s'.", cmd_str)
     try:
         await asyncio.wait_for(proc.wait(), timeout=5)
     except asyncio.TimeoutError:
-        logger.error("Test command '%s' did not die after SIGKILL.", cmd_str)
+        logger.error("Command '%s' did not die after SIGKILL.", cmd_str)
 
 
 def _verification_timeout() -> float:
@@ -71,7 +71,7 @@ def _verification_timeout() -> float:
 
 
 async def run_single_command(entry: List[str], workspace_path: str) -> Dict[str, Any]:
-    """Runs a single argv list as a test command under a timeout.
+    """Runs a single argv list as a command under a timeout.
 
     Returns a command result dict with an exit code and an output tail. A
     ``None`` exit code signals a timeout or spawn failure (so the aggregate
@@ -93,7 +93,7 @@ async def run_single_command(entry: List[str], workspace_path: str) -> Dict[str,
         tail = out.decode(errors="replace")[-2000:]
         exit_code = proc.returncode
         logger.info(
-            "Test command '%s' finished with exit code %s.",
+            "Command '%s' finished with exit code %s.",
             cmd_str,
             exit_code,
         )
@@ -104,7 +104,7 @@ async def run_single_command(entry: List[str], workspace_path: str) -> Dict[str,
         }
     except asyncio.TimeoutError:
         logger.error(
-            "Test command '%s' timed out after %ss; terminating it and its children.",
+            "Command '%s' timed out after %ss; terminating it and its children.",
             cmd_str,
             _verification_timeout(),
         )
@@ -114,13 +114,13 @@ async def run_single_command(entry: List[str], workspace_path: str) -> Dict[str,
             "cmd": cmd_str,
             "exit_code": None,
             "output_tail": (
-                f"Test command timed out after {_verification_timeout()}s "
+                f"Command timed out after {_verification_timeout()}s "
                 f"and was terminated."
             ),
         }
     except Exception as e:
         logger.error(
-            "Test command failed to run (%s): %s",
+            "Command failed to run (%s): %s",
             cmd_str,
             e,
             exc_info=True,
@@ -150,14 +150,14 @@ async def run_command_sequence(
     return results
 
 
-class TestRunner:
-    """Schedules async test runs and delivers their result via a callback.
+class CommandRunner:
+    """Schedules async command runs and delivers their result via a callback.
 
-    ``run_tests`` schedules ``TestRunner.dispatch`` as a background asyncio task
-    and returns immediately. When the whole command sequence has finished, the
-    registered ``on_complete`` handler (provided by the AssistantSession) is
-    invoked with the aggregate result so it can be delivered back as the tool
-    response.
+    Tools such as ``run_tests`` schedule ``CommandRunner.dispatch`` as a
+    background asyncio task and return immediately. When the whole command
+    sequence has finished, the registered ``on_complete`` handler (provided by
+    the AssistantSession) is invoked with the aggregate result so it can be
+    delivered back as the tool response.
     """
 
     _handlers: Dict[str, CompletionHandler] = {}
@@ -186,7 +186,7 @@ class TestRunner:
             results = await run_command_sequence(commands, workspace_path)
             results["run_id"] = run_id
         except Exception as e:
-            logger.error("Test run '%s' failed: %s", run_id, e, exc_info=True)
+            logger.error("Command run '%s' failed: %s", run_id, e, exc_info=True)
             results = {
                 "run_id": run_id,
                 "commands": [],
@@ -199,4 +199,6 @@ class TestRunner:
             try:
                 await handler(results, tool_ref)
             except Exception as e:
-                logger.error("Test run '%s' completion handler failed: %s", run_id, e)
+                logger.error(
+                    "Command run '%s' completion handler failed: %s", run_id, e
+                )

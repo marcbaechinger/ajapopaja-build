@@ -93,14 +93,14 @@ class AssistantSession:
             and result.get("status") == "started"
             and result.get("run_id")
         ):
-            from api.assistant.tools.test_runner import TestRunner
+            from api.assistant.tools.command_runner import CommandRunner
 
             tool_ref = {
                 "id": tool_call.get("id", "legacy_id"),
                 "type": "function",
                 "function": tool_call.get("function", {}),
             }
-            TestRunner.register_on_complete(
+            CommandRunner.register_on_complete(
                 result["run_id"], self._deliver_test_result, tool_ref
             )
 

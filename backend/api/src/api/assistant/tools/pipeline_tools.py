@@ -20,7 +20,7 @@ from api.assistant.decorators import register_tool
 from core.queries import pipeline as pipeline_queries
 from core.utils import git_utils
 
-from .test_runner import TestRunner
+from .command_runner import CommandRunner
 
 # Tool Categories
 WRITE_ACCESS = "write_access"
@@ -81,7 +81,7 @@ async def run_tests(pipeline_id: str) -> Dict[str, Any]:
     # Schedule the run in a background task so this tool call returns promptly;
     # the AssistantSession registers a completion handler for ``run_id`` that
     # delivers the aggregate result back as the tool response when it finishes.
-    asyncio.create_task(TestRunner.dispatch(run_id, commands, workspace_path))
+    asyncio.create_task(CommandRunner.dispatch(run_id, commands, workspace_path))
 
     return {
         "status": "started",
