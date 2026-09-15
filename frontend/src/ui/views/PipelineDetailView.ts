@@ -585,7 +585,7 @@ export class PipelineDetailView extends View {
     });
 
     this.context.actionRegistry.register('select_task', (_e, el) => {
-      const taskId = (el.closest('[data-view-id]') as HTMLElement | null)?.getAttribute('data-view-id') || el.getAttribute('data-view-id');
+      const taskId = (el.closest('[data-view-id]') as HTMLElement | null)?.getAttribute('data-view-id') || el.getAttribute('data-view-id') || el.getAttribute('data-task-id');
       if (!taskId) return;
       this.pendingSpecEditTaskId = null;
       this.selectedTask = this.allLoadedTasks.find(t => t.id === taskId) || null;

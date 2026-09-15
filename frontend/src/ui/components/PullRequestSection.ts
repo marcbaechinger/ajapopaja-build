@@ -61,6 +61,10 @@ export class PullRequestSection {
             ${pr.status === PullRequestStatus.SUBMITTED ? `<span class="ml-2 text-[10px] font-bold bg-app-accent-2/20 text-app-accent-2 px-2 py-0.5 rounded-full border border-app-accent-2/30 uppercase tracking-widest">Submitted</span>` : ''}
           </div>
           <div class="flex gap-2 shrink-0">
+             <button data-action-click="select_task" data-task-id="${pr.task_id}" class="px-4 py-2 bg-app-surface text-app-text text-[10px] font-black uppercase tracking-widest rounded-xl border border-app-border hover:border-app-accent-2/40 hover:text-app-accent-2 transition-all shadow-sm cursor-pointer flex items-center gap-2" title="Set as selected task">
+               ${Icon.render('eye', { size: 14 })}
+               View Task
+             </button>
              <button data-action-click="accept_pr" data-task-id="${pr.task_id}" data-pr-id="${pr.id}" class="px-4 py-2 bg-green-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-green-500 transition-all shadow-lg shadow-green-900/20 cursor-pointer flex items-center gap-2">
                ${Icon.render('check', { size: 14 })}
                ${pullRequestAcceptLabel(pr)}
