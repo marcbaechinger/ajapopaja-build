@@ -651,6 +651,20 @@ export class PipelineDetailView extends View {
       const newTitle = input.value.trim();
       if (!newTitle) return;
 
+      // No-op when the title is unchanged: pressing Enter (or clicking Save)
+      // without editing the text must not trigger an update. Saving anyway would
+      // bump ``updated_at`` on the server, which surfaces as a task update where
+      // ``prev.title === next.title`` and therefore falls through to a full
+      // TaskItem re-render, discarding any unrelated unsaved edits (e.g. an
+      // open Specification or Design Doc). Swallow the event so it does not
+      // propagate further while still leaving no-op as intended.
+      const currentTitle = container.querySelector<HTMLElement>('.title-view span.font-medium')?.textContent?.trim() ?? '';
+      if (newTitle === currentTitle) {
+        _e.preventDefault?.();
+        _e.stopPropagation?.();
+        return;
+      }
+
       console.log(`[title-save] ${taskId} (version=${version}): saving title -> "${newTitle}"`);
       try {
         await this.context.taskClient.updateDetails(taskId, version, { title: newTitle });
