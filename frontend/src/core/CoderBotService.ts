@@ -43,6 +43,13 @@ export interface RenderBlock {
   sub?: string[];
   /** Marks error blocks for red tinting. */
   error?: boolean;
+  /**
+   * The original command/argument captured when a tool started (e.g. the bash
+   * command or the file a read/write tool operated on). Preserving it keeps
+   * "what was executed" visible after the tool completes and its header becomes
+   * "✓ bash finished"; the view prepends it before the result/output.
+   */
+  command?: string;
 }
 
 type BlockListener = (blocks: RenderBlock[]) => void;
@@ -50,6 +57,8 @@ type BlockListener = (blocks: RenderBlock[]) => void;
 interface OpenBlock {
   block: RenderBlock;
   buffer: string;
+  /** The original command/argument captured at tool start (see RenderBlock.command). */
+  command?: string;
 }
 
 /**
@@ -306,8 +315,10 @@ export class CoderBotService {
     }
     const args = event.args?.command ?? this.previewArgs(event.args);
     if (args) {
-      open.buffer = String(args);
-      this.updateBlock(open.block.id, { text: open.buffer });
+      const command = String(args);
+      open.buffer = command;
+      open.command = command;
+      this.updateBlock(open.block.id, { text: open.buffer, command });
     }
   }
 
@@ -342,6 +353,8 @@ export class CoderBotService {
       header: isError ? `✕ ${event.toolName ?? 'tool'} failed` : `✓ ${event.toolName ?? 'tool'} finished`,
       text,
       error: isError,
+      // Keep the executed command/file so it stays visible after completion.
+      command: open.command,
     });
     this.openBlocks.delete(`tool:${event.toolCallId}`);
   }

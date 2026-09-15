@@ -1052,7 +1052,7 @@ export class PiView {
         const body = document.createElement('pre');
         body.setAttribute('data-role', 'body');
         body.className = 'whitespace-pre-wrap break-all text-green-300 mt-1 min-h-0';
-        body.textContent = block.text ?? '';
+        body.textContent = this.toolBodyText(block);
         if (this.blocksCollapsed) body.classList.add('hidden');
         wrapper.appendChild(body);
         el = wrapper;
@@ -1221,7 +1221,7 @@ export class PiView {
         const txt = (block.sub ?? []).join('\n');
         if (body.textContent !== txt) body.textContent = txt;
       } else {
-        const txt = block.text ?? '';
+        const txt = block.kind === 'tool' ? this.toolBodyText(block) : (block.text ?? '');
         if (body.textContent !== txt) body.textContent = txt;
       }
     } else {
@@ -1276,7 +1276,24 @@ export class PiView {
     if (block.kind === 'thinking') {
       return block.text ?? '';
     }
+    if (block.kind === 'tool') {
+      return [block.header ?? '', this.toolBodyText(block)].filter(Boolean).join('\n');
+    }
     return [block.header ?? '', block.text ?? ''].filter(Boolean).join('\n');
+  }
+
+  /**
+   * Body text for a `tool` block with the executed command prepended before the
+   * result/output, so the user still sees what was run once the tab text becomes
+   * "✓ bash finished" (or similar). When the body already leads with the command
+   * (e.g. the running initial state) it is returned unchanged to avoid duplicate.
+   */
+  private toolBodyText(block: RenderBlock): string {
+    const text = block.text ?? '';
+    const command = block.command;
+    if (!command) return text;
+    if (text.startsWith(command)) return text;
+    return command + (text ? `\n\n${text}` : '');
   }
 
   /** Extracts block text directly from the rendered DOM (excluding action buttons). */

@@ -168,6 +168,50 @@ describe('PiView', () => {
     expect(Array.from(container.querySelectorAll('div')).some((el) => el.textContent === 'plain')).toBe(true);
   });
 
+  it('prepends the executed command before the output for a finished tool block', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    // Tool streamed from "running" (command shown) to finished (result arrived).
+    // The block preserves the command so it stays visible after completion.
+    const running: RenderBlock = {
+      id: 'bash1',
+      kind: 'tool',
+      header: '→ Running bash…',
+      text: 'ls -la',
+      command: 'ls -la',
+    };
+    emitBlocks([running]);
+    let body = mount.querySelector('[data-role="body"]') as HTMLElement;
+    // Running state: body already leads with the command -> no duplication.
+    expect(body.textContent).toBe('ls -la');
+
+    const finished: RenderBlock = {
+      id: 'bash1',
+      kind: 'tool',
+      header: '✓ bash finished',
+      text: 'total 48\ndrwx------',
+      command: 'ls -la',
+    };
+    emitBlocks([finished]);
+    body = mount.querySelector('[data-role="body"]') as HTMLElement;
+    // Tab/header still changed to "bash finished".
+    expect(mount.querySelector('[data-role="header"]')?.textContent).toContain('bash finished');
+    // The command is preserved and prepended before the output.
+    expect(body.textContent).toBe('ls -la\n\ntotal 48\ndrwx------');
+  });
+
+  it('leaves tool block body unchanged when no command is stored', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    emitBlocks([{ id: 't', kind: 'tool', header: '✓ write finished', text: 'file written' }]);
+    const body = mount.querySelector('[data-role="body"]') as HTMLElement;
+    expect(body.textContent).toBe('file written');
+  });
+
   it('updateBlockEl updates header/body text on change', () => {
     const { service, emitBlocks } = createStubService();
     const view = new PiView(service, mount);

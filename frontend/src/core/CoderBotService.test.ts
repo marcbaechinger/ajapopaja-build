@@ -114,6 +114,24 @@ describe('CoderBotService RPC stream', () => {
     expect(LAST(tools).text).toContain('path');
   });
 
+  it('preserves the executed command on a finished tool block', () => {
+    rpcEvent(ws, {
+      type: 'tool_execution_start',
+      toolCallId: 'c1',
+      toolName: 'bash',
+      args: { command: 'ls -la' },
+    });
+    rpcEvent(ws, { type: 'tool_execution_end', toolCallId: 'c1', toolName: 'bash', isError: false, result: { content: [{ type: 'text', text: 'total 48' }] } });
+
+    const tools = history.filter((b) => b.kind === 'tool');
+    expect(tools).toHaveLength(1);
+    const tool = LAST(tools);
+    // Tab text still flips to "bash finished".
+    expect(tool.header).toContain('bash finished');
+    // The executed command is preserved on the block.
+    expect(tool.command).toBe('ls -la');
+  });
+
   it('groups bash output into a bash block', () => {
     rpcEvent(ws, { type: 'bash_execution_update', id: 'req-1', delta: 'total 48\n' });
     rpcEvent(ws, { type: 'bash_execution_update', id: 'req-1', delta: 'drwxr-xr-x\n' });
