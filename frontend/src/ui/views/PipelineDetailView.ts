@@ -600,6 +600,14 @@ export class PipelineDetailView extends View {
       this.setHistoryPage(this.historyPage + 1);
     });
 
+    this.context.actionRegistry.register('toggle_pr_summary', (_e, el) => {
+      const body = el.closest('[data-pr-card]')?.querySelector('.pr-summary');
+      const icon = el.querySelector('svg.transform');
+      if (!body) return;
+      const isHidden = body.classList.toggle('hidden');
+      if (icon) icon.classList.toggle('rotate-90', !isHidden);
+    });
+
     this.context.actionRegistry.register('toggle_task_collapse', (_e, el) => {
       const taskId = el.closest('[data-view-id]')?.getAttribute('data-view-id');
       if (!taskId) return;

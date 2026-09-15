@@ -96,4 +96,24 @@ describe('PullRequestSection', () => {
     ];
     expect(PullRequestSection.render(prs)).toBe('');
   });
+
+  it('renders a toggle for the PR summary that is initially hidden', () => {
+    const html = PullRequestSection.render([makePr({ summary: 'A detailed summary of the changes.' })]);
+    // A toggle control exists.
+    expect(html).toContain('data-action-click="toggle_pr_summary"');
+    // The summary content is initially hidden.
+    expect(html).toContain('pr-summary hidden');
+    expect(html).not.toBe('');
+  });
+
+  it('renders the summary text inside the hidden container and escapes HTML', () => {
+    const html = PullRequestSection.render([makePr({ summary: 'Changes <b>bolded</b> & more' })]);
+    expect(html).toContain('Changes &lt;b&gt;bolded&lt;/b&gt; &amp; more');
+    expect(html).not.toContain('<b>bolded</b>');
+  });
+
+  it('renders no summary toggle when the PR has no summary', () => {
+    const html = PullRequestSection.render([makePr({ summary: '' })]);
+    expect(html).not.toContain('toggle_pr_summary');
+  });
 });

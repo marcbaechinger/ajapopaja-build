@@ -51,7 +51,7 @@ export class PullRequestSection {
 
   private static renderPr(pr: PullRequest): string {
     return `
-      <div class="bg-app-surface border border-app-border rounded-2xl p-4 shadow-sm group hover:border-app-accent-2/40 transition-all duration-300">
+      <div class="bg-app-surface border border-app-border rounded-2xl p-4 shadow-sm group hover:border-app-accent-2/40 transition-all duration-300" data-pr-card>
         <div class="flex justify-between items-start gap-4">
           <div class="flex-grow min-w-0">
             <h4 class="font-bold text-app-text mb-1 truncate">${pr.subject}</h4>
@@ -75,7 +75,25 @@ export class PullRequestSection {
              </button>
           </div>
         </div>
+        ${pr.summary ? `
+        <div class="mt-3 pt-3 border-t border-app-border/60">
+          <button data-action-click="toggle_pr_summary" class="text-[10px] font-bold text-app-muted uppercase tracking-widest hover:text-app-accent-2 transition-all cursor-pointer flex items-center gap-1.5" title="Toggle summary">
+            ${Icon.render('chevronRight', { size: 14, className: 'transform transition-transform' })}
+            Summary
+          </button>
+          <div class="pr-summary hidden mt-2 text-sm text-app-text/90 leading-relaxed whitespace-pre-wrap">${this.escapeHtml(pr.summary)}</div>
+        </div>
+        ` : ''}
       </div>
     `;
+  }
+
+  private static escapeHtml(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 }
