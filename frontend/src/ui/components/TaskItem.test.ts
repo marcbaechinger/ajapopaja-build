@@ -119,6 +119,44 @@ describe('TaskItem', () => {
     expect(html).not.toContain('title-edit');
   });
 
+  it('updateTitleInPlace preserves an unsaved Specification textarea', () => {
+    const container = document.createElement('div');
+    container.innerHTML = TaskItem.render({ ...mockTask, title: 'Old Title' } as any);
+
+    // Enter title-edit mode and put "New Title" into the input.
+    const titleView = container.querySelector<HTMLElement>('.title-view')!;
+    const titleEdit = container.querySelector<HTMLElement>('.title-edit')!;
+    titleView.classList.add('hidden');
+    titleEdit.classList.remove('hidden');
+    const titleInput = titleEdit.querySelector('input') as HTMLInputElement;
+    titleInput.value = 'New Title';
+
+    // Simulate an unsaved spec edit: open the spec edit form and type text.
+    const specView = container.querySelector<HTMLElement>('.spec-view')!;
+    const specEdit = container.querySelector<HTMLElement>('.spec-edit')!;
+    specView.classList.add('hidden');
+    specEdit.classList.remove('hidden');
+    const specTextarea = specEdit.querySelector('textarea') as HTMLTextAreaElement;
+    specTextarea.value = 'unsaved spec draft';
+
+    // Saving the title must update only title-related DOM, not the spec.
+    TaskItem.updateTitleInPlace(container, { ...mockTask, title: 'New Title', version: 2 } as any);
+
+    expect(titleEdit.classList.contains('hidden')).toBe(true);
+    expect(titleView.classList.contains('hidden')).toBe(false);
+    expect(container.querySelector<HTMLElement>('.title-view span.font-medium')!.textContent).toBe('New Title');
+
+    // The unsaved spec draft must be untouched.
+    expect(specEdit.classList.contains('hidden')).toBe(false);
+    expect(specTextarea.value).toBe('unsaved spec draft');
+
+    // The optimistic-concurrency version must be refreshed everywhere (spec
+    // container, status selector, etc.) so a later "Save Specification" submits
+    // the current version rather than a stale one (which would 409-conflict).
+    expect(container.querySelector<HTMLElement>('.spec-container')!.getAttribute('data-version')).toBe('2');
+    expect(container.querySelectorAll<HTMLElement>('[data-version]').length).toBeGreaterThan(1);
+  });
+
   it('should render quickfix button for implemented tasks with commit hash', () => {
     const implementedTask = { 
       ...mockTask, 

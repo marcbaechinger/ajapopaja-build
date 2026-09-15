@@ -34,7 +34,11 @@ export class TaskItem {
    * Specifically it:
    * - sets the newly saved title as the displayed text,
    * - switches back from the edit input to the rendered title,
-   * - refreshes the optimistic-concurrency ``data-version`` used by save actions.
+   * - refreshes the optimistic-concurrency ``data-version`` **on every**
+   *   version-bearing element in the card (title container, Specification
+   *   container, Design Doc container, status selector, order/move buttons,
+   *   …) so a subsequent save action (e.g. "Save Specification") submits the
+   *   current version instead of a stale one.
    *
    * It is a no-op when ``element`` is not (or no longer) a TaskItem root that
    * contains a ``.title-container``.
@@ -42,7 +46,11 @@ export class TaskItem {
   static updateTitleInPlace(element: Element, task: Task): void {
     const container = element.querySelector('.title-container');
     if (!container) return;
-    container.setAttribute('data-version', String(task.version ?? 1));
+
+    const version = task.version ?? 1;
+    element.querySelectorAll<HTMLElement>('[data-version]').forEach(el => {
+      el.setAttribute('data-version', String(version));
+    });
 
     const view = container.querySelector('.title-view');
     const titleEl = view?.querySelector('span.font-medium');

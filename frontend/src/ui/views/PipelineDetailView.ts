@@ -651,6 +651,7 @@ export class PipelineDetailView extends View {
       const newTitle = input.value.trim();
       if (!newTitle) return;
 
+      console.log(`[title-save] ${taskId} (version=${version}): saving title -> "${newTitle}"`);
       try {
         await this.context.taskClient.updateDetails(taskId, version, { title: newTitle });
         // WS will refresh
@@ -1418,19 +1419,72 @@ export class PipelineDetailView extends View {
   }
 
   /**
-   * True when a task update changes only the title (plus the always-changing
-   * ``version`` / ``updated_at`` metadata). In that case re-rendering the whole
-   * TaskItem (or the backlog / selection / engine views) would wipe any
-   * in-progress edits in other text fields (e.g. an unsaved Specification), so
-   * we update just the title-related DOM instead.
+   * Serialises a Task excluding the fields that are expected to change on every
+   * save (``title``, ``version``, ``updated_at``) so we can tell whether an
+   * update is a pure title change or touches other data.
    */
+  private comparableTask(t: Task): string {
+    const { title, version, updated_at, ...rest } = t as any;
+    return JSON.stringify(rest);
+  }
+
+  /**
+   * Logs an exhaustive field-by-field diff (ignoring title / version /
+   * updated_at) between the previously cached task and the freshly received
+   * task. Used to debug why a title-only save still falls through to a full
+   * TaskItem re-render (which wipes any unsaved Specification / Design Doc
+   * edits).
+   */
+  private logTitleChangeDiff(prev: Task, next: Task): void {
+    try {
+      const prevRest = { ...(prev as any) };
+      const nextRest = { ...(next as any) };
+      delete prevRest.title; delete prevRest.version; delete prevRest.updated_at;
+      delete nextRest.title; delete nextRest.version; delete nextRest.updated_at;
+
+      const keys = Array.from(new Set([...Object.keys(prevRest), ...Object.keys(nextRest)]));
+      const diff: Array<{ key: string; cached: unknown; received: unknown }> = [];
+      for (const key of keys) {
+        const a = (prev as any)[key];
+        const b = (next as any)[key];
+        if (JSON.stringify(a) !== JSON.stringify(b)) {
+          diff.push({ key, cached: a, received: b });
+        }
+      }
+      console.groupCollapsed(`[title-save] ${next.id} title diff -> re-render needed`);
+      console.log('cached title:', prev.title, '-> received title:', next.title);
+      if (diff.length === 0) {
+        // Non-field changes (e.g. JSON key order / undefined-vs-null nuance).
+        console.log('No differing non-title fields, but comparable string differs:', {
+          cachedCompare: this.comparableTask(prev),
+          receivedCompare: this.comparableTask(next),
+        });
+      } else {
+        console.log('Non-title fields that differ (these force a full re-render):');
+        diff.forEach(d => console.log(`  ${d.key}:`, { cached: d.cached, received: d.received }));
+      }
+      console.groupEnd();
+    } catch (e) {
+      console.error('[title-save] diff logging failed:', e);
+    }
+  }
+
   private isTitleOnlyChange(prev: Task, next: Task): boolean {
-    if (prev.title === next.title) return false;
+    if (prev.title === next.title) {
+      console.log(`[title-save] ${next.id}: received update but title unchanged ("${prev.title}") -> treating as full re-render`);
+      return false;
+    }
     const comparable = (t: Task) => {
       const { title, version, updated_at, ...rest } = t as any;
       return rest;
     };
-    return JSON.stringify(comparable(prev)) === JSON.stringify(comparable(next));
+    const onlyTitle = JSON.stringify(comparable(prev)) === JSON.stringify(comparable(next));
+    if (!onlyTitle) {
+      this.logTitleChangeDiff(prev, next);
+    } else {
+      console.log(`[title-save] ${next.id}: title-only change ("${prev.title}" -> "${next.title}"), updating title in place`);
+    }
+    return onlyTitle;
   }
 
   /**
@@ -1453,12 +1507,17 @@ export class PipelineDetailView extends View {
       .forEach((el) => TaskItem.updateTitleInPlace(el, task));
 
     // Compact sidebar/history rows (BacklogTaskView, ExecutionEngineItemView,
-    // HistoryItemView): refresh the rendered title text in place.
+    // HistoryItemView): refresh the rendered title text and optimistic-concurrency
+    // version in place so later saves use the current version.
+    const version = task.version ?? 1;
     this.container
       .querySelectorAll<HTMLElement>(`[data-task-id="${taskId}"]`)
       .forEach((el) => {
-        const titleEl = el.querySelector<HTMLElement>('span.text-[11px].font-bold, span.font-medium.text-app-text');
+        const titleEl = el.querySelector<HTMLElement>('span.font-bold.text-app-text, span.font-medium.text-app-text');
         if (titleEl) titleEl.textContent = task.title;
+        el.querySelectorAll<HTMLElement>('[data-version]').forEach(v => {
+          v.setAttribute('data-version', String(version));
+        });
       });
   }
 
@@ -1480,9 +1539,17 @@ export class PipelineDetailView extends View {
     // A title-only update must not re-render the TaskItem / views, otherwise
     // unrelated unsaved text edits (e.g. an open Specification editor) get
     // wiped. Update just the title DOM in place instead.
-    if (prev && this.isTitleOnlyChange(prev, task)) {
-      this.updateTitleOnly(task);
-      return;
+    if (prev) {
+      const onlyTitle = this.isTitleOnlyChange(prev, task);
+      if (onlyTitle) {
+        console.log(`[title-save] ${taskId}: title-only change detected -> updating title in place (spec/design edits preserved)`);
+        this.updateTitleOnly(task);
+        return;
+      }
+      console.log(
+        `[title-save] ${taskId}: FALLING THROUGH TO FULL TaskItem re-render (` +
+        `title changed from "${prev.title}" to "${task.title}"). Unsaved spec/design edits WILL be lost.`
+      );
     }
 
     const targetColumnId = this.getTaskColumnId(task);

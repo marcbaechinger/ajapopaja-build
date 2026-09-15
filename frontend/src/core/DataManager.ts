@@ -135,20 +135,16 @@ export class DataManager {
 
   private initializeWebSocket() {
     this.wsClient.on('TASK_CREATED', msg => {
-      const task = this.updateTask(msg.payload);
-      if (task) this.notify(`pipeline:tasks:${task.pipeline_id}`, task);
+      this.updateTask(msg.payload);
     });
     this.wsClient.on('TASK_UPDATED', msg => {
-      const task = this.updateTask(msg.payload);
-      if (task) this.notify(`pipeline:tasks:${task.pipeline_id}`, task);
+      this.updateTask(msg.payload);
     });
     this.wsClient.on('TASK_STATUS_UPDATED', msg => {
-      const task = this.updateTask(msg.payload);
-      if (task) this.notify(`pipeline:tasks:${task.pipeline_id}`, task);
+      this.updateTask(msg.payload);
     });
     this.wsClient.on('TASK_COMPLETED', msg => {
-      const task = this.updateTask(msg.payload);
-      if (task) this.notify(`pipeline:tasks:${task.pipeline_id}`, task);
+      this.updateTask(msg.payload);
     });
     this.wsClient.on('TASK_DELETED', msg => {
       if (msg.payload?.task_id) {
@@ -203,11 +199,9 @@ export class DataManager {
 
     this.wsClient.on('REVIEWBOT_REVIEW_READY', msg => {
       // If payload is a full task object (has id and pipeline_id), update it.
+      // updateTask() notifies pipeline:tasks internally; do not notify twice.
       if (msg.payload?.id && msg.payload?.pipeline_id) {
-        const task = this.updateTask(msg.payload);
-        if (task) {
-          this.notify(`pipeline:tasks:${task.pipeline_id}`, task);
-        }
+        this.updateTask(msg.payload);
       } else if (msg.payload?.task_id) {
         this.notify(`task:review:${msg.payload.task_id}`);
       }
@@ -215,12 +209,10 @@ export class DataManager {
 
     this.wsClient.on('ARCHBOT_COMPLETED', msg => {
       // If payload is a full task object (has id and pipeline_id), update it.
-      // This ensures the design_doc is updated in the cache.
+      // This ensures the design_doc is updated in the cache. updateTask()
+      // notifies pipeline:tasks internally; do not notify twice.
       if (msg.payload?.id && msg.payload?.pipeline_id) {
-        const task = this.updateTask(msg.payload);
-        if (task) {
-          this.notify(`pipeline:tasks:${task.pipeline_id}`, task);
-        }
+        this.updateTask(msg.payload);
       } else if (msg.payload?.task_id) {
         this.notify(`task:design:${msg.payload.task_id}`);
       }

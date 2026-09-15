@@ -74,6 +74,19 @@ describe('DataManager', () => {
     expect(callback).toHaveBeenCalled();
   });
 
+  it('should notify pipeline:tasks exactly once per WebSocket task update', () => {
+    const pipeTasksCb = vi.fn();
+    dataManager.on('pipeline:tasks:p1', pipeTasksCb);
+
+    const handler = handlers.get('TASK_UPDATED')!;
+    handler({ type: 'TASK_UPDATED', payload: { id: '456', title: 'WS Task', pipeline_id: 'p1', version: 1 } });
+    handler({ type: 'TASK_UPDATED', payload: { id: '456', title: 'WS Task', pipeline_id: 'p1', version: 2 } });
+
+    // One notify per WS message. A duplicate notification made PipelineDetailView
+    // re-render a title-only update (wiping unsaved spec/design edits).
+    expect(pipeTasksCb).toHaveBeenCalledTimes(2);
+  });
+
   it('should handle task removal and pass deletion info', () => {
     dataManager.updateTask({ id: '789', pipeline_id: 'p1' });
     const callback = vi.fn();
