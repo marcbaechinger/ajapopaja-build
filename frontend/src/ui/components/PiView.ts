@@ -1063,7 +1063,8 @@ export class PiView {
   private createBlockEl(block: RenderBlock): HTMLElement {
     let el: HTMLElement;
     switch (block.kind) {
-      case 'tool': {
+      case 'tool':
+      case 'edit': {
         const wrapper = document.createElement('div');
         wrapper.className =
           'piview-collapsible piview-toolverify border border-app-border/60 rounded p-2 my-1 bg-app-surface/40';
@@ -1074,7 +1075,9 @@ export class PiView {
         const body = document.createElement('pre');
         body.setAttribute('data-role', 'body');
         body.className = 'whitespace-pre-wrap break-all text-green-300 mt-1 min-h-0';
-        body.textContent = this.toolBodyText(block);
+        // `edit` blocks do not show their (large JSON) command; for `tool` blocks
+        // the command is wrapped in a distinct `.piview-command` element.
+        this.applyToolBody(body, block);
         if (this.blocksCollapsed) body.classList.add('hidden');
         wrapper.appendChild(body);
         el = wrapper;
@@ -1242,8 +1245,10 @@ export class PiView {
       if (block.kind === 'verification') {
         const txt = (block.sub ?? []).join('\n');
         if (body.textContent !== txt) body.textContent = txt;
+      } else if (block.kind === 'tool' || block.kind === 'edit') {
+        this.applyToolBody(body, block);
       } else {
-        const txt = block.kind === 'tool' ? this.toolBodyText(block) : (block.text ?? '');
+        const txt = block.text ?? '';
         if (body.textContent !== txt) body.textContent = txt;
       }
     } else {
@@ -1309,13 +1314,43 @@ export class PiView {
    * result/output, so the user still sees what was run once the tab text becomes
    * "✓ bash finished" (or similar). When the body already leads with the command
    * (e.g. the running initial state) it is returned unchanged to avoid duplicate.
+   *
+   * The command is NOT prepended for `edit` blocks: an edit's args are a large
+   * JSON snippet that would just clutter the log, so only its result text is kept.
    */
   private toolBodyText(block: RenderBlock): string {
     const text = block.text ?? '';
     const command = block.command;
-    if (!command) return text;
+    // Suppress the (potentially large JSON) command for edit blocks.
+    if (!command || block.kind === 'edit') return text;
     if (text.startsWith(command)) return text;
     return command + (text ? `\n\n${text}` : '');
+  }
+
+  /**
+   * Renders the body of a `tool`/`edit` block into a `<pre>`. For blocks that
+   * display their command (everything except `edit`), the command is wrapped in a
+   * styled `.piview-command` element so it reads as clearly distinct from the
+   * command output that follows. `edit` blocks never include the command.
+   */
+  private applyToolBody(body: HTMLElement, block: RenderBlock): void {
+    const text = block.text ?? '';
+    const command = block.command;
+    // The command is shown for every kind except `edit` (whose args are a large
+    // JSON snippet), and only until it is already prefixed in the accumulated text
+    // (e.g. the running initial state, to avoid duplication).
+    const showCommand = block.kind !== 'edit' && !!command && !text.startsWith(command);
+    // Clear any previously rendered (possibly command-wrapped) content.
+    while (body.firstChild) body.removeChild(body.firstChild);
+    if (showCommand && command) {
+      const cmd = document.createElement('span');
+      cmd.className = 'piview-command';
+      cmd.textContent = command;
+      body.appendChild(cmd);
+      if (text) body.appendChild(document.createTextNode('\n\n' + text));
+    } else if (text) {
+      body.appendChild(document.createTextNode(text));
+    }
   }
 
   /** Extracts block text directly from the rendered DOM (excluding action buttons). */

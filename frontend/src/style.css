@@ -382,3 +382,9 @@ mark.piview-search-current {
   @apply bg-black/20;
 }
 
+/* The command/argument shown for a tool block, rendered as a distinct element
+   from the command output beneath it. Suppressed entirely for `edit` blocks. */
+span.piview-command {
+  @apply inline-block w-full text-cyan-300 font-semibold;
+}
+
