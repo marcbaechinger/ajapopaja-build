@@ -93,7 +93,7 @@ describe('AssistantPanel', () => {
     it.each([
       ['/pr', 'Show me the project structure of pipeline PIPELINE_ID'],
       ['/gl', 'Show me the commit hashes and message of the last 5 commits in pipeline PIPELINE_ID'],
-      ['/gi', 'Show 5 most recent issues of pipeline PIPELINE_ID'],
+      ['/i', 'Show 5 most recent issues of pipeline PIPELINE_ID'],
       ['/gd', 'Drop the top commit (that has not been pushed to the remote) of pipeline PIPELINE_ID'],
       ['/review', 'Make a review of the last implemented task of pipeline PIPELINE_ID'],
       ['/backlog', 'Show me the tasks in the backlog (state CREATED) of pipeline PIPELINE_ID'],
