@@ -73,17 +73,9 @@ async def save_design_doc(
         sanitized_md += report
 
     try:
-        task = await task_queries.get_task_by_id(task_id)
-        if not task:
-            return f"Error: Task {task_id} not found."
-
-        # Update the task with the design doc
-        task.design_doc = sanitized_md
-        # If the task was CREATED, moving it to PROPOSED seems logical if it now has a design doc
-        # but the spec says "only be started from the TaskItem when in state CREATED".
-        # In ajapopaja, usually adding a design doc moves it to 'proposed' if want_design_doc is True.
-        # Here we just save it.
-        await task.save()
+        # Save the design doc via the query layer so a new version-history
+        # entry is created when iterating on an existing design document.
+        await task_queries.save_task_design_doc(task_id, sanitized_md)
 
         if session and hasattr(session, "session_result"):
             session.session_result = {

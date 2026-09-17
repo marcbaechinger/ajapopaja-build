@@ -20,6 +20,7 @@ import pytest
 from api.archbot.tools import save_design_doc
 from api.bot.conversation import ConversationTurn
 from core.models.models import Pipeline, Task
+from core.queries.task import get_design_doc_history
 
 
 @pytest.mark.asyncio
@@ -41,6 +42,39 @@ async def test_save_design_doc_success(init_mock_db):
     # Verify task updated in DB
     updated_task = await Task.get(task.id)
     assert updated_task.design_doc == design_doc
+
+
+@pytest.mark.asyncio
+async def test_save_design_doc_creates_version_history_on_iteration(init_mock_db):
+    pipeline = Pipeline(name="Test Pipeline")
+    await pipeline.save()
+
+    task = Task(
+        title="Test Task",
+        pipeline_id=str(pipeline.id),
+        spec="Test Spec",
+        design_doc="# Design v1\n\nInitial content",
+        version=2,
+    )
+    await task.save()
+
+    pipeline_id = str(pipeline.id)
+    task_id = str(task.id)
+    new_design_doc = "# Design v2\n\nIterated content"
+
+    result = await save_design_doc(pipeline_id, task_id, new_design_doc)
+    assert "Successfully saved design document" in result
+
+    # A new version must be created so the user can go back in the versioned
+    # design document.
+    history = await get_design_doc_history(task_id)
+    assert len(history) == 1
+    assert history[0].design_doc == "# Design v1\n\nInitial content"
+    assert history[0].version == 2
+
+    updated_task = await Task.get(task.id)
+    assert updated_task.design_doc == new_design_doc
+    assert updated_task.version == 3
 
 
 @pytest.mark.asyncio

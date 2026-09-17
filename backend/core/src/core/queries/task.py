@@ -299,10 +299,7 @@ async def update_task_details(
     if design_doc is not None:
         # Save history if design_doc changes and old one exists
         if task.design_doc and task.design_doc != design_doc:
-            history_entry = DesignDocHistory(
-                task_id=str(task.id), version=task.version, design_doc=task.design_doc
-            )
-            await history_entry.insert()
+            await record_design_doc_version(task)
 
         task.design_doc = design_doc
         if task.want_design_doc and task.status == TaskStatus.INPROGRESS:
@@ -323,6 +320,40 @@ async def update_task_details(
             )
             task.status = TaskStatus.PROPOSED
 
+    task.version += 1
+    task.updated_at = datetime.now(UTC)
+    await task.save()
+    return task
+
+
+async def record_design_doc_version(task: Task) -> None:
+    """
+    Persist the task's current design doc into the version-history collection so
+    that the user can go back to previous versions of the design document.
+
+    The snapshot is stored under the task's current ``version`` (before it is
+    incremented). No-op if the task has no design doc yet.
+    """
+    if not task.design_doc:
+        return
+    history_entry = DesignDocHistory(
+        task_id=str(task.id), version=task.version, design_doc=task.design_doc
+    )
+    await history_entry.insert()
+
+
+async def save_task_design_doc(task_id: str, design_doc: str) -> Task:
+    """
+    Persist a design doc for a task, creating a version-history entry when the
+    design doc changes and a previous version already exists (i.e. when ArchBot
+    iterates on an existing design document). Also bumps the task version.
+    """
+    task = await get_task_by_id(task_id)
+
+    if task.design_doc and task.design_doc != design_doc:
+        await record_design_doc_version(task)
+
+    task.design_doc = design_doc
     task.version += 1
     task.updated_at = datetime.now(UTC)
     await task.save()
