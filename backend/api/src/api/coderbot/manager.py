@@ -35,7 +35,7 @@ class CoderBotManager:
         self._worker_task = None
         self._active_session: Optional[CoderBotSession] = None
         self._last_session: Optional[CoderBotSession] = None
-        self._default_model: Optional[str] = config.CODERBOT_DEFAULT_MODEL
+        self._default_model: Optional[str] = config.CODERBOT_MODEL
 
     def get_active_session(self) -> Optional[dict]:
         """Return the current (or last) CoderBot session for UI re-attachment."""

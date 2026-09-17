@@ -57,6 +57,35 @@ OLLAMA_MODEL = os.getenv(
     "OLLAMA_MODEL", "gpt-oss:120b" if OLLAMA_API_KEY else "gpt-oss:20b"
 )
 
+# Per-component model configuration. Each value defaults to the global
+# Ollama configuration so existing deployments are unaffected unless they
+# opt into a separate model/host/api-key per component.
+ASSISTANT_MODEL = os.getenv("ASSISTANT_MODEL", OLLAMA_MODEL)
+ARCHBOT_MODEL = os.getenv("ARCHBOT_MODEL", OLLAMA_MODEL)
+REVIEWBOT_MODEL = os.getenv("REVIEWBOT_MODEL", OLLAMA_MODEL)
+DOCBOT_MODEL = os.getenv("DOCBOT_MODEL", OLLAMA_MODEL)
+
+ASSISTANT_HOST = os.getenv("ASSISTANT_HOST", OLLAMA_HOST)
+ARCHBOT_HOST = os.getenv("ARCHBOT_HOST", OLLAMA_HOST)
+REVIEWBOT_HOST = os.getenv("REVIEWBOT_HOST", OLLAMA_HOST)
+DOCBOT_HOST = os.getenv("DOCBOT_HOST", OLLAMA_HOST)
+
+ASSISTANT_API_KEY = os.getenv("ASSISTANT_API_KEY", OLLAMA_API_KEY)
+ARCHBOT_API_KEY = os.getenv("ARCHBOT_API_KEY", OLLAMA_API_KEY)
+REVIEWBOT_API_KEY = os.getenv("REVIEWBOT_API_KEY", OLLAMA_API_KEY)
+DOCBOT_API_KEY = os.getenv("DOCBOT_API_KEY", OLLAMA_API_KEY)
+
+# CoderBot keeps its existing dedicated knob; introduce a symmetric alias so
+# all components share the same naming convention. CODERBOT_DEFAULT_MODEL remains
+# supported for backward compatibility.
+CODERBOT_MODEL = (
+    os.getenv(
+        "CODERBOT_MODEL",
+        os.getenv("CODERBOT_DEFAULT_MODEL", ""),
+    )
+    or None
+)
+
 # MCP Security Configuration
 MCP_AUTHENTICATION_ENABLED = (
     os.getenv("MCP_AUTHENTICATION_ENABLED", "false").lower() == "true"

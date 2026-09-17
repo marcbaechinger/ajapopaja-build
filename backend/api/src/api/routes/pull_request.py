@@ -535,9 +535,7 @@ async def iterate_pull_request(pr_id: str, request: IteratePullRequestRequest):
 
     comments = (request.comments or "").strip()
     if not comments:
-        raise HTTPException(
-            status_code=400, detail="Comments are required to iterate"
-        )
+        raise HTTPException(status_code=400, detail="Comments are required to iterate")
 
     await coderbot_manager.process_pr_iteration(pr, comments)
     return {"status": "success", "message": "PullRequest iteration enqueued"}

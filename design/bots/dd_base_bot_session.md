@@ -162,3 +162,20 @@ class BaseBotSessionConfig:
 ```
 
 The configuration dataclass centralises all adjustable parameters of the autonomous loop, making it easier to customise behaviour per bot without subclassing the base class.
+
+#### Per-component model selection
+
+The base configuration defaults to the global `OLLAMA_*` values. Each bot manager
+supplies an explicit per-component `BaseBotSessionConfig` instead of relying on the
+dataclass defaults, so each bot (and the assistant) can use a distinct model, host,
+and API key.
+
+- `ArchBotManager` → `ARCHBOT_MODEL` / `ARCHBOT_HOST` / `ARCHBOT_API_KEY`
+- `ReviewBotManager` → `REVIEWBOT_MODEL` / `REVIEWBOT_HOST` / `REVIEWBOT_API_KEY`
+- `DocBotManager` → `DOCBOT_MODEL` / `DOCBOT_HOST` / `DOCBOT_API_KEY`
+- Assistant → `ASSISTANT_MODEL` / `ASSISTANT_HOST` / `ASSISTANT_API_KEY`
+
+Every per-component variable defaults to the corresponding global `OLLAMA_*` value, so
+existing deployments are unaffected unless they opt into a separate model/host/api-key
+per component (e.g. `ARCHBOT_MODEL=gpt-oss:120b`, `ARCHBOT_HOST=https://ollama.com`,
+`ARCHBOT_API_KEY=...` to run just ArchBot on a cloud model).

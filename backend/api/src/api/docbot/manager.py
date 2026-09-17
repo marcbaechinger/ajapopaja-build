@@ -15,6 +15,8 @@
 import logging
 
 from api.bot.manager import bot_manager
+from api.bot.session_config import BaseBotSessionConfig
+from core import config as config_mod
 from core.models.models import Task
 
 from . import tools  # noqa: F401
@@ -30,5 +32,14 @@ class DocBotManager:
         Triggers an autonomous DocBot session by adding it to the bot manager queue.
         """
         logger.info(f"Queueing DocBot session for task {task.id}")
-        session = DocBotSession(pipeline_id=str(task.pipeline_id), task_id=str(task.id))
+        config = BaseBotSessionConfig(
+            model=config_mod.DOCBOT_MODEL,
+            host=config_mod.DOCBOT_HOST,
+            api_key=config_mod.DOCBOT_API_KEY,
+        )
+        session = DocBotSession(
+            pipeline_id=str(task.pipeline_id),
+            task_id=str(task.id),
+            session_config=config,
+        )
         await bot_manager.enqueue(session)

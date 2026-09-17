@@ -1,9 +1,72 @@
+import importlib
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from api.assistant.session import AssistantSession
+from core import config
 from core.models.models import ChatMessage
+
+
+@pytest.mark.asyncio
+async def test_config_assistant_model_defaults_to_ollama(monkeypatch):
+    monkeypatch.setenv("OLLAMA_MODEL", "global-model")
+    monkeypatch.delenv("ASSISTANT_MODEL", raising=False)
+    importlib.reload(config)
+    assert config.ASSISTANT_MODEL == "global-model"
+
+    monkeypatch.setenv("ASSISTANT_MODEL", "assistant-model")
+    importlib.reload(config)
+    assert config.ASSISTANT_MODEL == "assistant-model"
+
+
+@pytest.mark.asyncio
+async def test_llm_loop_uses_config_assistant_model():
+    history = [ChatMessage(role="user", content="hello")]
+    mock_on_update = AsyncMock()
+    session = AssistantSession(
+        user_id="test_user", history=history, on_update=mock_on_update
+    )
+    session._save_history = AsyncMock()
+
+    async def mock_chat(*args, **kwargs):
+        async def async_gen():
+            yield {"message": {"content": "success"}}
+
+        return async_gen()
+
+    with patch("api.assistant.session.ollama.AsyncClient.chat") as mock_chat_method:
+        mock_chat_method.side_effect = mock_chat
+        await session._run_llm_loop()
+        assert mock_chat_method.await_count == 1
+        assert mock_chat_method.await_args.kwargs["model"] == config.ASSISTANT_MODEL
+
+
+@pytest.mark.asyncio
+async def test_llm_loop_uses_injected_model():
+    history = [ChatMessage(role="user", content="hello")]
+    mock_on_update = AsyncMock()
+    session = AssistantSession(
+        user_id="test_user",
+        history=history,
+        on_update=mock_on_update,
+        model="injected-model",
+        host="injected-host",
+        api_key="injected-key",
+    )
+    session._save_history = AsyncMock()
+
+    async def mock_chat(*args, **kwargs):
+        async def async_gen():
+            yield {"message": {"content": "success"}}
+
+        return async_gen()
+
+    with patch("api.assistant.session.ollama.AsyncClient.chat") as mock_chat_method:
+        mock_chat_method.side_effect = mock_chat
+        await session._run_llm_loop()
+        assert mock_chat_method.await_count == 1
+        assert mock_chat_method.await_args.kwargs["model"] == "injected-model"
 
 
 @pytest.mark.asyncio

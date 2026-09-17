@@ -117,9 +117,7 @@ async def test_validate_remote_valid(init_mock_db):
     ):
         await pipeline_queries.validate_pipeline_repository(pipeline)
     mock_creds.assert_called_once_with(pipeline)
-    mock_verify.assert_called_once_with(
-        "https://host/org/my-app.git", "u", "t"
-    )
+    mock_verify.assert_called_once_with("https://host/org/my-app.git", "u", "t")
 
 
 @pytest.mark.asyncio

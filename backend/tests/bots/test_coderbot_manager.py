@@ -23,6 +23,53 @@ from core import config
 
 
 @pytest.mark.asyncio
+async def test_config_per_component_defaults_to_ollama(monkeypatch):
+    monkeypatch.setenv("OLLAMA_MODEL", "global-model")
+    monkeypatch.delenv("ASSISTANT_MODEL", raising=False)
+    monkeypatch.delenv("ARCHBOT_MODEL", raising=False)
+    monkeypatch.delenv("REVIEWBOT_MODEL", raising=False)
+    monkeypatch.delenv("DOCBOT_MODEL", raising=False)
+    importlib.reload(config)
+    assert config.ASSISTANT_MODEL == "global-model"
+    assert config.ARCHBOT_MODEL == "global-model"
+    assert config.REVIEWBOT_MODEL == "global-model"
+    assert config.DOCBOT_MODEL == "global-model"
+
+
+@pytest.mark.asyncio
+async def test_config_per_component_overrides(monkeypatch):
+    monkeypatch.setenv("ARCHBOT_MODEL", "cloud-x")
+    importlib.reload(config)
+    assert config.ARCHBOT_MODEL == "cloud-x"
+    assert config.ASSISTANT_MODEL == config.OLLAMA_MODEL
+
+
+@pytest.mark.asyncio
+async def test_config_coderbot_model_precedence(monkeypatch):
+    monkeypatch.setenv("CODERBOT_MODEL", "coderbot-alias")
+    monkeypatch.setenv("CODERBOT_DEFAULT_MODEL", "coderbot-legacy")
+    importlib.reload(config)
+    assert config.CODERBOT_MODEL == "coderbot-alias"
+
+    monkeypatch.delenv("CODERBOT_MODEL", raising=False)
+    monkeypatch.setenv("CODERBOT_DEFAULT_MODEL", "coderbot-legacy")
+    importlib.reload(config)
+    assert config.CODERBOT_MODEL == "coderbot-legacy"
+
+    monkeypatch.delenv("CODERBOT_MODEL", raising=False)
+    monkeypatch.delenv("CODERBOT_DEFAULT_MODEL", raising=False)
+    importlib.reload(config)
+    assert config.CODERBOT_MODEL is None
+
+
+@pytest.mark.asyncio
+async def test_config_host_and_api_default():
+    importlib.reload(config)
+    assert config.ASSISTANT_HOST == config.OLLAMA_HOST
+    assert config.REVIEWBOT_API_KEY == config.OLLAMA_API_KEY
+
+
+@pytest.mark.asyncio
 async def test_config_default_model_none_when_unset(monkeypatch):
     monkeypatch.delenv("CODERBOT_DEFAULT_MODEL", raising=False)
     importlib.reload(config)

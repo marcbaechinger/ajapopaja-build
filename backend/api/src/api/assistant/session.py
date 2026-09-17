@@ -34,18 +34,24 @@ class AssistantSession:
         user_id: str,
         history: List[ChatMessage],
         on_update: Callable[[Dict], Awaitable[None]],
+        model: Optional[str] = None,
+        host: Optional[str] = None,
+        api_key: Optional[str] = None,
     ):
         self.user_id = user_id
         self.history = history
         self.on_update = on_update
+        self.model = model or config.ASSISTANT_MODEL
+        host = host or config.ASSISTANT_HOST
+        api_key = api_key or config.ASSISTANT_API_KEY
         self.is_processing = False
         self.pending_tool_call: Optional[Dict] = None
 
         headers = {}
-        if config.OLLAMA_API_KEY:
-            headers["Authorization"] = f"Bearer {config.OLLAMA_API_KEY}"
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
 
-        self.client = ollama.AsyncClient(host=config.OLLAMA_HOST, headers=headers)
+        self.client = ollama.AsyncClient(host=host, headers=headers)
 
     async def _save_history(self):
         chat = await UserChat.find_one(UserChat.user_id == self.user_id)
@@ -220,12 +226,12 @@ class AssistantSession:
             )
 
         logger.info(
-            f"Presenting {len(ollama_tools)} tools to Ollama model '{config.OLLAMA_MODEL}': {[t.name for t in registered_tools]}"
+            f"Presenting {len(ollama_tools)} tools to Ollama model '{self.model}': {[t.name for t in registered_tools]}"
         )
 
         try:
             response = await self.client.chat(
-                model=config.OLLAMA_MODEL,
+                model=self.model,
                 messages=messages,
                 tools=ollama_tools,
                 stream=True,

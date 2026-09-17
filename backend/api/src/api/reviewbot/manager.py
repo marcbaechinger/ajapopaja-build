@@ -15,6 +15,8 @@
 import logging
 
 from api.bot.manager import bot_manager
+from api.bot.session_config import BaseBotSessionConfig
+from core import config as config_mod
 from core.models.models import Task
 
 from .session import ReviewBotSession
@@ -29,7 +31,14 @@ class ReviewBotManager:
         Triggers an autonomous ReviewBot session by adding it to the bot manager queue.
         """
         logger.info(f"Queueing ReviewBot session for task {task.id}")
+        config = BaseBotSessionConfig(
+            model=config_mod.REVIEWBOT_MODEL,
+            host=config_mod.REVIEWBOT_HOST,
+            api_key=config_mod.REVIEWBOT_API_KEY,
+        )
         session = ReviewBotSession(
-            pipeline_id=str(task.pipeline_id), task_id=str(task.id)
+            pipeline_id=str(task.pipeline_id),
+            task_id=str(task.id),
+            session_config=config,
         )
         await bot_manager.enqueue(session)

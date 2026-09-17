@@ -236,13 +236,16 @@ async def test_archbot_session_completed_fallback_when_task_missing(init_mock_db
 
     session = ArchBotSession(pipeline_id="p", task_id="missing_task")
 
-    with patch(
-        "api.archbot.session.task_queries.get_task_by_id",
-        new_callable=AsyncMock,
-        return_value=None,
-    ), patch(
-        "api.archbot.session.manager.broadcast", new_callable=AsyncMock
-    ) as mock_broadcast:
+    with (
+        patch(
+            "api.archbot.session.task_queries.get_task_by_id",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
+        patch(
+            "api.archbot.session.manager.broadcast", new_callable=AsyncMock
+        ) as mock_broadcast,
+    ):
         await session.on_event("bot_completed")
         mock_broadcast.assert_called_once()
         msg = mock_broadcast.call_args[0][0]

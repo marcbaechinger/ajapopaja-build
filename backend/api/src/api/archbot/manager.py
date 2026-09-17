@@ -16,6 +16,8 @@ import logging
 from typing import Optional
 
 from api.bot.manager import bot_manager
+from api.bot.session_config import BaseBotSessionConfig
+from core import config as config_mod
 from core.models.models import Task
 
 from .session import ArchBotSession
@@ -35,9 +37,15 @@ class ArchBotManager:
                 an existing design document.
         """
         logger.info(f"ArchBotManager: Enqueueing ArchBot for task {task.id}")
+        config = BaseBotSessionConfig(
+            model=config_mod.ARCHBOT_MODEL,
+            host=config_mod.ARCHBOT_HOST,
+            api_key=config_mod.ARCHBOT_API_KEY,
+        )
         session = ArchBotSession(
             pipeline_id=str(task.pipeline_id),
             task_id=str(task.id),
             user_prompt=user_prompt,
+            session_config=config,
         )
         await bot_manager.enqueue(session)
