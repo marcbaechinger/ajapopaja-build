@@ -476,3 +476,139 @@ async def test_accept_pull_request_direct_mode_uses_push(async_client, init_mock
     mock_update_status.assert_awaited_once_with(mock_pr, PullRequestStatus.ACCEPTED)
     mock_update_task.assert_awaited_once()
     app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_iterate_pull_request_unauthenticated(async_client, init_mock_db):
+    response = await async_client.post(
+        "/api/pull_requests/pr_123/iterate",
+        json={"comments": "please review"},
+    )
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.asyncio
+async def test_iterate_pull_request_empty_comments(async_client, init_mock_db):
+    mock_user = AsyncMock()
+    mock_user.username = "testuser"
+    app.dependency_overrides[get_current_user] = lambda: mock_user
+
+    try:
+        with patch(
+            "api.routes.pull_request.PullRequest.get", new_callable=AsyncMock
+        ) as mock_get_pr:
+            mock_pr = PullRequest(
+                id=ObjectId(),
+                pipeline_id="pipe_123",
+                task_id="task_123",
+                summary="summary",
+                branch_name="branch",
+                patch="patch",
+                status=PullRequestStatus.OPEN,
+            )
+            mock_get_pr.return_value = mock_pr
+
+            response = await async_client.post(
+                f"/api/pull_requests/{mock_pr.id}/iterate",
+                json={"comments": "   "},
+            )
+            assert response.status_code == 400
+            assert "Comments are required" in response.json()["detail"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_iterate_pull_request_non_open(async_client, init_mock_db):
+    mock_user = AsyncMock()
+    mock_user.username = "testuser"
+    app.dependency_overrides[get_current_user] = lambda: mock_user
+
+    try:
+        with patch(
+            "api.routes.pull_request.PullRequest.get", new_callable=AsyncMock
+        ) as mock_get_pr:
+            mock_pr = PullRequest(
+                id=ObjectId(),
+                pipeline_id="pipe_123",
+                task_id="task_123",
+                summary="summary",
+                branch_name="branch",
+                patch="patch",
+                status=PullRequestStatus.ACCEPTED,
+            )
+            mock_get_pr.return_value = mock_pr
+
+            response = await async_client.post(
+                f"/api/pull_requests/{mock_pr.id}/iterate",
+                json={"comments": "please change this"},
+            )
+            assert response.status_code == 400
+            assert "not open" in response.json()["detail"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_iterate_pull_request_not_found(async_client, init_mock_db):
+    mock_user = AsyncMock()
+    mock_user.username = "testuser"
+    app.dependency_overrides[get_current_user] = lambda: mock_user
+
+    try:
+        with patch(
+            "api.routes.pull_request.PullRequest.get", new_callable=AsyncMock
+        ) as mock_get_pr:
+            mock_get_pr.return_value = None
+
+            response = await async_client.post(
+                "/api/pull_requests/pr_123/iterate",
+                json={"comments": "please change"},
+            )
+            assert response.status_code == 404
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_iterate_pull_request_happy_path(async_client, init_mock_db):
+    mock_user = AsyncMock()
+    mock_user.username = "testuser"
+    app.dependency_overrides[get_current_user] = lambda: mock_user
+
+    pr_id = ObjectId()
+    mock_pr = PullRequest(
+        id=pr_id,
+        pipeline_id="pipe_123",
+        task_id="task_123",
+        summary="summary",
+        branch_name="branch",
+        patch="patch",
+        status=PullRequestStatus.OPEN,
+    )
+
+    try:
+        with (
+            patch(
+                "api.routes.pull_request.PullRequest.get", new_callable=AsyncMock
+            ) as mock_get_pr,
+            patch("api.routes.pull_request.coderbot_manager") as mock_manager,
+        ):
+            mock_get_pr.return_value = mock_pr
+            mock_manager.process_pr_iteration = AsyncMock()
+
+            response = await async_client.post(
+                f"/api/pull_requests/{pr_id}/iterate",
+                json={"comments": "  Please review and fix  "},
+            )
+            assert response.status_code == 200
+            body = response.json()
+            assert body["status"] == "success"
+            assert "enqueued" in body["message"]
+
+            mock_manager.process_pr_iteration.assert_awaited_once()
+            enqueued_pr, comments = mock_manager.process_pr_iteration.await_args.args
+            assert str(enqueued_pr.id) == str(pr_id)
+            assert comments == "Please review and fix"
+    finally:
+        app.dependency_overrides.clear()

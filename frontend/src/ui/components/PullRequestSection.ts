@@ -70,6 +70,10 @@ export class PullRequestSection {
                ${Icon.render('check', { size: 14 })}
                ${pullRequestAcceptLabel(pr)}
              </button>
+             <button data-action-click="iterate_pr" data-task-id="${pr.task_id}" data-pr-id="${pr.id}" class="px-4 py-2 bg-purple-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-purple-500 transition-all shadow-lg shadow-purple-900/20 cursor-pointer flex items-center gap-2" title="Send review comments to CoderBot to iterate on this pull request">
+               ${Icon.render('git-pull-request', { size: 14 })}
+               Iterate
+             </button>
              <button data-action-click="open_pr_dialog" data-task-id="${pr.task_id}" data-pr-id="${pr.id}" class="px-4 py-2 bg-app-accent-2 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-app-accent-2/80 transition-all shadow-lg shadow-app-accent-2/20 cursor-pointer flex items-center gap-2">
                ${Icon.render('git-pull-request', { size: 14 })}
                Review

@@ -73,6 +73,19 @@ describe('PullRequestSection', () => {
     expect(reviewIndex).toBeGreaterThan(acceptIndex);
   });
 
+  it('renders an Iterate button with the expected action and data attributes for OPEN PRs', () => {
+    const html = PullRequestSection.render([makePr()]);
+    expect(html).toContain('data-action-click="iterate_pr"');
+    expect(html).toContain('data-pr-id="pr1"');
+    expect(html).toContain('data-task-id="t1"');
+    expect(html).toContain('Iterate');
+    // Iterate button is placed before Review
+    const iterateIndex = html.indexOf('data-action-click="iterate_pr"');
+    const reviewIndex = html.indexOf('open_pr_dialog');
+    expect(iterateIndex).toBeGreaterThan(-1);
+    expect(reviewIndex).toBeGreaterThan(iterateIndex);
+  });
+
   it('renders no Accept button when there are no OPEN PRs', () => {
     const html = PullRequestSection.render([makePr({ status: PullRequestStatus.SUBMITTED, remote_pr_url: 'https://host/o/r/pull/1' })]);
     expect(html).toBe('');

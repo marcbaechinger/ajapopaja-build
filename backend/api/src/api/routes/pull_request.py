@@ -26,6 +26,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from api.auth import get_current_user
+from api.coderbot.manager import coderbot_manager
 from api.git_hosting.gitea import GiteaApiError, GiteaClient
 from core import config
 from core.models.models import (
@@ -55,6 +56,10 @@ class FailureStrategy(str, Enum):
 class AcceptPullRequestRequest(BaseModel):
     commit_message: Optional[str] = None
     failure_strategy: FailureStrategy = FailureStrategy.REVERT
+
+
+class IteratePullRequestRequest(BaseModel):
+    comments: str
 
 
 # =============================================================================
@@ -514,6 +519,28 @@ async def accept_pull_request(
             exc_info=True,
         )
         raise HTTPException(status_code=500, detail=f"Error applying patch: {str(e)}")
+
+
+@router.post("/{pr_id}/iterate")
+async def iterate_pull_request(pr_id: str, request: IteratePullRequestRequest):
+    """Enqueue a CoderBot session to iterate on an OPEN pull request.
+
+    Validates the PR exists and is OPEN, requires non-empty review comments, then
+    hands off to the CoderBot manager which re-runs the agent on a fresh branch
+    with the current PR patch applied as unstaged changes. The task status is
+    unchanged (it stays PULL_REQUEST_AVAILABLE); only the PR content is updated
+    when the session completes."""
+    pr = validate_pull_request_exists(pr_id, await PullRequest.get(pr_id))
+    validate_pull_request_status(pr)  # only OPEN PRs can be iterated
+
+    comments = (request.comments or "").strip()
+    if not comments:
+        raise HTTPException(
+            status_code=400, detail="Comments are required to iterate"
+        )
+
+    await coderbot_manager.process_pr_iteration(pr, comments)
+    return {"status": "success", "message": "PullRequest iteration enqueued"}
 
 
 @router.post("/{pr_id}/reject")

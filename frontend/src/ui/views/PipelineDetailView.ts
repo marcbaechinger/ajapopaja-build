@@ -35,6 +35,7 @@ import { PipelineEditDialog } from '../components/PipelineEditDialog.ts';
 import { ReviewDialog } from '../components/ReviewDialog.ts';
 import { UpdateDesignDialog } from '../components/UpdateDesignDialog.ts';
 import { PullRequestDialog } from '../components/PullRequestDialog.ts';
+import { IteratePullRequestDialog } from '../components/IteratePullRequestDialog.ts';
 import { CoderBotDialog } from '../components/CoderBotDialog.ts';
 import { PiView } from '../components/PiView.ts';
 import { PipelineHeaderView, type DocbotState, type ReviewbotState, type CoderbotState } from '../components/PipelineHeaderView.ts';
@@ -526,6 +527,27 @@ export class PipelineDetailView extends View {
         alert(`Failed to accept Pull Request: ${error.message}`);
         btn.disabled = false;
         btn.textContent = 'Accept';
+      }
+    });
+
+    this.context.actionRegistry.register('iterate_pr', async (_e, el) => {
+      const prId = el.getAttribute('data-pr-id');
+      if (!prId) return;
+
+      const dialog = new IteratePullRequestDialog();
+      const comments = await dialog.show();
+      if (!comments) return;
+
+      this.coderbotState = { status: 'inProgress', taskId: el.getAttribute('data-task-id') };
+      this.updateHeader();
+      try {
+        await this.context.pullRequestClient.iteratePullRequest(prId, comments);
+        this.updateEnginePiSlot();
+      } catch (error: any) {
+        console.error('Iterate PR error:', error);
+        alert(`Failed to start iteration: ${error.message}`);
+        this.coderbotState = { status: 'none', taskId: null };
+        this.updateHeader();
       }
     });
 

@@ -15,10 +15,14 @@
 import asyncio
 import json
 import logging
+import os
 import re
+import tempfile
 import traceback
 from datetime import UTC, datetime
 from typing import Any, Dict, Optional, TextIO
+
+import git
 
 from api.assistant.tools.command_runner import run_command_sequence
 from api.websocket_manager import WSMessage, manager as ws_manager
@@ -152,10 +156,19 @@ class CoderBotSession:
         pipeline_id: str,
         task_id: str,
         model: Optional[str] = None,
+        pr: Optional[PullRequest] = None,
+        comments: Optional[str] = None,
     ):
         self.pipeline_id = pipeline_id
         self.task_id = task_id
         self.model = model
+        self.pr = pr
+        self.comments = comments
+        # Iteration mode is active whenever an existing PullRequest is provided.
+        # In this mode CoderBot re-runs on a fresh branch with the current PR
+        # patch applied as unstaged changes and writes the updated result back
+        # onto the same PR document instead of inserting a new one.
+        self.iteration_mode = pr is not None
         self.process: Optional[asyncio.subprocess.Process] = None
         self.helper: Optional[SandboxGitHelper] = None
         self.pipeline: Optional[Pipeline] = None
@@ -247,6 +260,100 @@ class CoderBotSession:
             f"### Design Document\n{design_doc}\n\n"
             f"{self._build_test_instruction()}"
         )
+
+    def get_iteration_instruction(self) -> str:
+        """Return an alternative system instruction for PR-iteration runs.
+
+        The working tree already contains the existing pull-request patch applied
+        as *unstaged changes* on top of a fresh branch. Pi must review that diff
+        and modify it to address the user's review comments while keeping the
+        changes consistent and running the verification suite.
+        """
+        return (
+            "## System Instruction (Iteration)\n"
+            "You are iterating on an existing pull request in response to the "
+            "review comments below. The working tree already contains the current "
+            "pull-request patch applied as unstaged changes (nothing is committed "
+            "on this branch yet).\n\n"
+            "- Inspect the existing unstaged diff (`git diff`) to understand the "
+            "current implementation.\n"
+            "- Address every review comment by editing the working tree so the "
+            "resulting diff resolves the feedback (fix bugs, add tests, adjust "
+            "design, etc.).\n"
+            "- Keep changes focused and consistent with the existing diff and the "
+            "project conventions.\n"
+            "- Do NOT overwrite unrelated parts of the tree and do NOT revert "
+            "already-correct pieces of the patch.\n"
+            "- Run the verification suite and ensure everything is green before "
+            "reporting completion."
+        )
+
+    async def get_iteration_prompt(self, task: Task) -> str:
+        """Build the prompt for a PR-iteration run.
+
+        Includes the same task information (title, specification, design document)
+        as the initial prompt, followed by the user's review comments verbatim and
+        guidance that the existing patch is already present as unstaged changes.
+        """
+        design_doc = task.design_doc or "No design document provided."
+        spec = task.spec or "No specification provided."
+        comments = self.comments or ""
+
+        return (
+            f"Please iterate on the following pull request.\n\n"
+            f"### Task: {task.title}\n\n"
+            f"### Specification\n{spec}\n\n"
+            f"### Design Document\n{design_doc}\n\n"
+            f"### Review Comments\n{comments}\n\n"
+            f"### Current Patch Present as Unstaged Changes\n"
+            f"The diff of the current pull request is already applied in the "
+            f"working tree as unstaged changes. It is NOT committed. You should "
+            f"edit these files to resolve the review comments above, keeping the "
+            f"changes consistent with the existing implementation. The final "
+            f"result should be a diff that incorporates the review feedback.\n\n"
+            f"{self.get_iteration_instruction()}\n\n"
+            f"{self._build_test_instruction()}"
+        )
+
+    def _apply_existing_patch(self):
+        """Apply the existing PullRequest patch into the working tree as unstaged
+        changes (no commit) before spawning Pi for an iteration run.
+
+        Uses a real three-way merge (`git apply --3way`) so that blob pre-image
+        IDs recorded in the diff are merged against the current working-tree
+        files. When the surrounding lines no longer match the blobs the patch
+        expects, git returns a non-zero exit code and we surface the failure so the
+        session falls cleanly into the existing error/FAILED path.
+        """
+        if not self.pr or not self.pr.patch:
+            raise ValueError("Cannot apply existing patch: PullRequest has no patch")
+
+        repo = self.helper.get_repo()
+        patch_content = self.pr.patch
+        if not patch_content.endswith("\n"):
+            patch_content += "\n"
+
+        patch_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".patch", delete=False
+            ) as f:
+                f.write(patch_content)
+                patch_path = f.name
+            logger.info(
+                f"Applying existing PR patch (iteration) for task {self.task_id}"
+            )
+            repo.git.apply("--3way", patch_path)
+        except git.exc.GitCommandError as e:
+            logger.error(
+                f"Failed to apply existing patch for PR iteration "
+                f"({self.pr.id}): {e.stderr}",
+                exc_info=True,
+            )
+            raise
+        finally:
+            if patch_path and os.path.exists(patch_path):
+                os.remove(patch_path)
 
     def get_resolved_verification_commands(self) -> list:
         """Resolve the argv lists for the post-run test verification.
@@ -519,19 +626,39 @@ class CoderBotSession:
                                 )
             pr_summary = summary + "\n".join(summary_meta)
 
-            pr = PullRequest(
-                pipeline_id=self.pipeline_id,
-                task_id=self.task_id,
-                subject=task_title,
-                summary=pr_summary,
-                branch_name=self.helper.branch_name,
-                patch=patch,
-                status=PullRequestStatus.OPEN,
-            )
-            await pr.insert()
-            logger.info(f"PullRequest {pr.id} created in DB.")
+            if self.iteration_mode and self.pr:
+                # Iteration mode: write the updated patch/summary/subject/branch
+                # back onto the existing PullRequest document instead of inserting
+                # a new one. The PR keeps its id/shape (only content is refreshed)
+                # so the frontend PullRequestSection and PullRequestDialog "just
+                # work" with the updated patch.
+                self.pr.summary = pr_summary
+                self.pr.subject = task_title
+                self.pr.branch_name = self.helper.branch_name
+                self.pr.patch = patch
+                self.pr.updated_at = datetime.now(UTC)
+                await self.pr.save()
+                logger.info(f"PullRequest {self.pr.id} updated in DB.")
+                pr = self.pr
+                pr_id = str(self.pr.id)
+            else:
+                pr = PullRequest(
+                    pipeline_id=self.pipeline_id,
+                    task_id=self.task_id,
+                    subject=task_title,
+                    summary=pr_summary,
+                    branch_name=self.helper.branch_name,
+                    patch=patch,
+                    status=PullRequestStatus.OPEN,
+                )
+                await pr.insert()
+                logger.info(f"PullRequest {pr.id} created in DB.")
+                pr_id = str(pr.id)
 
-            # Update task status
+            # Update task status.
+            # In iteration mode the task is already PULL_REQUEST_AVAILABLE, so the
+            # guard below harmlessly does not fire; it exists for the initial-run
+            # path where the task transitions INPROGRESS -> PULL_REQUEST_AVAILABLE.
             if task and task.status == TaskStatus.INPROGRESS:
                 await task_queries.transition_task(
                     str(task.id), TaskStatus.PULL_REQUEST_AVAILABLE, actor="coderbot"
@@ -544,7 +671,7 @@ class CoderBotSession:
                 WSMessage(
                     type="PULL_REQUEST_CREATED",
                     payload={
-                        "id": str(pr.id),
+                        "id": pr_id,
                         "pipeline_id": self.pipeline_id,
                         "task_id": self.task_id,
                         "summary": summary,
@@ -611,7 +738,14 @@ class CoderBotSession:
         )
         self.helper.setup_sandbox()
 
-        initial_prompt = await self.get_initial_prompt(task)
+        if self.iteration_mode:
+            # In iteration mode the existing PR patch is already present in the
+            # tree as unstaged changes (nothing committed) and the agent is asked
+            # to address the user's review comments.
+            self._apply_existing_patch()
+            initial_prompt = await self.get_iteration_prompt(task)
+        else:
+            initial_prompt = await self.get_initial_prompt(task)
 
         # Spawn Pi
         try:

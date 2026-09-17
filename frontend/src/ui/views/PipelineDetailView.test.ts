@@ -20,6 +20,7 @@ import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
 import { TaskStatus } from '../../core/domain.ts';
 import { CoderBotDialog } from '../components/CoderBotDialog.ts';
 import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
+import { IteratePullRequestDialog } from '../components/IteratePullRequestDialog.ts';
 
 vi.mock('../components/ConfirmationDialog.ts', () => ({
   ConfirmationDialog: vi.fn(function ConfirmationDialog() {
@@ -46,6 +47,14 @@ vi.mock('../components/PaginationControl.ts', () => ({
 vi.mock('../components/CoderBotDialog.ts', () => ({
   CoderBotDialog: vi.fn(function CoderBotDialog() {
     return { show: vi.fn() };
+  }),
+}));
+
+// Mock the iteration dialog so the view can register the iterate_pr action
+// without requiring a real DOM dialog in unit tests.
+vi.mock('../components/IteratePullRequestDialog.ts', () => ({
+  IteratePullRequestDialog: vi.fn(function IteratePullRequestDialog() {
+    return { show: vi.fn().mockResolvedValue('Review comments') };
   }),
 }));
 
@@ -903,6 +912,7 @@ describe('PipelineDetailView Accept Pull Request', () => {
       pullRequestClient: {
         getPullRequestsByPipeline: vi.fn().mockResolvedValue([]),
         acceptPullRequest: vi.fn().mockResolvedValue({}),
+        iteratePullRequest: vi.fn().mockResolvedValue({}),
       },
       systemClient: {
         getGitStatus: vi.fn().mockResolvedValue({}),
@@ -966,5 +976,57 @@ describe('PipelineDetailView Accept Pull Request', () => {
     await acceptAction(null, el);
 
     expect(mockContext.pullRequestClient.acceptPullRequest).not.toHaveBeenCalled();
+  });
+
+  it('should register the iterate_pr action', () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+
+    const iterateAction = getAction('iterate_pr');
+    expect(iterateAction).toBeDefined();
+  });
+
+  it('should open the dialog and call iteratePullRequest on confirm', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+
+    const iterateAction = getAction('iterate_pr');
+    const el = document.createElement('button');
+    el.setAttribute('data-pr-id', 'pr1');
+    el.setAttribute('data-task-id', 't1');
+
+    await iterateAction(null, el);
+
+    expect(mockContext.pullRequestClient.iteratePullRequest).toHaveBeenCalledWith('pr1', 'Review comments');
+  });
+
+  it('should not call iteratePullRequest when the dialog is cancelled', async () => {
+    (IteratePullRequestDialog as any).mockImplementationOnce(function CancelledDialog() {
+      return { show: vi.fn().mockResolvedValue(null) };
+    });
+
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+
+    const iterateAction = getAction('iterate_pr');
+    const el = document.createElement('button');
+    el.setAttribute('data-pr-id', 'pr1');
+    el.setAttribute('data-task-id', 't1');
+
+    await iterateAction(null, el);
+
+    expect(mockContext.pullRequestClient.iteratePullRequest).not.toHaveBeenCalled();
+  });
+
+  it('should not call iteratePullRequest when data-pr-id is missing', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+
+    const iterateAction = getAction('iterate_pr');
+    const el = document.createElement('button');
+
+    await iterateAction(null, el);
+
+    expect(mockContext.pullRequestClient.iteratePullRequest).not.toHaveBeenCalled();
   });
 });

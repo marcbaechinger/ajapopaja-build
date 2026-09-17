@@ -56,4 +56,14 @@ export class PullRequestClient extends BaseClient {
       method: 'POST',
     });
   }
+
+  async iteratePullRequest(prId: string, comments: string): Promise<void> {
+    await this.fetch(`/api/pull_requests/${prId}/iterate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ comments }),
+    });
+  }
 }

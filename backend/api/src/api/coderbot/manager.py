@@ -17,7 +17,7 @@ import logging
 from typing import Optional
 
 from core import config
-from core.models.models import Task
+from core.models.models import PullRequest, Task
 
 from .session import CoderBotSession
 
@@ -57,6 +57,11 @@ class CoderBotManager:
         """Updates the default model injected into session constructors."""
         self._default_model = model
 
+    def _ensure_worker_running(self):
+        """Start the queue-processing worker if it is not already running."""
+        if self._worker_task is None or self._worker_task.done():
+            self._worker_task = asyncio.create_task(self._process_queue())
+
     async def process_task(self, task: Task):
         """Enqueues a new CoderBotSession for the given task."""
         session = CoderBotSession(
@@ -69,8 +74,28 @@ class CoderBotManager:
             f"Enqueued CoderBotSession for pipeline {session.pipeline_id}, task {session.task_id}."
         )
 
-        if self._worker_task is None or self._worker_task.done():
-            self._worker_task = asyncio.create_task(self._process_queue())
+        self._ensure_worker_running()
+
+    async def process_pr_iteration(self, pr: PullRequest, comments: str):
+        """Enqueues a CoderBotSession in iteration mode for the given PullRequest.
+
+        The session re-runs CoderBot on a fresh branch with the current PR patch
+        applied as unstaged changes and writes the updated result back onto the
+        same PR document."""
+        session = CoderBotSession(
+            pipeline_id=pr.pipeline_id,
+            task_id=pr.task_id,
+            model=self._default_model,
+            pr=pr,
+            comments=comments,
+        )
+        await self._queue.put(session)
+        logger.info(
+            f"Enqueued CoderBotSession iteration for pipeline {session.pipeline_id}, "
+            f"task {session.task_id}, pr {pr.id}."
+        )
+
+        self._ensure_worker_running()
 
     def stop_session(self, task_id: str) -> bool:
         """Stops the active session if it matches the task_id."""

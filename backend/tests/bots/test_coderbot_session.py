@@ -16,6 +16,7 @@ import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import git
 import pytest
 
 from api.coderbot.session import DEFAULT_TEST_COMMANDS, CoderBotSession
@@ -860,3 +861,232 @@ async def test_coderbot_handle_agent_end_skips_verification_when_disabled(
         assert not verif_msgs, "No CODERBOT_VERIFICATION event expected"
     finally:
         config.CODERBOT_RUN_TESTS = original
+
+
+@pytest.mark.asyncio
+async def test_coderbot_iteration_prompt_includes_comments_and_instruction(
+    init_mock_db,
+):
+    """The iteration prompt carries the task info, the user's review comments,
+    the alternative iteration instruction and the verification block, and does
+    not regress the initial prompt."""
+    task = Task(
+        title="Iterate me",
+        pipeline_id="p1",
+        design_doc="Design doc",
+        spec="Spec text",
+    )
+    pr = PullRequest(
+        pipeline_id="p1",
+        task_id="t1",
+        subject="Iterate me",
+        summary="",
+        branch_name="coderbot/t1",
+        patch="diff --git a/a b/a\n+change\n",
+        status=PullRequestStatus.OPEN,
+    )
+    session = CoderBotSession(
+        pipeline_id="p1", task_id="t1", pr=pr, comments="Please fix the edge case."
+    )
+
+    prompt = await session.get_iteration_prompt(task)
+
+    assert "Iterate me" in prompt
+    assert "Spec text" in prompt
+    assert "Design doc" in prompt
+    assert "Please fix the edge case." in prompt
+    assert "Review Comments" in prompt
+    assert "Current Patch Present as Unstaged Changes" in prompt
+    assert "Iteration" in prompt
+    assert "uv run pytest" in prompt
+    assert "CI=true npm run test" in prompt
+
+    # The initial prompt must remain unchanged (no comments / iteration text).
+    initial = await session.get_initial_prompt(task)
+    assert "Please fix the edge case." not in initial
+    assert "Current Patch Present as Unstaged Changes" not in initial
+
+
+def test_coderbot_iteration_instruction_mentions_unstaged_patch():
+    pr = PullRequest(
+        pipeline_id="p1",
+        task_id="t1",
+        subject="s",
+        summary="",
+        branch_name="coderbot/t1",
+        patch="diff",
+        status=PullRequestStatus.OPEN,
+    )
+    session = CoderBotSession(pipeline_id="p1", task_id="t1", pr=pr)
+    instruction = session.get_iteration_instruction()
+    assert "unstaged changes" in instruction
+    assert "review" in instruction.lower()
+
+
+def test_coderbot_iteration_mode_flag():
+    assert (
+        CoderBotSession(
+            pipeline_id="p1", task_id="t1", pr=MagicMock(), comments="cc"
+        ).iteration_mode
+        is True
+    )
+    assert CoderBotSession(pipeline_id="p1", task_id="t1").iteration_mode is False
+
+
+@pytest.mark.asyncio
+async def test_coderbot_apply_existing_patch_applies_without_commit(init_mock_db):
+    """_apply_existing_patch invokes git apply --3way with the PR patch and does
+    not leave anything committed (no git commit call)."""
+    session = CoderBotSession(pipeline_id="p1", task_id="t1")
+    session.helper = MagicMock()
+    repo = MagicMock()
+    session.helper.get_repo.return_value = repo
+
+    pr = PullRequest(
+        pipeline_id="p1",
+        task_id="t1",
+        subject="s",
+        summary="",
+        branch_name="coderbot/t1",
+        patch="diff --git a/a b/a\n+change",
+        status=PullRequestStatus.OPEN,
+    )
+    session.pr = pr
+
+    with patch("api.coderbot.session.tempfile.NamedTemporaryFile") as mock_tmp:
+        mock_tmp.return_value.__enter__.return_value.name = "/tmp/iter.patch"
+        session._apply_existing_patch()
+
+    # The patch file content was written via the tempfile handle.
+    handle = mock_tmp.return_value.__enter__.return_value
+    handle.write.assert_called_once_with("diff --git a/a b/a\n+change\n")
+    # git apply --3way is used, and no commit is issued.
+    repo.git.apply.assert_called_once_with("--3way", "/tmp/iter.patch")
+    repo.git.commit.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_coderbot_apply_existing_patch_propagates_git_error(init_mock_db):
+    """When the stored patch no longer applies (concurrent edit to the same
+    files), git.exc.GitCommandError propagates so the session fails cleanly
+    rather than proceeding on a corrupt tree."""
+    session = CoderBotSession(pipeline_id="p1", task_id="t1")
+    session.helper = MagicMock()
+    repo = MagicMock()
+    session.helper.get_repo.return_value = repo
+
+    pr = PullRequest(
+        pipeline_id="p1",
+        task_id="t1",
+        subject="s",
+        summary="",
+        branch_name="coderbot/t1",
+        patch="diff --git a/a b/a\n+change",
+        status=PullRequestStatus.OPEN,
+    )
+    session.pr = pr
+    repo.git.apply.side_effect = git.exc.GitCommandError("apply", 1)
+
+    with (
+        patch("api.coderbot.session.tempfile.NamedTemporaryFile") as mock_tmp,
+        pytest.raises(git.exc.GitCommandError),
+    ):
+        mock_tmp.return_value.__enter__.return_value.name = "/tmp/iter.patch"
+        session._apply_existing_patch()
+
+
+@pytest.mark.asyncio
+async def test_coderbot_apply_existing_patch_requires_pr_patch(init_mock_db):
+    session = CoderBotSession(pipeline_id="p1", task_id="t1")
+    session.helper = MagicMock()
+    session.pr = PullRequest(
+        pipeline_id="p1",
+        task_id="t1",
+        subject="s",
+        summary="",
+        branch_name="coderbot/t1",
+        patch="",
+        status=PullRequestStatus.OPEN,
+    )
+    with pytest.raises(ValueError):
+        session._apply_existing_patch()
+
+
+@pytest.mark.asyncio
+async def test_coderbot_handle_agent_end_updates_existing_pr(init_mock_db):
+    """In iteration mode _handle_agent_end updates the existing PR (same id)
+    with the new patch, subject, summary, branch and updated_at, rather than
+    inserting a new one, and broadcasts PULL_REQUEST_CREATED."""
+    task = Task(title="Iterated Task", pipeline_id="p1", design_doc="D", spec="S")
+    await task.insert()
+
+    pr = PullRequest(
+        pipeline_id="p1",
+        task_id=str(task.id),
+        subject="old",
+        summary="old summary",
+        branch_name="coderbot/t1",
+        patch="old patch",
+        status=PullRequestStatus.OPEN,
+    )
+    await pr.insert()
+
+    session = CoderBotSession(
+        pipeline_id="p1",
+        task_id=str(task.id),
+        pr=pr,
+        comments="Make it better",
+    )
+    session.iteration_mode = True
+    session.helper = MagicMock()
+    session.helper.branch_name = "coderbot/t1"
+    repo = MagicMock()
+    repo.git.add = MagicMock()
+    repo.git.commit.return_value = "ok"
+    repo.git.diff.return_value = "new patch!"
+    session.helper.get_repo.return_value = repo
+
+    original_run_tests = config.CODERBOT_RUN_TESTS
+    config.CODERBOT_RUN_TESTS = False
+    try:
+        with (
+            patch(
+                "api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock
+            ) as mock_broadcast,
+            patch(
+                "api.coderbot.session.Task.get", new_callable=AsyncMock
+            ) as mock_task_get,
+            patch("core.queries.task.transition_task", new_callable=AsyncMock),
+        ):
+            mock_task_get.return_value = task
+            await session._handle_agent_end(
+                [
+                    {
+                        "role": "assistant",
+                        "content": [{"type": "text", "text": "Revised."}],
+                    }
+                ]
+            )
+    finally:
+        config.CODERBOT_RUN_TESTS = original_run_tests
+
+    # The PR must be updated with the new content on the same id.
+    prs = await PullRequest.find(PullRequest.task_id == str(task.id)).to_list()
+    assert len(prs) == 1
+    updated = prs[0]
+    assert str(updated.id) == str(pr.id)
+    assert updated.patch == "new patch!\n"
+    assert updated.subject == "Iterated Task"
+    assert "Revised." in updated.summary
+    assert updated.branch_name == "coderbot/t1"
+    # updated_at is refreshed when the PR is rewritten.
+    assert updated.updated_at is not None
+
+    # PULL_REQUEST_CREATED is broadcast with the same pr id.
+    created_msgs = [
+        c
+        for c in mock_broadcast.await_args_list
+        if isinstance(c.args[0], WSMessage) and c.args[0].type == "PULL_REQUEST_CREATED"
+    ]
+    assert created_msgs, "Expected a PULL_REQUEST_CREATED broadcast"
+    assert created_msgs[0].args[0].payload["id"] == str(pr.id)
