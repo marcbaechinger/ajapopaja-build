@@ -15,6 +15,7 @@
 import base64
 import logging
 import re
+import subprocess
 from pathlib import Path
 from typing import Dict, Tuple
 from urllib.parse import quote, urlsplit, urlunsplit
@@ -22,7 +23,7 @@ from urllib.parse import quote, urlsplit, urlunsplit
 import git
 
 from core import config
-from core.exceptions import EntityNotFoundError
+from core.exceptions import EntityNotFoundError, ValidationError
 from core.models.models import Pipeline
 from core.queries import pipeline as pipeline_queries
 from core.queries import task as task_queries
@@ -66,6 +67,37 @@ async def ensure_repo_cloned(pipeline: Pipeline) -> None:
             )
             default = repo.git.symbolic_ref("refs/remotes/origin/HEAD").split("/")[-1]
             repo.git.reset("--hard", f"origin/{default}")
+
+
+def verify_remote_repo(repo_uri: str, username: str = "", token: str = "") -> None:
+    """
+    Verify that a remote git repo is reachable and authenticated.
+
+    Runs ``git ls-remote --heads`` against the URI with the provided credentials
+    injected (reusing ``_inject_credentials``). Raises
+    ``core.exceptions.ValidationError`` with a clear message when the repository
+    is unreachable, the URI is invalid, or the command exceeds the configured
+    timeout (``config.GIT_LS_REMOTE_TIMEOUT``).
+    """
+    uri = _inject_credentials(repo_uri, username, token)
+    try:
+        subprocess.run(
+            ["git", "ls-remote", "--heads", uri],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=config.GIT_LS_REMOTE_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired as e:
+        raise ValidationError(
+            f"Timed out verifying the repository '{repo_uri}'. "
+            "Check that the host is reachable and the network is available."
+        ) from e
+    except subprocess.CalledProcessError as e:
+        stderr = (e.stderr or "").strip()
+        raise ValidationError(
+            f"Could not reach the repository '{repo_uri}': {stderr or e}"
+        ) from e
 
 
 def _inject_credentials(uri: str, username: str, token: str) -> str:

@@ -63,7 +63,33 @@ async def get_pipeline_by_id(
     return pipeline
 
 
+async def validate_pipeline_repository(pipeline: Pipeline) -> None:
+    """Sanitize a pipeline's repository before it is created.
+
+    - Remote: verify the repo_uri is reachable and authenticated.
+    - Local:  verify the workspace_path (when set) points to an existing dir.
+    Raises ValidationError on failure so the pipeline is never persisted.
+    """
+    # Imported locally to avoid a circular import (git_utils imports this module).
+    from core.utils import git_utils
+
+    if pipeline.repo_uri:
+        username, token = git_utils._resolve_credentials(pipeline)
+        git_utils.verify_remote_repo(pipeline.repo_uri, username, token)
+        return
+
+    if pipeline.workspace_path:
+        ws = pipeline.workspace_abs_path
+        if not ws or not ws.is_dir():
+            raise ValidationError(
+                f"The workspace path '{pipeline.workspace_path}' does not resolve "
+                "to an existing directory under the project root."
+            )
+
+
 async def create_pipeline(pipeline: Pipeline) -> Pipeline:
+    # Sanitize BEFORE inserting so a bad repo is never persisted.
+    await validate_pipeline_repository(pipeline)
     # Ensure version is set to 1 for new pipelines
     pipeline.version = 1
     await pipeline.insert()

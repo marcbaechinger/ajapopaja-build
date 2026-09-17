@@ -90,6 +90,12 @@ CODERBOT_VERIFICATION_TIMEOUT = float(os.getenv("CODERBOT_VERIFICATION_TIMEOUT",
 GIT_USER_NAME = os.getenv("GIT_USER_NAME", "Ajapopaja Build")
 GIT_USER_EMAIL = os.getenv("GIT_USER_EMAIL", "ajapopaja-build@localhost")
 
+# Timeout (seconds) for `git ls-remote` reachability verification performed
+# when creating a remote pipeline. Guards against a hung ls-remote against an
+# unreachable host blocking the pipeline-creation request indefinitely.
+# Overridable via env var.
+GIT_LS_REMOTE_TIMEOUT = float(os.getenv("GIT_LS_REMOTE_TIMEOUT", "10"))
+
 # Global git credentials used to push to remote repositories when a pipeline
 # does not define its own per-pipeline credentials. Overridable via env vars.
 GIT_PUSH_USERNAME = os.getenv("GIT_PUSH_USERNAME", "")
