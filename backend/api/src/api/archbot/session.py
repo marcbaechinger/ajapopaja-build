@@ -17,6 +17,7 @@ from textwrap import dedent
 from typing import Any, Dict, List, Optional
 
 from api.bot.base_session import BaseBotSession
+from api.bot.session_config import BaseBotSessionConfig
 from api.bot.tool_registry import ToolDefinition
 from api.websocket_manager import WSMessage, manager
 from core.queries import task as task_queries
@@ -29,10 +30,21 @@ logger = logging.getLogger(__name__)
 class ArchBotSession(BaseBotSession):
     """
     Bot session for the ArchitectureBot.
-    Creates a design document for a given task.
+    Creates a design document for a given task, or iterates on an existing one.
     """
 
-    def get_system_instruction(self) -> str:
+    def __init__(
+        self,
+        pipeline_id: str,
+        task_id: str,
+        session_config: Optional[BaseBotSessionConfig] = None,
+        user_prompt: Optional[str] = None,
+    ):
+        self.user_prompt = user_prompt
+        self._has_existing_design_doc = False
+        super().__init__(pipeline_id, task_id, session_config)
+
+    def _create_system_instruction(self) -> str:
         return dedent("""\
             You are a Senior Software Architect. Your goal is to create a clear, concise,
             and technically sound design document for a given task.
@@ -54,10 +66,58 @@ class ArchBotSession(BaseBotSession):
             Always use the `save_design_doc` tool to finalize your work.
             """)
 
+    def _update_system_instruction(self) -> str:
+        return dedent("""\
+            You are a Senior Software Architect. Your goal is to update an existing
+            design document based on the provided comments without rewriting everything
+            unnecessarily.
+
+            Only change what really needs to be changed to address the comments.
+            Everything else is untouched. IMPORTANT: You must send the ENTIRE updated
+            design document back as your response, not only the updated part. The whole
+            thing! And only the design doc is included as the response; no other
+            conversational content.
+            """)
+
+    def get_system_instruction(self) -> str:
+        if self._has_existing_design_doc:
+            return self._update_system_instruction()
+        return self._create_system_instruction()
+
     async def get_initial_prompt(self) -> str:
         task = await task_queries.get_task_by_id(self.task_id)
         if not task:
             return f"Error: Task {self.task_id} not found."
+
+        if task.design_doc:
+            # The task already has a design doc: iterate on it.
+            self._has_existing_design_doc = True
+            # Override the initial (creation) system instruction now that we know
+            # we are operating on an existing design doc.
+            self.history[0]["content"] = self.get_system_instruction()
+
+            prompt = dedent(f"""\
+                Please update the existing design document for the following task:
+
+                Title: {task.title}
+                Description: {task.description or "No description provided."}
+                Spec: {task.spec or "No spec provided."}
+
+                Existing design document to improve:
+                ```
+                {task.design_doc}
+                ```
+                """)
+
+            if self.user_prompt:
+                prompt += dedent(f"""\
+
+                    Address the following comments:
+
+                    {self.user_prompt}
+                    """)
+
+            return prompt
 
         return dedent(f"""\
             Please create a design document for the following task:

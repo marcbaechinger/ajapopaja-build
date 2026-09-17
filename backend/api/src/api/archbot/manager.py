@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import logging
+from typing import Optional
 
 from api.bot.manager import bot_manager
 from core.models.models import Task
@@ -24,12 +25,19 @@ logger = logging.getLogger(__name__)
 
 class ArchBotManager:
     @staticmethod
-    async def process_task(task: Task):
+    async def process_task(task: Task, user_prompt: Optional[str] = None):
         """
         Enqueues an ArchBotSession for the given task.
+
+        Args:
+            task: The task to process.
+            user_prompt: Optional comments/feedback to address when iterating on
+                an existing design document.
         """
         logger.info(f"ArchBotManager: Enqueueing ArchBot for task {task.id}")
         session = ArchBotSession(
-            pipeline_id=str(task.pipeline_id), task_id=str(task.id)
+            pipeline_id=str(task.pipeline_id),
+            task_id=str(task.id),
+            user_prompt=user_prompt,
         )
         await bot_manager.enqueue(session)
