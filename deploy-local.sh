@@ -30,7 +30,7 @@ OLLAMA_HOST=http://host.docker.internal:11434
 DATABASE_NAME=ajapopaja_build_prod
 PORT=8081
 WORKSPACES_ROOT=/home/marc-baechinger/monolit/code
-CODERBOT_DEFAULT_MODEL=deepseek-v4-flash:cloud
+CODERBOT_DEFAULT_MODEL=deepseek-v4.1-flash:cloud
 REMOTE_PR_MODE=gitea_pr
 EOT"
   echo "Created default environment file."

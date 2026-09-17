@@ -18,7 +18,7 @@
         {
           "_launch": true,
           "contextWindow": 1048576,
-          "id": "deepseek-v4-flash:cloud",
+          "id": "deepseek-v4.1-flash:cloud",
           "input": [
             "text"
           ],

@@ -35,7 +35,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
 
 # Provide pi's model configuration. The container runs as root, so pi reads
 # ~/.pi/agent/models.json from /root/.pi/agent/. Only the models listed in
-# docker/pi-agent/models.json (qwen3.6:27b, deepseek-v4-flash:cloud) are exposed.
+# docker/pi-agent/models.json (qwen3.6:27b, deepseek-v4.1-flash:cloud) are exposed.
 RUN mkdir -p /root/.pi/agent
 COPY docker/pi-agent/models.json /root/.pi/agent/models.json
 # Copy backend workspace definition

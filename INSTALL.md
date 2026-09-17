@@ -64,7 +64,7 @@ docker build --build-arg BUILD_VERSION=$(git rev-parse --short HEAD) \
 - **Node.js 22** and the **`pi` coding agent** (installed globally via npm).
 - A pi model configuration at `/root/.pi/agent/models.json` exposing only the
   models listed in `docker/pi-agent/models.json`
-  (`qwen3.6:27b` and `deepseek-v4-flash:cloud`).
+  (`qwen3.6:27b` and `deepseek-v4.1-flash:cloud`).
 - Git configured with `safe.directory '*'` so it can operate on mounted
   workspaces owned by a different host user.
 
@@ -86,7 +86,7 @@ DATABASE_NAME=ajapopaja_build_prod
 PORT=8081
 OLLAMA_HOST=http://host.docker.internal:11434
 WORKSPACES_ROOT=/home/marc-baechinger/monolit/code
-CODERBOT_DEFAULT_MODEL=deepseek-v4-flash:cloud
+CODERBOT_DEFAULT_MODEL=deepseek-v4.1-flash:cloud
 ```
 
 ### 3.2 Variable reference
