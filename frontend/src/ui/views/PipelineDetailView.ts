@@ -608,6 +608,7 @@ export class PipelineDetailView extends View {
       if (!taskId) return;
       this.pendingSpecEditTaskId = null;
       this.selectedTask = this.allLoadedTasks.find(t => t.id === taskId) || null;
+      this.refreshBacklog();
       this.refreshSelectedTask();
     });
 
@@ -1731,6 +1732,11 @@ export class PipelineDetailView extends View {
     const backlogEl = this.container.querySelector('#backlog-view');
     if (!backlogEl) return;
     const backlogTasks = this.allLoadedTasks.filter(t => !t.deleted && (t.status === TaskStatus.PROPOSED || t.status === TaskStatus.CREATED));
-    backlogEl.innerHTML = BacklogView.render({ tasks: backlogTasks });
+    const selectedTaskId =
+      this.selectedTask && this.selectedTask.status === TaskStatus.CREATED
+        ? this.selectedTask.id
+        : undefined;
+
+    backlogEl.innerHTML = BacklogView.render({ tasks: backlogTasks, selectedTaskId });
   }
 }

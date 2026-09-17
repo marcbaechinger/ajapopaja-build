@@ -116,4 +116,27 @@ describe('BacklogTaskView', () => {
       expect(html).not.toContain('data-action-click="schedule_task"');
     });
   });
+
+  describe('selected state', () => {
+    it('should not apply the selected styling by default', () => {
+      const html = BacklogTaskView.render(makeTask());
+      expect(html).not.toContain('border-app-accent-1/70');
+      expect(html).not.toContain('bg-app-accent-1/10');
+      expect(html).not.toContain('ring-app-accent-1/40');
+    });
+
+    it('should apply the selected styling when isSelected is true', () => {
+      const html = BacklogTaskView.render(makeTask(), true);
+      expect(html).toContain('border-app-accent-1/70');
+      expect(html).toContain('bg-app-accent-1/10');
+      expect(html).toContain('ring-1 ring-app-accent-1/40');
+    });
+
+    it('should keep the row clickable and identifiable when selected', () => {
+      const html = BacklogTaskView.render(makeTask(), true);
+      expect(html).toContain('data-action-click="select_task"');
+      expect(html).toContain('data-task-id="task-1"');
+      expect(html).toContain('data-view-id="task-1"');
+    });
+  });
 });

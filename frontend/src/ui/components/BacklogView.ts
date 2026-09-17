@@ -19,6 +19,8 @@ import { BacklogTaskView } from './BacklogTaskView.ts';
 
 export interface BacklogViewProps {
   tasks: Task[];
+  /** Id of the currently selected backlog task (only CREATED ones are highlighted). */
+  selectedTaskId?: string;
 }
 
 /**
@@ -35,7 +37,7 @@ export interface BacklogViewProps {
  */
 export class BacklogView {
   static render(props: BacklogViewProps): string {
-    const { tasks } = props;
+    const { tasks, selectedTaskId } = props;
 
     const proposed = tasks
       .filter(t => !t.deleted && t.status === TaskStatus.PROPOSED)
@@ -47,10 +49,10 @@ export class BacklogView {
     return `
       <div class="flex flex-col gap-3 p-2 min-h-0">
         ${BacklogView.sectionHeader('Proposed', proposed.length, 'text-purple-400')}
-        ${BacklogView.sectionBody(proposed, 'No proposed designs.')}
+        ${BacklogView.sectionBody(proposed, 'No proposed designs.', selectedTaskId)}
 
         ${BacklogView.sectionHeader('Backlog', created.length, 'text-app-muted')}
-        ${BacklogView.sectionBody(created, 'Backlog is empty.')}
+        ${BacklogView.sectionBody(created, 'Backlog is empty.', selectedTaskId)}
       </div>
     `;
   }
@@ -64,7 +66,7 @@ export class BacklogView {
     `;
   }
 
-  private static sectionBody(tasks: Task[], emptyMessage: string): string {
+  private static sectionBody(tasks: Task[], emptyMessage: string, selectedTaskId?: string): string {
     if (tasks.length === 0) {
       return `
         <div class="px-1">
@@ -74,7 +76,7 @@ export class BacklogView {
     }
     return `
       <div class="flex flex-col gap-2">
-        ${tasks.map(t => BacklogTaskView.render(t)).join('')}
+        ${tasks.map(t => BacklogTaskView.render(t, t.id === selectedTaskId)).join('')}
       </div>
     `;
   }

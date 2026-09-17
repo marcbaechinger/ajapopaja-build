@@ -96,4 +96,41 @@ describe('BacklogView', () => {
     const html = BacklogView.render({ tasks: [makeTask({ deleted: true })] });
     expect(html).toContain('Backlog is empty.');
   });
+
+  it('should highlight only the row matching selectedTaskId', () => {
+    const tasks = [
+      makeTask({ id: 'p1', status: TaskStatus.PROPOSED, design_doc: '# d' }),
+      makeTask({ id: 'c1', status: TaskStatus.CREATED }),
+      makeTask({ id: 'c2', status: TaskStatus.CREATED }),
+    ];
+    const html = BacklogView.render({ tasks, selectedTaskId: 'c1' });
+
+    // Match each backlog row: its opening div class and its data-view-id.
+    const rowRe = /<div class="([^"]*group rounded-lg[^"]*)"[^>]*data-view-id="([^"]*)"/g;
+    const rows: { id: string, cls: string }[] = [];
+    let m: RegExpExecArray | null;
+    while ((m = rowRe.exec(html)) !== null) {
+      rows.push({ id: m[2], cls: m[1] });
+    }
+
+    expect(rows.map(r => r.id)).toEqual(['p1', 'c1', 'c2']);
+
+    const c1 = rows.find(r => r.id === 'c1')!;
+    const c2 = rows.find(r => r.id === 'c2')!;
+    // The selected row carries the selected classes.
+    expect(c1.cls).toContain('border-app-accent-1/70');
+    expect(c1.cls).toContain('bg-app-accent-1/10');
+    expect(c1.cls).toContain('ring-app-accent-1/40');
+    // A sibling non-selected row does not.
+    expect(c2.cls).not.toContain('border-app-accent-1/70');
+    expect(c2.cls).not.toContain('bg-app-accent-1/10');
+    expect(c2.cls).not.toContain('ring-app-accent-1/40');
+  });
+
+  it('should not apply selected styling when selectedTaskId is omitted', () => {
+    const html = BacklogView.render({ tasks: [makeTask({ id: 'c1', status: TaskStatus.CREATED })] });
+    expect(html).not.toContain('border-app-accent-1/70');
+    expect(html).not.toContain('bg-app-accent-1/10');
+    expect(html).not.toContain('ring-app-accent-1/40');
+  });
 });

@@ -169,6 +169,59 @@ describe('PipelineDetailView Layout', () => {
     expect(selectedView!.innerHTML).not.toContain('Select a task from the backlog');
   });
 
+  it('should highlight the backlog row of a selected CREATED task', async () => {
+    mockContext.taskClient.listByPipeline.mockResolvedValue([
+      { id: 'c1', title: 'Selected Created', status: TaskStatus.CREATED, deleted: false, version: 1, order: 0, type: 'manual', want_design_doc: false },
+      { id: 'c2', title: 'Other Created', status: TaskStatus.CREATED, deleted: false, version: 1, order: 10, type: 'manual', want_design_doc: false },
+    ]);
+
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+    container.innerHTML = view.render() as string;
+    await view.refreshTasks();
+
+    const selectAction = mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === 'select_task')![1];
+    const el = document.createElement('div');
+    el.setAttribute('data-view-id', 'c1');
+    selectAction(new Event('click'), el);
+
+    const backlog = container.querySelector('#backlog-view') as HTMLElement;
+    const rowRe = /<div class="([^"]*group rounded-lg[^"]*)"[^>]*data-view-id="([^"]*)"/g;
+    const rows: { id: string, cls: string }[] = [];
+    let m: RegExpExecArray | null;
+    while ((m = rowRe.exec(backlog.innerHTML)) !== null) rows.push({ id: m[2], cls: m[1] });
+
+    const c1 = rows.find(r => r.id === 'c1')!;
+    const c2 = rows.find(r => r.id === 'c2')!;
+    expect(c1.cls).toContain('border-app-accent-1/70');
+    expect(c1.cls).toContain('bg-app-accent-1/10');
+    expect(c1.cls).toContain('ring-app-accent-1/40');
+    expect(c2.cls).not.toContain('border-app-accent-1/70');
+    expect(c2.cls).not.toContain('bg-app-accent-1/10');
+  });
+
+  it('should not highlight a selected PROPOSED task in the backlog', async () => {
+    mockContext.taskClient.listByPipeline.mockResolvedValue([
+      { id: 'p1', title: 'Selected Proposed', design_doc: '# d', status: TaskStatus.PROPOSED, deleted: false, version: 1, order: 0, type: 'manual', want_design_doc: true },
+    ]);
+
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+    container.innerHTML = view.render() as string;
+    await view.refreshTasks();
+
+    const selectAction = mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === 'select_task')![1];
+    const el = document.createElement('div');
+    el.setAttribute('data-view-id', 'p1');
+    selectAction(new Event('click'), el);
+
+    const backlog = container.querySelector('#backlog-view') as HTMLElement;
+    expect(backlog.innerHTML).toContain('data-view-id="p1"');
+    expect(backlog.innerHTML).not.toContain('border-app-accent-1/70');
+    expect(backlog.innerHTML).not.toContain('bg-app-accent-1/10');
+    expect(backlog.innerHTML).not.toContain('ring-app-accent-1/40');
+  });
+
   it('should update a task order via the update_task_order action', async () => {
     mockContext.taskClient.listByPipeline.mockResolvedValue([]);
     const view = new PipelineDetailView(mockContext, { id: 'p1' });

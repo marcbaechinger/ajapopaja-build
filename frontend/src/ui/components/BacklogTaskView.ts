@@ -50,14 +50,25 @@ function specExcerpt(spec: string): string {
  * to create/update a design doc, and starting CoderBot to implement the task.
  */
 export class BacklogTaskView {
-  static render(task: Task): string {
+  /**
+   * @param isSelected When true the row gets a visually distinct "selected"
+   *   treatment (accent border + subtle fill) so the user can recognise the
+   *   currently selected backlog task. Defaults to false.
+   */
+  static render(task: Task, isSelected: boolean = false): string {
     const taskId = escapeHtml(task.id || '');
     const hasDesignDoc = !!(task.design_doc && task.design_doc.trim());
     const excerpt = task.spec ? specExcerpt(task.spec) : '';
     const statusActionsHtml = renderStatusActions(task);
 
+    const rowClass =
+      'group rounded-lg p-3 flex flex-col gap-2 transition-colors cursor-pointer hover:border-app-accent-1/40 hover:bg-app-bg ' +
+      (isSelected
+        ? 'border border-app-accent-1/70 bg-app-accent-1/10 ring-1 ring-app-accent-1/40'
+        : 'border border-app-border bg-app-bg/60');
+
     return `
-      <div class="group rounded-lg border border-app-border bg-app-bg/60 p-3 flex flex-col gap-2 transition-colors cursor-pointer hover:border-app-accent-1/40 hover:bg-app-bg"
+      <div class="${rowClass}"
            data-action-click="select_task" data-view-id="${taskId}" data-task-id="${taskId}">
         <div class="flex items-start justify-between gap-2">
           <span class="text-[11px] font-bold text-app-text leading-snug break-words">${escapeHtml(task.title || '')}</span>
