@@ -33,6 +33,7 @@ import { PullRequestSection } from '../components/PullRequestSection.ts';
 import type { DocBotDialogProps } from '../components/DocBotDialog.ts';
 import { PipelineEditDialog } from '../components/PipelineEditDialog.ts';
 import { ReviewDialog } from '../components/ReviewDialog.ts';
+import { UpdateDesignDialog } from '../components/UpdateDesignDialog.ts';
 import { PullRequestDialog } from '../components/PullRequestDialog.ts';
 import { CoderBotDialog } from '../components/CoderBotDialog.ts';
 import { PiView } from '../components/PiView.ts';
@@ -418,6 +419,24 @@ export class PipelineDetailView extends View {
       } catch (error) {
         console.error('Trigger ArchBot error:', error);
         alert('Failed to trigger ArchitectureBot');
+      }
+    });
+
+    this.context.actionRegistry.register('update_design', async (_e, el) => {
+      const taskId = el.getAttribute('data-task-id');
+      if (!taskId) return;
+
+      const dialog = new UpdateDesignDialog();
+      const comments = await dialog.show();
+      if (!comments) return;
+
+      try {
+        await this.context.archBotClient.iterate(this.pipelineId, taskId, comments);
+        this.archbotState = { status: 'inProgress', taskId };
+        this.updateHeader();
+      } catch (error) {
+        console.error('Update Design error:', error);
+        alert('Failed to update design document');
       }
     });
 

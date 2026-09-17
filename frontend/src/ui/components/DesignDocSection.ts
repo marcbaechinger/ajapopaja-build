@@ -49,6 +49,16 @@ export function renderDesignDocSection(task: Task, isProposed: boolean): string 
                 </span>
               </button>
             ` : ''}
+            ${task.design_doc ? `
+              <button data-action-click="update_design" data-task-id="${taskId}" 
+                      title="Iterate on the design doc with ArchitectureBot"
+                      class="text-[10px] bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded font-bold uppercase tracking-tight transition-all cursor-pointer">
+                <span class="flex items-center gap-1">
+                  ${Icon.render('architecture', { size: 12 })}
+                  Update Design
+                </span>
+              </button>
+            ` : ''}
             ${(isImplemented || isDiscarded) ? `<button data-action-click="view_design_doc" class="text-[10px] text-app-accent-1 opacity-0 group-hover:opacity-100 transition-opacity hover:underline cursor-pointer">Open to view</button>` : ''}
             ${(isImplemented || isDiscarded) ? '' : `<button data-action-click="edit_design_doc" class="text-[10px] text-app-muted opacity-0 group-hover:opacity-100 transition-opacity hover:underline cursor-pointer">Click to edit</button>`}
             <button data-action-click="toggle_design_doc_expand" class="text-[10px] text-app-accent-2 hover:underline cursor-pointer">

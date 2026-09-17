@@ -14,7 +14,9 @@
 
 import logging
 
-from fastapi import APIRouter, HTTPException, Depends
+from typing import Optional
+
+from fastapi import APIRouter, HTTPException, Depends, Body
 
 from api.auth import get_current_user
 from core.queries import task as task_queries
@@ -30,10 +32,15 @@ logger = logging.getLogger(__name__)
 async def trigger_archbot(
     pipeline_id: str,
     task_id: str,
+    comments: Optional[str] = Body(None, embed=True),
     current_user: str = Depends(get_current_user),
 ):
     """
     Triggers the ArchitectureBot for a specific task.
+
+    - If the task has no design document yet, it generates a new one.
+    - If the task already has a design document, `comments` (the feedback the
+      user wants the bot to address) are used to iterate on the existing doc.
     """
     logger.info(
         f"trigger_archbot: Received request for task {task_id} in pipeline {pipeline_id}"
@@ -48,17 +55,25 @@ async def trigger_archbot(
             status_code=400, detail="Task does not belong to this pipeline"
         )
 
+    if task.design_doc:
+        # The task already has a design document: iterate on it using the
+        # provided comments. Comments are required for iteration.
+        comments = (comments or "").strip()
+        if not comments:
+            raise HTTPException(
+                status_code=400,
+                detail="Comments are required to iterate on an existing design document",
+            )
+
+        await ArchBotManager.process_task(task, user_prompt=comments)
+
+        return {"status": "success", "message": "ArchitectureBot enqueued"}
+
     # Validation: CREATED state and no design doc
     if task.status != TaskStatus.CREATED:
         raise HTTPException(
             status_code=400,
             detail=f"Task must be in CREATED state, currently {task.status}",
-        )
-
-    if task.design_doc:
-        raise HTTPException(
-            status_code=400,
-            detail="Task already has a design document",
         )
 
     if not task.spec:

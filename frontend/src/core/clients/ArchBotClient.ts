@@ -30,4 +30,12 @@ export class ArchBotClient extends BaseClient {
       method: 'POST'
     });
   }
+
+  async iterate(pipelineId: string, taskId: string, comments: string): Promise<void> {
+    await this.fetch(`${this.apiBaseUrl}/pipelines/${pipelineId}/archbot/trigger/${taskId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ comments })
+    });
+  }
 }
