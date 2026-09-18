@@ -77,6 +77,8 @@ class ArchBotSession(BaseBotSession):
             design document back as your response, not only the updated part. The whole
             thing! And only the design doc is included as the response; no other
             conversational content.
+
+            Always use the `save_design_doc` tool to finalize your work.
             """)
 
     def get_system_instruction(self) -> str:
