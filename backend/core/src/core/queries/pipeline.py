@@ -108,6 +108,7 @@ async def update_pipeline(
     doc_root: Optional[str] = None,
     test_commands: Optional[List[List[str]]] = None,
     lint_commands: Optional[List[List[str]]] = None,
+    serve_commands: Optional[List[List[str]]] = None,
 ) -> Pipeline:
     pipeline = await get_pipeline_by_id(pipeline_id)
 
@@ -144,6 +145,12 @@ async def update_pipeline(
         # payloads are rejected with a clear ValidationError before saving.
         pipeline.lint_commands = _validate_command_lists(
             lint_commands, "lint_commands", "lint", ValidationError
+        )
+    if serve_commands is not None:
+        # Re-validate here (mirroring the model validator) so that invalid
+        # payloads are rejected with a clear ValidationError before saving.
+        pipeline.serve_commands = _validate_command_lists(
+            serve_commands, "serve_commands", "serve", ValidationError
         )
 
     pipeline.version += 1

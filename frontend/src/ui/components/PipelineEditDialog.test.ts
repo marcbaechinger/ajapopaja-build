@@ -256,7 +256,7 @@ describe('PipelineEditDialog', () => {
     expect(updateCall[2].test_commands).toEqual([]);
   });
 
-  const switchToCmdTab = (tab: 'test' | 'lint') => {
+  const switchToCmdTab = (tab: 'test' | 'lint' | 'serve') => {
     const btn = document.querySelector(`[data-cmd-tab="${tab}"]`) as HTMLButtonElement;
     btn.click();
   };
@@ -323,6 +323,85 @@ describe('PipelineEditDialog', () => {
 
     const updateCall = (mockProps.context.pipelineClient.update as any).mock.calls[0];
     expect(updateCall[2].test_commands).toEqual([['sh', '-c', 'make test']]);
+  });
+
+  it('should render a serve commands tab', async () => {
+    const dialog = new PipelineEditDialog(mockProps);
+    const showPromise = dialog.show();
+
+    const serveTab = document.querySelector('[data-cmd-tab="serve"]') as HTMLButtonElement;
+    expect(serveTab).not.toBeNull();
+    expect(serveTab.textContent).toContain('Serve');
+
+    switchToCmdTab('serve');
+    const textarea = document.querySelector('textarea[name="serve_commands"]') as HTMLTextAreaElement;
+    expect(textarea).not.toBeNull();
+
+    document.querySelector('#pipeline-edit-cancel')?.dispatchEvent(new MouseEvent('click'));
+    await showPromise;
+  });
+
+  it('should pre-fill the serve commands textarea from stored argv lists', async () => {
+    mockProps.pipeline!.serve_commands = [
+      ['sh', '-c', 'make serve'],
+      ['uvicorn', 'main:app', '--reload'],
+    ];
+    const dialog = new PipelineEditDialog(mockProps);
+    const showPromise = dialog.show();
+
+    switchToCmdTab('serve');
+    const textarea = document.querySelector('textarea[name="serve_commands"]') as HTMLTextAreaElement;
+    expect(textarea.value).toBe('make serve\nuvicorn main:app --reload');
+
+    document.querySelector('#pipeline-edit-cancel')?.dispatchEvent(new MouseEvent('click'));
+    await showPromise;
+  });
+
+  it('should send serve_commands parsed from the textarea on save', async () => {
+    const dialog = new PipelineEditDialog(mockProps);
+    const showPromise = dialog.show();
+
+    switchToCmdTab('serve');
+    const textarea = document.querySelector('textarea[name="serve_commands"]') as HTMLTextAreaElement;
+    textarea.value = 'make serve\n\ncd backend && uv run uvicorn api.main:app --reload';
+
+    const saveBtn = document.querySelector('#pipeline-edit-save') as HTMLButtonElement;
+    saveBtn.click();
+    await showPromise;
+
+    const updateCall = (mockProps.context.pipelineClient.update as any).mock.calls[0];
+    expect(updateCall[2].serve_commands).toEqual([
+      ['sh', '-c', 'make serve'],
+      ['sh', '-c', 'cd backend && uv run uvicorn api.main:app --reload'],
+    ]);
+  });
+
+  it('should send an empty serve_commands array when the serve textarea is blank', async () => {
+    const dialog = new PipelineEditDialog(mockProps);
+    const showPromise = dialog.show();
+
+    switchToCmdTab('serve');
+    const saveBtn = document.querySelector('#pipeline-edit-save') as HTMLButtonElement;
+    saveBtn.click();
+    await showPromise;
+
+    const updateCall = (mockProps.context.pipelineClient.update as any).mock.calls[0];
+    expect(updateCall[2].serve_commands).toEqual([]);
+  });
+
+  it('should preserve serve_commands when saving from the test tab', async () => {
+    mockProps.pipeline!.serve_commands = [['sh', '-c', 'make serve']];
+    const dialog = new PipelineEditDialog(mockProps);
+    const showPromise = dialog.show();
+
+    // The serve textarea is not rendered from the test tab; the stored value
+    // must still be parsed from the pipeline and sent on save.
+    const saveBtn = document.querySelector('#pipeline-edit-save') as HTMLButtonElement;
+    saveBtn.click();
+    await showPromise;
+
+    const updateCall = (mockProps.context.pipelineClient.update as any).mock.calls[0];
+    expect(updateCall[2].serve_commands).toEqual([['sh', '-c', 'make serve']]);
   });
 
   it('should call update and close on save', async () => {
@@ -489,6 +568,44 @@ describe('PipelineEditDialog', () => {
 
       const createCall = (props.context.pipelineClient.create as any).mock.calls[0];
       expect(createCall[0].test_commands).toBeNull();
+    });
+
+    it('should send serve_commands on create when provided', async () => {
+      const props = mkCreateProps();
+      const dialog = new PipelineEditDialog(props);
+      const showPromise = dialog.show();
+
+      switchToCmdTab('serve');
+      const nameInput = document.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
+      nameInput.value = 'New Pipe';
+      const textarea = document.querySelector('textarea[name="serve_commands"]') as HTMLTextAreaElement;
+      textarea.value = 'uvicorn main:app --reload';
+
+      const saveBtn = document.querySelector('#pipeline-edit-save') as HTMLButtonElement;
+      saveBtn.click();
+      await showPromise;
+
+      const createCall = (props.context.pipelineClient.create as any).mock.calls[0];
+      expect(createCall[0].serve_commands).toEqual([
+        ['sh', '-c', 'uvicorn main:app --reload'],
+      ]);
+    });
+
+    it('should send null serve_commands on create when the serve textarea is blank', async () => {
+      const props = mkCreateProps();
+      const dialog = new PipelineEditDialog(props);
+      const showPromise = dialog.show();
+
+      switchToCmdTab('serve');
+      const nameInput = document.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
+      nameInput.value = 'New Pipe';
+
+      const saveBtn = document.querySelector('#pipeline-edit-save') as HTMLButtonElement;
+      saveBtn.click();
+      await showPromise;
+
+      const createCall = (props.context.pipelineClient.create as any).mock.calls[0];
+      expect(createCall[0].serve_commands).toBeNull();
     });
 
     it('should surface backend validation errors inline instead of alert', async () => {

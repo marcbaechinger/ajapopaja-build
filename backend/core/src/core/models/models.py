@@ -153,6 +153,11 @@ class Pipeline(Document):
     # ``run_lint`` assistant tool / lint endpoint. ``None``/empty means
     # "not configured".
     lint_commands: Optional[List[List[str]]] = None
+    # Pipeline-specific serve commands (list of argv lists, e.g.
+    # [["sh", "-c", "uv run uvicorn api.main:app --reload"]]). These are
+    # launched as a long-running background dev server by the
+    # ``DevProcessManager`` / dev router. ``None``/empty means "not configured".
+    serve_commands: Optional[List[List[str]]] = None
     version: int = 1
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -222,6 +227,17 @@ class Pipeline(Document):
         - Otherwise each entry must be a non-empty list of non-empty strings.
         """
         return _validate_command_lists(v, "lint_commands", "lint")
+
+    @field_validator("serve_commands")
+    @classmethod
+    def validate_serve_commands(cls, v):
+        """Validate per-pipeline serve commands (a list of argv lists).
+
+        - ``None`` means “not configured”.
+        - An empty list ``[]`` disables the pipeline-specific dev server.
+        - Otherwise each entry must be a non-empty list of non-empty strings.
+        """
+        return _validate_command_lists(v, "serve_commands", "serve")
 
     @field_validator("repo_uri")
     @classmethod

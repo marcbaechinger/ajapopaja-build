@@ -67,6 +67,7 @@ async def update_pipeline(
     doc_root: Optional[str] = Body(None, embed=True),
     test_commands: Optional[List[List[str]]] = Body(None, embed=True),
     lint_commands: Optional[List[List[str]]] = Body(None, embed=True),
+    serve_commands: Optional[List[List[str]]] = Body(None, embed=True),
     current_user: User = Depends(get_current_user),
 ):
     updated_pipeline = await pipeline_queries.update_pipeline(
@@ -81,6 +82,7 @@ async def update_pipeline(
         doc_root=doc_root,
         test_commands=test_commands,
         lint_commands=lint_commands,
+        serve_commands=serve_commands,
     )
 
     await manager.broadcast(

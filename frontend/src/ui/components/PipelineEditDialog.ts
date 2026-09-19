@@ -30,7 +30,7 @@ export interface PipelineEditDialogProps {
 
 type RepoTab = 'local' | 'remote';
 
-type CommandsTab = 'test' | 'lint';
+type CommandsTab = 'test' | 'lint' | 'serve';
 
 const READONLY_CLASS = ' opacity-60 cursor-not-allowed';
 
@@ -241,14 +241,31 @@ export class PipelineEditDialog extends BaseDialog<void> {
     );
   }
 
+  private renderServeCommands(): string {
+    return this.renderCommandTextarea(
+      'serve_commands',
+      'Serve Commands',
+      this.pipeline.serve_commands || [],
+      'One command per line, e.g.&#10;cd backend &amp;&amp; uv run uvicorn api.main:app --reload&#10;cd frontend &amp;&amp; npm run dev',
+      'Commands launched as a long-running background dev server. One per line. Leave empty to disable the dev server.'
+    );
+  }
+
   private renderCommandsTabs(): string {
+    const activeContent =
+      this.activeCmdTab === 'test'
+        ? this.renderTestCommands()
+        : this.activeCmdTab === 'lint'
+          ? this.renderLintCommands()
+          : this.renderServeCommands();
     return `
       <div class="flex flex-col gap-3">
         <div class="flex gap-1 border-b border-app-border">
           <button type="button" data-cmd-tab="test" class="${this.cmdTabClass('test')}">Test</button>
           <button type="button" data-cmd-tab="lint" class="${this.cmdTabClass('lint')}">Lint</button>
+          <button type="button" data-cmd-tab="serve" class="${this.cmdTabClass('serve')}">Serve</button>
         </div>
-        ${this.activeCmdTab === 'test' ? this.renderTestCommands() : this.renderLintCommands()}
+        ${activeContent}
       </div>
     `;
   }
@@ -336,6 +353,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
     const repoTokenInput = this.dialog.querySelector('input[name="repo_token"]') as HTMLInputElement;
     const testCommandsInput = this.dialog.querySelector('textarea[name="test_commands"]') as HTMLTextAreaElement;
     const lintCommandsInput = this.dialog.querySelector('textarea[name="lint_commands"]') as HTMLTextAreaElement;
+    const serveCommandsInput = this.dialog.querySelector('textarea[name="serve_commands"]') as HTMLTextAreaElement;
 
     // When saving from the other command tab the hidden textarea is not
     // rendered, so fall back to the stored pipeline value to avoid silently
@@ -346,9 +364,13 @@ export class PipelineEditDialog extends BaseDialog<void> {
     const lintText =
       lintCommandsInput?.value ??
       (this.pipeline.lint_commands || []).map(argsToCommand).join('\n');
+    const serveText =
+      serveCommandsInput?.value ??
+      (this.pipeline.serve_commands || []).map(argsToCommand).join('\n');
 
     const testCommands = parseTestCommands(testText);
     const lintCommands = parseTestCommands(lintText);
+    const serveCommands = parseTestCommands(serveText);
 
     const btnLabel = create ? 'Create Pipeline' : 'Save Changes';
     saveBtn.disabled = true;
@@ -365,11 +387,13 @@ export class PipelineEditDialog extends BaseDialog<void> {
           doc_root?: string;
           test_commands?: string[][] | null;
           lint_commands?: string[][] | null;
+          serve_commands?: string[][] | null;
         } = {
           name: nameInput?.value.trim() || '',
           doc_root: docRootInput?.value.trim() || 'design',
           test_commands: testCommands.length > 0 ? testCommands : null,
           lint_commands: lintCommands.length > 0 ? lintCommands : null,
+          serve_commands: serveCommands.length > 0 ? serveCommands : null,
         };
 
         if (this.activeTab === 'remote') {
@@ -405,9 +429,11 @@ export class PipelineEditDialog extends BaseDialog<void> {
           doc_root?: string;
           test_commands?: string[][] | null;
           lint_commands?: string[][] | null;
+          serve_commands?: string[][] | null;
         } = {
           test_commands: testCommands,
           lint_commands: lintCommands,
+          serve_commands: serveCommands,
         };
 
         if (remote) {

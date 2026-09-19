@@ -37,6 +37,7 @@ from ajapopaja_mcp.server import mcp
 from api.assistant.ws_handler import register_assistant_handlers
 from api.auth import ALGORITHM, SECRET_KEY, get_current_user_from_token
 from api.routes.auth import router as auth_router
+from api.routes.dev_server import router as dev_server_router
 from api.routes.docbot import router as docbot_router
 from api.routes.editor_commands import router as editor_router
 from api.reviewbot.router import router as reviewbot_router
@@ -55,6 +56,7 @@ from core.exceptions import (
     ValidationError,
     VersionMismatchError,
 )
+from core.services.dev_process_manager import DevProcessManager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -96,6 +98,7 @@ async def lifespan(app: FastAPI):
     register_assistant_handlers()
     yield
     logger.info("Shutting down...")
+    await DevProcessManager.instance().stop_all()
 
 
 # Create MCP ASGI app
@@ -267,6 +270,7 @@ api_router.include_router(reviewbot_router)
 api_router.include_router(archbot_router)
 api_router.include_router(coderbot_router)
 api_router.include_router(pull_request_router)
+api_router.include_router(dev_server_router)
 
 app.include_router(api_router)
 

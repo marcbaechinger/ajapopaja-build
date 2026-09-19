@@ -62,6 +62,24 @@ async def list_pipelines():
     return await pipeline_queries.get_all_pipelines()
 ```
 
+## 3.1 Dev Process Manager
+
+Per‑pipeline development servers are managed by `DevProcessManager`
+(`core/services/dev_process_manager.py`), a process‑wide singleton that owns the
+`serve` process of each pipeline. It is deliberately decoupled from the REST
+layer so that agent tools and other modules can start, stop and query a dev
+process through the same service API.
+
+- State is keyed by `pipeline_id` (`ProcessInfo`: task, subprocess, stdout,
+  stderr, exit code).
+- Only one process may run per pipeline; a second `start` raises
+  `DevProcessAlreadyRunningError` (mapped to HTTP `409`).
+- `start`/`stop` are guarded by a per‑pipeline `asyncio.Lock` to make the
+  check‑then‑mutate sequence race‑free.
+- The dev router (`api/routes/dev_server.py`, prefix
+  `/pipelines/{pipeline_id}/dev`, tag `dev`) is a thin HTTP wrapper exposing
+  `GET /status`, `POST /start`, `POST /restart` and `POST /stop`.
+
 ## 4. Error Handling & HTTP Mapping
 
 A centralized exception handler translates internal domain errors into appropriate HTTP responses.
