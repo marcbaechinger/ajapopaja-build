@@ -55,7 +55,7 @@ describe('HistoryItemView', () => {
     expect(html).toContain('abcdef1');
     expect(html).toContain('data-action-click="open_diff_view"');
     expect(html).toContain('data-commit-hash="abcdef123456"');
-    expect(html).toContain('title="Open Diff View in Neovim"');
+    expect(html).toContain('title="View Commit Diff"');
   });
 
   it('should render implementation duration', () => {

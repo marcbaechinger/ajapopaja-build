@@ -538,3 +538,61 @@ async def test_drop_top_commit_no_remote():
 
     assert "no remote repo_uri" in msg
     repo.remotes.origin.fetch.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_get_commit_diff_success(tmp_path):
+    origin = _make_origin(tmp_path)
+    ws = tmp_path / "workspace"
+    _git(tmp_path, ["clone", str(origin), str(ws)])
+
+    (ws / "file.txt").write_text("extra change\n")
+    _git(ws, ["add", "."])
+    _git(ws, ["commit", "-m", "Add file"])
+
+    repo = git.Repo(str(ws))
+    head = repo.head.commit.hexsha
+
+    with _patch_pipeline_and_repo(repo):
+        result = await git_utils.get_commit_diff("p1", head)
+
+    assert result["commit_hash"] == head
+    assert result["subject"] == "Add file"
+    assert result["author"] == "Test User"
+    assert result["created_at"]
+    assert "file.txt" in result["patch"]
+    assert "+extra change" in result["patch"]
+    # Commit metadata must be stripped, leaving only the patch.
+    assert "Add file" not in result["patch"]
+
+
+@pytest.mark.asyncio
+async def test_get_commit_diff_root_commit(tmp_path):
+    origin = _make_origin(tmp_path)
+    ws = tmp_path / "workspace"
+    _git(tmp_path, ["clone", str(origin), str(ws)])
+
+    repo = git.Repo(str(ws))
+    # The initial commit of the origin has no parent; the diff must still work.
+    root = repo.head.commit.hexsha
+
+    with _patch_pipeline_and_repo(repo):
+        result = await git_utils.get_commit_diff("p1", root)
+
+    assert result["commit_hash"] == root
+    assert result["subject"] == "Initial commit"
+    assert "readme.md" in result["patch"]
+
+
+@pytest.mark.asyncio
+async def test_get_commit_diff_unknown_hash(tmp_path):
+    origin = _make_origin(tmp_path)
+    ws = tmp_path / "workspace"
+    _git(tmp_path, ["clone", str(origin), str(ws)])
+
+    repo = git.Repo(str(ws))
+
+    with _patch_pipeline_and_repo(repo):
+        with pytest.raises(EntityNotFoundError, match="not found in pipeline"):
+            await git_utils.get_commit_diff("p1", "deadbeef")
+

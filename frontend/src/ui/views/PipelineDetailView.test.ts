@@ -19,6 +19,7 @@ import { PipelineDetailView } from './PipelineDetailView.ts';
 import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
 import { TaskStatus } from '../../core/domain.ts';
 import { CoderBotDialog } from '../components/CoderBotDialog.ts';
+import { DiffDialog } from '../components/DiffDialog.ts';
 import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
 import { IteratePullRequestDialog } from '../components/IteratePullRequestDialog.ts';
 
@@ -55,6 +56,14 @@ vi.mock('../components/CoderBotDialog.ts', () => ({
 vi.mock('../components/IteratePullRequestDialog.ts', () => ({
   IteratePullRequestDialog: vi.fn(function IteratePullRequestDialog() {
     return { show: vi.fn().mockResolvedValue('Review comments') };
+  }),
+}));
+
+// Mock the diff dialog so triggering the action can be asserted without the
+// dialog's async network load.
+vi.mock('../components/DiffDialog.ts', () => ({
+  DiffDialog: vi.fn(function DiffDialog() {
+    return { show: vi.fn() };
   }),
 }));
 
@@ -1028,5 +1037,96 @@ describe('PipelineDetailView Accept Pull Request', () => {
     await iterateAction(null, el);
 
     expect(mockContext.pullRequestClient.iteratePullRequest).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('PipelineDetailView Commit Diff', () => {
+  let mockContext: any;
+  let container: HTMLElement;
+
+  const getAction = (name: string) =>
+    mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === name)![1];
+
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    LocalStorageManager.resetInstances();
+    vi.clearAllMocks();
+
+    mockContext = {
+      actionRegistry: { register: vi.fn() },
+      wsClient: { on: vi.fn().mockReturnValue(() => {}) },
+      dataManager: {
+        on: vi.fn().mockReturnValue(() => {}),
+        updateTask: vi.fn(),
+        updatePipeline: vi.fn(),
+      },
+      authService: {
+        getUser: vi.fn().mockReturnValue({ username: 'testuser' }),
+        getAccessToken: vi.fn().mockReturnValue('token'),
+      },
+      pipelineClient: {
+        get: vi.fn().mockResolvedValue({ id: 'p1', name: 'Pipe 1' }),
+        getCommitDiff: vi.fn().mockResolvedValue({}),
+      },
+      taskClient: {
+        listByPipeline: vi.fn().mockResolvedValue([]),
+        listCompletedByPipeline: vi.fn().mockResolvedValue({ tasks: [], total_count: 0 }),
+      },
+      pullRequestClient: { getPullRequestsByPipeline: vi.fn().mockResolvedValue([]) },
+      systemClient: {
+        getGitStatus: vi.fn().mockResolvedValue({}),
+        isOllamaAvailable: vi.fn().mockResolvedValue(true),
+      },
+      // The legacy Neovim client is still referenced by other actions; the diff
+      // handler must no longer call it.
+      editorClient: { diffViewOpen: vi.fn() },
+    };
+
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn(() => null),
+      setItem: vi.fn(),
+    });
+  });
+
+  it('opens a DiffDialog with the task commit hash instead of calling the editor client', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+    (view as any).allLoadedTasks = [
+      { id: 't1', title: 'Task One', commit_hash: 'abcdef123456' },
+    ];
+
+    const action = getAction('open_diff_view');
+    const el = document.createElement('button');
+    el.setAttribute('data-commit-hash', 'abcdef123456');
+    el.setAttribute('data-task-id', 't1');
+
+    await action(null, el);
+
+    expect(DiffDialog).toHaveBeenCalledTimes(1);
+    expect(DiffDialog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pipelineId: 'p1',
+        commitHash: 'abcdef123456',
+        title: 'Task One',
+      })
+    );
+    const dialog = (DiffDialog as any).mock.results[0].value;
+    expect(dialog.show).toHaveBeenCalled();
+    expect(mockContext.editorClient.diffViewOpen).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when the element has no commit hash', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+
+    const action = getAction('open_diff_view');
+    const el = document.createElement('button');
+
+    await action(null, el);
+
+    expect(DiffDialog).not.toHaveBeenCalled();
   });
 });

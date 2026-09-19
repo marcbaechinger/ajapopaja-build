@@ -380,6 +380,30 @@ def validate_commit_hash(repo: git.Repo, commit_hash: str) -> bool:
         return False
 
 
+async def get_commit_diff(pipeline_id: str, commit_hash: str) -> Dict:
+    """Return the unified-diff patch and light metadata for a commit.
+
+    Raises EntityNotFoundError when the commit does not exist in the
+    pipeline's repo.
+    """
+    pipeline, repo = await get_pipeline_and_repo(pipeline_id)
+    if not validate_commit_hash(repo, commit_hash):
+        raise EntityNotFoundError(
+            f"Commit {commit_hash} not found in pipeline {pipeline_id}"
+        )
+    commit = repo.commit(commit_hash)
+    # format="" strips commit metadata so only the unified patch remains;
+    # this works for root commits too (no `^` parent ref needed).
+    patch = repo.git.show(commit.hexsha, format="")
+    return {
+        "commit_hash": commit.hexsha,
+        "patch": patch,
+        "subject": commit.summary,
+        "author": commit.author.name,
+        "created_at": commit.committed_datetime.isoformat(),
+    }
+
+
 def get_git_status_summary(repo: git.Repo) -> Dict[str, int]:
     """Returns a summary of staged, unstaged, and untracked changes."""
     status_output = repo.git.status("--porcelain")

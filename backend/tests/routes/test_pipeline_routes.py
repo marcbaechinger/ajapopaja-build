@@ -515,3 +515,48 @@ async def test_drop_top_commit_endpoint(async_client, init_mock_db):
             "message": "Successfully dropped commit abc123.",
         }
         mock_drop.assert_awaited_once_with("p1")
+
+
+@pytest.mark.asyncio
+async def test_get_commit_diff_endpoint(async_client, init_mock_db):
+    """GET /api/pipelines/{id}/commits/{sha}/diff returns the JSON diff shape."""
+    diff = {
+        "commit_hash": "abcdef123456",
+        "patch": "diff --git a/a.txt b/a.txt\n",
+        "subject": "Add a.txt",
+        "author": "Alice",
+        "created_at": "2026-01-01T00:00:00+00:00",
+    }
+    with patch(
+        "api.routes.pipeline.git_utils.get_commit_diff",
+        new_callable=AsyncMock,
+        return_value=diff,
+    ) as mock_diff:
+        response = await async_client.get(
+            "/api/pipelines/p1/commits/abcdef123456/diff"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json() == diff
+        mock_diff.assert_awaited_once_with("p1", "abcdef123456")
+
+
+@pytest.mark.asyncio
+async def test_get_commit_diff_endpoint_not_found(async_client, init_mock_db):
+    """A missing commit propagates EntityNotFoundError as HTTP 404."""
+    from core.exceptions import EntityNotFoundError
+
+    with patch(
+        "api.routes.pipeline.git_utils.get_commit_diff",
+        new_callable=AsyncMock,
+        side_effect=EntityNotFoundError("Commit deadbeef not found in pipeline p1"),
+    ):
+        response = await async_client.get("/api/pipelines/p1/commits/deadbeef/diff")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+@pytest.mark.asyncio
+async def test_get_commit_diff_endpoint_unauthenticated(async_client, init_mock_db):
+    """The commit diff route requires authentication."""
+    app.dependency_overrides.clear()  # remove mock auth
+    response = await async_client.get("/api/pipelines/p1/commits/abcdef/diff")
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED

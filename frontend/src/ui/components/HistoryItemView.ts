@@ -44,7 +44,7 @@ export class HistoryItemView {
           ${task.commit_hash ? `
             <button data-action-click="open_diff_view" data-commit-hash="${task.commit_hash}"
                     class="text-[10px] font-mono text-app-accent-2 bg-app-surface px-2 py-0.5 rounded border border-app-border hover:bg-app-accent-2/10 hover:border-app-accent-2/50 transition-all cursor-pointer shrink-0"
-                    title="Open Diff View in Neovim">
+                    title="View Commit Diff">
               ${task.commit_hash.substring(0, 7)}
             </button>
           ` : ''}

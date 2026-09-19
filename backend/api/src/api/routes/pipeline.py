@@ -15,6 +15,7 @@
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends
+from pydantic import BaseModel
 
 from api.auth import get_current_user
 from api.websocket_manager import WSMessage, manager
@@ -190,3 +191,21 @@ async def drop_top_commit(
     """Drop the topmost local commit that has not been pushed to the remote."""
     msg = await git_utils.drop_top_commit(pipeline_id)
     return {"status": "ok", "message": msg}
+
+
+class CommitDiff(BaseModel):
+    commit_hash: str
+    patch: str
+    subject: Optional[str] = None
+    author: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+@router.get("/{pipeline_id}/commits/{commit_hash}/diff", response_model=CommitDiff)
+async def get_commit_diff(
+    pipeline_id: str,
+    commit_hash: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Return the diff of a single commit so the UI can render it in a dialog."""
+    return await git_utils.get_commit_diff(pipeline_id, commit_hash)

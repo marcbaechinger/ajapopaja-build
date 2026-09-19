@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { Pipeline, PipelineStatus } from '../domain.ts';
+import { Pipeline, PipelineStatus, CommitDiff } from '../domain.ts';
 import { BaseClient } from './BaseClient.ts';
 import { AuthService } from '../AuthService.ts';
 
@@ -85,5 +85,12 @@ export class PipelineClient extends BaseClient {
   async getDailyStats(id: string): Promise<any[]> {
     const response = await this.fetch(`${this.baseUrl}/pipelines/${id}/stats/daily`);
     return await response.json();
+  }
+
+  async getCommitDiff(pipelineId: string, commitHash: string): Promise<CommitDiff> {
+    const response = await this.fetch(
+      `${this.baseUrl}/pipelines/${pipelineId}/commits/${encodeURIComponent(commitHash)}/diff`
+    );
+    return new CommitDiff(await response.json());
   }
 }

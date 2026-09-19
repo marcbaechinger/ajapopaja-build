@@ -35,6 +35,7 @@ import { PipelineEditDialog } from '../components/PipelineEditDialog.ts';
 import { ReviewDialog } from '../components/ReviewDialog.ts';
 import { UpdateDesignDialog } from '../components/UpdateDesignDialog.ts';
 import { PullRequestDialog } from '../components/PullRequestDialog.ts';
+import { DiffDialog } from '../components/DiffDialog.ts';
 import { IteratePullRequestDialog } from '../components/IteratePullRequestDialog.ts';
 import { CoderBotDialog } from '../components/CoderBotDialog.ts';
 import { PiView } from '../components/PiView.ts';
@@ -1128,18 +1129,15 @@ export class PipelineDetailView extends View {
       const commitHash = el.dataset.commitHash;
       if (!commitHash) return;
 
-      const btn = el as HTMLElement;
-      btn.classList.add('animate-pulse', 'text-app-accent-2');
+      const taskId = el.closest('[data-task-id]')?.getAttribute('data-task-id');
+      const task = this.allLoadedTasks.find(t => t.id === taskId);
 
-      try {
-        await this.context.editorClient.diffViewOpen(this.pipelineId, commitHash);
-        setTimeout(() => btn.classList.remove('animate-pulse', 'text-app-accent-2'), 1000);
-      } catch (err) {
-        console.error('Failed to open diff view:', err);
-        btn.classList.remove('animate-pulse', 'text-app-accent-2');
-        btn.classList.add('text-red-500');
-        setTimeout(() => btn.classList.remove('text-red-500'), 2000);
-      }
+      new DiffDialog({
+        context: this.context,
+        pipelineId: this.pipelineId,
+        commitHash,
+        title: task?.title,
+      }).show();
     });
     this.context.actionRegistry.register('open_docbot_dialog', () => {
       this.openDocBotDialog();

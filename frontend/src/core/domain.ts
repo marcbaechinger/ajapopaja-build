@@ -230,6 +230,23 @@ export function pullRequestAcceptLabel(pr: PullRequest): string {
   }
 }
 
+export class CommitDiff {
+  commit_hash: string = '';
+  patch: string = '';
+  subject?: string | null;
+  author?: string | null;
+  created_at?: string | null;
+
+  constructor(json: any) {
+    if (!json) return;
+    if (json.commit_hash !== undefined) this.commit_hash = String(json.commit_hash);
+    if (json.patch !== undefined) this.patch = String(json.patch);
+    if (json.subject !== undefined) this.subject = json.subject;
+    if (json.author !== undefined) this.author = json.author;
+    if (json.created_at !== undefined) this.created_at = json.created_at;
+  }
+}
+
 
 export interface User {
   id?: string;

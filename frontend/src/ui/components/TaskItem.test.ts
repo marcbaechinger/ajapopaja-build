@@ -168,6 +168,18 @@ describe('TaskItem', () => {
     expect(html).toContain('data-action-click="open_quickfix"');
   });
 
+  it('should render the commit hash with a View Commit Diff action', () => {
+    const implementedTask = {
+      ...mockTask,
+      status: TaskStatus.IMPLEMENTED,
+      commit_hash: 'abcdef123'
+    };
+    const html = TaskItem.render(implementedTask as any);
+    expect(html).toContain('data-action-click="open_diff_view"');
+    expect(html).toContain('data-commit-hash="abcdef123"');
+    expect(html).toContain('title="View Commit Diff"');
+  });
+
   const BOT_TARGET_ACTIONS = ['trigger_docbot', 'trigger_reviewbot', 'open_review_dialog'];
 
   describe('bot-trigger gating', () => {

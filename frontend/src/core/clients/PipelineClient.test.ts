@@ -16,7 +16,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { PipelineClient } from './PipelineClient.ts';
-import { Pipeline, PipelineStatus } from '../domain.ts';
+import { Pipeline, PipelineStatus, CommitDiff } from '../domain.ts';
 
 const mockPipelineResponse = (overrides = {}) => ({
   id: 'pipe-1',
@@ -509,6 +509,55 @@ describe('PipelineClient', () => {
 
       const stats = await client.getDailyStats('pipe-1');
       expect(stats).toEqual([]);
+    });
+  });
+
+  describe('getCommitDiff', () => {
+    it('should GET the commit diff URL with an encoded hash and return a CommitDiff', async () => {
+      const payload = {
+        commit_hash: 'abc123',
+        patch: 'diff --git a/a.txt b/a.txt\n',
+        subject: 'Add a',
+        author: 'Alice',
+        created_at: '2026-01-01T00:00:00+00:00',
+      };
+      (fetch as any).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(payload),
+      });
+
+      const diff = await client.getCommitDiff('pipe-1', 'feat/abc 123');
+
+      expect(diff).toBeInstanceOf(CommitDiff);
+      expect(diff.commit_hash).toBe('abc123');
+      expect(diff.subject).toBe('Add a');
+      expect(diff.author).toBe('Alice');
+      expect(diff.patch).toContain('a.txt');
+
+      const url = new URL((fetch as any).mock.calls[0][0]);
+      expect(url.pathname).toBe('/pipelines/pipe-1/commits/feat%2Fabc%20123/diff');
+    });
+
+    it('should authenticate with the Authorization header', async () => {
+      (fetch as any).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ commit_hash: 'a', patch: '' }),
+      });
+
+      await client.getCommitDiff('pipe-1', 'abc');
+
+      const headers = (fetch as any).mock.calls[0][1].headers;
+      expect(headers.get('Authorization')).toBe('Bearer mock-token');
+    });
+
+    it('should propagate a 404 error', async () => {
+      (fetch as any).mockResolvedValue({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({ detail: 'Commit not found' }),
+      });
+
+      await expect(client.getCommitDiff('pipe-1', 'nope')).rejects.toThrow('Commit not found');
     });
   });
 

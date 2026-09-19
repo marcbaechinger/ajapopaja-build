@@ -171,64 +171,6 @@ describe('EditorClient', () => {
     });
   });
 
-  describe('diffViewOpen', () => {
-    it('should call diff_view_open with correct pipeline_id and commit_hash', async () => {
-      (fetch as any).mockResolvedValue({ ok: true });
-
-      await client.diffViewOpen('pipeline-1', 'abc123def');
-
-      expect(fetch).toHaveBeenCalledWith(
-        `${baseUrl}/editor/call/diff_view_open`,
-        expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({
-            pipeline_id: 'pipeline-1',
-            commit_hash: 'abc123def',
-          }),
-        })
-      );
-    });
-
-    it('should include Content-Type and Authorization headers', async () => {
-      (fetch as any).mockResolvedValue({ ok: true });
-
-      await client.diffViewOpen('p1', 'c1');
-
-      const callHeaders = new Headers((fetch as any).mock.calls[0][1].headers);
-      expect(callHeaders.get('Content-Type')).toBe('application/json');
-      expect(callHeaders.get('Authorization')).toBe('Bearer token123');
-    });
-
-    it('should handle long commit hashes', async () => {
-      (fetch as any).mockResolvedValue({ ok: true });
-
-      const longHash = 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0';
-      await client.diffViewOpen('pipe-1', longHash);
-
-      const body = JSON.parse((fetch as any).mock.calls[0][1].body as string);
-      expect(body.commit_hash).toBe(longHash);
-      expect(body.pipeline_id).toBe('pipe-1');
-    });
-
-    it('should handle empty strings', async () => {
-      (fetch as any).mockResolvedValue({ ok: true });
-
-      await client.diffViewOpen('', '');
-
-      const body = JSON.parse((fetch as any).mock.calls[0][1].body as string);
-      expect(body.pipeline_id).toBe('');
-      expect(body.commit_hash).toBe('');
-    });
-
-    it('should return undefined on success', async () => {
-      (fetch as any).mockResolvedValue({ ok: true });
-
-      const result = await client.diffViewOpen('p1', 'c1');
-
-      expect(result).toBeUndefined();
-    });
-  });
-
   describe('error handling', () => {
     it('should throw error for non-OK responses from call', async () => {
       (fetch as any).mockResolvedValue({
@@ -250,17 +192,6 @@ describe('EditorClient', () => {
 
       await expect(client.quickfix('task-1'))
         .rejects.toThrow('Quickfix failed');
-    });
-
-    it('should throw error for non-OK responses from diffViewOpen', async () => {
-      (fetch as any).mockResolvedValue({
-        ok: false,
-        status: 500,
-        json: () => Promise.resolve({ detail: 'Diff view failed' }),
-      });
-
-      await expect(client.diffViewOpen('p1', 'c1'))
-        .rejects.toThrow('Diff view failed');
     });
 
     it('should throw error with default message for malformed JSON', async () => {
@@ -303,7 +234,7 @@ describe('EditorClient', () => {
         json: () => Promise.resolve({ detail: 'Invalid parameters' }),
       });
 
-      await expect(client.diffViewOpen('p1', 'c1'))
+      await expect(client.call('bad_command', {}))
         .rejects.toThrow('Invalid parameters');
     });
 
@@ -319,9 +250,6 @@ describe('EditorClient', () => {
 
       (fetch as any).mockResolvedValue(errorResponse);
       await expect(client.quickfix('t1')).rejects.toThrow('Bad request');
-
-      (fetch as any).mockResolvedValue(errorResponse);
-      await expect(client.diffViewOpen('p1', 'c1')).rejects.toThrow('Bad request');
     });
   });
 
@@ -366,30 +294,6 @@ describe('EditorClient', () => {
       expect(mockAuthService.refreshToken).toHaveBeenCalled();
       expect(fetch).toHaveBeenCalledTimes(2);
     });
-
-    it('should handle 401 unauthorized and attempt token refresh for diffViewOpen', async () => {
-      const newToken = 'new-token-999';
-      mockAuthService.refreshToken.mockResolvedValue(newToken);
-
-      const errorResponse = { ok: false, status: 401 };
-      const successResponse = { ok: true };
-
-      (fetch as any) // @ts-ignore
-        .mockImplementation(() => {
-          if ((fetch as any).mock.calls.length === 1) {
-            return Promise.resolve(errorResponse);
-          }
-          return Promise.resolve(successResponse);
-        });
-
-      await expect(client.diffViewOpen('p1', 'c1')).resolves.toBeUndefined();
-      expect(mockAuthService.refreshToken).toHaveBeenCalled();
-      expect(fetch).toHaveBeenCalledTimes(2);
-
-      // Verify the second call used the refreshed token
-      const secondCallHeaders = new Headers((fetch as any).mock.calls[1][1].headers);
-      expect(secondCallHeaders.get('Authorization')).toBe(`Bearer ${newToken}`);
-    });
   });
 
   describe('authentication with null token', () => {
@@ -409,16 +313,6 @@ describe('EditorClient', () => {
       (fetch as any).mockResolvedValue({ ok: true });
 
       await client.quickfix('task-1');
-
-      const callHeaders = new Headers((fetch as any).mock.calls[0][1].headers);
-      expect(callHeaders.get('Authorization')).toBeNull();
-    });
-
-    it('should handle null access token gracefully for diffViewOpen', async () => {
-      mockAuthService.getAccessToken.mockReturnValue(null);
-      (fetch as any).mockResolvedValue({ ok: true });
-
-      await client.diffViewOpen('p1', 'c1');
 
       const callHeaders = new Headers((fetch as any).mock.calls[0][1].headers);
       expect(callHeaders.get('Authorization')).toBeNull();
@@ -444,15 +338,6 @@ describe('EditorClient', () => {
       expect(url.pathname).toBe('/editor/call/quickfix');
     });
 
-    it('should construct correct URL for diffViewOpen', async () => {
-      (fetch as any).mockResolvedValue({ ok: true });
-
-      await client.diffViewOpen('pipeline-456', 'abc');
-
-      const url = new URL((fetch as any).mock.calls[0][0]);
-      expect(url.pathname).toBe('/editor/call/diff_view_open');
-    });
-
     it('should use the provided base URL', async () => {
       const customBaseUrl = 'https://custom.example.com:8080';
       const customClient = new EditorClient(customBaseUrl, mockAuthService);
@@ -476,13 +361,6 @@ describe('EditorClient', () => {
     it('should use POST method for quickfix', async () => {
       (fetch as any).mockResolvedValue({ ok: true });
       await client.quickfix('task-1');
-
-      expect((fetch as any).mock.calls[0][1].method).toBe('POST');
-    });
-
-    it('should use POST method for diffViewOpen', async () => {
-      (fetch as any).mockResolvedValue({ ok: true });
-      await client.diffViewOpen('p1', 'c1');
 
       expect((fetch as any).mock.calls[0][1].method).toBe('POST');
     });

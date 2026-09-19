@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { Task, TaskStatus, Pipeline, PipelineStatus } from './domain';
+import { Task, TaskStatus, Pipeline, PipelineStatus, CommitDiff } from './domain';
 
 describe('Domain Models', () => {
   describe('Task', () => {
@@ -83,6 +83,30 @@ describe('Domain Models', () => {
       // @ts-ignore
       const pipeline = new Pipeline({ name: 'Invalid Status', status: 'junk' });
       expect(pipeline.status).toBe(PipelineStatus.ACTIVE); 
+    });
+  });
+
+  describe('CommitDiff', () => {
+    it('should instantiate from valid JSON', () => {
+      const diff = new CommitDiff({
+        commit_hash: 'abc123',
+        patch: 'diff --git a/a.txt b/a.txt\n',
+        subject: 'Add a',
+        author: 'Alice',
+        created_at: '2026-01-01T00:00:00+00:00'
+      });
+      expect(diff.commit_hash).toBe('abc123');
+      expect(diff.patch).toContain('a.txt');
+      expect(diff.subject).toBe('Add a');
+      expect(diff.author).toBe('Alice');
+      expect(diff.created_at).toBe('2026-01-01T00:00:00+00:00');
+    });
+
+    it('should fall back to safe defaults for missing fields', () => {
+      const diff = new CommitDiff({});
+      expect(diff.commit_hash).toBe('');
+      expect(diff.patch).toBe('');
+      expect(diff.subject).toBeUndefined();
     });
   });
 });
