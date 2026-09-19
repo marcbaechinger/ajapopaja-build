@@ -16,15 +16,7 @@
 
 import { Task, TaskStatus } from '../../core/domain.ts';
 import { OrderControl } from './OrderControl.ts';
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
+import { escapeHtml } from './utils/html.ts';
 
 /**
  * Strips markdown and collapses whitespace so the spec can be shown as a

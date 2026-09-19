@@ -1,6 +1,7 @@
 // frontend/src/ui/components/DocBotDialog.ts
 import { AppContext } from '../../core/AppContext';
 import { Icon } from './Icon.ts';
+import { escapeHtml } from './utils/html.ts';
 
 export interface DocBotDialogProps {
   taskId: string;
@@ -145,7 +146,7 @@ export class DocBotDialog {
     if (!diff) return '<span class="italic text-app-muted">No changes found.</span>';
     
     return diff.split('\n').map(line => {
-      const escaped = line.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const escaped = escapeHtml(line);
       if (line.startsWith('+')) {
         return `<span class="text-green-400 bg-green-400/10 w-full block px-2 -mx-2">${escaped}</span>`;
       } else if (line.startsWith('-')) {
