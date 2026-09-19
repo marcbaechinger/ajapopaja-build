@@ -180,3 +180,31 @@ async def update_design_doc(task_id: str, design_doc: str) -> Dict:
 
     await manager.notify_task_update(task_id)
     return updated_task.model_dump(mode="json")
+
+
+@register_tool(tool_type=WRITE_ACCESS)
+async def delete_task(task_id: str) -> Dict:
+    """
+    Deletes an existing task (soft delete). Use this to remove duplicate or
+    obsolete tasks.
+
+    Args:
+        task_id: The identifier of the task to delete.
+    """
+    try:
+        task = await task_queries.get_task_by_id(task_id)
+    except EntityNotFoundError:
+        return {
+            "error": f"Task with ID '{task_id}' not found. Please verify the task_id or use list_tasks to find the correct ID."
+        }
+
+    pipeline_id = task.pipeline_id
+    await task_queries.delete_task(task_id)
+
+    await manager.broadcast(
+        WSMessage(
+            type="TASK_DELETED",
+            payload={"task_id": task_id, "pipeline_id": pipeline_id},
+        )
+    )
+    return {"status": "ok", "task_id": task_id}
