@@ -532,9 +532,7 @@ async def test_get_commit_diff_endpoint(async_client, init_mock_db):
         new_callable=AsyncMock,
         return_value=diff,
     ) as mock_diff:
-        response = await async_client.get(
-            "/api/pipelines/p1/commits/abcdef123456/diff"
-        )
+        response = await async_client.get("/api/pipelines/p1/commits/abcdef123456/diff")
         assert response.status_code == status.HTTP_200_OK
         assert response.json() == diff
         mock_diff.assert_awaited_once_with("p1", "abcdef123456")

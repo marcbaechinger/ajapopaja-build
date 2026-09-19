@@ -15,6 +15,7 @@ dependencies = [
   "msgpack>=1.1.2",
   "gitpython>=3.1.46",
   "httpx>=0.28.1",
+  "pyyaml>=6.0",
 ]
 requires-python = ">=3.11"
 

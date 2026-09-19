@@ -595,4 +595,3 @@ async def test_get_commit_diff_unknown_hash(tmp_path):
     with _patch_pipeline_and_repo(repo):
         with pytest.raises(EntityNotFoundError, match="not found in pipeline"):
             await git_utils.get_commit_diff("p1", "deadbeef")
-
