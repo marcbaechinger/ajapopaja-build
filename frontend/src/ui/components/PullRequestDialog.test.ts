@@ -30,6 +30,45 @@ describe('PullRequestDialog', () => {
     }
   }) as any;
 
+  it('mounts a DiffView into #pr-diff-container instead of raw patch text', async () => {
+    const patch = `diff --git a/src/foo.ts b/src/foo.ts
+--- a/src/foo.ts
++++ b/src/foo.ts
+@@ -1,2 +1,2 @@
+ context
+-removed
++added
+`;
+    const pr = {
+      _id: 'pr-diff',
+      pipeline_id: 'p1',
+      task_id: 't1',
+      summary: 'summary',
+      subject: 'My subject',
+      author: 'Alice',
+      branch_name: 'feature/x',
+      patch,
+      status: PullRequestStatus.OPEN
+    };
+    const dialog = new PullRequestDialog({
+      taskId: 't1',
+      pipelineId: 'p1',
+      context: makeContext(pr)
+    });
+
+    await vi.waitFor(() => expect(dialog['pr']).not.toBeNull());
+
+    const container = dialog['dialog'].querySelector('#pr-diff-container') as HTMLElement;
+    expect(container).not.toBeNull();
+    expect(container.querySelector('[data-role="diff-view"]')).not.toBeNull();
+    expect(container.querySelector('[data-role="file-path"]')?.textContent).toBe('src/foo.ts');
+    expect(container.textContent).toContain('added');
+    expect(container.textContent).toContain('removed');
+
+    const body = dialog['dialog'].querySelector('#dialog-body-container') as HTMLElement;
+    expect(body.querySelector('pre > code')?.textContent ?? '').not.toContain(patch);
+  });
+
   it('renders Open in Gitea link when PR is submitted', async () => {
     const pr = {
       _id: 'pr1',

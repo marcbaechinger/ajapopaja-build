@@ -18,6 +18,8 @@ import { BaseDialog } from './dialog_common.ts';
 import { PullRequest, PullRequestStatus, pullRequestAcceptLabel } from '../../core/domain.ts';
 import type { AppContext } from '../../core/AppContext.ts';
 import { Icon } from './Icon.ts';
+import { DiffView } from './DiffView.ts';
+import { escapeHtml } from './utils/html.ts';
 
 export interface PullRequestDialogProps {
   taskId: string;
@@ -32,6 +34,7 @@ export class PullRequestDialog extends BaseDialog<void> {
   private props: PullRequestDialogProps;
   private pr: PullRequest | null = null;
   private loading: boolean = true;
+  private diffView: DiffView | null = null;
 
   constructor(props: PullRequestDialogProps) {
     super({
@@ -69,6 +72,29 @@ export class PullRequestDialog extends BaseDialog<void> {
     footerContainer.innerHTML = this.renderFooter();
 
     this.attachInternalEventListeners();
+    this.renderDiffView();
+  }
+
+  private renderDiffView() {
+    if (this.diffView) {
+      this.diffView.destroy();
+      this.diffView = null;
+    }
+    if (!this.pr) return;
+    const mount = this.dialog.querySelector('#pr-diff-container') as HTMLElement | null;
+    if (!mount) return;
+    this.diffView = new DiffView(mount, {
+      patch: this.pr.patch,
+      metadata: {
+        subject: this.pr.subject || this.pr.summary,
+        author: this.pr.author,
+        branch: this.pr.branch_name,
+        createdAt: this.pr.created_at,
+        updatedAt: this.pr.updated_at,
+      },
+      heightClass: 'max-h-[60vh]',
+    });
+    this.diffView.render();
   }
 
   protected renderBody(): string {
@@ -117,8 +143,8 @@ export class PullRequestDialog extends BaseDialog<void> {
         </div>
         ${this.renderExternalReviewBanner()}
 
-        <div class="flex-grow overflow-auto p-0 bg-slate-950">
-          <pre class="text-[11px] leading-relaxed p-6 text-slate-300 font-mono whitespace-pre overflow-visible"><code>${this.escapeHtml(this.pr.patch)}</code></pre>
+        <div class="flex-grow overflow-auto p-0 bg-slate-950 custom-scrollbar">
+          <div id="pr-diff-container"></div>
         </div>
       </div>
     `;
@@ -134,7 +160,7 @@ export class PullRequestDialog extends BaseDialog<void> {
           Close
         </button>
         <div class="flex gap-3">
-          <a id="pr-open-gitea-link" href="${this.escapeHtml(this.pr.remote_pr_url || '#')}" target="_blank" rel="noopener noreferrer" class="px-8 py-2 rounded bg-app-accent-2 text-white text-xs font-black uppercase tracking-widest hover:bg-app-accent-2/80 transition-all cursor-pointer shadow-lg shadow-app-accent-2/20 inline-flex items-center gap-2">
+          <a id="pr-open-gitea-link" href="${escapeHtml(this.pr.remote_pr_url || '#')}" target="_blank" rel="noopener noreferrer" class="px-8 py-2 rounded bg-app-accent-2 text-white text-xs font-black uppercase tracking-widest hover:bg-app-accent-2/80 transition-all cursor-pointer shadow-lg shadow-app-accent-2/20 inline-flex items-center gap-2">
             ${Icon.render('arrowRight', { size: 16 })}
             Open in Gitea
           </a>
@@ -176,7 +202,7 @@ export class PullRequestDialog extends BaseDialog<void> {
           ${Icon.render('git-pull-request', { size: 16 })}
           Submitted for external review
         </div>
-        <a href="${this.escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="text-[10px] font-black text-app-accent-2 underline hover:opacity-80">View Pull Request</a>
+        <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="text-[10px] font-black text-app-accent-2 underline hover:opacity-80">View Pull Request</a>
       </div>
     `;
   }
@@ -241,14 +267,5 @@ export class PullRequestDialog extends BaseDialog<void> {
       rejectBtn.disabled = false;
       rejectBtn.textContent = 'Reject';
     }
-  }
-
-  private escapeHtml(text: string): string {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
   }
 }

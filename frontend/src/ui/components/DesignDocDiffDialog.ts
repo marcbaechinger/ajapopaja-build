@@ -20,6 +20,7 @@ import DOMPurify from 'dompurify';
 import { diffLines } from 'diff';
 import { DesignDocHistory, Task } from '../../core/domain.ts';
 import { AppContext } from '../../core/AppContext.ts';
+import { escapeHtml } from './utils/html.ts';
 
 type ViewMode = 'side-by-side' | 'unified';
 
@@ -99,12 +100,6 @@ export class DesignDocDiffDialog extends BaseDialog<void> {
     }
   }
 
-  private escapeHtml(text: string): string {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
-
   private renderUnifiedDiff(oldText: string, newText: string): string {
     const changes = diffLines(oldText, newText);
     const diffHtml = changes.map(part => {
@@ -115,7 +110,7 @@ export class DesignDocDiffDialog extends BaseDialog<void> {
         : part.removed 
           ? 'bg-red-500/10 block w-full' 
           : 'text-app-text/80 block w-full';
-      return `<${tag} class="${className}">${this.escapeHtml(part.value)}</${tag}>`;
+      return `<${tag} class="${className}">${escapeHtml(part.value)}</${tag}>`;
     }).join('');
     
     return `<pre class="text-app-text whitespace-pre-wrap font-mono text-sm p-4 bg-app-bg/60 rounded-xl border border-app-border/30 shadow-inner">${diffHtml}</pre>`;

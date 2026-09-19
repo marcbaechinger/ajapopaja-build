@@ -634,6 +634,7 @@ class CoderBotSession:
                 # work" with the updated patch.
                 self.pr.summary = pr_summary
                 self.pr.subject = task_title
+                self.pr.author = config.GIT_USER_NAME
                 self.pr.branch_name = self.helper.branch_name
                 self.pr.patch = patch
                 self.pr.updated_at = datetime.now(UTC)
@@ -646,6 +647,7 @@ class CoderBotSession:
                     pipeline_id=self.pipeline_id,
                     task_id=self.task_id,
                     subject=task_title,
+                    author=config.GIT_USER_NAME,
                     summary=pr_summary,
                     branch_name=self.helper.branch_name,
                     patch=patch,

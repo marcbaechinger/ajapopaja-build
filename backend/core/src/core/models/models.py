@@ -313,6 +313,7 @@ class PullRequest(Document):
     task_id: str
     summary: str
     subject: str = ""
+    author: Optional[str] = None
     branch_name: str
     patch: str  # The git diff output
     status: PullRequestStatus = PullRequestStatus.OPEN
