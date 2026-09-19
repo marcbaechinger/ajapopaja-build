@@ -72,12 +72,17 @@ from api.oneprompt.hooks import (
     unregister_hook,
 )
 from api.oneprompt.context import (
+    DEFAULT_CONTEXT_PROMPTS,
     TASK_ELABORATE_SPEC,
     ContextProvider,
     ContextProviderError,
+    enrich_context,
     load_task_and_pipeline,
     provide_context,
+    provide_task_context,
     register_context_providers,
+    reset_context_providers,
+    task_and_pipeline_provider,
     unregister_context_providers,
 )
 from api.oneprompt.ollama_client import (
@@ -133,6 +138,7 @@ from api.oneprompt.ws_handler import (
 )
 
 __all__ = [
+    "DEFAULT_CONTEXT_PROMPTS",
     "DEFAULT_HOOK",
     "DEFAULT_TEMPLATES_DIR",
     "DEFAULT_TIMEOUT",
@@ -191,6 +197,7 @@ __all__ = [
     "create_ollama_client",
     "default_client",
     "dispatch_message",
+    "enrich_context",
     "extract_content",
     "get_hook",
     "get_ollama_client",
@@ -207,16 +214,19 @@ __all__ = [
     "one_prompt_runner",
     "parse_template",
     "provide_context",
+    "provide_task_context",
     "register_context_providers",
     "register_hook",
     "register_oneprompt_handlers",
     "registered_hooks",
     "registry",
     "render_template",
+    "reset_context_providers",
     "run_post_render",
     "run_post_response",
     "run_pre_render",
     "send_oneprompt_message",
+    "task_and_pipeline_provider",
     "unregister_context_providers",
     "unregister_hook",
 ]
