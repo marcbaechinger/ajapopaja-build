@@ -35,6 +35,10 @@ from jose import JWTError, jwt
 
 from ajapopaja_mcp.server import mcp
 from api.assistant.ws_handler import register_assistant_handlers
+from api.oneprompt.ws_handler import (
+    initialize_oneprompt,
+    register_oneprompt_handlers,
+)
 from api.auth import ALGORITHM, SECRET_KEY, get_current_user_from_token
 from api.routes.auth import router as auth_router
 from api.routes.dev_server import router as dev_server_router
@@ -96,6 +100,8 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing database...")
     await init_db()
     register_assistant_handlers()
+    register_oneprompt_handlers()
+    initialize_oneprompt()
     yield
     logger.info("Shutting down...")
     await DevProcessManager.instance().stop_all()
