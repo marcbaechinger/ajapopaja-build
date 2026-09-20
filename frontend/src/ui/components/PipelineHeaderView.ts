@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { Pipeline, Task, type GitStatus } from '../../core/domain.ts';
+import { Pipeline, Task, type GitStatusDetails } from '../../core/domain.ts';
 import { UserProfileBadge } from './UserProfileBadge.ts';
 import { TaskStatusCounter } from './TaskStatusCounter.ts';
 import { RepositoryStatusBadge } from './RepositoryStatusBadge.ts';
@@ -52,7 +52,7 @@ export interface PipelineHeaderViewProps {
   coderbotState?: CoderbotState;
   user: any;
   allTasks: Task[];
-  gitStatus?: GitStatus;
+  gitStatus?: GitStatusDetails;
   pendingReviews: string[];
 }
 

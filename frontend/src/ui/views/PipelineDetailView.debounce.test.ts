@@ -45,13 +45,13 @@ describe('PipelineDetailView Git Status Debounce', () => {
       },
       pipelineClient: {
         get: vi.fn().mockResolvedValue({ id: 'p1', name: 'Pipe 1' }),
+        getGitStatus: vi.fn().mockResolvedValue({ staged: 0, unstaged: 0, untracked: 0 }),
       },
       taskClient: {
         listByPipeline: vi.fn().mockResolvedValue([]),
         listCompletedByPipeline: vi.fn().mockResolvedValue({ tasks: [], total_count: 0 }),
       },
       systemClient: {
-        getGitStatus: vi.fn().mockResolvedValue({}),
         isOllamaAvailable: vi.fn().mockResolvedValue(true),
       }
     };
@@ -67,40 +67,37 @@ describe('PipelineDetailView Git Status Debounce', () => {
 
     // Wait for initial load to settle
     await vi.runAllTimersAsync();
-    
-    // Initial load should have triggered one refresh
-    expect(mockContext.systemClient.getGitStatus).toHaveBeenCalledTimes(1);
 
-    // Get the refresh action handler
-    const refreshAction = mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === 'refresh_git_status')[1];
-    
-    // Trigger multiple times rapidly
-    const mockBtn = document.createElement('button');
-    refreshAction(null, mockBtn);
-    refreshAction(null, mockBtn);
-    refreshAction(null, mockBtn);
+    // Initial load should have triggered one refresh
+    expect(mockContext.pipelineClient.getGitStatus).toHaveBeenCalledTimes(1);
+
+    // Trigger multiple schedule calls rapidly (e.g. multiple task completions)
+    const scheduleRefresh = () => (view as any).scheduleRefreshGitStatus();
+    scheduleRefresh();
+    scheduleRefresh();
+    scheduleRefresh();
 
     // Advance 500ms for the debounce timer
     vi.advanceTimersByTime(500);
-    
+
     // Should result in exactly ONE more call to getGitStatus
-    expect(mockContext.systemClient.getGitStatus).toHaveBeenCalledTimes(2);
-    
+    expect(mockContext.pipelineClient.getGitStatus).toHaveBeenCalledTimes(2);
+
     // Wait for the async part of the 2nd call to finish
     await vi.runAllTimersAsync();
-    
+
     // Trigger again after first one finished
-    refreshAction(null, mockBtn);
+    scheduleRefresh();
     vi.advanceTimersByTime(500);
     await vi.runAllTimersAsync();
-    
-    expect(mockContext.systemClient.getGitStatus).toHaveBeenCalledTimes(3);
+
+    expect(mockContext.pipelineClient.getGitStatus).toHaveBeenCalledTimes(3);
   });
 
   it('should schedule a trailing refresh if one is already in progress', async () => {
     // Delay the git status response
     let resolveGitStatus: (val: any) => void;
-    mockContext.systemClient.getGitStatus.mockReturnValue(new Promise(resolve => {
+    mockContext.pipelineClient.getGitStatus.mockReturnValue(new Promise(resolve => {
       resolveGitStatus = resolve;
     }));
 
@@ -114,13 +111,10 @@ describe('PipelineDetailView Git Status Debounce', () => {
     // Now advance 500ms for the timer that was scheduled at the end of loadPipeline
     vi.advanceTimersByTime(500);
     // getGitStatus is now "in progress"
-    expect(mockContext.systemClient.getGitStatus).toHaveBeenCalledTimes(1);
-
-    const refreshAction = mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === 'refresh_git_status')[1];
-    const mockBtn = document.createElement('button');
+    expect(mockContext.pipelineClient.getGitStatus).toHaveBeenCalledTimes(1);
 
     // Call while in progress
-    refreshAction(null, mockBtn);
+    (view as any).scheduleRefreshGitStatus();
 
     // Resolve the first call
     resolveGitStatus!({});
@@ -129,8 +123,8 @@ describe('PipelineDetailView Git Status Debounce', () => {
     // After the first one finishes, it should have seen the pending flag and scheduled another one.
     // The scheduler starts another 500ms timer.
     vi.advanceTimersByTime(500);
-    
+
     // Should now be called twice
-    expect(mockContext.systemClient.getGitStatus).toHaveBeenCalledTimes(2);
+    expect(mockContext.pipelineClient.getGitStatus).toHaveBeenCalledTimes(2);
   });
 });

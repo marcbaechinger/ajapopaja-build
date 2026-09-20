@@ -17,9 +17,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import status
 
-from api.auth import get_current_user
-from api.main import app
-
 
 @pytest.mark.asyncio
 async def test_health_check_all_ok(async_client, init_mock_db):
@@ -76,37 +73,3 @@ async def test_health_check_mixed_status(async_client, init_mock_db):
                             assert data["ollama"]["status"] == "error"
                             assert data["nvim"]["status"] == "error"
                             assert data["pi"]["status"] == "error"
-
-
-@pytest.mark.asyncio
-async def test_get_git_status_ok(async_client, init_mock_db):
-    pipeline_id = "p1"
-    mock_user = MagicMock()
-    mock_user.username = "testuser"
-    app.dependency_overrides[get_current_user] = lambda: mock_user
-
-    try:
-        with patch(
-            "api.routes.system.git_utils.get_repo_for_pipeline", new_callable=AsyncMock
-        ) as mock_get_repo:
-            mock_repo = MagicMock()
-            mock_get_repo.return_value = mock_repo
-            with patch(
-                "api.routes.system.git_utils.get_git_status_summary"
-            ) as mock_get_summary:
-                mock_get_summary.return_value = {
-                    "staged": 2,
-                    "unstaged": 2,
-                    "untracked": 1,
-                }
-
-                response = await async_client.get(
-                    f"/api/system/git-status/{pipeline_id}"
-                )
-                assert response.status_code == status.HTTP_200_OK
-                data = response.json()
-                assert data["staged"] == 2
-                assert data["unstaged"] == 2
-                assert data["untracked"] == 1
-    finally:
-        app.dependency_overrides.clear()

@@ -16,7 +16,7 @@
 
 import { View } from '../../core/Navigator.ts';
 import { AppContext } from '../../core/AppContext.ts';
-import { Pipeline, TaskStatus, Task, type GitStatus } from '../../core/domain.ts';
+import { Pipeline, TaskStatus, Task, type GitStatusDetails } from '../../core/domain.ts';
 import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
 import { TaskItem } from '../components/TaskItem.ts';
 import { HistoryItemView } from '../components/HistoryItemView.ts';
@@ -56,7 +56,7 @@ export class PipelineDetailView extends View {
   private collapsedSpecs: Set<string> = new Set();
   private isFirstLoad: boolean = true;
   private keydownHandler: ((e: KeyboardEvent) => void) | null = null;
-  private gitStatus: GitStatus | undefined = undefined;
+  private gitStatus: GitStatusDetails | undefined = undefined;
   private gitStatusRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   private gitStatusRefreshInProgress: boolean = false;
   private gitStatusRefreshPending: boolean = false;
@@ -1148,16 +1148,6 @@ export class PipelineDetailView extends View {
       this.docbotPreviewData = null;
       this.updateHeader();
     });
-
-    this.context.actionRegistry.register('refresh_git_status', async (_e, el) => {
-      const btn = el as HTMLElement;
-      btn.classList.add('animate-pulse', 'border-app-accent-2');
-      try {
-        this.scheduleRefreshGitStatus();
-      } finally {
-        setTimeout(() => btn.classList.remove('animate-pulse', 'border-app-accent-2'), 500);
-      }
-    });
   }
 
   async loadPipeline() {
@@ -1191,7 +1181,7 @@ export class PipelineDetailView extends View {
   private async refreshGitStatusInternal() {
     this.gitStatusRefreshInProgress = true;
     try {
-      this.gitStatus = await this.context.systemClient.getGitStatus(this.pipelineId);
+      this.gitStatus = await this.context.pipelineClient.getGitStatus(this.pipelineId);
       this.updateHeader();
     } catch (error) {
       console.error('Failed to refresh git status:', error);

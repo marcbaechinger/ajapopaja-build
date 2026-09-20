@@ -97,6 +97,7 @@ describe('PipelineDetailView Layout', () => {
       },
       pipelineClient: {
         get: vi.fn().mockResolvedValue({ id: 'p1', name: 'Pipe 1' }),
+        getGitStatus: vi.fn().mockResolvedValue({ staged: 0, unstaged: 0, untracked: 0 }),
       },
       taskClient: {
         listByPipeline: vi.fn().mockResolvedValue([]),
@@ -107,7 +108,6 @@ describe('PipelineDetailView Layout', () => {
         getPullRequestsByPipeline: vi.fn().mockResolvedValue([]),
       },
       systemClient: {
-        getGitStatus: vi.fn().mockResolvedValue({}),
         isOllamaAvailable: vi.fn().mockResolvedValue(true),
       }
     };
@@ -447,7 +447,10 @@ describe('PipelineDetailView save_title no-op', () => {
         getUser: vi.fn().mockReturnValue({ username: 'testuser' }),
         getAccessToken: vi.fn().mockReturnValue('token'),
       },
-      pipelineClient: { get: vi.fn().mockResolvedValue({ id: 'p1', name: 'Pipe 1' }) },
+      pipelineClient: {
+        get: vi.fn().mockResolvedValue({ id: 'p1', name: 'Pipe 1' }),
+        getGitStatus: vi.fn().mockResolvedValue({ staged: 0, unstaged: 0, untracked: 0 }),
+      },
       taskClient: {
         listByPipeline: vi.fn().mockResolvedValue([]),
         listCompletedByPipeline: vi.fn().mockResolvedValue({ tasks: [], total_count: 0 }),
@@ -455,7 +458,6 @@ describe('PipelineDetailView save_title no-op', () => {
       },
       pullRequestClient: { getPullRequestsByPipeline: vi.fn().mockResolvedValue([]) },
       systemClient: {
-        getGitStatus: vi.fn().mockResolvedValue({}),
         isOllamaAvailable: vi.fn().mockResolvedValue(true),
       },
     };
@@ -543,6 +545,7 @@ describe('PipelineDetailView Review Notifications', () => {
       },
       pipelineClient: {
         get: vi.fn().mockResolvedValue({ id: 'p1' }),
+        getGitStatus: vi.fn().mockResolvedValue({ staged: 0, unstaged: 0, untracked: 0 }),
       },
       taskClient: {
         listByPipeline: vi.fn().mockResolvedValue([]),
@@ -553,7 +556,6 @@ describe('PipelineDetailView Review Notifications', () => {
         getPullRequestsByPipeline: vi.fn().mockResolvedValue([]),
       },
       systemClient: {
-        getGitStatus: vi.fn().mockResolvedValue({}),
         isOllamaAvailable: vi.fn().mockResolvedValue(true),
       }
     };
@@ -631,7 +633,10 @@ describe('PipelineDetailView Pull Request Insert', () => {
         getUser: vi.fn().mockReturnValue({ username: 'testuser' }),
         getAccessToken: vi.fn().mockReturnValue('token'),
       },
-      pipelineClient: { get: vi.fn().mockResolvedValue({ id: 'p1', name: 'Pipe 1' }) },
+      pipelineClient: {
+        get: vi.fn().mockResolvedValue({ id: 'p1', name: 'Pipe 1' }),
+        getGitStatus: vi.fn().mockResolvedValue({ staged: 0, unstaged: 0, untracked: 0 }),
+      },
       taskClient: {
         listByPipeline: vi.fn().mockResolvedValue([]),
         listCompletedByPipeline: vi.fn().mockResolvedValue({ tasks: [], total_count: 0 }),
@@ -640,7 +645,6 @@ describe('PipelineDetailView Pull Request Insert', () => {
         getPullRequestsByPipeline: vi.fn().mockResolvedValue([]),
       },
       systemClient: {
-        getGitStatus: vi.fn().mockResolvedValue({}),
         isOllamaAvailable: vi.fn().mockResolvedValue(true),
       },
     };
@@ -767,14 +771,16 @@ describe('PipelineDetailView CoderBot Dialog', () => {
         getUser: vi.fn().mockReturnValue({ username: 'testuser' }),
         getAccessToken: vi.fn().mockReturnValue('token'),
       },
-      pipelineClient: { get: vi.fn().mockResolvedValue({ id: 'p1', name: 'Pipe 1' }) },
+      pipelineClient: {
+        get: vi.fn().mockResolvedValue({ id: 'p1', name: 'Pipe 1' }),
+        getGitStatus: vi.fn().mockResolvedValue({ staged: 0, unstaged: 0, untracked: 0 }),
+      },
       taskClient: {
         listByPipeline: vi.fn().mockResolvedValue([]),
         listCompletedByPipeline: vi.fn().mockResolvedValue({ tasks: [], total_count: 0 }),
       },
       pullRequestClient: { getPullRequestsByPipeline: vi.fn().mockResolvedValue([]) },
       systemClient: {
-        getGitStatus: vi.fn().mockResolvedValue({}),
         isOllamaAvailable: vi.fn().mockResolvedValue(true),
       },
       coderBotService: {
@@ -913,7 +919,10 @@ describe('PipelineDetailView Accept Pull Request', () => {
         getUser: vi.fn().mockReturnValue({ username: 'testuser' }),
         getAccessToken: vi.fn().mockReturnValue('token'),
       },
-      pipelineClient: { get: vi.fn().mockResolvedValue({ id: 'p1', name: 'Pipe 1' }) },
+      pipelineClient: {
+        get: vi.fn().mockResolvedValue({ id: 'p1', name: 'Pipe 1' }),
+        getGitStatus: vi.fn().mockResolvedValue({ staged: 0, unstaged: 0, untracked: 0 }),
+      },
       taskClient: {
         listByPipeline: vi.fn().mockResolvedValue([]),
         listCompletedByPipeline: vi.fn().mockResolvedValue({ tasks: [], total_count: 0 }),
@@ -924,7 +933,6 @@ describe('PipelineDetailView Accept Pull Request', () => {
         iteratePullRequest: vi.fn().mockResolvedValue({}),
       },
       systemClient: {
-        getGitStatus: vi.fn().mockResolvedValue({}),
         isOllamaAvailable: vi.fn().mockResolvedValue(true),
       },
     };
@@ -1069,6 +1077,7 @@ describe('PipelineDetailView Commit Diff', () => {
       },
       pipelineClient: {
         get: vi.fn().mockResolvedValue({ id: 'p1', name: 'Pipe 1' }),
+        getGitStatus: vi.fn().mockResolvedValue({ staged: 0, unstaged: 0, untracked: 0 }),
         getCommitDiff: vi.fn().mockResolvedValue({}),
       },
       taskClient: {
@@ -1077,7 +1086,6 @@ describe('PipelineDetailView Commit Diff', () => {
       },
       pullRequestClient: { getPullRequestsByPipeline: vi.fn().mockResolvedValue([]) },
       systemClient: {
-        getGitStatus: vi.fn().mockResolvedValue({}),
         isOllamaAvailable: vi.fn().mockResolvedValue(true),
       },
       // The legacy Neovim client is still referenced by other actions; the diff
