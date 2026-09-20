@@ -107,6 +107,27 @@ export function renderElaborateSpecResult(
 }
 
 /**
+ * Renders a failed `task_elaborate_spec` request inline.
+ *
+ * Design section 9 requires the UI to surface the backend's friendly error
+ * message (``unavailable``, ``not_found``, ``timeout``, ``cancelled``, ...)
+ * instead of silently dropping the request.
+ */
+export function renderElaborateSpecError(
+  resultEl: HTMLElement,
+  ctx: OnePromptRenderContext
+): void {
+  const message = ctx.error || `The AI request failed (${ctx.status}).`;
+
+  resultEl.innerHTML = `
+    <div class="elaborate-spec-error mt-3 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-400" role="alert" data-oneprompt-error="${escapeHtml(String(ctx.status))}">
+      ${Icon.render('documentation', { size: 12 })}
+      <span>${escapeHtml(message)}</span>
+    </div>
+  `;
+}
+
+/**
  * Builds the declarative `task_elaborate_spec` one-shot action.
  *
  * @param updater Optional write-back implementation. When omitted the module
@@ -123,6 +144,9 @@ export function createTaskElaborateSpecAction(
     buildContext: (taskId: string, pipelineId: string) => ({ taskId, pipelineId }),
     anchor: { entity: 'task', field: 'spec' },
     render: renderElaborateSpecResult,
+    onError: (ctx) => {
+      renderElaborateSpecError(ctx.container, ctx);
+    },
     accept: async (ctx, result) => {
       const taskId = String(ctx.taskId ?? ctx.context?.taskId ?? '');
       if (!taskId) return;
@@ -217,6 +241,7 @@ export function renderSpecSection(task: Task, isSpecExpanded: boolean): string {
 /** Aliases kept for callers/tests that prefer a verbose name. */
 export const renderTaskElaborateSpecResult = renderElaborateSpecResult;
 export const renderElaborateSpecSuggestion = renderElaborateSpecResult;
+export const renderElaborateSpecFailure = renderElaborateSpecError;
 export const TASK_ELABORATE_SPEC_ACTION_ID = TASK_ELABORATE_SPEC_PROMPT_ID;
 
 /**
