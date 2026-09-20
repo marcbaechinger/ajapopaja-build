@@ -301,40 +301,6 @@ class GitLogEntry(BaseModel):
     subject: Optional[str] = None
 
 
-class DesignDocInfo(BaseModel):
-    """Lightweight description of one Markdown design document.
-
-    ``path`` is relative to the pipeline's ``doc_root``; ``title`` is derived
-    from the first level-1 Markdown heading (falling back to the file name).
-    ``snippet`` is only populated for search results whose *content* matched
-    the query so the UI can show a short preview around the hit.
-    """
-
-    path: str
-    title: str
-    size: int = 0
-    modified_at: Optional[datetime] = None
-    snippet: Optional[str] = None
-
-
-class DesignDocContent(BaseModel):
-    """Full content of a single Markdown design document."""
-
-    path: str
-    title: str
-    content: str
-    size: int = 0
-    modified_at: Optional[datetime] = None
-
-
-class DesignDocListResponse(BaseModel):
-    """Response payload of the design-doc library listing endpoint."""
-
-    documents: List[DesignDocInfo] = Field(default_factory=list)
-    total: int = 0
-    query: Optional[str] = None
-
-
 class User(Document):
     username: str
     hashed_password: str
