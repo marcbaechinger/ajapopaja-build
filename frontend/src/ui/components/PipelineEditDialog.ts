@@ -247,7 +247,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
       'Serve Commands',
       this.pipeline.serve_commands || [],
       'One command per line, e.g.&#10;cd backend &amp;&amp; uv run uvicorn api.main:app --reload&#10;cd frontend &amp;&amp; npm run dev',
-      'Commands launched as a long-running background dev server. One per line. Leave empty to disable the dev server.'
+      'Commands launched as a long-running background dev server. One per line. Leave empty to disable the dev server. The port is available as $DEV_SERVER_PORT (also exported as $PORT).'
     );
   }
 

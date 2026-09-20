@@ -29,6 +29,7 @@ MONGODB_URI=mongodb://host.docker.internal:27017/
 OLLAMA_HOST=http://host.docker.internal:11434
 DATABASE_NAME=ajapopaja_build_prod
 PORT=8081
+DEV_SERVER_PORT=1224
 WORKSPACES_ROOT=/home/marc-baechinger/monolit/code
 CODERBOT_DEFAULT_MODEL=deepseek-v4.1-flash:cloud
 REMOTE_PR_MODE=gitea_pr

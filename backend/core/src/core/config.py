@@ -138,3 +138,11 @@ REMOTE_PR_MODE = os.getenv("REMOTE_PR_MODE", "direct").lower()
 
 if REMOTE_PR_MODE not in ("direct", "gitea_pr"):
     raise RuntimeError("REMOTE_PR_MODE must be 'direct' or 'gitea_pr'")
+
+# Port on which a user-started pipeline dev server is expected to listen inside
+# the container. It is published to the host via docker-compose.yml and injected
+# into the dev-process environment by DevProcessManager. Must be an integer.
+try:
+    DEV_SERVER_PORT = int(os.getenv("DEV_SERVER_PORT", "1224"))
+except ValueError as e:
+    raise RuntimeError("DEV_SERVER_PORT must be an integer") from e

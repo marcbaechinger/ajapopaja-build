@@ -41,13 +41,19 @@ async def test_dev_status(async_client, init_mock_db):
     with patch.object(
         DevProcessManager, "status", new_callable=AsyncMock
     ) as mock_status:
-        mock_status.return_value = {"running": False, "pid": None, "exit_code": None}
+        mock_status.return_value = {
+            "running": False,
+            "pid": None,
+            "exit_code": None,
+            "port": 1224,
+        }
         response = await async_client.get("/api/pipelines/p1/dev/status")
         assert response.status_code == status.HTTP_200_OK
         assert response.json() == {
             "running": False,
             "pid": None,
             "exit_code": None,
+            "port": 1224,
         }
 
 
@@ -73,11 +79,17 @@ async def test_dev_start_uses_pipeline_serve_commands(async_client, init_mock_db
     await pipeline.insert()
 
     with patch.object(DevProcessManager, "start", new_callable=AsyncMock) as mock_start:
-        mock_start.return_value = {"status": "started", "run_id": "abc", "pid": 42}
+        mock_start.return_value = {
+            "status": "started",
+            "run_id": "abc",
+            "pid": 42,
+            "port": 1224,
+        }
         response = await async_client.post(f"/api/pipelines/{pipeline.id}/dev/start")
 
     assert response.status_code == status.HTTP_200_OK
     assert response.json()["status"] == "started"
+    assert response.json()["port"] == 1224
     mock_start.assert_awaited_once()
     args = mock_start.await_args.args
     assert args[0] == str(pipeline.id)
@@ -135,9 +147,15 @@ async def test_dev_restart_stops_then_starts(async_client, init_mock_db):
         patch.object(DevProcessManager, "stop", new_callable=AsyncMock) as mock_stop,
         patch.object(DevProcessManager, "start", new_callable=AsyncMock) as mock_start,
     ):
-        mock_start.return_value = {"status": "started", "run_id": "new", "pid": 7}
+        mock_start.return_value = {
+            "status": "started",
+            "run_id": "new",
+            "pid": 7,
+            "port": 1224,
+        }
         response = await async_client.post(f"/api/pipelines/{pipeline.id}/dev/restart")
 
     assert response.status_code == status.HTTP_200_OK
+    assert response.json()["port"] == 1224
     mock_stop.assert_awaited_once()
     mock_start.assert_awaited_once()

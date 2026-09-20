@@ -84,6 +84,7 @@ Create `/etc/ajapopaja-build.env` with the variables you need. A typical example
 MONGODB_URI=mongodb://host.docker.internal:27017/
 DATABASE_NAME=ajapopaja_build_prod
 PORT=8081
+DEV_SERVER_PORT=1224
 OLLAMA_HOST=http://host.docker.internal:11434
 WORKSPACES_ROOT=/home/marc-baechinger/monolit/code
 CODERBOT_DEFAULT_MODEL=deepseek-v4.1-flash:cloud
@@ -96,6 +97,7 @@ CODERBOT_DEFAULT_MODEL=deepseek-v4.1-flash:cloud
 | `MONGODB_URI` | **Yes** | MongoDB connection string. Use `host.docker.internal` to reach a MongoDB running on the host. |
 | `DATABASE_NAME` | No | Name of the MongoDB database. Default: `ajapopaja_build_prod`. |
 | `PORT` | No | HTTP port the app listens on. Default: `8081`. |
+| `DEV_SERVER_PORT` | No | Port published to the host on which a user-started pipeline dev server listens. Injected into serve commands as `$DEV_SERVER_PORT` (and `$PORT`). Default: `1224`. |
 | `OLLAMA_HOST` | **Yes** (for AI features) | URL of the Ollama server. Use `http://host.docker.internal:11434` to reach Ollama on the host. |
 | `OLLAMA_MODEL` | No | Default model for the built-in AI Assistant. Default: `gpt-oss:20b` (or `gpt-oss:120b` when `OLLAMA_API_KEY` is set). |
 | `OLLAMA_API_KEY` | No | Optional API key for cloud-hosted/proxied Ollama. When set, the app connects to `https://ollama.com`. |
@@ -186,6 +188,7 @@ services:
       - /etc/ajapopaja-build.env
     ports:
       - "${PORT:-8081}:${PORT:-8081}"
+      - "${DEV_SERVER_PORT:-1224}:${DEV_SERVER_PORT:-1224}"
     volumes:
       - /home:/home
       - /Users:/Users
@@ -328,3 +331,20 @@ compose file includes the `extra_hosts` entry
 The path set in `WORKSPACES_ROOT` must exist on the host and be mounted into the
 container. Create the directory and add a matching `volumes` entry to
 `docker-compose.yml` if it is not under `/home` or `/Users`.
+
+### The pipeline dev server is not reachable from the host
+
+A dev server started from the dashboard listens inside the container. Make sure:
+
+- The serve command binds to the injected port (e.g. `$DEV_SERVER_PORT` or
+  `$PORT`), which defaults to `1224` and is set by the app automatically.
+- `/etc/ajapopaja-build.env` contains `DEV_SERVER_PORT` (default `1224`) and the
+  compose file publishes it:
+  `"${DEV_SERVER_PORT:-1224}:${DEV_SERVER_PORT:-1224}"`. Re-copy
+  `docker-compose.yml` (or run `deploy-local.sh`) and restart the service after
+  upgrading.
+
+Then open `http://<host>:1224` from the Docker host. Note that the port is
+published on all host interfaces; restrict it to loopback by changing the
+compose mapping to
+`"127.0.0.1:${DEV_SERVER_PORT:-1224}:${DEV_SERVER_PORT:-1224}"` if needed.

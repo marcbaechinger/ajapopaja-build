@@ -36,13 +36,21 @@ router = APIRouter(prefix="/pipelines/{pipeline_id}/dev", tags=["dev"])
 
 @router.get("/status", response_model=dict)
 async def dev_status(pipeline_id: str, current_user: User = Depends(get_current_user)):
-    """Return the status of the pipeline's dev process."""
+    """Return the status of the pipeline's dev process.
+
+    The response includes ``port`` (the container port the dev server is
+    expected to listen on, published to the host via docker-compose).
+    """
     return await DevProcessManager.instance().status(pipeline_id)
 
 
 @router.post("/start", response_model=dict)
 async def dev_start(pipeline_id: str, current_user: User = Depends(get_current_user)):
-    """Start the pipeline's dev process using its ``serve_commands``."""
+    """Start the pipeline's dev process using its ``serve_commands``.
+
+    The child process receives ``DEV_SERVER_PORT``/``PORT`` so it binds to the
+    published dev-server port; the response includes that ``port``.
+    """
     pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
     commands = pipeline.serve_commands or []
     if not commands:
@@ -60,7 +68,10 @@ async def dev_start(pipeline_id: str, current_user: User = Depends(get_current_u
 
 @router.post("/restart", response_model=dict)
 async def dev_restart(pipeline_id: str, current_user: User = Depends(get_current_user)):
-    """Restart the pipeline's dev process (stop then start)."""
+    """Restart the pipeline's dev process (stop then start).
+
+    The response includes the published dev-server ``port``.
+    """
     manager = DevProcessManager.instance()
     try:
         await manager.stop(pipeline_id)

@@ -20,10 +20,12 @@ workspace resolution is patched).
 """
 
 import asyncio
+import os
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from core import config
 from core.services.dev_process_manager import (
     DevProcessAlreadyRunningError,
     DevProcessError,
@@ -135,3 +137,46 @@ async def test_start_after_finish_is_allowed(tmp_path):
         restarted = await manager.start("p1", [["sh", "-c", "sleep 30"]])
         assert restarted["status"] == "started"
         await manager.stop("p1")
+
+
+async def test_dev_server_port_is_injected_into_child_env(tmp_path):
+    manager = DevProcessManager.instance()
+    with _patch_workspace(manager, str(tmp_path)):
+        started = await manager.start(
+            "p1", [["sh", "-c", "echo $DEV_SERVER_PORT; echo $PORT"]]
+        )
+
+    info = manager._processes["p1"]
+    await asyncio.wait_for(info.task, timeout=5)
+
+    expected = str(config.DEV_SERVER_PORT)
+    assert info.stdout.split() == [expected, expected]
+    assert started["port"] == config.DEV_SERVER_PORT
+
+
+async def test_port_is_included_in_start_and_status(tmp_path):
+    manager = DevProcessManager.instance()
+    before = await manager.status("p1")
+    assert before["port"] == config.DEV_SERVER_PORT
+
+    with _patch_workspace(manager, str(tmp_path)):
+        started = await manager.start("p1", [["sh", "-c", "sleep 30"]])
+    assert started["port"] == config.DEV_SERVER_PORT
+
+    status = await manager.status("p1")
+    assert status["port"] == config.DEV_SERVER_PORT
+    await manager.stop("p1")
+
+
+async def test_parent_environment_is_not_mutated(tmp_path):
+    manager = DevProcessManager.instance()
+    parent_port = os.environ.get("PORT")
+    parent_dev_port = os.environ.get("DEV_SERVER_PORT")
+
+    with _patch_workspace(manager, str(tmp_path)):
+        await manager.start("p1", [["sh", "-c", "exit 0"]])
+        info = manager._processes["p1"]
+        await asyncio.wait_for(info.task, timeout=5)
+
+    assert os.environ.get("PORT") == parent_port
+    assert os.environ.get("DEV_SERVER_PORT") == parent_dev_port

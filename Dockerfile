@@ -65,6 +65,9 @@ ENV MONGODB_URI=mongodb://host.docker.internal:27017/
 ENV OLLAMA_HOST=http://host.docker.internal:11434
 ENV DATABASE_NAME=ajapopaja_build_prod
 ENV PORT=8081
+# Port on which a user-started pipeline dev server listens. Published to the
+# host by docker-compose.yml; overridable at runtime via the env file.
+ENV DEV_SERVER_PORT=1224
 ENV FRONTEND_DIST_PATH=/app/frontend_dist
 ENV PYTHONPATH=/app/backend/api/src:/app/backend/core/src:/app/backend/mcp/src
 ENV WORKSPACES_ROOT=/workspaces
@@ -75,7 +78,7 @@ RUN mkdir -p /workspaces
 # Workdir MUST be the backend directory so uv can find pyproject.toml
 WORKDIR /app/backend
 
-EXPOSE 8000
+EXPOSE 8000 1224
 
 # Start command
 CMD ["sh", "-c", "uv run --package api uvicorn api.main:app --host 0.0.0.0 --port ${PORT}"]

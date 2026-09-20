@@ -32,6 +32,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from core import config
 from core.exceptions import EntityNotFoundError
 from core.queries import pipeline as pipeline_queries
 from core.utils import git_utils
@@ -192,6 +193,7 @@ class DevProcessManager:
                 "pipeline_id": pipeline_id,
                 "run_id": info.run_id,
                 "pid": pid,
+                "port": config.DEV_SERVER_PORT,
             }
 
     async def _run_commands(
@@ -201,11 +203,22 @@ class DevProcessManager:
         info = self._processes.get(pipeline_id)
         if info is None:  # pragma: no cover - defensive
             return
+        # Build an explicit child environment. Overriding PORT/DEV_SERVER_PORT
+        # only here (never in the parent) keeps the API's own PORT untouched
+        # while making zero-config dev servers bind to the published port.
+        env = {
+            **os.environ,
+            "DEV_SERVER_PORT": str(config.DEV_SERVER_PORT),
+            # Many frameworks (Vite/CRA, uvicorn --port, express) read PORT; set
+            # it so user serve commands bind to the published port by default.
+            "PORT": str(config.DEV_SERVER_PORT),
+        }
         try:
             for entry in commands:
                 proc = await asyncio.create_subprocess_exec(
                     *entry,
                     cwd=workspace,
+                    env=env,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                     # Own session/process group so descendants die with it.
@@ -253,6 +266,7 @@ class DevProcessManager:
                 "pid": None,
                 "exit_code": None,
                 "run_id": None,
+                "port": config.DEV_SERVER_PORT,
             }
         running = info.task is not None and not info.task.done()
         pid = (
@@ -267,6 +281,7 @@ class DevProcessManager:
             "pid": pid,
             "exit_code": info.exit_code,
             "run_id": info.run_id,
+            "port": config.DEV_SERVER_PORT,
         }
 
     async def stop(self, pipeline_id: str) -> Dict:
