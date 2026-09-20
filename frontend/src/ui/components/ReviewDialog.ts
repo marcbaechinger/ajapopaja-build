@@ -127,7 +127,7 @@ export class ReviewDialog extends BaseDialog<void> {
     const taskId = task.id || '';
 
     const config = PROMPT_CONFIGS.find(c => c.id === action);
-    const prompt = config ? config.getPrompt(taskId, pipelineId) : '';
+    const prompt = config ? (config.getPrompt?.(taskId, pipelineId) ?? '') : '';
 
     if (prompt) {
       try {

@@ -34,6 +34,9 @@ import { CoderBotService } from './CoderBotService.ts';
 import { SearchDialog } from '../ui/components/SearchDialog';
 import { AssistantPanel } from '../ui/components/AssistantPanel';
 import { HealthCheckDialog } from '../ui/components/HealthCheckDialog';
+import { handleQuickPromptButtonClick } from '../ui/components/QuickPromptButton';
+import { registerTaskElaborateSpecAction } from '../ui/components/SpecSection';
+import { registerOnePromptHandlers } from './oneprompt';
 
 export interface AppState {
   theme: 'light' | 'dark';
@@ -75,7 +78,9 @@ export class AppContext {
     this.dataManager = new DataManager(this.wsClient);
     this.assistantService = new AssistantService(this.wsClient, this.authService);
     this.coderBotService = new CoderBotService(this.wsClient, this.authService);
-    
+
+    this.initOnePrompt();
+
     // Initialize singleton components
     new AssistantPanel(this);
     
@@ -86,6 +91,24 @@ export class AppContext {
 
     this.initGlobalActions();
     this.setupGlobalShortcuts();
+  }
+
+  /**
+   * Registers the one-shot AI prompt framework: the inbound result/stream
+   * handlers, the bundled `task_elaborate_spec` action and the generic
+   * `quick_prompt` button dispatcher.
+   */
+  private initOnePrompt() {
+    registerOnePromptHandlers(this.wsClient);
+    registerTaskElaborateSpecAction(async (taskId, spec) => {
+      const task = this.dataManager.getTask(taskId);
+      const updated = await this.taskClient.updateDetails(taskId, task?.version ?? 1, { spec });
+      this.dataManager.updateTask(updated);
+    });
+
+    this.actionRegistry.register('quick_prompt', (_e, el) => {
+      handleQuickPromptButtonClick(this.wsClient, el);
+    });
   }
 
   private initGlobalActions() {
