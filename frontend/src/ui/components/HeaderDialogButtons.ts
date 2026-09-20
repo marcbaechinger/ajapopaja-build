@@ -28,6 +28,12 @@ export class HeaderDialogButtons {
            title: 'Global Search (Ctrl+K)'
          })}
          ${ButtonComponent.render({
+           action: 'open_design_doc_library',
+           extraAttrs: { 'data-pipeline-id': pipelineId },
+           icon: Icon.render('documentation', { size: 16, className: 'group-hover:scale-110 transition-transform' }),
+           title: 'Design Doc Library (D)'
+         })}
+         ${ButtonComponent.render({
            action: 'toggle_assistant',
            icon: Icon.render('lightning', { size: 16, className: 'group-hover:scale-110 transition-transform' }),
            title: 'AI Assistant (Ctrl+Shift+A)'

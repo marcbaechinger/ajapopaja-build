@@ -24,6 +24,7 @@ import { HistoryDialog } from '../components/HistoryDialog.ts';
 import { StatsDialog } from '../components/StatsDialog.ts';
 import { TaskForm } from '../components/TaskForm.ts';
 import { DesignDocDialog } from '../components/DesignDocDialog.ts';
+import { DesignDocLibraryDialog } from '../components/DesignDocLibraryDialog.ts';
 import { DesignDocDiffDialog } from '../components/DesignDocDiffDialog.ts';
 import { BacklogView } from '../components/BacklogView.ts';
 import { ExecutionEngineView } from '../components/ExecutionEngineView.ts';
@@ -185,6 +186,12 @@ export class PipelineDetailView extends View {
       if (e.key === 's' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
         new StatsDialog(this.allLoadedTasks, this.pipelineId, this.context.pipelineClient).show();
+      }
+
+      // 'd' key for the design doc library dialog
+      if (e.key === 'd' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        this.openDesignDocLibrary();
       }
     };
     document.addEventListener('keydown', this.keydownHandler);
@@ -378,6 +385,10 @@ export class PipelineDetailView extends View {
 
   private openCoderBotDialog() {
     new CoderBotDialog(this.context.coderBotService).show();
+  }
+
+  private openDesignDocLibrary() {
+    new DesignDocLibraryDialog(this.pipelineId, this.context.designDocClient).show();
   }
 
   private registerActions() {
@@ -596,6 +607,10 @@ export class PipelineDetailView extends View {
 
     this.context.actionRegistry.register('open_history', () => {
       new HistoryDialog(this.pipelineId, this.context.pipelineClient).show();
+    });
+
+    this.context.actionRegistry.register('open_design_doc_library', () => {
+      this.openDesignDocLibrary();
     });
 
     this.context.actionRegistry.register('create_task', async (_e, el) => {

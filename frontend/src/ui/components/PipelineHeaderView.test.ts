@@ -50,6 +50,7 @@ describe('PipelineHeaderView', () => {
   it('contains tool actions', () => {
     const html = PipelineHeaderView.render(mockProps);
     expect(html).toContain("data-action-click=\"open_search\"")
+    expect(html).toContain("data-action-click=\"open_design_doc_library\"")
     expect(html).toContain("data-action-click=\"open_stats\"")
     expect(html).toContain("data-action-click=\"open_history\"")
     expect(html).toContain("data-action-click=\"toggle_assistant\"")

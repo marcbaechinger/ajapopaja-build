@@ -293,6 +293,32 @@ export interface GitLogResponse {
   error?: string | null;
 }
 
+/** A single Markdown design document listed in the design-doc library. */
+export interface DesignDocInfo {
+  path: string;
+  title: string;
+  size: number;
+  modified_at?: string | null;
+  /** Short content preview when the result matched a search query. */
+  snippet?: string | null;
+}
+
+/** Full content of a single Markdown design document. */
+export interface DesignDocContent {
+  path: string;
+  title: string;
+  content: string;
+  size: number;
+  modified_at?: string | null;
+}
+
+/** Response payload of the design-doc library listing endpoint. */
+export interface DesignDocListResponse {
+  documents: DesignDocInfo[];
+  total: number;
+  query?: string | null;
+}
+
 export interface WSMessage {
   type: string;
   id?: string;

@@ -42,6 +42,7 @@ from api.oneprompt.ws_handler import (
 from api.auth import ALGORITHM, SECRET_KEY, get_current_user_from_token
 from api.routes.auth import router as auth_router
 from api.routes.dev_server import router as dev_server_router
+from api.routes.design_docs import router as design_docs_router
 from api.routes.docbot import router as docbot_router
 from api.routes.editor_commands import router as editor_router
 from api.reviewbot.router import router as reviewbot_router
@@ -277,6 +278,7 @@ api_router.include_router(archbot_router)
 api_router.include_router(coderbot_router)
 api_router.include_router(pull_request_router)
 api_router.include_router(dev_server_router)
+api_router.include_router(design_docs_router)
 
 app.include_router(api_router)
 
