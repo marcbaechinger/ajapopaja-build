@@ -636,4 +636,185 @@ describe('PipelineEditDialog', () => {
       await showPromise;
     });
   });
+
+  describe('dev server control', () => {
+    const enableDevServer = (opts: { running?: boolean; port?: number } = {}) => {
+      const client = mockProps.context.pipelineClient as any;
+      client.getDevServerStatus = vi.fn().mockResolvedValue({
+        running: opts.running ?? false,
+        status: opts.running ? 'running' : 'not_started',
+        pid: opts.running ? 42 : null,
+        exit_code: null,
+        run_id: opts.running ? 'run-1' : null,
+        port: opts.port ?? 1224,
+      });
+      client.startDevServer = vi.fn().mockResolvedValue({
+        status: 'started',
+        running: true,
+        pid: 42,
+        port: opts.port ?? 1224,
+      });
+      client.stopDevServer = vi.fn().mockResolvedValue({
+        status: 'stopped',
+        running: false,
+        pid: null,
+        port: opts.port ?? 1224,
+      });
+      return client;
+    };
+
+    const clickCancel = () => {
+      document.querySelector('#pipeline-edit-cancel')?.dispatchEvent(new MouseEvent('click'));
+    };
+
+    it('should render a start button when serve commands are stored', async () => {
+      mockProps.pipeline!.serve_commands = [['sh', '-c', 'make serve']];
+      enableDevServer();
+      const dialog = new PipelineEditDialog(mockProps);
+      const showPromise = dialog.show();
+
+      await vi.waitFor(() => {
+        const btn = document.querySelector('#pipeline-dev-toggle') as HTMLButtonElement;
+        expect(btn).not.toBeNull();
+        expect(btn.textContent).toContain('Start Dev Server');
+      });
+      expect(document.querySelector('#dev-server-status')?.textContent).toContain('Stopped');
+
+      clickCancel();
+      await showPromise;
+    });
+
+    it('should not render the control when no serve commands are stored', async () => {
+      const dialog = new PipelineEditDialog(mockProps);
+      const showPromise = dialog.show();
+
+      expect(document.querySelector('#pipeline-dev-toggle')).toBeNull();
+
+      clickCancel();
+      await showPromise;
+    });
+
+    it('should not render the control in create mode', async () => {
+      const props = mkCreateProps();
+      props.pipeline = new Pipeline({
+        _id: 'new-pipeline',
+        serve_commands: [['sh', '-c', 'make serve']],
+      });
+      const dialog = new PipelineEditDialog(props);
+      const showPromise = dialog.show();
+
+      expect(document.querySelector('#pipeline-dev-toggle')).toBeNull();
+
+      clickCancel();
+      await showPromise;
+    });
+
+    it('should show a stop button when the dev server is already running', async () => {
+      mockProps.pipeline!.serve_commands = [['sh', '-c', 'make serve']];
+      const client = enableDevServer({ running: true });
+      const dialog = new PipelineEditDialog(mockProps);
+      const showPromise = dialog.show();
+
+      await vi.waitFor(() => {
+        const btn = document.querySelector('#pipeline-dev-toggle') as HTMLButtonElement;
+        expect(btn).not.toBeNull();
+        expect(btn.textContent).toContain('Stop Dev Server');
+      });
+      expect(client.getDevServerStatus).toHaveBeenCalledWith('pipeline-1');
+      expect(document.querySelector('#dev-server-status')?.textContent).toContain('Running on port 1224');
+
+      clickCancel();
+      await showPromise;
+    });
+
+    it('should start the dev server and switch to the stop button', async () => {
+      mockProps.pipeline!.serve_commands = [['sh', '-c', 'make serve']];
+      const client = enableDevServer();
+      const dialog = new PipelineEditDialog(mockProps);
+      const showPromise = dialog.show();
+
+      await vi.waitFor(() => {
+        expect(document.querySelector('#pipeline-dev-toggle')).not.toBeNull();
+      });
+      (document.querySelector('#pipeline-dev-toggle') as HTMLButtonElement).click();
+
+      await vi.waitFor(() => {
+        expect(client.startDevServer).toHaveBeenCalledWith('pipeline-1');
+        const btn = document.querySelector('#pipeline-dev-toggle') as HTMLButtonElement;
+        expect(btn.textContent).toContain('Stop Dev Server');
+      });
+      expect(document.querySelector('#dev-server-status')?.textContent).toContain('Running on port 1224');
+
+      clickCancel();
+      await showPromise;
+    });
+
+    it('should stop a running dev server and switch to the start button', async () => {
+      mockProps.pipeline!.serve_commands = [['sh', '-c', 'make serve']];
+      const client = enableDevServer({ running: true });
+      const dialog = new PipelineEditDialog(mockProps);
+      const showPromise = dialog.show();
+
+      await vi.waitFor(() => {
+        const btn = document.querySelector('#pipeline-dev-toggle') as HTMLButtonElement;
+        expect(btn?.textContent).toContain('Stop Dev Server');
+      });
+      (document.querySelector('#pipeline-dev-toggle') as HTMLButtonElement).click();
+
+      await vi.waitFor(() => {
+        expect(client.stopDevServer).toHaveBeenCalledWith('pipeline-1');
+        const btn = document.querySelector('#pipeline-dev-toggle') as HTMLButtonElement;
+        expect(btn.textContent).toContain('Start Dev Server');
+      });
+
+      clickCancel();
+      await showPromise;
+    });
+
+    it('should surface dev server start errors inline', async () => {
+      mockProps.pipeline!.serve_commands = [['sh', '-c', 'make serve']];
+      const client = enableDevServer();
+      client.startDevServer.mockRejectedValue(new Error('No serve commands configured'));
+      const dialog = new PipelineEditDialog(mockProps);
+      const showPromise = dialog.show();
+
+      await vi.waitFor(() => {
+        expect(document.querySelector('#pipeline-dev-toggle')).not.toBeNull();
+      });
+      (document.querySelector('#pipeline-dev-toggle') as HTMLButtonElement).click();
+
+      await vi.waitFor(() => {
+        expect(document.querySelector('#dev-server-status')?.textContent).toContain('No serve commands configured');
+      });
+      expect(window.alert).not.toHaveBeenCalled();
+      expect((document.querySelector('#pipeline-dev-toggle') as HTMLButtonElement).textContent).toContain('Start Dev Server');
+
+      clickCancel();
+      await showPromise;
+    });
+
+    it('should fall back to the REST endpoint when the client exposes no dev methods', async () => {
+      mockProps.pipeline!.serve_commands = [['sh', '-c', 'make serve']];
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ running: false, status: 'not_started', port: 1224 }),
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      try {
+        const dialog = new PipelineEditDialog(mockProps);
+        const showPromise = dialog.show();
+
+        await vi.waitFor(() => {
+          expect(fetchMock).toHaveBeenCalled();
+        });
+        expect(fetchMock.mock.calls[0][0]).toBe('/api/pipelines/pipeline-1/dev/status');
+
+        clickCancel();
+        await showPromise;
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+  });
 });

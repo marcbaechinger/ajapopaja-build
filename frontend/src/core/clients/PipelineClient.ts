@@ -18,6 +18,16 @@ import { Pipeline, PipelineStatus, CommitDiff, type GitStatusDetails, type GitLo
 import { BaseClient } from './BaseClient.ts';
 import { AuthService } from '../AuthService.ts';
 
+export interface DevServerStatus {
+  pipeline_id?: string;
+  running: boolean;
+  status: string;
+  pid: number | null;
+  exit_code: number | null;
+  run_id: string | null;
+  port: number;
+}
+
 export class PipelineClient extends BaseClient {
   private baseUrl: string;
 
@@ -103,6 +113,25 @@ export class PipelineClient extends BaseClient {
     const response = await this.fetch(
       `${this.baseUrl}/pipelines/${pipelineId}/git-log?limit=${limit}`
     );
+    return await response.json();
+  }
+
+  async getDevServerStatus(id: string): Promise<DevServerStatus> {
+    const response = await this.fetch(`${this.baseUrl}/pipelines/${id}/dev/status`);
+    return await response.json();
+  }
+
+  async startDevServer(id: string): Promise<DevServerStatus> {
+    const response = await this.fetch(`${this.baseUrl}/pipelines/${id}/dev/start`, {
+      method: 'POST',
+    });
+    return await response.json();
+  }
+
+  async stopDevServer(id: string): Promise<DevServerStatus> {
+    const response = await this.fetch(`${this.baseUrl}/pipelines/${id}/dev/stop`, {
+      method: 'POST',
+    });
     return await response.json();
   }
 }

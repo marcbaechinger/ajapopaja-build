@@ -812,3 +812,78 @@ describe('PipelineClient git endpoints', () => {
     });
   });
 });
+
+describe('PipelineClient dev server endpoints', () => {
+  let client: PipelineClient;
+  let mockAuthService: any;
+  const baseUrl = 'http://api.test';
+
+  beforeEach(() => {
+    mockAuthService = {
+      getAccessToken: vi.fn().mockReturnValue('mock-token'),
+      refreshToken: vi.fn().mockResolvedValue(null),
+    };
+    vi.stubGlobal('fetch', vi.fn());
+    client = new PipelineClient(baseUrl, mockAuthService);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('should GET the dev server status', async () => {
+    const payload = { running: true, status: 'running', pid: 42, port: 1224 };
+    (fetch as any).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(payload),
+    });
+
+    const status = await client.getDevServerStatus('pipe-1');
+
+    expect(status).toEqual(payload);
+    const url = new URL((fetch as any).mock.calls[0][0]);
+    expect(url.pathname).toBe('/pipelines/pipe-1/dev/status');
+    expect((fetch as any).mock.calls[0][1]?.method).toBeUndefined();
+  });
+
+  it('should POST to start the dev server', async () => {
+    const payload = { status: 'started', running: true, pid: 42, port: 1224 };
+    (fetch as any).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(payload),
+    });
+
+    const status = await client.startDevServer('pipe-1');
+
+    expect(status).toEqual(payload);
+    const url = new URL((fetch as any).mock.calls[0][0]);
+    expect(url.pathname).toBe('/pipelines/pipe-1/dev/start');
+    expect((fetch as any).mock.calls[0][1].method).toBe('POST');
+  });
+
+  it('should POST to stop the dev server', async () => {
+    const payload = { status: 'stopped', running: false, pid: null, port: 1224 };
+    (fetch as any).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(payload),
+    });
+
+    const status = await client.stopDevServer('pipe-1');
+
+    expect(status).toEqual(payload);
+    const url = new URL((fetch as any).mock.calls[0][0]);
+    expect(url.pathname).toBe('/pipelines/pipe-1/dev/stop');
+    expect((fetch as any).mock.calls[0][1].method).toBe('POST');
+  });
+
+  it('should propagate dev server errors', async () => {
+    (fetch as any).mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: () => Promise.resolve({ detail: 'No serve commands configured' }),
+    });
+
+    await expect(client.startDevServer('pipe-1')).rejects.toThrow('No serve commands configured');
+  });
+});

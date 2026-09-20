@@ -67,6 +67,13 @@ export class PipelineEditDialog extends BaseDialog<void> {
   private activeTab: RepoTab;
   private activeCmdTab: CommandsTab = 'test';
 
+  // Dev-server control state (edit mode only). Tracks whether the pipeline's
+  // long-running dev process is running so the button can start or stop it.
+  private devServerRunning = false;
+  private devServerPort: number | null = null;
+  private devServerLoading = false;
+  private devServerError: string | null = null;
+
   constructor(props: PipelineEditDialogProps) {
     // We need to set props BEFORE super() if renderBody uses them,
     // but JS doesn't allow this.props before super().
@@ -89,6 +96,8 @@ export class PipelineEditDialog extends BaseDialog<void> {
     this.activeTab = create ? 'local' : this.isRemote() ? 'remote' : 'local';
     // After props are set, we MUST re-render because the first render in super() had no props.
     this.reRender();
+    // Show the current dev-server state without blocking the dialog render.
+    void this.loadDevServerStatus();
   }
 
   private isEditMode(): boolean {
@@ -270,6 +279,56 @@ export class PipelineEditDialog extends BaseDialog<void> {
     `;
   }
 
+  /** True when the pipeline has serve commands persisted on the server. */
+  private hasServeCommands(): boolean {
+    return Array.isArray(this.pipeline.serve_commands) && this.pipeline.serve_commands.length > 0;
+  }
+
+  /**
+   * Renders the dev-server start/stop control. Only shown in edit mode for
+   * pipelines that already have serve commands stored, because the backend
+   * ``dev/start`` endpoint reads those stored commands.
+   */
+  private renderDevServerControl(): string {
+    if (!this.isEditMode() || !this.hasServeCommands()) return '';
+
+    const running = this.devServerRunning;
+    const busy = this.devServerLoading;
+    const statusText = this.devServerError
+      ? this.devServerError
+      : running
+        ? `Running${this.devServerPort != null ? ` on port ${this.devServerPort}` : ''}`
+        : 'Stopped';
+    const statusClass = this.devServerError
+      ? 'text-red-400'
+      : running
+        ? 'text-green-500'
+        : 'text-app-muted';
+    const buttonClass = running
+      ? 'bg-red-500/80 hover:bg-red-500'
+      : 'bg-app-accent-1 hover:brightness-110';
+    const disabledClass = busy ? ' opacity-60 cursor-not-allowed' : '';
+    const label = busy
+      ? running
+        ? 'Stopping...'
+        : 'Starting...'
+      : running
+        ? 'Stop Dev Server'
+        : 'Start Dev Server';
+
+    return `
+      <div id="dev-server-control" class="flex items-center justify-between gap-3 p-3 rounded border border-app-border bg-app-bg">
+        <div class="flex flex-col gap-0.5 min-w-0">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-app-muted">Dev Server</span>
+          <span id="dev-server-status" class="text-xs font-medium ${statusClass} truncate">${statusText}</span>
+        </div>
+        <button type="button" id="pipeline-dev-toggle" ${busy ? 'disabled' : ''} class="shrink-0 px-3 py-1.5 rounded text-white text-[10px] font-bold uppercase tracking-widest transition-all shadow-md cursor-pointer ${buttonClass}${disabledClass}">
+          ${label}
+        </button>
+      </div>
+    `;
+  }
+
   protected renderBody(): string {
     if (!this.props) return '';
     const create = !this.isEditMode();
@@ -287,6 +346,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
         </div>
         ${this.activeTab === 'local' ? this.renderLocalTab(localReadonly, create) : this.renderRemoteTab(remoteReadonly, create)}
         ${this.renderCommandsTabs()}
+        ${this.renderDevServerControl()}
         <div id="pipeline-edit-error" class="hidden text-xs text-red-400 font-bold"></div>
         ${create ? '' : `
         <div class="flex col-span-2">
@@ -329,6 +389,105 @@ export class PipelineEditDialog extends BaseDialog<void> {
         }
       });
     });
+
+    this.dialog.querySelector('#pipeline-dev-toggle')?.addEventListener('click', () => {
+      void this.toggleDevServer();
+    });
+  }
+
+  /**
+   * Issues a dev-server request (status/start/stop).
+   *
+   * Prefers a dedicated method on the context's clients so callers stay
+   * authenticated through the shared :class:`BaseClient`. A few common method
+   * names are accepted to remain tolerant of naming differences, and a direct
+   * REST call is used as a last resort.
+   */
+  private async requestDevServer(
+    action: 'status' | 'start' | 'stop',
+    pipelineId: string
+  ): Promise<any> {
+    const context = this.props.context as any;
+    const candidates = [context?.devServerClient, context?.pipelineClient].filter(Boolean);
+    const methodNames: Record<string, string[]> = {
+      status: ['getDevServerStatus', 'getDevStatus', 'getStatus', 'status'],
+      start: ['startDevServer', 'startDev', 'start'],
+      stop: ['stopDevServer', 'stopDev', 'stop'],
+    };
+    for (const candidate of candidates) {
+      for (const name of methodNames[action]) {
+        if (typeof candidate?.[name] === 'function') {
+          return await candidate[name](pipelineId);
+        }
+      }
+    }
+
+    const token = context?.authService?.getAccessToken?.();
+    const response = await fetch(`/api/pipelines/${pipelineId}/dev/${action}`, {
+      method: action === 'status' ? 'GET' : 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      throw new Error(error.detail || `HTTP error! status: ${response.status}`);
+    }
+    return await response.json();
+  }
+
+  private isRunning(status: any): boolean {
+    if (!status) return false;
+    if (status.running === true) return true;
+    return status.status === 'running' || status.status === 'started';
+  }
+
+  /**
+   * Fetches the dev-server status for the pipeline and updates the control.
+   * Failures are silent (the control simply stays "Stopped") because status is
+   * only informational; the start/stop action reports its own errors.
+   */
+  private async loadDevServerStatus(): Promise<void> {
+    if (!this.isEditMode() || !this.hasServeCommands()) return;
+    const pipelineId = this.pipelineId;
+    if (!pipelineId) return;
+    try {
+      const status = await this.requestDevServer('status', pipelineId);
+      this.devServerRunning = this.isRunning(status);
+      this.devServerPort = typeof status?.port === 'number' ? status.port : null;
+      this.devServerError = null;
+      this.reRender();
+    } catch (error) {
+      console.error('Failed to load dev server status:', error);
+    }
+  }
+
+  /** Starts or stops the pipeline's dev server based on the current state. */
+  private async toggleDevServer(): Promise<void> {
+    const pipelineId = this.pipelineId;
+    if (!pipelineId || this.devServerLoading) return;
+
+    const wasRunning = this.devServerRunning;
+    this.devServerLoading = true;
+    this.devServerError = null;
+    this.reRender();
+
+    try {
+      if (wasRunning) {
+        await this.requestDevServer('stop', pipelineId);
+        this.devServerRunning = false;
+        this.devServerPort = null;
+      } else {
+        const status = await this.requestDevServer('start', pipelineId);
+        // A successful start means the process is running, even if the
+        // response shape varies between backends.
+        this.devServerRunning = true;
+        this.devServerPort = typeof status?.port === 'number' ? status.port : null;
+      }
+    } catch (error) {
+      this.devServerError = error instanceof Error ? error.message : String(error);
+    } finally {
+      this.devServerLoading = false;
+      this.reRender();
+    }
   }
 
   private showError(message: string) {
