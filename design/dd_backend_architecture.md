@@ -80,6 +80,23 @@ process through the same service API.
   `/pipelines/{pipeline_id}/dev`, tag `dev`) is a thin HTTP wrapper exposing
   `GET /status`, `POST /start`, `POST /restart` and `POST /stop`.
 
+## 3.2 Model Organization
+
+All general model classes belong in `models.py` (`backend/core/src/core/models/models.py`).
+This includes domain entities, enums, and value/DTO classes that describe the
+app's data and are shared across more than one module (routers, queries,
+services, tools, or the MCP server).
+
+Specific response or request models that a route uses internally and
+exclusively may be kept where the endpoints are defined (i.e. alongside the
+router in `api/routes/`). However, as soon as such a model is reused elsewhere
+or represents a general concept of the application, it should be moved into
+`models.py`.
+
+Keeping general models in one place has the advantage that inspecting
+`models.py` gives a quick idea of what the app is about: its central entities,
+their fields, and the states they move through.
+
 ## 4. Error Handling & HTTP Mapping
 
 A centralized exception handler translates internal domain errors into appropriate HTTP responses.

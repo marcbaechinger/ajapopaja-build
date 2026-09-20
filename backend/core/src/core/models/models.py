@@ -270,6 +270,37 @@ class Pipeline(Document):
         name = "pipelines"
 
 
+class GitStatusInfo(BaseModel):
+    """Read-only snapshot of a pipeline repository's working-tree status.
+
+    ``in_sync`` is ``True`` when there are no local commits ahead of and no
+    remote commits behind ``origin``; ``False`` when the branch diverged;
+    ``None`` when sync is not applicable or cannot be determined (no origin,
+    detached HEAD, or the branch was never pushed).
+    """
+
+    staged: int = 0
+    unstaged: int = 0
+    untracked: int = 0
+    has_origin: bool = False
+    branch: Optional[str] = None
+    in_sync: Optional[bool] = None
+    ahead: int = 0
+    behind: int = 0
+    error: Optional[str] = None
+
+
+class GitLogEntry(BaseModel):
+    """Compact commit information for the history dialog."""
+
+    hash: str
+    short_hash: str
+    author: Optional[str] = None
+    email: Optional[str] = None
+    date: Optional[str] = None
+    subject: Optional[str] = None
+
+
 class User(Document):
     username: str
     hashed_password: str

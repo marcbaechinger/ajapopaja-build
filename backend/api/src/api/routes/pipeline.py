@@ -20,7 +20,13 @@ from pydantic import BaseModel, Field
 from api.auth import get_current_user
 from api.websocket_manager import WSMessage, manager
 from core.exceptions import EntityNotFoundError
-from core.models.models import Pipeline, PipelineStatus, User
+from core.models.models import (
+    GitLogEntry,
+    GitStatusInfo,
+    Pipeline,
+    PipelineStatus,
+    User,
+)
 from core.queries import pipeline as pipeline_queries
 from core.queries import task as task_queries
 from core.utils import git_utils
@@ -210,37 +216,6 @@ async def get_commit_diff(
 ):
     """Return the diff of a single commit so the UI can render it in a dialog."""
     return await git_utils.get_commit_diff(pipeline_id, commit_hash)
-
-
-class GitStatusInfo(BaseModel):
-    """Read-only snapshot of a pipeline repository's working-tree status.
-
-    ``in_sync`` is ``True`` when there are no local commits ahead of and no
-    remote commits behind ``origin``; ``False`` when the branch diverged;
-    ``None`` when sync is not applicable or cannot be determined (no origin,
-    detached HEAD, or the branch was never pushed).
-    """
-
-    staged: int = 0
-    unstaged: int = 0
-    untracked: int = 0
-    has_origin: bool = False
-    branch: Optional[str] = None
-    in_sync: Optional[bool] = None
-    ahead: int = 0
-    behind: int = 0
-    error: Optional[str] = None
-
-
-class GitLogEntry(BaseModel):
-    """Compact commit information for the history dialog."""
-
-    hash: str
-    short_hash: str
-    author: Optional[str] = None
-    email: Optional[str] = None
-    date: Optional[str] = None
-    subject: Optional[str] = None
 
 
 class GitLogResponse(BaseModel):
