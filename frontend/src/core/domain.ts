@@ -263,6 +263,36 @@ export interface GitStatus {
   untracked: number;
 }
 
+/**
+ * Extended repository status returned by the Pipeline git-status endpoint:
+ * working-tree counts plus remote-origin sync information.
+ */
+export interface GitStatusDetails extends GitStatus {
+  has_origin: boolean;
+  branch?: string | null;
+  /** True when neither ahead nor behind origin; null when not applicable/unknown. */
+  in_sync?: boolean | null;
+  ahead: number;
+  behind: number;
+  error?: string | null;
+}
+
+/** A single compact commit entry in the pipeline git log. */
+export interface GitLogEntry {
+  hash: string;
+  short_hash: string;
+  author?: string | null;
+  email?: string | null;
+  date?: string | null;
+  subject?: string | null;
+}
+
+/** Response wrapper for the Pipeline git-log endpoint. */
+export interface GitLogResponse {
+  commits: GitLogEntry[];
+  error?: string | null;
+}
+
 export interface WSMessage {
   type: string;
   id?: string;

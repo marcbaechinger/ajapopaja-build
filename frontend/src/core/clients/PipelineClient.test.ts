@@ -680,3 +680,135 @@ describe('PipelineClient', () => {
     });
   });
 });
+
+describe('PipelineClient git endpoints', () => {
+  let client: PipelineClient;
+  let mockAuthService: any;
+  const baseUrl = 'http://api.test';
+
+  beforeEach(() => {
+    mockAuthService = {
+      getAccessToken: vi.fn().mockReturnValue('mock-token'),
+      refreshToken: vi.fn().mockResolvedValue(null),
+    };
+    vi.stubGlobal('fetch', vi.fn());
+    client = new PipelineClient(baseUrl, mockAuthService);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  describe('getGitStatus', () => {
+    it('should GET the pipeline git-status URL and return the payload', async () => {
+      const payload = {
+        staged: 1,
+        unstaged: 2,
+        untracked: 3,
+        has_origin: true,
+        branch: 'main',
+        in_sync: false,
+        ahead: 1,
+        behind: 0,
+        error: null,
+      };
+      (fetch as any).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(payload),
+      });
+
+      const status = await client.getGitStatus('pipe-1');
+
+      expect(status).toEqual(payload);
+
+      const url = new URL((fetch as any).mock.calls[0][0]);
+      expect(url.pathname).toBe('/pipelines/pipe-1/git-status');
+    });
+
+    it('should authenticate with the Authorization header', async () => {
+      (fetch as any).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({}),
+      });
+
+      await client.getGitStatus('pipe-1');
+
+      const headers = (fetch as any).mock.calls[0][1].headers;
+      expect(headers.get('Authorization')).toBe('Bearer mock-token');
+    });
+
+    it('should propagate errors', async () => {
+      (fetch as any).mockResolvedValue({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({ detail: 'Pipeline not found' }),
+      });
+
+      await expect(client.getGitStatus('missing')).rejects.toThrow('Pipeline not found');
+    });
+  });
+
+  describe('getGitLog', () => {
+    it('should GET the pipeline git-log URL with a limit and return commits', async () => {
+      const payload = {
+        commits: [
+          {
+            hash: 'abcdef1234567890',
+            short_hash: 'abcdef1',
+            author: 'Alice',
+            date: '2026-01-01T00:00:00+00:00',
+            subject: 'Add feature',
+          },
+        ],
+        error: null,
+      };
+      (fetch as any).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(payload),
+      });
+
+      const log = await client.getGitLog('pipe-1', 25);
+
+      expect(log).toEqual(payload);
+
+      const url = new URL((fetch as any).mock.calls[0][0]);
+      expect(url.pathname).toBe('/pipelines/pipe-1/git-log');
+      expect(url.searchParams.get('limit')).toBe('25');
+    });
+
+    it('should default the limit to 50', async () => {
+      (fetch as any).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ commits: [] }),
+      });
+
+      await client.getGitLog('pipe-1');
+
+      const url = new URL((fetch as any).mock.calls[0][0]);
+      expect(url.searchParams.get('limit')).toBe('50');
+    });
+
+    it('should authenticate with the Authorization header', async () => {
+      (fetch as any).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ commits: [] }),
+      });
+
+      await client.getGitLog('pipe-1');
+
+      const headers = (fetch as any).mock.calls[0][1].headers;
+      expect(headers.get('Authorization')).toBe('Bearer mock-token');
+    });
+
+    it('should propagate errors', async () => {
+      (fetch as any).mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({ detail: 'Server Error' }),
+      });
+
+      await expect(client.getGitLog('pipe-1')).rejects.toThrow('Server Error');
+    });
+  });
+});

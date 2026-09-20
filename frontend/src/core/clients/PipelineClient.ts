@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { Pipeline, PipelineStatus, CommitDiff } from '../domain.ts';
+import { Pipeline, PipelineStatus, CommitDiff, type GitStatusDetails, type GitLogResponse } from '../domain.ts';
 import { BaseClient } from './BaseClient.ts';
 import { AuthService } from '../AuthService.ts';
 
@@ -92,5 +92,17 @@ export class PipelineClient extends BaseClient {
       `${this.baseUrl}/pipelines/${pipelineId}/commits/${encodeURIComponent(commitHash)}/diff`
     );
     return new CommitDiff(await response.json());
+  }
+
+  async getGitStatus(pipelineId: string): Promise<GitStatusDetails> {
+    const response = await this.fetch(`${this.baseUrl}/pipelines/${pipelineId}/git-status`);
+    return await response.json();
+  }
+
+  async getGitLog(pipelineId: string, limit: number = 50): Promise<GitLogResponse> {
+    const response = await this.fetch(
+      `${this.baseUrl}/pipelines/${pipelineId}/git-log?limit=${limit}`
+    );
+    return await response.json();
   }
 }

@@ -424,3 +424,124 @@ def get_git_status_summary(repo: git.Repo) -> Dict[str, int]:
                 unstaged += 1
 
     return {"staged": staged, "unstaged": unstaged, "untracked": untracked}
+
+
+def get_git_status_details(repo: git.Repo) -> Dict:
+    """Return a read-only repository status snapshot for the UI.
+
+    Besides the staged/unstaged/untracked counts (see
+    :func:`get_git_status_summary`), this reports whether the repository has an
+    ``origin`` remote and whether the current branch is in sync with its
+    remote-tracking branch. ``in_sync`` is ``True`` when there are no commits
+    ahead of and none behind ``origin``, ``False`` when they diverge and
+    ``None`` when sync cannot be determined (e.g. no origin, detached HEAD or
+    the branch has never been pushed).
+
+    The function only reads local refs; it never fetches, pulls or otherwise
+    modifies the repository.
+    """
+    result: Dict = {
+        "staged": 0,
+        "unstaged": 0,
+        "untracked": 0,
+        "has_origin": False,
+        "branch": None,
+        "in_sync": None,
+        "ahead": 0,
+        "behind": 0,
+    }
+    result.update(get_git_status_summary(repo))
+
+    try:
+        remote_names = [remote.name for remote in repo.remotes]
+    except Exception:
+        remote_names = []
+    if "origin" not in remote_names:
+        return result
+    result["has_origin"] = True
+
+    # Detached HEAD has no branch to compare against.
+    try:
+        branch = repo.active_branch.name
+    except Exception:
+        return result
+    result["branch"] = branch
+
+    remote_ref = f"origin/{branch}"
+    try:
+        repo.git.rev_parse("--verify", remote_ref)
+    except git.exc.GitCommandError:
+        # The branch has not been pushed to origin yet; sync is unknown.
+        return result
+
+    try:
+        counts = repo.git.rev_list("--left-right", "--count", f"{remote_ref}...HEAD")
+        behind_str, ahead_str = counts.split()
+        behind = int(behind_str)
+        ahead = int(ahead_str)
+    except (git.exc.GitCommandError, ValueError):
+        return result
+
+    result["behind"] = behind
+    result["ahead"] = ahead
+    result["in_sync"] = behind == 0 and ahead == 0
+    return result
+
+
+def get_git_log(repo: git.Repo, limit: int = 50) -> list:
+    """Return compact commit entries for the repository's current branch.
+
+    Each entry carries the abbreviated and full hash, author name/email, the
+    commit date and the subject line. A repository without commits (unborn
+    HEAD) yields an empty list rather than raising.
+    """
+    try:
+        commits = list(repo.iter_commits("HEAD", max_count=limit))
+    except Exception:
+        return []
+
+    return [
+        {
+            "hash": commit.hexsha,
+            "short_hash": commit.hexsha[:7],
+            "author": commit.author.name,
+            "email": commit.author.email,
+            "date": commit.committed_datetime.isoformat(),
+            "subject": commit.summary,
+        }
+        for commit in commits
+    ]
+
+
+async def get_pipeline_repo_readonly(pipeline_id: str) -> Tuple[Pipeline, git.Repo]:
+    """Resolve a pipeline's repository for read-only inspection.
+
+    Unlike :func:`get_pipeline_and_repo` this never clones, fetches, pulls or
+    resets the repository, so it is safe to call from read-only endpoints. It
+    does not require the repository to be cloned at all. Raises
+    ``EntityNotFoundError`` when the pipeline or its repository is missing.
+    """
+    pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
+    if not pipeline or not pipeline.workspace_abs_path:
+        raise EntityNotFoundError(
+            f"Workspace path not found for pipeline {pipeline_id}"
+        )
+    try:
+        repo = get_repo(str(pipeline.workspace_abs_path))
+    except (git.exc.InvalidGitRepositoryError, git.exc.NoSuchPathError) as e:
+        raise EntityNotFoundError(
+            f"Git repository not found for pipeline {pipeline_id}"
+        ) from e
+    return pipeline, repo
+
+
+async def get_pipeline_git_status(pipeline_id: str) -> Dict:
+    """Read-only git status (including origin sync) for a pipeline repo."""
+    _, repo = await get_pipeline_repo_readonly(pipeline_id)
+    return get_git_status_details(repo)
+
+
+async def get_pipeline_git_log(pipeline_id: str, limit: int = 50) -> list:
+    """Read-only git log for a pipeline repo."""
+    _, repo = await get_pipeline_repo_readonly(pipeline_id)
+    return get_git_log(repo, limit)

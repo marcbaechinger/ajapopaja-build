@@ -595,3 +595,132 @@ async def test_get_commit_diff_unknown_hash(tmp_path):
     with _patch_pipeline_and_repo(repo):
         with pytest.raises(EntityNotFoundError, match="not found in pipeline"):
             await git_utils.get_commit_diff("p1", "deadbeef")
+
+
+def test_get_git_status_details_in_sync_with_changes(tmp_path):
+    origin = _make_origin(tmp_path)
+    ws = tmp_path / "workspace"
+    _git(tmp_path, ["clone", str(origin), str(ws)])
+    repo = git.Repo(str(ws))
+
+    # staged change
+    (ws / "staged.txt").write_text("staged\n")
+    _git(ws, ["add", "staged.txt"])
+    # unstaged change
+    (ws / "readme.md").write_text("readme changed\n")
+    # untracked change
+    (ws / "untracked.txt").write_text("untracked\n")
+
+    details = git_utils.get_git_status_details(repo)
+
+    assert details["staged"] == 1
+    assert details["unstaged"] == 1
+    assert details["untracked"] == 1
+    assert details["has_origin"] is True
+    assert details["branch"] == "main"
+    assert details["in_sync"] is True
+    assert details["ahead"] == 0
+    assert details["behind"] == 0
+
+
+def test_get_git_status_details_ahead_of_origin(tmp_path):
+    origin = _make_origin(tmp_path)
+    ws = tmp_path / "workspace"
+    _git(tmp_path, ["clone", str(origin), str(ws)])
+    (ws / "local.txt").write_text("local\n")
+    _git(ws, ["add", "."])
+    _git(ws, ["commit", "-m", "Local commit"])
+    repo = git.Repo(str(ws))
+
+    details = git_utils.get_git_status_details(repo)
+
+    assert details["has_origin"] is True
+    assert details["in_sync"] is False
+    assert details["ahead"] == 1
+    assert details["behind"] == 0
+
+
+def test_get_git_status_details_without_origin(tmp_path):
+    ws = tmp_path / "local"
+    ws.mkdir()
+    _git(ws, ["init", "-b", "main"])
+    (ws / "a.txt").write_text("a\n")
+    _git(ws, ["add", "."])
+    _git(ws, ["commit", "-m", "Initial commit"])
+    repo = git.Repo(str(ws))
+
+    details = git_utils.get_git_status_details(repo)
+
+    assert details["has_origin"] is False
+    assert details["in_sync"] is None
+    assert details["staged"] == 0
+    assert details["unstaged"] == 0
+    assert details["untracked"] == 0
+
+
+def test_get_git_log_returns_compact_entries(tmp_path):
+    origin = _make_origin(tmp_path)
+    ws = tmp_path / "workspace"
+    _git(tmp_path, ["clone", str(origin), str(ws)])
+    (ws / "next.txt").write_text("next\n")
+    _git(ws, ["add", "."])
+    _git(ws, ["commit", "-m", "Add next file"])
+    repo = git.Repo(str(ws))
+
+    entries = git_utils.get_git_log(repo, limit=10)
+
+    assert len(entries) == 2
+    assert entries[0]["subject"] == "Add next file"
+    assert entries[0]["short_hash"] == entries[0]["hash"][:7]
+    assert entries[0]["author"] == "Test User"
+    assert entries[0]["date"]
+    assert entries[1]["subject"] == "Initial commit"
+
+
+def test_get_git_log_empty_repository(tmp_path):
+    ws = tmp_path / "empty"
+    ws.mkdir()
+    _git(ws, ["init", "-b", "main"])
+    repo = git.Repo(str(ws))
+
+    assert git_utils.get_git_log(repo) == []
+
+
+@pytest.mark.asyncio
+async def test_get_pipeline_repo_readonly_missing_repository(tmp_path):
+    pipeline = MagicMock()
+    pipeline.workspace_abs_path = tmp_path / "does-not-exist"
+
+    with patch(
+        "core.utils.git_utils.pipeline_queries.get_pipeline_by_id",
+        new_callable=AsyncMock,
+        return_value=pipeline,
+    ):
+        with pytest.raises(EntityNotFoundError, match="Git repository not found"):
+            await git_utils.get_pipeline_repo_readonly("p1")
+
+
+@pytest.mark.asyncio
+async def test_get_pipeline_git_status_and_log(tmp_path):
+    origin = _make_origin(tmp_path)
+    ws = tmp_path / "workspace"
+    _git(tmp_path, ["clone", str(origin), str(ws)])
+    repo = git.Repo(str(ws))
+
+    pipeline = MagicMock()
+    pipeline.workspace_abs_path = ws
+
+    with patch(
+        "core.utils.git_utils.pipeline_queries.get_pipeline_by_id",
+        new_callable=AsyncMock,
+        return_value=pipeline,
+    ):
+        details = await git_utils.get_pipeline_git_status("p1")
+        assert details["has_origin"] is True
+
+        entries = await git_utils.get_pipeline_git_log("p1", limit=5)
+        assert entries
+        assert entries[0]["subject"] == "Initial commit"
+
+    # The wrapper must not modify the repository.
+    assert not repo.is_dirty(untracked_files=True)

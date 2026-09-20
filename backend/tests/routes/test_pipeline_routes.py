@@ -558,3 +558,117 @@ async def test_get_commit_diff_endpoint_unauthenticated(async_client, init_mock_
     app.dependency_overrides.clear()  # remove mock auth
     response = await async_client.get("/api/pipelines/p1/commits/abcdef/diff")
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.asyncio
+async def test_get_pipeline_git_status_endpoint(async_client, init_mock_db):
+    """GET /api/pipelines/{id}/git-status returns the repository status shape."""
+    status_payload = {
+        "staged": 2,
+        "unstaged": 1,
+        "untracked": 3,
+        "has_origin": True,
+        "branch": "main",
+        "in_sync": False,
+        "ahead": 1,
+        "behind": 0,
+    }
+    with patch(
+        "api.routes.pipeline.git_utils.get_pipeline_git_status",
+        new_callable=AsyncMock,
+        return_value=status_payload,
+    ) as mock_status:
+        response = await async_client.get("/api/pipelines/p1/git-status")
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json() == {**status_payload, "error": None}
+        mock_status.assert_awaited_once_with("p1")
+
+
+@pytest.mark.asyncio
+async def test_get_pipeline_git_status_endpoint_git_error(async_client, init_mock_db):
+    """Git failures are surfaced in the error field rather than crashing."""
+    with patch(
+        "api.routes.pipeline.git_utils.get_pipeline_git_status",
+        new_callable=AsyncMock,
+        side_effect=RuntimeError("git exploded"),
+    ):
+        response = await async_client.get("/api/pipelines/p1/git-status")
+        assert response.status_code == status.HTTP_200_OK
+        body = response.json()
+        assert body["staged"] == 0
+        assert "git exploded" in body["error"]
+
+
+@pytest.mark.asyncio
+async def test_get_pipeline_git_status_endpoint_not_found(async_client, init_mock_db):
+    """A missing pipeline propagates EntityNotFoundError as HTTP 404."""
+    from core.exceptions import EntityNotFoundError
+
+    with patch(
+        "api.routes.pipeline.git_utils.get_pipeline_git_status",
+        new_callable=AsyncMock,
+        side_effect=EntityNotFoundError("Pipeline with ID p1 not found"),
+    ):
+        response = await async_client.get("/api/pipelines/p1/git-status")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+@pytest.mark.asyncio
+async def test_get_pipeline_git_log_endpoint(async_client, init_mock_db):
+    """GET /api/pipelines/{id}/git-log returns compact commit entries."""
+    commits = [
+        {
+            "hash": "abcdef1234567890",
+            "short_hash": "abcdef1",
+            "author": "Alice",
+            "email": "alice@example.com",
+            "date": "2026-01-01T00:00:00+00:00",
+            "subject": "Add feature",
+        }
+    ]
+    with patch(
+        "api.routes.pipeline.git_utils.get_pipeline_git_log",
+        new_callable=AsyncMock,
+        return_value=commits,
+    ) as mock_log:
+        response = await async_client.get("/api/pipelines/p1/git-log?limit=10")
+        assert response.status_code == status.HTTP_200_OK
+        body = response.json()
+        assert body["commits"] == commits
+        assert body["error"] is None
+        mock_log.assert_awaited_once_with("p1", 10)
+
+
+@pytest.mark.asyncio
+async def test_get_pipeline_git_log_endpoint_git_error(async_client, init_mock_db):
+    """Git failures yield an empty commit list plus an error message."""
+    with patch(
+        "api.routes.pipeline.git_utils.get_pipeline_git_log",
+        new_callable=AsyncMock,
+        side_effect=RuntimeError("git exploded"),
+    ):
+        response = await async_client.get("/api/pipelines/p1/git-log")
+        assert response.status_code == status.HTTP_200_OK
+        body = response.json()
+        assert body["commits"] == []
+        assert "git exploded" in body["error"]
+
+
+@pytest.mark.asyncio
+async def test_get_pipeline_git_log_endpoint_unauthenticated(
+    async_client, init_mock_db
+):
+    """The git-log route requires authentication."""
+    app.dependency_overrides.clear()
+    response = await async_client.get("/api/pipelines/p1/git-log")
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.asyncio
+async def test_get_pipeline_git_status_endpoint_unauthenticated(
+    async_client, init_mock_db
+):
+    """The git-status route requires authentication."""
+    app.dependency_overrides.clear()
+    response = await async_client.get("/api/pipelines/p1/git-status")
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED

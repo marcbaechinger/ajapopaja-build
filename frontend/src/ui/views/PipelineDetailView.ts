@@ -178,7 +178,7 @@ export class PipelineDetailView extends View {
       // 'h' key for history dialog
       if (e.key === 'h' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
-        new HistoryDialog(this.allLoadedTasks).show();
+        new HistoryDialog(this.pipelineId, this.context.pipelineClient).show();
       }
 
       // 's' key for stats dialog
@@ -595,7 +595,7 @@ export class PipelineDetailView extends View {
     });
 
     this.context.actionRegistry.register('open_history', () => {
-      new HistoryDialog(this.allLoadedTasks).show();
+      new HistoryDialog(this.pipelineId, this.context.pipelineClient).show();
     });
 
     this.context.actionRegistry.register('create_task', async (_e, el) => {
