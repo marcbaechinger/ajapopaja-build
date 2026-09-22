@@ -94,6 +94,7 @@ async def test_dev_start_uses_pipeline_serve_commands(async_client, init_mock_db
     args = mock_start.await_args.args
     assert args[0] == str(pipeline.id)
     assert args[1] == [["sh", "-c", "sleep 30"]]
+    assert args[2] == "testuser"
 
 
 @pytest.mark.asyncio
@@ -159,3 +160,6 @@ async def test_dev_restart_stops_then_starts(async_client, init_mock_db):
     assert response.json()["port"] == 1224
     mock_stop.assert_awaited_once()
     mock_start.assert_awaited_once()
+    start_args = mock_start.await_args.args
+    assert start_args[0] == str(pipeline.id)
+    assert start_args[2] == "testuser"

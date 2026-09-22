@@ -59,7 +59,9 @@ async def dev_start(pipeline_id: str, current_user: User = Depends(get_current_u
             detail="No serve commands configured",
         )
     try:
-        return await DevProcessManager.instance().start(pipeline_id, commands)
+        return await DevProcessManager.instance().start(
+            pipeline_id, commands, current_user.username
+        )
     except DevProcessAlreadyRunningError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except DevProcessError as e:
@@ -87,7 +89,7 @@ async def dev_restart(pipeline_id: str, current_user: User = Depends(get_current
             detail="No serve commands configured",
         )
     try:
-        return await manager.start(pipeline_id, commands)
+        return await manager.start(pipeline_id, commands, current_user.username)
     except DevProcessAlreadyRunningError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except DevProcessError as e:

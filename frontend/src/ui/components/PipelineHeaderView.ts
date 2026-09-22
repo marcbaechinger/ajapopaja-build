@@ -43,6 +43,12 @@ export interface CoderbotState {
   taskId: string | null;
 }
 
+export interface DevProcessState {
+  running: boolean;
+  pid: number | null;
+  port: number | null;
+}
+
 export interface PipelineHeaderViewProps {
   pipeline: Pipeline;
   pipelineId: string;
@@ -50,6 +56,7 @@ export interface PipelineHeaderViewProps {
   reviewbotState: ReviewbotState;
   archbotState?: ArchbotState;
   coderbotState?: CoderbotState;
+  devProcessState?: DevProcessState;
   user: any;
   allTasks: Task[];
   gitStatus?: GitStatusDetails;
@@ -58,7 +65,7 @@ export interface PipelineHeaderViewProps {
 
 export class PipelineHeaderView {
   static render(props: PipelineHeaderViewProps): string {
-    const { pipeline, pipelineId, docbotState, reviewbotState, archbotState, coderbotState, user, allTasks, gitStatus, pendingReviews } = props;
+    const { pipeline, pipelineId, docbotState, reviewbotState, archbotState, coderbotState, devProcessState, user, allTasks, gitStatus, pendingReviews } = props;
 
     let docbotBannerHtml = '';
     if (docbotState.status === 'inProgress') {
@@ -145,6 +152,21 @@ export class PipelineHeaderView {
       `;
     }
 
+    let devServerBannerHtml = '';
+    if (devProcessState?.running) {
+      devServerBannerHtml = `
+        <div class="inline-flex bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-full px-3 py-1 text-[10px] shadow-sm items-center gap-2" data-dev-server-running="true">
+          <span class="relative flex h-2 w-2">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          <span class="font-bold tracking-wide uppercase">Dev Server Running</span>
+          ${devProcessState.port != null ? `<span class="font-mono text-emerald-300/80">:${devProcessState.port}</span>` : ''}
+          <button data-action-click="open_dev_server_dialog" class="font-black underline hover:text-emerald-300 transition-colors cursor-pointer ml-1">Logs</button>
+        </div>
+      `;
+    }
+
     return `
       <header class="flex justify-between items-center bg-app-surface px-4 py-2 border-b border-app-border shrink-0">
         <div class="flex gap-4 items-center">
@@ -168,6 +190,7 @@ export class PipelineHeaderView {
                 ${reviewbotBannerHtml}
                 ${archbotBannerHtml}
                 ${coderbotBannerHtml}
+                ${devServerBannerHtml}
                 ${ReviewNotificationBadge.render(pendingReviews, allTasks)}
               </div>
             </div>

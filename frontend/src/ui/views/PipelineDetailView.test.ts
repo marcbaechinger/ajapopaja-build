@@ -19,6 +19,7 @@ import { PipelineDetailView } from './PipelineDetailView.ts';
 import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
 import { TaskStatus } from '../../core/domain.ts';
 import { CoderBotDialog } from '../components/CoderBotDialog.ts';
+import { DevServerDialog } from '../components/DevServerDialog.ts';
 import { DiffDialog } from '../components/DiffDialog.ts';
 import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
 import { IteratePullRequestDialog } from '../components/IteratePullRequestDialog.ts';
@@ -47,6 +48,12 @@ vi.mock('../components/PaginationControl.ts', () => ({
 }));
 vi.mock('../components/CoderBotDialog.ts', () => ({
   CoderBotDialog: vi.fn(function CoderBotDialog() {
+    return { show: vi.fn() };
+  }),
+}));
+
+vi.mock('../components/DevServerDialog.ts', () => ({
+  DevServerDialog: vi.fn(function DevServerDialog() {
     return { show: vi.fn() };
   }),
 }));
@@ -1136,5 +1143,100 @@ describe('PipelineDetailView Commit Diff', () => {
     await action(null, el);
 
     expect(DiffDialog).not.toHaveBeenCalled();
+  });
+});
+
+describe('PipelineDetailView Dev Server', () => {
+  let mockContext: any;
+  let container: HTMLElement;
+  let dataManagerHandlers: Record<string, Function> = {};
+
+  const getAction = (name: string) =>
+    mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === name)![1];
+
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    dataManagerHandlers = {};
+    LocalStorageManager.resetInstances();
+    vi.clearAllMocks();
+
+    mockContext = {
+      actionRegistry: { register: vi.fn() },
+      wsClient: { on: vi.fn() },
+      dataManager: {
+        on: vi.fn((event: string, handler: Function) => {
+          dataManagerHandlers[event] = handler;
+          return () => {};
+        }),
+        updateTask: vi.fn(),
+        updatePipeline: vi.fn(),
+      },
+      authService: {
+        getUser: vi.fn().mockReturnValue({ username: 'testuser' }),
+        getAccessToken: vi.fn().mockReturnValue('token'),
+      },
+      pipelineClient: {
+        get: vi.fn().mockResolvedValue({ id: 'p1', name: 'Pipe 1' }),
+        getGitStatus: vi.fn().mockResolvedValue({ staged: 0, unstaged: 0, untracked: 0 }),
+        getDevServerStatus: vi.fn().mockResolvedValue({
+          running: true,
+          pid: 5,
+          port: 1224,
+          status: 'running',
+          exit_code: null,
+          run_id: 'r1',
+        }),
+      },
+      taskClient: {
+        listByPipeline: vi.fn().mockResolvedValue([]),
+        listCompletedByPipeline: vi.fn().mockResolvedValue({ tasks: [], total_count: 0 }),
+      },
+      pullRequestClient: { getPullRequestsByPipeline: vi.fn().mockResolvedValue([]) },
+      systemClient: { isOllamaAvailable: vi.fn().mockResolvedValue(true) },
+    };
+
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn(() => null),
+      setItem: vi.fn(),
+    });
+  });
+
+  it('loads the dev server status and sets the running indicator', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+    await view.loadPipeline();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mockContext.pipelineClient.getDevServerStatus).toHaveBeenCalledWith('p1');
+    expect((view as any).devProcessState).toEqual({ running: true, pid: 5, port: 1224 });
+  });
+
+  it('updates the indicator from DEV_PROCESS_STARTED/EXITED events', () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+
+    expect(dataManagerHandlers['ws:DEV_PROCESS_STARTED:p1']).toBeDefined();
+    dataManagerHandlers['ws:DEV_PROCESS_STARTED:p1']({
+      pid: 9,
+      port: 1224,
+      pipeline_id: 'p1',
+    });
+    expect((view as any).devProcessState).toEqual({ running: true, pid: 9, port: 1224 });
+
+    dataManagerHandlers['ws:DEV_PROCESS_EXITED:p1']({ pipeline_id: 'p1', exit_code: 0 });
+    expect((view as any).devProcessState).toEqual({ running: false, pid: null, port: null });
+  });
+
+  it('opens the DevServerDialog from the open_dev_server_dialog action', () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+
+    const action = getAction('open_dev_server_dialog');
+    action(null, document.createElement('button'));
+
+    expect(DevServerDialog).toHaveBeenCalledTimes(1);
+    expect(DevServerDialog).toHaveBeenCalledWith(mockContext, 'p1');
   });
 });

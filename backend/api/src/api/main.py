@@ -40,6 +40,7 @@ from api.oneprompt.ws_handler import (
     register_oneprompt_handlers,
 )
 from api.auth import ALGORITHM, SECRET_KEY, get_current_user_from_token
+from api.dev_server_ws import register_dev_process_ws
 from api.routes.auth import router as auth_router
 from api.routes.dev_server import router as dev_server_router
 from api.routes.docbot import router as docbot_router
@@ -101,6 +102,7 @@ async def lifespan(app: FastAPI):
     await init_db()
     register_assistant_handlers()
     register_oneprompt_handlers()
+    register_dev_process_ws()
     initialize_oneprompt()
     yield
     logger.info("Shutting down...")

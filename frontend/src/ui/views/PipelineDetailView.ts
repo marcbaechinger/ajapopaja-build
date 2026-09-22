@@ -38,6 +38,7 @@ import { PullRequestDialog } from '../components/PullRequestDialog.ts';
 import { DiffDialog } from '../components/DiffDialog.ts';
 import { IteratePullRequestDialog } from '../components/IteratePullRequestDialog.ts';
 import { CoderBotDialog } from '../components/CoderBotDialog.ts';
+import { DevServerDialog } from '../components/DevServerDialog.ts';
 import { PiView } from '../components/PiView.ts';
 import { PipelineHeaderView, type DocbotState, type ReviewbotState, type CoderbotState } from '../components/PipelineHeaderView.ts';
 import EasyMDE from 'easymde';
@@ -97,6 +98,10 @@ export class PipelineDetailView extends View {
     status: 'none',
     taskId: null,
   };
+
+  private devProcessState:
+    | { running: boolean; pid: number | null; port: number | null }
+    | undefined = undefined;
 
   private pullRequests: any[] = [];
 
@@ -250,6 +255,16 @@ export class PipelineDetailView extends View {
       'ARCHBOT_COMPLETED': () => { this.archbotState = { status: 'none', taskId: null }; },
       'CODERBOT_STARTED': (p) => { this.coderbotState = { status: 'inProgress', taskId: p.task_id }; },
       'CODERBOT_COMPLETED': (p) => { this.coderbotState = { status: 'completed', taskId: p.task_id }; },
+      'DEV_PROCESS_STARTED': (p) => {
+        this.devProcessState = {
+          running: true,
+          pid: typeof p?.pid === 'number' ? p.pid : null,
+          port: typeof p?.port === 'number' ? p.port : null,
+        };
+      },
+      'DEV_PROCESS_EXITED': () => {
+        this.devProcessState = { running: false, pid: null, port: null };
+      },
       // Insert a newly created PR precisely into its container instead of
       // re-running the full task refresh (which re-renders the whole prep column
       // and re-publishes every task, cascading UI re-renders page-wide).
@@ -583,6 +598,10 @@ export class PipelineDetailView extends View {
     this.context.actionRegistry.register('open_coderbot_dialog', (e) => {
       e.preventDefault();
       this.openCoderBotDialog();
+    });
+
+    this.context.actionRegistry.register('open_dev_server_dialog', () => {
+      new DevServerDialog(this.context, this.pipelineId).show();
     });
 
     this.context.actionRegistry.register('dismiss_coderbot_banner', () => {
@@ -1158,9 +1177,27 @@ export class PipelineDetailView extends View {
       }
       this.fetchPullRequests();
       this.scheduleRefreshGitStatus();
+      this.loadDevServerStatus();
       this.updateHeader();
     } catch (error) {
       console.error('Error loading pipeline:', error);
+    }
+  }
+
+  /** Loads the dev-process running state so the header indicator is accurate. */
+  private async loadDevServerStatus() {
+    try {
+      const status = await this.context.pipelineClient.getDevServerStatus(
+        this.pipelineId,
+      );
+      this.devProcessState = {
+        running: !!status?.running,
+        pid: typeof status?.pid === 'number' ? status.pid : null,
+        port: typeof status?.port === 'number' ? status.port : null,
+      };
+      this.updateHeader();
+    } catch (error) {
+      console.error('Failed to load dev server status:', error);
     }
   }
 
@@ -1295,6 +1332,7 @@ export class PipelineDetailView extends View {
       reviewbotState: this.reviewbotState,
       archbotState: this.archbotState,
       coderbotState: this.coderbotState,
+      devProcessState: this.devProcessState,
       user: this.context.authService.getUser(),
       allTasks: this.allLoadedTasks,
       gitStatus: this.gitStatus,

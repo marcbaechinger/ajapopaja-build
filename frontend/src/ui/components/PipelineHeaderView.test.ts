@@ -57,6 +57,20 @@ describe('PipelineHeaderView', () => {
     expect(html).toContain("data-action-click=\"open_health_check\"")
   });
 
+  it('renders the dev-server indicator only when a process is running', () => {
+    const hidden = PipelineHeaderView.render(mockProps);
+    expect(hidden).not.toContain('Dev Server Running');
+    expect(hidden).not.toContain('open_dev_server_dialog');
+
+    const running = PipelineHeaderView.render({
+      ...mockProps,
+      devProcessState: { running: true, pid: 42, port: 1224 },
+    });
+    expect(running).toContain('Dev Server Running');
+    expect(running).toContain('open_dev_server_dialog');
+    expect(running).toContain(':1224');
+  });
+
   it('renders DocBot banner when ready', () => {
     const props = { ...mockProps, docbotState: { status: 'ready', taskId: 't1' } as any };
     const html = PipelineHeaderView.render(props);
