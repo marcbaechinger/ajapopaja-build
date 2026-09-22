@@ -1,5 +1,139 @@
 # Release Notes
 
+## 0.4.0 – IDE‑style workspace, remote repositories, and richer agent tooling
+
+This release rebuilds the dashboard around an IDE‑style workspace, adds
+first‑class support for remote git repositories, turns the live CoderBot log
+(PiView) into a first‑class part of the UI, and equips the Assistant with slash
+commands and a much broader tool set.
+
+### 🧭 Frontend redesign – an IDE‑style workspace
+
+* **PipelineDetailView rebuilt as an IDE‑style layout** – a left sidebar holds the
+  **backlog**, the currently selected task and the quick‑add panel, the centre
+  column shows the open task sequence, and the right sidebar hosts the live
+  CoderBot view together with the history feed.
+* **Backlog and task views** – `BacklogView` renders `CREATED`/`PROPOSED` tasks
+  with inline workflow actions, and a dedicated `TaskView` inspects the selected
+  task without leaving the pipeline.
+* **Dashboard redesign** – the dashboard is composed of `PipelineItemView` cards,
+  sorted by status and recency, with a cleaner pipeline panel.
+* **Centralized frontend state** – `DataManager`, `AppContext`, `ActionRegistry`,
+  `Navigator` and `KeybindingManager` provide a single source of truth for domain
+  and UI state, with preferences persisted through `LocalStorageManager`.
+* **Richer task cards** – inline title editing, collapsible specification and
+  status history, Markdown‑rendered implementation and pull‑request summaries, a
+  relocated commit‑hash pill, and HTML‑injection protection.
+* **Statistics** – the stats dialog/`PipelineStatsView` was refactored and now
+  reports the total processing time and tracks deleted tasks.
+
+### 🌐 Remote git repositories (Gitea, GitHub, …)
+
+* **Pipelines can point at a remote repository** through a new `repo_uri`; the app
+  clones it into a dedicated remote workspace instead of relying on a host
+  directory mount.
+* **Authenticated push on pull‑request acceptance** – accepting a PR now pushes
+  the commit to the remote `origin`. Credentials are injected through a git
+  **credential helper** instead of a tokenised URL, and the pipeline token is
+  never exposed in the UI.
+* **Gitea pull‑request workflow** – real pull requests can be opened against a
+  remote host. Pull requests gain a **subject**, PR titles are derived from the
+  commit message, and the summary is read back from Gitea.
+* **Hardening** – `repo_uri` and pipeline creation are validated, pushing to an
+  unborn repository, duplicate commits and null PR URLs are handled, and the flow
+  is covered by integration tests and security/environment documentation.
+
+### 📺 PiView – live CoderBot activity log
+
+* **Standalone component** embedded in the `ExecutionEngineView` and the CoderBot
+  dialog, with a live session status, an elapsed‑time indicator, and empty /
+  session‑ended states.
+* **Scannable long sessions** – auto‑collapsing `thinking` blocks, collapsible
+  `tool` and `verification` blocks, an error‑visibility toggle, next/previous
+  error navigation, and in‑log find/search.
+* **Copy and share** – copy individual blocks or the whole log, format entries as
+  Markdown, and open the log in a dialog.
+* **Slash commands and shortcuts** – a growing set of PiView slash commands
+  (e.g. `/test`, `/gd` to drop the top commit, `/i` to improve a prompt) and
+  remappable keyboard shortcuts surfaced in button tooltips.
+* **Performance** – a stateful session and animation‑frame‑coalesced
+  reconciliation keep the log smooth even for very long runs.
+
+### 📜 History view
+
+* The pipeline history is now a **compact, paged “History Feed”** (page size 10)
+  shown at the bottom of the right sidebar, below PiView.
+* Settled tasks are listed newest‑first with a commit‑hash button and paging
+  controls.
+* The `HistoryDialog` is now based on the **git repository status** instead of the
+  task list and also shows `SUBMITTED` tasks.
+
+### 🤖 Assistant slash commands and tools
+
+* **Slash commands** in the AssistantPanel (e.g. `/test`, `/git pull`).
+* **`/test` and the `run_tests` tool** execute a pipeline’s configured test
+  commands asynchronously and report the result back to the assistant.
+* **New tools** – read GitHub issues and pull requests, pull from the remote,
+  update a task spec (`update_task_spec`), delete a task, and open a task diff
+  using `DiffView`.
+* **AI improve buttons** and AssistantPanel usability improvements.
+* **Configurable models** – the model used by each bot and by the Assistant can
+  now be configured independently (DeepSeek is the default coding model).
+
+### ✨ One‑shot AI prompts
+
+* A general **one‑shot prompt infrastructure**: server‑side prompt templates with
+  context data providers and hooks, an `OnePromptRunner` backed by Ollama, and
+  WebSocket streaming back to the UI.
+* The first consumer is an **“Elaborate” button** on the task specification that
+  expands a rough dot list into a complete spec, which is reviewed and accepted
+  in place.
+
+### 📐 Design‑document iteration
+
+* **Iterate on a design document** – ArchBot can refine an existing
+  `Task.design_doc`, creating a new version each time and keeping the design
+  history.
+* An **“Update design”** action in the task view starts an iteration and keeps the
+  previous versions in the design history.
+
+### 🧰 Task ordering and workflow
+
+* `Task.order` semantics are documented and applied consistently to the backlog
+  and the execution queue, and the order is now editable directly in the UI.
+* Workflow actions were added to backlog tasks, and completed/submitted tasks are
+  handled like settled work throughout the UI.
+
+### 🖥️ Dev server management
+
+* Pipelines can start and stop their configured `serve_commands` through a new
+  process manager, with a **Start dev server** button in the pipeline editor.
+* Docker now publishes the user dev‑server port **1224**, so a started server is
+  reachable from the host.
+
+### 🔌 MCP & Pi skill
+
+* The shipped **Pi skill is now self‑contained**: it bundles `mcp_client.py` and
+  works from any location.
+* New `update_task_spec` MCP/CLI command, a configurable MCP endpoint, and a
+  cleaner `mcp_client` interface.
+
+### 🔒 Security & reliability
+
+* Credential‑helper based git push, validated remote URIs, and no secrets exposed
+  to the frontend.
+* Consistent CoderBot state transitions and history, batched history‑replay
+  notifications to fix reload freezes, and fixes for stale queue rows and task
+  removal.
+* Correct MongoDB port handling in continuous integration.
+
+### 🧪 Testing & tooling
+
+* An idempotent **test‑database seeding script** (`scripts/setup_test_db.py`) with
+  sample task data.
+* Broad new test coverage, including integration tests for the remote‑pipeline
+  flow, and pipeline‑specific verification commands (`CommandRunner`, lint).
+
 ## 0.3.0 – Autonomous coding agents and pull‑request workflow
 
 This release turns Ajapopaja Build from a task pipeline into a platform that can
