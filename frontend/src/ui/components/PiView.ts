@@ -946,11 +946,10 @@ export class PiView {
       // (potentially expensive) render so the enclosing view paints its layout
       // with the placeholder first, then fills in the log on the next animation
       // frame. Live snapshots arriving before that flush are coalesced.
-      this.renderFrameHandle = requestAnimationFrame(() => {
-        this.renderFrameHandle = null;
-        this.renderCurrentState();
-      });
+      this.scheduleRenderFrame();
     } else {
+      // Non-embedded usages (e.g. the CoderBotDialog) render synchronously so the
+      // dialog shows the log immediately on open.
       this.renderCurrentState();
     }
 
@@ -962,17 +961,34 @@ export class PiView {
   }
 
   /**
-   * Renders whatever blocks are currently known. If a live snapshot was
-   * coalesced while an initial render was pending, it is reconciled in one pass;
-   * otherwise the current history is rendered.
+   * Schedules a single reconciliation on the next animation frame, coalescing
+   * every block snapshot that arrives before then into one pass. This keeps a
+   * burst of streamed token updates from triggering one full reconciliation of
+   * the whole (growing) log per token - i.e. O(events x blocks) - and also lets
+   * the browser paint between bursts. While a deferred initial render is pending
+   * no extra frame is scheduled; the pending snapshot is folded into it.
+   */
+  private scheduleRenderFrame() {
+    if (this.renderFrameHandle !== null) return;
+    this.renderFrameHandle = requestAnimationFrame(() => {
+      this.renderFrameHandle = null;
+      if (this.pendingBlocks) {
+        const blocks = this.pendingBlocks;
+        this.pendingBlocks = null;
+        this.reconcileNow(blocks);
+        return;
+      }
+      // No snapshot arrived while waiting: this is the deferred initial render.
+      this.renderCurrentState();
+    });
+  }
+
+  /**
+   * Renders whatever blocks are currently known into an empty log. Used only for
+   * the initial render (synchronous for dialogs, or on the deferred frame for
+   * embedded use). Subsequent updates flow through {@link reconcile}.
    */
   private renderCurrentState() {
-    if (this.pendingBlocks) {
-      const blocks = this.pendingBlocks;
-      this.pendingBlocks = null;
-      this.reconcileNow(blocks);
-      return;
-    }
     const history = this.service.getHistory();
     history.forEach((block) => this.applyBlock(block));
     this.updateEmptyState();
@@ -1014,15 +1030,12 @@ export class PiView {
   }
 
   private reconcile(blocks: RenderBlock[]) {
-    if (this.renderFrameHandle !== null) {
-      // The deferred initial render has not flushed yet. Coalesce the snapshot
-      // so the pending animation frame renders the latest content in a single
-      // pass instead of re-rendering synchronously here (which would defeat the
-      // performance deferral).
-      this.pendingBlocks = blocks;
-      return;
-    }
-    this.reconcileNow(blocks);
+    // Always coalesce into the next animation frame. Snapshots arrive once per
+    // streamed token; diffing the full log on every one of them is O(n^2) over a
+    // session. Batching them means at most one reconciliation pass per frame,
+    // regardless of how many updates landed in between.
+    this.pendingBlocks = blocks;
+    this.scheduleRenderFrame();
   }
 
   private reconcileNow(blocks: RenderBlock[]) {

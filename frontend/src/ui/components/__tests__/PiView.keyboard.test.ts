@@ -18,6 +18,30 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { PiView, type PiSessionService } from '../PiView.ts';
 import { KeybindingManager } from '../KeybindingManager.ts';
 
+// PiView coalesces block reconciliations onto the next animation frame. Tests
+// drive that frame manually via flushRaf() so DOM assertions stay synchronous.
+let rafCallbacks: Map<number, FrameRequestCallback>;
+let rafNextId: number;
+
+function flushRaf() {
+  const pending = Array.from(rafCallbacks.values());
+  rafCallbacks.clear();
+  for (const cb of pending) cb(0);
+}
+
+beforeEach(() => {
+  rafCallbacks = new Map();
+  rafNextId = 0;
+  vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((cb: FrameRequestCallback) => {
+    const id = ++rafNextId;
+    rafCallbacks.set(id, cb);
+    return id;
+  });
+  vi.spyOn(globalThis, 'cancelAnimationFrame').mockImplementation((id: number) => {
+    rafCallbacks.delete(id);
+  });
+});
+
 function createStubService(overrides: Partial<PiSessionService> = {}) {
   const listeners: {
     blocks: Set<(blocks: unknown[]) => void>;
@@ -107,6 +131,7 @@ describe('PiView keyboard shortcuts', () => {
         { id: 'b', kind: 'error', text: 'boom' },
       ] as never)
     );
+    flushRaf();
 
     press(mount, { key: 'c' });
     expect(writeText).toHaveBeenCalledTimes(1);
@@ -144,6 +169,7 @@ describe('PiView keyboard shortcuts', () => {
         { id: 'e3', kind: 'error', text: 'c' },
       ] as never)
     );
+    flushRaf();
 
     const scrollSpy = vi
       .spyOn(view as unknown as { ensureVisible: () => void }, 'ensureVisible')

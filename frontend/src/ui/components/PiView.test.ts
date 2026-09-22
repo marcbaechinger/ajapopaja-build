@@ -18,6 +18,33 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { PiView, type PiSessionService } from './PiView.ts';
 import type { RenderBlock } from '../../core/CoderBotService.ts';
 
+// PiView coalesces block reconciliations onto the next animation frame. Tests
+// drive that frame manually via flushRaf() so DOM assertions stay synchronous.
+let rafCallbacks: Map<number, FrameRequestCallback>;
+let rafNextId: number;
+
+function flushRaf() {
+  // Move the callbacks out before running them so a callback that schedules
+  // another frame is handled on the next flush rather than looping forever.
+  const pending = Array.from(rafCallbacks.values());
+  rafCallbacks.clear();
+  for (const cb of pending) cb(0);
+}
+
+// Installed for every test in this file (both describes).
+beforeEach(() => {
+  rafCallbacks = new Map();
+  rafNextId = 0;
+  vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((cb: FrameRequestCallback) => {
+    const id = ++rafNextId;
+    rafCallbacks.set(id, cb);
+    return id;
+  });
+  vi.spyOn(globalThis, 'cancelAnimationFrame').mockImplementation((id: number) => {
+    rafCallbacks.delete(id);
+  });
+});
+
 function createStubService(overrides: Partial<PiSessionService> = {}) {
   const listeners: {
     blocks: Set<(blocks: RenderBlock[]) => void>;
@@ -29,16 +56,21 @@ function createStubService(overrides: Partial<PiSessionService> = {}) {
     state: new Set(),
   };
 
-  const emitBlocks = (blocks: RenderBlock[]) => listeners.blocks.forEach((l) => l(blocks));
+  const emitBlocks = (blocks: RenderBlock[]) => {
+    listeners.blocks.forEach((l) => l(blocks));
+    // Reconciles are scheduled on the next animation frame; flush it so the
+    // caller observes the resulting DOM synchronously.
+    flushRaf();
+  };
 
   const service: PiSessionService = {
     getHistory: vi.fn(() => []),
     getCurrentTaskId: vi.fn(() => null),
     isActive: vi.fn(() => false),
     getSessionStartTime: vi.fn(() => null),
-    onSessionStartTimeChange: vi.fn(() => () => {}),
+    onSessionStartTimeChange: vi.fn(() => () => { }),
     clearHistory: vi.fn(),
-    stopSession: vi.fn(async () => {}),
+    stopSession: vi.fn(async () => { }),
     onBlocks: vi.fn((l) => {
       listeners.blocks.add(l);
       return () => listeners.blocks.delete(l);
@@ -121,6 +153,72 @@ describe('PiView', () => {
     const blocksAfter = mount.querySelectorAll('#log-blocks > div');
     expect(blocksAfter.length).toBe(1);
     expect(blocksAfter[0].textContent).toContain('hello');
+  });
+
+  it('coalesces multiple block snapshots into a single reconciliation per frame', () => {
+    const { service, listeners } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    // Notify directly (bypassing the auto-flushing emitBlocks helper) so several
+    // snapshots can land before the frame is driven.
+    const notify = (blocks: RenderBlock[]) => listeners.blocks.forEach((l) => l(blocks));
+    notify([{ id: 'a', kind: 'text', text: 'one' }]);
+    notify([{ id: 'a', kind: 'text', text: 'two' }]);
+    notify([{ id: 'a', kind: 'text', text: 'three' }]);
+
+    // Nothing rendered yet: the three snapshots were coalesced into one frame.
+    expect(mount.querySelectorAll('#log-blocks > div').length).toBe(0);
+    // All three notify() calls scheduled exactly one frame, not three.
+    expect(rafCallbacks.size).toBe(1);
+
+    flushRaf();
+
+    const blocks = mount.querySelectorAll('#log-blocks > div');
+    expect(blocks.length).toBe(1);
+    expect(blocks[0].textContent).toContain('three');
+  });
+
+  it('renders every accumulated block when snapshots coalesce', () => {
+    const { service, listeners } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    // Three full snapshots that accumulate distinct blocks. Coalescing must keep
+    // the final snapshot's complete state, not just the latest single block.
+    const notify = (blocks: RenderBlock[]) => listeners.blocks.forEach((l) => l(blocks));
+    notify([{ id: 'a', kind: 'text', text: 'one' }]);
+    notify([
+      { id: 'a', kind: 'text', text: 'one' },
+      { id: 'b', kind: 'text', text: 'two' },
+    ]);
+    notify([
+      { id: 'a', kind: 'text', text: 'one' },
+      { id: 'b', kind: 'text', text: 'two' },
+      { id: 'c', kind: 'text', text: 'three' },
+    ]);
+
+    // Coalesced: nothing is rendered until the frame is driven.
+    expect(mount.querySelectorAll('#log-blocks > div').length).toBe(0);
+    // All three notify() calls scheduled exactly one frame, not three.
+    expect(rafCallbacks.size).toBe(1);
+
+    flushRaf();
+
+    const blocks = Array.from(mount.querySelectorAll<HTMLElement>('#log-blocks > div'));
+    expect(blocks.length).toBe(3);
+    expect(blocks.map((b) => b.textContent?.trim())).toEqual(['one', 'two', 'three']);
+
+    // Every coalesced block must have been fully badged, not just the last one:
+    // each carries its block id and its per-block copy + "Format as markup" badges.
+    expect(blocks.map((b) => b.getAttribute('data-block-id'))).toEqual(['a', 'b', 'c']);
+    expect(mount.querySelectorAll('#log-blocks .piview-copy').length).toBe(3);
+    expect(mount.querySelectorAll('#log-blocks .piview-format').length).toBe(3);
+    blocks.forEach((block) => {
+      expect(block.getAttribute('data-block-id')).not.toBeNull();
+      expect(block.querySelector('.piview-copy')).not.toBeNull();
+      expect(block.querySelector('.piview-format')).not.toBeNull();
+    });
   });
 
   it('renders each RenderBlock kind with expected DOM', () => {
@@ -273,7 +371,7 @@ describe('PiView', () => {
     const stopBtn = mount.querySelector('#stop-bot-btn') as HTMLButtonElement;
     expect(stopBtn.classList.contains('hidden')).toBe(false);
 
-    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => { });
     stopBtn.click();
     await Promise.resolve();
     expect(service.stopSession).toHaveBeenCalledWith('task-1');
@@ -458,7 +556,7 @@ describe('PiView', () => {
   });
 
   it('elapsed timer updates every second while running', () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
     const { service, listeners } = createStubService();
     const view = new PiView(service, mount);
     view.render();
@@ -475,7 +573,7 @@ describe('PiView', () => {
   });
 
   it('resumes the running timer from the server-reported session start time', () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
     vi.setSystemTime(new Date('2026-02-03T04:05:10Z'));
     const startMs = Date.parse('2026-02-03T04:05:00Z'); // 10s before "now".
     const { service } = createStubService({
@@ -493,7 +591,7 @@ describe('PiView', () => {
   });
 
   it('adopts the session start time once the server reports it after history loads', () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
     vi.setSystemTime(new Date('2026-02-03T04:05:10Z'));
     const { service } = createStubService({
       isActive: vi.fn(() => true),
@@ -521,7 +619,7 @@ describe('PiView', () => {
   });
 
   it('adds a copy button to each block that copies block content with a timestamp', () => {
-    const writeText = vi.fn(async (_text: string) => {});
+    const writeText = vi.fn(async (_text: string) => { });
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     const { service, emitBlocks } = createStubService();
     const view = new PiView(service, mount);
@@ -543,7 +641,7 @@ describe('PiView', () => {
   });
 
   it('copy-all button and c key copy the whole log', () => {
-    const writeText = vi.fn(async (_text: string) => {});
+    const writeText = vi.fn(async (_text: string) => { });
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     const { service, emitBlocks } = createStubService();
     const view = new PiView(service, mount);
@@ -565,7 +663,7 @@ describe('PiView', () => {
   });
 
   it('shows a transient toast after copying a block', async () => {
-    const writeText = vi.fn(async (_text: string) => {});
+    const writeText = vi.fn(async (_text: string) => { });
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     const { service, emitBlocks } = createStubService();
     const view = new PiView(service, mount);
@@ -855,7 +953,7 @@ describe('PiView', () => {
   });
 
   it('does not hijack the copy shortcut (c) while typing in the search input', () => {
-    const writeText = vi.fn(async (_t: string) => {});
+    const writeText = vi.fn(async (_t: string) => { });
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     const { service, emitBlocks } = createStubService();
     const view = new PiView(service, mount);
@@ -869,7 +967,7 @@ describe('PiView', () => {
   });
 
   it('debounces live search and highlights matches after the debounce delay', async () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
     const { service, emitBlocks } = createStubService();
     const view = new PiView(service, mount);
     view.render();
@@ -900,7 +998,7 @@ describe('PiView', () => {
   });
 
   it('clearing the search input removes all highlights and resets the counter', async () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
     const { service, emitBlocks } = createStubService();
     const view = new PiView(service, mount);
     view.render();
@@ -927,7 +1025,7 @@ describe('PiView', () => {
   });
 
   it('next/prev buttons navigate between matches, wrapping around, and scroll into view', async () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
     const { service, emitBlocks } = createStubService();
     const view = new PiView(service, mount);
     view.render();
@@ -946,7 +1044,7 @@ describe('PiView', () => {
     const counter = mount.querySelector('#piview-search-count') as HTMLElement;
     expect(counter.textContent).toBe('1 / 3');
 
-    const scrollSpy = vi.spyOn(view as unknown as { ensureVisible: () => void }, 'ensureVisible').mockImplementation(() => {});
+    const scrollSpy = vi.spyOn(view as unknown as { ensureVisible: () => void }, 'ensureVisible').mockImplementation(() => { });
     const container = mount.querySelector('#log-content-container') as HTMLElement;
     Object.defineProperty(container, 'scrollTop', {
       configurable: true,
@@ -975,7 +1073,7 @@ describe('PiView', () => {
   });
 
   it('Enter and Shift+Enter in the search input navigate next/prev', async () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
     const { service, emitBlocks } = createStubService();
     const view = new PiView(service, mount);
     view.render();
@@ -1003,7 +1101,7 @@ describe('PiView', () => {
   });
 
   it('does not change match on next/prev when there are no matches', async () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
     const { service, emitBlocks } = createStubService();
     const view = new PiView(service, mount);
     view.render();
@@ -1020,7 +1118,7 @@ describe('PiView', () => {
   });
 
   it('updates highlights and counter when new log entries arrive during a search', async () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
     const { service, emitBlocks } = createStubService();
     const view = new PiView(service, mount);
     view.render();
@@ -1048,7 +1146,7 @@ describe('PiView', () => {
   });
 
   it('removes highlights when a searched-for block is dropped from the log', async () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
     const { service, emitBlocks } = createStubService();
     const view = new PiView(service, mount);
     view.render();
@@ -1070,7 +1168,7 @@ describe('PiView', () => {
   });
 
   it('ensureVisible scrolls the container so the current match lands in view', async () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
     const { service, emitBlocks } = createStubService();
     const view = new PiView(service, mount);
     view.render();
@@ -1106,7 +1204,7 @@ describe('PiView', () => {
   });
 
   it('Escape clears the search, removes highlights, and resets the counter', async () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
     const { service, emitBlocks } = createStubService();
     const view = new PiView(service, mount);
     view.render();
@@ -1169,7 +1267,7 @@ describe('PiView', () => {
 
     const scrollSpy = vi
       .spyOn(view as unknown as { ensureVisible: () => void }, 'ensureVisible')
-      .mockImplementation(() => {});
+      .mockImplementation(() => { });
 
     next.click();
     expect(scrollSpy).toHaveBeenCalledTimes(1);
@@ -1202,7 +1300,7 @@ describe('PiView', () => {
     const log = mount.querySelector('#log-content-container') as HTMLElement;
     const scrollSpy = vi
       .spyOn(view as unknown as { ensureVisible: () => void }, 'ensureVisible')
-      .mockImplementation(() => {});
+      .mockImplementation(() => { });
 
     // n -> next error(s).
     log.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', bubbles: true }));
@@ -1233,7 +1331,7 @@ describe('PiView', () => {
 
     const scrollSpy = vi
       .spyOn(view as unknown as { ensureVisible: () => void }, 'ensureVisible')
-      .mockImplementation(() => {});
+      .mockImplementation(() => { });
     const input = mount.querySelector('#piview-search-input') as HTMLInputElement;
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', bubbles: true }));
     expect(scrollSpy).not.toHaveBeenCalled();
@@ -1440,7 +1538,7 @@ describe('PiView keyboard tooltips', () => {
   });
 
   it('copying a formatted block still returns the raw Markdown', async () => {
-    const writeText = vi.fn(async (_text: string) => {});
+    const writeText = vi.fn(async (_text: string) => { });
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     const { service, emitBlocks } = createStubService();
     const view = new PiView(service, mount);
@@ -1466,7 +1564,7 @@ describe('PiView keyboard tooltips', () => {
     expect(mount.querySelector('#open-dialog-btn')).toBeNull();
     plain.destroy();
 
-    const withCb = new PiView(service, mount, { onOpenDialog: () => {} });
+    const withCb = new PiView(service, mount, { onOpenDialog: () => { } });
     withCb.render();
     const btn = mount.querySelector('#open-dialog-btn') as HTMLButtonElement;
     expect(btn).not.toBeNull();
@@ -1490,7 +1588,7 @@ describe('PiView keyboard tooltips', () => {
 
   it('annotates the "Open in Dialog" button with its keyboard shortcut', () => {
     const { service } = createStubService();
-    const view = new PiView(service, mount, { onOpenDialog: () => {} });
+    const view = new PiView(service, mount, { onOpenDialog: () => { } });
     view.render();
 
     const btn = mount.querySelector('[data-action="open-dialog"]') as HTMLButtonElement;
