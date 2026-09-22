@@ -311,6 +311,33 @@ describe('CoderBotService session tracking / reconnect', () => {
     expect(texts()).toHaveLength(1);
   });
 
+  it('coalesces a long history replay into a single block notification', async () => {
+    ws.dispatch('CODERBOT_STARTED', { task_id: 't1', pipeline_id: 'p1' });
+    const blocksSpy = vi.fn();
+    service.onBlocks(blocksSpy);
+
+    // Simulate a session with one persisted event per streamed token, which is
+    // what a real long CoderBot run produces.
+    const events: any[] = [{ type: 'agent_start' }];
+    for (let i = 0; i < 200; i++) {
+      events.push({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'x' },
+      });
+    }
+    fetchMock.mockResolvedValue({ ok: true, json: () => Promise.resolve({ events }) });
+
+    await service.reconnect({ pipelineId: 'p1', taskId: 't1', active: true });
+
+    // The whole replay must produce exactly one consolidated snapshot rather than
+    // one notification per event (the latter is O(n²) and freezes the page).
+    expect(blocksSpy).toHaveBeenCalledTimes(1);
+    const snapshot = blocksSpy.mock.calls[0][0] as RenderBlock[];
+    const text = snapshot.filter((b) => b.kind === 'text');
+    expect(text).toHaveLength(1);
+    expect(text[0].text).toBe('x'.repeat(200));
+  });
+
   it('adopts the server-reported session start time from the /session endpoint after reconnect', async () => {
     ws.dispatch('CODERBOT_STARTED', { task_id: 't1', pipeline_id: 'p1' });
     fetchMock.mockResolvedValue({

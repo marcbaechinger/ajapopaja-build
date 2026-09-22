@@ -89,6 +89,17 @@ export class CoderBotService {
   /** In-flight history load so concurrent reconnects share one fetch. */
   private historyLoadPromise: Promise<void> | null = null;
   /**
+   * Depth counter for notification suspension. While > 0, {@link emitBlocks}
+   * only records that an update is pending instead of notifying listeners.
+   * Used to batch the (potentially enormous) history replay into a single
+   * snapshot: replaying a long session otherwise fires one full block-list
+   * notification per persisted RPC event, which makes listeners reconcile the
+   * growing log once per event (O(n²)) and freezes the page for seconds.
+   */
+  private emitSuspensionDepth: number = 0;
+  /** Whether an emit was requested while notifications were suspended. */
+  private emitPending: boolean = false;
+  /**
    * Wall-clock start (epoch ms) of the current/last session, as reported by the
    * backend so the "Running since" elapsed-time display can resume from the real
    * session start instead of when the PiView was created.
@@ -483,8 +494,31 @@ export class CoderBotService {
   }
 
   private emitBlocks() {
+    if (this.emitSuspensionDepth > 0) {
+      this.emitPending = true;
+      return;
+    }
     const snapshot = this.blocks.slice();
     this.blockListeners.forEach((l) => l(snapshot));
+  }
+
+  /**
+   * Suspends block notifications until the returned release function is called.
+   * Calls are nestable. When the outermost release runs and an update was
+   * requested while suspended, a single consolidated snapshot is emitted.
+   */
+  private suspendEmits(): () => void {
+    this.emitSuspensionDepth++;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.emitSuspensionDepth = Math.max(0, this.emitSuspensionDepth - 1);
+      if (this.emitSuspensionDepth === 0 && this.emitPending) {
+        this.emitPending = false;
+        this.emitBlocks();
+      }
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -661,14 +695,26 @@ export class CoderBotService {
 
       // Rebuild the activity log by replaying the same reducer over the persisted
       // events, so past output of this session is preserved after a reload.
-      this.blocks = [];
-      this.openBlocks.clear();
-      this.nextBlockId = 1;
-      for (const event of events) {
-        this.handleRpcEvent(event);
+      //
+      // Notification is suspended during the replay: a long session contains one
+      // persisted event per streamed token, so emitting per event would make every
+      // listener (e.g. PiView) reconcile the whole, ever-growing log once per token
+      // (O(n²)), freezing the main thread. Instead we emit exactly one snapshot
+      // once the replay has finished.
+      const releaseEmits = this.suspendEmits();
+      try {
+        this.blocks = [];
+        this.openBlocks.clear();
+        this.nextBlockId = 1;
+        for (const event of events) {
+          this.handleRpcEvent(event);
+        }
+        // Re-publish the fully rebuilt log once (even when it is empty).
+        this.emitBlocks();
+      } finally {
+        releaseEmits();
       }
       this.loadedSessionKey = key;
-      this.emitBlocks();
       this.notify('');
     } finally {
       this.historyLoadPromise = null;
