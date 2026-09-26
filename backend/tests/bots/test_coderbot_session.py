@@ -480,6 +480,59 @@ async def test_coderbot_initial_prompt_includes_test_instruction(init_mock_db):
     assert "test suite" in prompt
 
 
+@pytest.mark.asyncio
+async def test_coderbot_initial_prompt_includes_repo_scope(init_mock_db):
+    """The initial prompt must confine Pi to the sandbox repository, naming the
+    repository path and the branch and forbidding searches outside of it."""
+    task = Task(title="Test Task", pipeline_id="p1", design_doc="D", spec="S")
+    session = CoderBotSession(pipeline_id="p1", task_id="t1")
+    session.helper = MagicMock()
+    session.helper.sandbox_path = "/tmp/sandbox/coderbot/t1"
+    session.helper.branch_name = "coderbot/t1"
+
+    prompt = await session.get_initial_prompt(task)
+
+    assert "Repository Scope" in prompt
+    assert "/tmp/sandbox/coderbot/t1" in prompt
+    assert "coderbot/t1" in prompt
+    assert "MUST only search" in prompt
+    assert "edit files within the repository" in prompt
+
+
+def test_coderbot_repo_scope_instruction_without_helper():
+    """Without a configured helper the scope block is still emitted (only the
+    concrete path/branch are omitted)."""
+    session = CoderBotSession(pipeline_id="p1", task_id="t1")
+    instruction = session._build_repo_scope_instruction()
+    assert "Repository Scope" in instruction
+    assert "MUST only search" in instruction
+
+
+@pytest.mark.asyncio
+async def test_coderbot_iteration_prompt_includes_repo_scope(init_mock_db):
+    """Iteration runs are confined to the repository just like initial runs."""
+    task = Task(title="Test Task", pipeline_id="p1", design_doc="D", spec="S")
+    pr = PullRequest(
+        pipeline_id="p1",
+        task_id="t1",
+        subject="s",
+        summary="",
+        branch_name="coderbot/t1",
+        patch="diff",
+        status=PullRequestStatus.OPEN,
+    )
+    session = CoderBotSession(pipeline_id="p1", task_id="t1", pr=pr, comments="fix it")
+    session.helper = MagicMock()
+    session.helper.sandbox_path = "/tmp/sandbox/coderbot/t1"
+    session.helper.branch_name = "coderbot/t1"
+
+    prompt = await session.get_iteration_prompt(task)
+
+    assert "Repository Scope" in prompt
+    assert "/tmp/sandbox/coderbot/t1" in prompt
+    assert "coderbot/t1" in prompt
+
+
 def test_coderbot_get_verification_commands_defaults():
     """Without an override, the README-documented commands are used."""
     session = CoderBotSession(pipeline_id="p1", task_id="t1")

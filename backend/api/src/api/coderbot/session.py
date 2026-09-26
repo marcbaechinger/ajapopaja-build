@@ -243,6 +243,40 @@ class CoderBotSession(PiRpcProcess):
             self.process.terminate()
             logger.info(f"Terminated CoderBot process for task {self.task_id}")
 
+    def _build_repo_scope_instruction(self) -> str:
+        """Build the instruction that confines Pi to the sandbox repository.
+
+        CoderBot/Pi has a tendency to run recursive searches (e.g. ``grep -r``)
+        from the filesystem root or the user's home directory. Those searches are
+        slow, usually return nothing relevant and pollute the context with
+        unrelated files. This block tells Pi the exact repository it owns, the
+        branch it is working on and that it MUST restrict every search and edit
+        to that directory.
+        """
+        if self.helper is not None:
+            repo_path = str(self.helper.sandbox_path)
+            branch_name = self.helper.branch_name
+            location = (
+                f"- Repository root: `{repo_path}`\n"
+                f"- Working branch: `{branch_name}`\n\n"
+            )
+        else:
+            location = ""
+
+        return (
+            "### Repository Scope\n"
+            "You work exclusively inside the Git repository that is your current "
+            "working directory. Every file you may read, search or edit lives "
+            "inside it.\n\n"
+            f"{location}"
+            "You MUST only search (e.g. `grep`, `rg`, `find`, `ls`, glob) and "
+            "edit files within the repository. Do NOT search the whole machine, "
+            "the filesystem root (`/`) or your home directory, and do NOT use "
+            "absolute paths outside the repository: those searches are slow and "
+            "return no relevant results. Run every command from the repository "
+            "root and keep all paths relative to it."
+        )
+
     def _build_test_instruction(self) -> str:
         """Build the "Mandatory Verification" block listing the test commands
         that are configured for this pipeline (falling back to the defaults)."""
@@ -269,6 +303,7 @@ class CoderBotSession(PiRpcProcess):
             f"### Task: {task.title}\n\n"
             f"### Specification\n{spec}\n\n"
             f"### Design Document\n{design_doc}\n\n"
+            f"{self._build_repo_scope_instruction()}\n\n"
             f"{self._build_test_instruction()}"
         )
 
@@ -323,6 +358,7 @@ class CoderBotSession(PiRpcProcess):
             f"changes consistent with the existing implementation. The final "
             f"result should be a diff that incorporates the review feedback.\n\n"
             f"{self.get_iteration_instruction()}\n\n"
+            f"{self._build_repo_scope_instruction()}\n\n"
             f"{self._build_test_instruction()}"
         )
 
