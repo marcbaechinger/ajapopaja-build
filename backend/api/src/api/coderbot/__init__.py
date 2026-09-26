@@ -13,5 +13,7 @@
 # limitations under the License.
 
 from . import manager as manager
+from . import pi_parsers as pi_parsers
+from . import pi_rpc_process as pi_rpc_process
 from . import router as router
 from . import session as session

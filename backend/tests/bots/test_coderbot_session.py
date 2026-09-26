@@ -31,6 +31,86 @@ from core.models.models import (
 )
 
 
+class _FakeStdin:
+    """Minimal stdin double that feeds a matching response + scripted events."""
+
+    def __init__(self, process):
+        self._process = process
+        self.writes = []
+        self.eof = False
+
+    def write(self, data):
+        self.writes.append(data)
+        self._process.feed_for(data)
+
+    async def drain(self):
+        pass
+
+    def can_write_eof(self):
+        return True
+
+    def write_eof(self):
+        self.eof = True
+
+    def close(self):
+        self.eof = True
+
+    def is_closing(self):
+        return self.eof
+
+
+class _FakeStdout:
+    def __init__(self, process):
+        self._process = process
+
+    async def readline(self):
+        return await self._process.next_line()
+
+
+class FakePiProcess:
+    """Fake Pi process that acknowledges commands and yields scripted events."""
+
+    def __init__(self, events=None):
+        self._queue = asyncio.Queue()
+        self._events = list(events or [])
+        self.stdin = _FakeStdin(self)
+        self.stdout = _FakeStdout(self)
+        self.returncode = None
+        self.pid = 4242
+        self.terminated = False
+
+    def feed_for(self, data):
+        command = json.loads(data.decode("utf-8"))
+        self._queue.put_nowait(
+            (
+                json.dumps(
+                    {
+                        "id": command.get("id"),
+                        "type": "response",
+                        "command": command.get("type"),
+                        "success": True,
+                    }
+                )
+                + "\n"
+            ).encode("utf-8")
+        )
+        for event in self._events:
+            self._queue.put_nowait((json.dumps(event) + "\n").encode("utf-8"))
+        # Signal EOF so the background read loop terminates.
+        self._queue.put_nowait(b"")
+
+    async def next_line(self):
+        return await self._queue.get()
+
+    async def wait(self):
+        self.returncode = 0
+        return 0
+
+    def terminate(self):
+        self.terminated = True
+        self.returncode = -15
+
+
 @pytest.fixture(autouse=True)
 def enable_logging():
     original = config.BASEBOT_LOG_ENABLED
@@ -113,24 +193,8 @@ async def test_coderbot_run_spawns_pi(init_mock_db):
                 pipeline_id=str(pipeline.id), task_id=str(task.id)
             )
 
-            mock_proc = AsyncMock()
-            mock_proc.stdin = MagicMock()
-            mock_proc.stdin.write = MagicMock()
-            mock_proc.stdin.drain = AsyncMock()
-            mock_proc.stdin.can_write_eof.return_value = True
-            mock_proc.stdin.write_eof = MagicMock()
-
-            # Simulate stdout returning a single 'agent_end' event
-            async def mock_stdout_stream():
-                yield (
-                    json.dumps({"type": "agent_end", "messages": []}).encode("utf-8")
-                    + b"\n"
-                )
-
-            mock_proc.stdout.__aiter__.side_effect = lambda: mock_stdout_stream()
-            mock_proc.wait = AsyncMock()
-
-            mock_exec.return_value = mock_proc
+            fake_proc = FakePiProcess(events=[{"type": "agent_end", "messages": []}])
+            mock_exec.return_value = fake_proc
 
             await session.run()
 
@@ -152,13 +216,13 @@ async def test_coderbot_run_spawns_pi(init_mock_db):
             )
 
             # Verify stdin was written to
-            mock_proc.stdin.write.assert_called_once()
-            written_data = mock_proc.stdin.write.call_args[0][0].decode("utf-8")
+            assert len(fake_proc.stdin.writes) == 1
+            written_data = fake_proc.stdin.writes[0].decode("utf-8")
             assert "prompt" in written_data
             assert "Test Task" in written_data
 
             # Verify EOF was signaled
-            mock_proc.stdin.write_eof.assert_called_once()
+            assert fake_proc.stdin.eof is True
     finally:
         config.CODERBOT_RUN_TESTS = original_run_tests
 
@@ -203,23 +267,8 @@ async def test_coderbot_run_with_model_includes_model_flag(init_mock_db):
                 model="custom-model:cloud",
             )
 
-            mock_proc = AsyncMock()
-            mock_proc.stdin = MagicMock()
-            mock_proc.stdin.write = MagicMock()
-            mock_proc.stdin.drain = AsyncMock()
-            mock_proc.stdin.can_write_eof.return_value = True
-            mock_proc.stdin.write_eof = MagicMock()
-
-            async def mock_stdout_stream():
-                yield (
-                    json.dumps({"type": "agent_end", "messages": []}).encode("utf-8")
-                    + b"\n"
-                )
-
-            mock_proc.stdout.__aiter__.side_effect = lambda: mock_stdout_stream()
-            mock_proc.wait = AsyncMock()
-
-            mock_exec.return_value = mock_proc
+            fake_proc = FakePiProcess(events=[{"type": "agent_end", "messages": []}])
+            mock_exec.return_value = fake_proc
 
             await session.run()
 
@@ -274,22 +323,10 @@ async def test_coderbot_run_logs_events(init_mock_db):
 
         session = CoderBotSession(pipeline_id=str(pipeline.id), task_id=str(task.id))
 
-        mock_proc = AsyncMock()
-        mock_proc.stdin = MagicMock()
-        mock_proc.stdin.write = MagicMock()
-        mock_proc.stdin.drain = AsyncMock()
-
-        # Simulate stdout returning one event
-        async def mock_stdout_stream():
-            yield json.dumps({"type": "agent_start"}).encode("utf-8") + b"\n"
-            yield (
-                json.dumps({"type": "agent_end", "messages": []}).encode("utf-8")
-                + b"\n"
-            )
-
-        mock_proc.stdout.__aiter__.side_effect = lambda: mock_stdout_stream()
-        mock_proc.wait = AsyncMock()
-        mock_exec.return_value = mock_proc
+        fake_proc = FakePiProcess(
+            events=[{"type": "agent_start"}, {"type": "agent_end", "messages": []}]
+        )
+        mock_exec.return_value = fake_proc
 
         await session.run()
 
@@ -398,22 +435,8 @@ async def test_coderbot_run_transitions_task_state(init_mock_db):
 
         session = CoderBotSession(pipeline_id=str(pipeline.id), task_id=str(task.id))
 
-        mock_proc = AsyncMock()
-        mock_proc.stdin = MagicMock()
-        mock_proc.stdin.write = MagicMock()
-        mock_proc.stdin.drain = AsyncMock()
-        mock_proc.stdin.can_write_eof.return_value = True
-        mock_proc.stdin.write_eof = MagicMock()
-
-        async def mock_stdout_stream():
-            yield (
-                json.dumps({"type": "agent_end", "messages": []}).encode("utf-8")
-                + b"\n"
-            )
-
-        mock_proc.stdout.__aiter__.side_effect = lambda: mock_stdout_stream()
-        mock_proc.wait = AsyncMock()
-        mock_exec.return_value = mock_proc
+        fake_proc = FakePiProcess(events=[{"type": "agent_end", "messages": []}])
+        mock_exec.return_value = fake_proc
 
         await session.run()
 

@@ -38,6 +38,14 @@ from core.queries import task as task_queries
 
 from api.bot.git_helper import SandboxGitHelper
 
+from .pi_parsers import (
+    extract_final_summary,
+    extract_text_delta,
+    extract_thinking_delta,
+    extract_tool_call_name,
+)
+from .pi_rpc_process import DEFAULT_COMMAND_TIMEOUT, PiRpcProcess  # noqa: F401
+
 logger = logging.getLogger(__name__)
 
 # Default test commands for the post-run verification hook, mirroring the
@@ -146,7 +154,7 @@ def read_session_history(task_id: str) -> list:
     return events
 
 
-class CoderBotSession:
+class CoderBotSession(PiRpcProcess):
     """
     Orchestrates the Pi coding agent via its headless RPC mode.
     """
@@ -159,6 +167,7 @@ class CoderBotSession:
         pr: Optional[PullRequest] = None,
         comments: Optional[str] = None,
     ):
+        super().__init__(model=model)
         self.pipeline_id = pipeline_id
         self.task_id = task_id
         self.model = model
@@ -169,7 +178,9 @@ class CoderBotSession:
         # patch applied as unstaged changes and writes the updated result back
         # onto the same PR document instead of inserting a new one.
         self.iteration_mode = pr is not None
-        self.process: Optional[asyncio.subprocess.Process] = None
+        # The ``agent_end`` record captured by ``_handle_event``. ``run()`` reads
+        # its ``messages`` payload after the process has exited.
+        self.agent_end_event: Optional[Dict[str, Any]] = None
         self.helper: Optional[SandboxGitHelper] = None
         self.pipeline: Optional[Pipeline] = None
         self.log_file: Optional[TextIO] = None
@@ -464,6 +475,58 @@ class CoderBotSession:
             )
         )
 
+    async def _broadcast_assistant_stream(self, content: str):
+        """Broadcasts a chunk of streamed assistant output for this task."""
+        if not content:
+            return
+        await ws_manager.broadcast(
+            WSMessage(
+                type="ASSISTANT_STREAM",
+                payload={
+                    "content": content,
+                    "task_id": self.task_id,
+                    "pipeline_id": self.pipeline_id,
+                    "bot_type": "coderbot",
+                },
+            )
+        )
+
+    async def _handle_event(self, event: Dict[str, Any]):
+        """Handle one asynchronous Pi RPC session event.
+
+        Persists the raw event, forwards it to connected clients and derives the
+        streamed assistant text/tool-call updates. When Pi reports ``agent_end``
+        the session signals EOF to the child so it can exit; the post-run work
+        (commit, verification, PR) happens in :meth:`run` once the process has
+        stopped.
+        """
+        event_type = event.get("type")
+        logger.debug(f"Received event: {event_type}")
+
+        self._log_event({"type": "pi_rpc_event", "event": event})
+        await self._broadcast_rpc(event)
+
+        if event_type == "message_update":
+            text_delta = extract_text_delta(event)
+            if text_delta:
+                await self._broadcast_assistant_stream(text_delta)
+                return
+
+            thinking_delta = extract_thinking_delta(event)
+            if thinking_delta:
+                await self._broadcast_assistant_stream(thinking_delta)
+                return
+
+            tool_name = extract_tool_call_name(event)
+            if tool_name:
+                await self._broadcast_assistant_stream(
+                    f"\n\n> Calling {tool_name}...\n"
+                )
+        elif event_type == "agent_end":
+            logger.info("Received 'agent_end' from Pi. Signaling EOF to stdin.")
+            self.agent_end_event = event
+            await self.close(graceful=True)
+
     async def _handle_agent_end(self, messages: list):
         """Called when Pi finishes the task."""
         logger.info(f"Handling agent_end for task {self.task_id}")
@@ -472,17 +535,7 @@ class CoderBotSession:
             return
 
         try:
-            # Look for completion summary in assistant messages
-            summary = "Task completed by Pi."
-            for msg in reversed(messages):
-                if msg.get("role") == "assistant":
-                    content = msg.get("content", [])
-                    # Just grab the last text chunk
-                    for block in reversed(content):
-                        if block.get("type") == "text":
-                            summary = block.get("text", summary)[:2000]
-                            break
-                    break
+            summary = extract_final_summary(messages)
 
             logger.info(f"Summary extracted: {summary[:50]}...")
             repo = self.helper.get_repo()
@@ -749,115 +802,39 @@ class CoderBotSession:
         else:
             initial_prompt = await self.get_initial_prompt(task)
 
-        # Spawn Pi
+        # Spawn Pi and drive one run to completion. The base class owns the
+        # subprocess, JSONL framing and command/response correlation; this class
+        # only supplies the sandbox cwd and reacts to events via _handle_event.
         try:
             logger.info("Spawning 'pi' subprocess...")
-            cmd = ["pi", "--mode", "rpc", "--no-session"]
             if self.model is not None:
                 logger.info(f"--model for pi coding agent: {self.model}")
-                cmd.extend(["--model", self.model])
 
-            self.process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-                cwd=str(self.helper.sandbox_path),
-                limit=10 * 1024 * 1024,  # 10MB buffer limit
-            )
+            await self.start(cwd=str(self.helper.sandbox_path))
 
-            # Send prompt
-            prompt_cmd = (
-                json.dumps({"id": "req-1", "type": "prompt", "message": initial_prompt})
-                + "\n"
-            )
-
-            if not self.process.stdin:
+            if not self.process or not self.process.stdin:
                 error_msg = "Failed to open stdin to Pi."
                 logger.error(error_msg)
                 self._log_event({"type": "error", "message": error_msg})
                 return
 
             logger.info("Sending initial prompt to Pi...")
-            self.process.stdin.write(prompt_cmd.encode("utf-8"))
-            await self.process.stdin.drain()
-
-            if not self.process.stdout:
-                error_msg = "Failed to open stdout from Pi."
-                logger.error(error_msg)
-                self._log_event({"type": "error", "message": error_msg})
-                return
-
-            # Read events
-            agent_end_event = None
-            logger.info("Entering RPC event loop...")
-            async for line in self.process.stdout:
-                try:
-                    raw_line = line.decode("utf-8").strip()
-                    if not raw_line:
-                        continue
-                    event = json.loads(raw_line)
-                    self._log_event({"type": "pi_rpc_event", "event": event})
-                    event_type = event.get("type")
-
-                    logger.debug(f"Received event: {event_type}")
-
-                    # Forward the full RPC event to the client via the websocket so
-                    # the UI can render the whole CoderBot activity stream.
-                    await self._broadcast_rpc(event)
-
-                    if event_type == "message_update":
-                        delta = event.get("assistantMessageEvent", {})
-                        delta_type = delta.get("type")
-
-                        # Route text/thinking to assistant stream
-                        if delta_type in ["text_delta", "thinking_delta"]:
-                            await ws_manager.broadcast(
-                                WSMessage(
-                                    type="ASSISTANT_STREAM",
-                                    payload={
-                                        "content": delta.get("delta", ""),
-                                        "task_id": self.task_id,
-                                        "pipeline_id": self.pipeline_id,
-                                        "bot_type": "coderbot",
-                                    },
-                                )
-                            )
-                        elif delta_type == "toolcall_start":
-                            tool_call = delta.get("partial", {}).get("toolCall", {})
-                            name = tool_call.get("name", "tool")
-                            await ws_manager.broadcast(
-                                WSMessage(
-                                    type="ASSISTANT_STREAM",
-                                    payload={
-                                        "content": f"\n\n> Calling {name}...\n",
-                                        "task_id": self.task_id,
-                                        "pipeline_id": self.pipeline_id,
-                                        "bot_type": "coderbot",
-                                    },
-                                )
-                            )
-
-                    elif event_type == "agent_end":
-                        logger.info(
-                            "Received 'agent_end' from Pi. Signaling EOF to stdin."
-                        )
-                        agent_end_event = event
-                        # Signal Pi to exit by closing stdin
-                        if self.process.stdin.can_write_eof():
-                            self.process.stdin.write_eof()
-
-                except json.JSONDecodeError:
-                    logger.debug(f"Non-JSON line from Pi: {line}")
-                    continue
+            await self.prompt(initial_prompt)
 
             logger.info("Subprocess stdout stream closed. Waiting for process exit...")
-            # Wait for exit
             exit_code = await self.process.wait()
             logger.info(f"Pi process exited with code {exit_code}")
 
-            if agent_end_event:
-                await self._handle_agent_end(agent_end_event.get("messages", []))
+            # Make sure the background read loop has drained every buffered event
+            # (including the final agent_end) before running the post-processing.
+            if self._read_task is not None:
+                try:
+                    await self._read_task
+                except asyncio.CancelledError:  # pragma: no cover - defensive
+                    pass
+
+            if self.agent_end_event:
+                await self._handle_agent_end(self.agent_end_event.get("messages", []))
             else:
                 logger.warning("Process exited without receiving 'agent_end' event.")
 
@@ -895,3 +872,81 @@ class CoderBotSession:
                     payload={"pipeline_id": self.pipeline_id, "task_id": self.task_id},
                 )
             )
+
+
+class InteractivePiSession(PiRpcProcess):
+    """Stateful, multi-turn RPC session for user-driven chat.
+
+    Unlike :class:`CoderBotSession`, which runs one batch task and then shuts
+    the child down, an interactive session keeps the same Pi process alive for
+    many turns. It never closes ``stdin`` on its own; the caller decides when to
+    :meth:`close` the session.
+
+    Events that belong to the active turn are pushed onto an
+    :class:`asyncio.Queue`. :meth:`send_user_message` is an async generator that
+    yields streamed text chunks and stops as soon as Pi reports
+    ``agent_settled`` (i.e. it will not continue automatically).
+    """
+
+    # Marker pushed onto the queue once Pi has settled and the turn is over.
+    SETTLED_MARKER: Dict[str, Any] = {"type": "settled"}
+
+    def __init__(
+        self,
+        model: Optional[str] = None,
+        cwd: Optional[str] = None,
+        command_timeout: Optional[float] = None,
+    ):
+        super().__init__(model=model, cwd=cwd, command_timeout=command_timeout)
+        self._queue: "asyncio.Queue[Any]" = asyncio.Queue()
+        # Public alias so callers/tests can inspect the active-turn queue.
+        self.queue = self._queue
+
+    async def _handle_event(self, event: Dict[str, Any]):
+        """Push text deltas for the active turn and mark settled turns.
+
+        ``agent_end`` is deliberately ignored: it only marks the end of one
+        low-level run and retries/compaction can still follow. ``agent_settled``
+        is the signal that Pi will not continue automatically.
+        """
+        event_type = event.get("type")
+        if event_type == "message_update":
+            delta = extract_text_delta(event)
+            if delta:
+                await self._queue.put(delta)
+        elif event_type == "agent_settled":
+            await self._queue.put(dict(self.SETTLED_MARKER))
+
+    async def send_user_message(self, text: str):
+        """Send one chat turn and stream the assistant text back.
+
+        Yields the streamed text chunks in order until Pi emits
+        ``agent_settled``. A prompt that Pi handled itself (disposition
+        ``"handled"``) does not start a run, so no ``agent_settled`` event will
+        follow and the generator returns without yielding.
+        """
+        response = await self.prompt(text)
+        if not response or not response.get("success"):
+            error = (response or {}).get("error", "Pi rejected the prompt.")
+            logger.error(f"Interactive prompt was not accepted: {error}")
+            return
+
+        data = response.get("data") or {}
+        if data.get("disposition") == "handled":
+            # No run was started for this prompt, so no agent_settled follows.
+            return
+
+        while True:
+            item = await self._queue.get()
+            if (
+                isinstance(item, dict)
+                and item.get("type") == self.SETTLED_MARKER["type"]
+            ):
+                return
+            yield item
+
+
+# The design/refactor notes refer to the batch session as either
+# ``CoderBotSession`` or ``PiSession``. Keep the shorter name available as an
+# alias so callers can use whichever they prefer.
+PiSession = CoderBotSession
