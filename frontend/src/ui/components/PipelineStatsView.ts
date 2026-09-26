@@ -54,12 +54,18 @@ export class PipelineStatsView {
   static calculateMetrics(tasks: Task[]): {
     work: { avg: string, median: string, total: string }
   } {
-    const implemented = tasks.filter(t => t.status === TaskStatus.IMPLEMENTED);
-    if (implemented.length === 0) return {
+    // A task's IN_PROGRESS duration is only final once it has left IN_PROGRESS
+    // for a "done" state. Both IMPLEMENTED and PULL_REQUEST_AVAILABLE end an
+    // IN_PROGRESS interval, so both must be included in the work-time stats.
+    const done = tasks.filter(t =>
+      t.status === TaskStatus.IMPLEMENTED ||
+      t.status === TaskStatus.PULL_REQUEST_AVAILABLE
+    );
+    if (done.length === 0) return {
       work: { avg: 'N/A', median: 'N/A', total: 'N/A' }
     };
 
-    const workTimes = implemented
+    const workTimes = done
       .map(t => this.getInProgressTime(t))
       .sort((a, b) => a - b);
 
