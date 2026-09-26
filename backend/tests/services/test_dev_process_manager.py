@@ -277,9 +277,7 @@ async def test_stream_unknown_pipeline_yields_terminal_event_only():
 async def test_user_and_started_at_are_captured(tmp_path):
     manager = DevProcessManager.instance()
     with _patch_workspace(manager, str(tmp_path)):
-        started = await manager.start(
-            "p1", [["sh", "-c", "sleep 30"]], user="bob"
-        )
+        started = await manager.start("p1", [["sh", "-c", "sleep 30"]], user="bob")
 
     assert started["user"] == "bob"
     assert started["started_at"] > 0

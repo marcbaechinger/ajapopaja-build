@@ -207,7 +207,5 @@ async def test_subscribe_without_pipeline_id_is_ignored():
     register_dev_process_ws(cm=cm)
     websocket = AsyncMock()
 
-    await _dispatch(
-        {"type": DEV_PROCESS_LOGS_SUBSCRIBE, "payload": {}}, websocket, cm
-    )
+    await _dispatch({"type": DEV_PROCESS_LOGS_SUBSCRIBE, "payload": {}}, websocket, cm)
     assert dev_server_ws._pumps == {}

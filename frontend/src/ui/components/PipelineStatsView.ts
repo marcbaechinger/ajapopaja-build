@@ -54,36 +54,37 @@ export class PipelineStatsView {
   static calculateMetrics(tasks: Task[]): {
     work: { avg: string, median: string, total: string }
   } {
-    // A task's IN_PROGRESS duration is only final once it has left IN_PROGRESS
-    // for a "done" state. Both IMPLEMENTED and PULL_REQUEST_AVAILABLE end an
-    // IN_PROGRESS interval, so both must be included in the work-time stats.
-    const done = tasks.filter(t =>
-      t.status === TaskStatus.IMPLEMENTED ||
-      t.status === TaskStatus.PULL_REQUEST_AVAILABLE
-    );
-    if (done.length === 0) return {
+    // Which tasks contribute to the work-time statistics is determined by the
+    // task's history, NOT by its current status. Any task that has completed at
+    // least one IN_PROGRESS interval has a non-zero in-progress time and must be
+    // included, no matter which state it currently sits in (IMPLEMENTED,
+    // PULL_REQUEST_AVAILABLE, SUBMITTED, DISCARDED, FAILED, back to SCHEDULED,
+    // or even IN_PROGRESS with a trailing open interval). Filtering on the
+    // current status silently dropped those tasks and produced wrong averages
+    // and medians. Tasks that never completed an IN_PROGRESS interval have no
+    // measurable work time and are excluded.
+    const workTimes = tasks
+      .map(t => this.getInProgressTime(t))
+      .filter(time => time > 0)
+      .sort((a, b) => a - b);
+
+    if (workTimes.length === 0) return {
       work: { avg: 'N/A', median: 'N/A', total: 'N/A' }
     };
 
-    const workTimes = done
-      .map(t => this.getInProgressTime(t))
-      .sort((a, b) => a - b);
+    const total = workTimes.reduce((sum, t) => sum + t, 0);
+    const avg = total / workTimes.length;
+    const median = workTimes.length % 2 === 0
+      ? (workTimes[workTimes.length / 2 - 1] + workTimes[workTimes.length / 2]) / 2
+      : workTimes[Math.floor(workTimes.length / 2)];
 
-    const getAvgMedian = (times: number[]) => {
-      if (times.length === 0) return { avg: 'N/A', median: 'N/A', total: 'N/A' };
-      const total = times.reduce((sum, t) => sum + t, 0);
-      const avg = total / times.length;
-      const median = times.length % 2 === 0
-        ? (times[times.length / 2 - 1] + times[times.length / 2]) / 2
-        : times[Math.floor(times.length / 2)];
-      return {
+    return {
+      work: {
         avg: this.formatDuration(avg),
         median: this.formatDuration(median),
         total: this.formatDuration(total)
-      };
+      }
     };
-
-    return { work: getAvgMedian(workTimes) };
   }
 
   static formatDuration(ms: number): string {

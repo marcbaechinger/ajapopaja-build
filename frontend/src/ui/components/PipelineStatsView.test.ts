@@ -169,6 +169,14 @@ describe('PipelineStatsView', () => {
   });
 
   describe('calculateMetrics', () => {
+    const makeDurationTask = (ms: number, status: TaskStatus = TaskStatus.IMPLEMENTED): Task => ({
+      status,
+      history: [
+        { to_status: TaskStatus.INPROGRESS, timestamp: new Date(now).toISOString(), by: 'mcp' },
+        { to_status: status, timestamp: new Date(now + ms).toISOString(), by: 'mcp' }
+      ]
+    } as unknown as Task);
+
     it('returns N/A for empty tasks', () => {
       expect(PipelineStatsView.calculateMetrics([])).toEqual({
         work: { avg: 'N/A', median: 'N/A', total: 'N/A' }
@@ -192,6 +200,46 @@ describe('PipelineStatsView', () => {
       expect(metrics.work.avg).toBe('5s');
       expect(metrics.work.median).toBe('5s');
       expect(metrics.work.total).toBe('10s');
+    });
+
+    it('computes the average from the time-in-progress values of all considered tasks', () => {
+      // (2s + 4s + 9s) / 3 = 5s
+      const metrics = PipelineStatsView.calculateMetrics([
+        makeDurationTask(2000),
+        makeDurationTask(4000),
+        makeDurationTask(9000),
+      ]);
+
+      expect(metrics.work.avg).toBe('5s');
+      expect(metrics.work.median).toBe('4s');
+      expect(metrics.work.total).toBe('15s');
+    });
+
+    it('computes the median for an odd number of considered tasks as the middle value', () => {
+      // Sorted: 1s, 3s, 5s -> middle value is 3s
+      const metrics = PipelineStatsView.calculateMetrics([
+        makeDurationTask(5000),
+        makeDurationTask(1000),
+        makeDurationTask(3000),
+      ]);
+
+      expect(metrics.work.median).toBe('3s');
+      expect(metrics.work.avg).toBe('3s');
+      expect(metrics.work.total).toBe('9s');
+    });
+
+    it('computes the median for an even number of considered tasks as the average of the two middle values', () => {
+      // Sorted: 2s, 4s, 6s, 12s -> (4s + 6s) / 2 = 5s
+      const metrics = PipelineStatsView.calculateMetrics([
+        makeDurationTask(12000),
+        makeDurationTask(2000),
+        makeDurationTask(6000),
+        makeDurationTask(4000),
+      ]);
+
+      expect(metrics.work.median).toBe('5s');
+      expect(metrics.work.avg).toBe('6s');
+      expect(metrics.work.total).toBe('24s');
     });
   });
 
@@ -244,6 +292,29 @@ describe('PipelineStatsView', () => {
       const sum = counts.reduce((acc, c) => acc + c, 0);
       expect(counts.length).toBe(statuses.length + 1); // all 9 states + DELETED
       expect(sum).toBe(total);
+    });
+
+    it('keeps the total task count correct when worked tasks are mixed with tasks that never started', () => {
+      const worked = (id: string, status: TaskStatus, ms: number): Task => ({
+        id,
+        title: id,
+        status,
+        deleted: false,
+        history: [
+          { to_status: TaskStatus.INPROGRESS, timestamp: new Date(now).toISOString(), by: 'mcp' },
+          { to_status: status, timestamp: new Date(now + ms).toISOString(), by: 'mcp' },
+        ],
+      } as unknown as Task);
+      const tasks = [
+        worked('a', TaskStatus.SUBMITTED, 4000),
+        worked('b', TaskStatus.FAILED, 2000),
+        { id: 'c', title: 'c', status: TaskStatus.CREATED, deleted: false, history: [] },
+      ] as Task[];
+
+      const html = PipelineStatsView.render(tasks);
+      const totalMatch = html.match(/Total Tasks<\/span>\s*<span[^>]*>([^<]+)<\/span>/);
+      expect(totalMatch).not.toBeNull();
+      expect(Number(totalMatch![1])).toBe(3);
     });
   });
 
