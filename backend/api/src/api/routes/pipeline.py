@@ -76,6 +76,7 @@ async def update_pipeline(
     test_commands: Optional[List[List[str]]] = Body(None, embed=True),
     lint_commands: Optional[List[List[str]]] = Body(None, embed=True),
     serve_commands: Optional[List[List[str]]] = Body(None, embed=True),
+    build_commands: Optional[List[List[str]]] = Body(None, embed=True),
     current_user: User = Depends(get_current_user),
 ):
     updated_pipeline = await pipeline_queries.update_pipeline(
@@ -91,6 +92,7 @@ async def update_pipeline(
         test_commands=test_commands,
         lint_commands=lint_commands,
         serve_commands=serve_commands,
+        build_commands=build_commands,
     )
 
     await manager.broadcast(
@@ -127,6 +129,24 @@ async def run_lint(
     """
     pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
     commands = [c for c in (pipeline.lint_commands or []) if isinstance(c, list) and c]
+    return await _run_pipeline_commands(pipeline_id, commands)
+
+
+@router.post("/{pipeline_id}/run/build", response_model=dict)
+async def run_build(
+    pipeline_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Run the configured build commands for a pipeline asynchronously.
+
+    When the pipeline has no build commands defined, returns a ``no_commands``
+    status immediately. Otherwise the command sequence is dispatched via the
+    shared ``CommandRunner`` in a background task (so the call returns promptly)
+    and the aggregate result is reported back through the registered completion
+    handler when it finishes.
+    """
+    pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
+    commands = [c for c in (pipeline.build_commands or []) if isinstance(c, list) and c]
     return await _run_pipeline_commands(pipeline_id, commands)
 
 

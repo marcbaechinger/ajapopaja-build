@@ -271,6 +271,23 @@ describe('PipelineClient', () => {
       });
     });
 
+    it('should forward build_commands on create', async () => {
+      (fetch as any).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockPipelineResponse({ name: 'WithBuild' })),
+      });
+
+      await client.create({
+        name: 'WithBuild',
+        build_commands: [['sh', '-c', 'cd frontend && npm run build']],
+      });
+
+      const body = JSON.parse((fetch as any).mock.calls[0][1].body);
+      expect(body.build_commands).toEqual([
+        ['sh', '-c', 'cd frontend && npm run build'],
+      ]);
+    });
+
     it('should authenticate with Authorization header', async () => {
       (fetch as any).mockResolvedValue({
         ok: true,
@@ -372,6 +389,21 @@ describe('PipelineClient', () => {
       const body = JSON.parse((fetch as any).mock.calls[0][1].body);
       expect(body.version).toBe(2);
       expect(body.repo_uri).toBe('https://host/org/my-app.git');
+    });
+
+    it('should forward build_commands on update', async () => {
+      (fetch as any).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockPipelineResponse()),
+      });
+
+      await client.update('pipe-1', 2, {
+        build_commands: [['sh', '-c', 'make build']],
+      });
+
+      const body = JSON.parse((fetch as any).mock.calls[0][1].body);
+      expect(body.version).toBe(2);
+      expect(body.build_commands).toEqual([['sh', '-c', 'make build']]);
     });
 
     it('should authenticate with Authorization header', async () => {
@@ -603,6 +635,16 @@ describe('PipelineClient', () => {
 
       const pipeline = await client.get('pipe-1');
       expect(pipeline.repo_uri).toBe('https://host/org/my-app.git');
+    });
+
+    it('should map build_commands from response', async () => {
+      (fetch as any).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ id: 'pipe-1', name: 'Build', build_commands: [['sh', '-c', 'make build']] }),
+      });
+
+      const pipeline = await client.get('pipe-1');
+      expect(pipeline.build_commands).toEqual([['sh', '-c', 'make build']]);
     });
 
     it('should map response with id field (not _id)', async () => {

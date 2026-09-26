@@ -158,6 +158,10 @@ class Pipeline(Document):
     # launched as a long-running background dev server by the
     # ``DevProcessManager`` / dev router. ``None``/empty means "not configured".
     serve_commands: Optional[List[List[str]]] = None
+    # Pipeline-specific build commands (list of argv lists, e.g.
+    # [["sh", "-c", "cd frontend && npm run build"]]). These build the repo.
+    # ``None``/empty means "not configured".
+    build_commands: Optional[List[List[str]]] = None
     version: int = 1
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -238,6 +242,17 @@ class Pipeline(Document):
         - Otherwise each entry must be a non-empty list of non-empty strings.
         """
         return _validate_command_lists(v, "serve_commands", "serve")
+
+    @field_validator("build_commands")
+    @classmethod
+    def validate_build_commands(cls, v):
+        """Validate per-pipeline build commands (a list of argv lists).
+
+        - ``None`` means “not configured”.
+        - An empty list ``[]`` disables pipeline-specific build commands.
+        - Otherwise each entry must be a non-empty list of non-empty strings.
+        """
+        return _validate_command_lists(v, "build_commands", "build")
 
     @field_validator("repo_uri")
     @classmethod

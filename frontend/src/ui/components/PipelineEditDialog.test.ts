@@ -256,7 +256,7 @@ describe('PipelineEditDialog', () => {
     expect(updateCall[2].test_commands).toEqual([]);
   });
 
-  const switchToCmdTab = (tab: 'test' | 'lint' | 'serve') => {
+  const switchToCmdTab = (tab: 'test' | 'lint' | 'build' | 'serve') => {
     const btn = document.querySelector(`[data-cmd-tab="${tab}"]`) as HTMLButtonElement;
     btn.click();
   };
@@ -402,6 +402,85 @@ describe('PipelineEditDialog', () => {
 
     const updateCall = (mockProps.context.pipelineClient.update as any).mock.calls[0];
     expect(updateCall[2].serve_commands).toEqual([['sh', '-c', 'make serve']]);
+  });
+
+  it('should render a build commands tab', async () => {
+    const dialog = new PipelineEditDialog(mockProps);
+    const showPromise = dialog.show();
+
+    const buildTab = document.querySelector('[data-cmd-tab="build"]') as HTMLButtonElement;
+    expect(buildTab).not.toBeNull();
+    expect(buildTab.textContent).toContain('Build');
+
+    switchToCmdTab('build');
+    const textarea = document.querySelector('textarea[name="build_commands"]') as HTMLTextAreaElement;
+    expect(textarea).not.toBeNull();
+
+    document.querySelector('#pipeline-edit-cancel')?.dispatchEvent(new MouseEvent('click'));
+    await showPromise;
+  });
+
+  it('should pre-fill the build commands textarea from stored argv lists', async () => {
+    mockProps.pipeline!.build_commands = [
+      ['sh', '-c', 'make build'],
+      ['npm', 'run', 'build'],
+    ];
+    const dialog = new PipelineEditDialog(mockProps);
+    const showPromise = dialog.show();
+
+    switchToCmdTab('build');
+    const textarea = document.querySelector('textarea[name="build_commands"]') as HTMLTextAreaElement;
+    expect(textarea.value).toBe('make build\nnpm run build');
+
+    document.querySelector('#pipeline-edit-cancel')?.dispatchEvent(new MouseEvent('click'));
+    await showPromise;
+  });
+
+  it('should send build_commands parsed from the textarea on save', async () => {
+    const dialog = new PipelineEditDialog(mockProps);
+    const showPromise = dialog.show();
+
+    switchToCmdTab('build');
+    const textarea = document.querySelector('textarea[name="build_commands"]') as HTMLTextAreaElement;
+    textarea.value = 'make build\n\ncd frontend && npm run build';
+
+    const saveBtn = document.querySelector('#pipeline-edit-save') as HTMLButtonElement;
+    saveBtn.click();
+    await showPromise;
+
+    const updateCall = (mockProps.context.pipelineClient.update as any).mock.calls[0];
+    expect(updateCall[2].build_commands).toEqual([
+      ['sh', '-c', 'make build'],
+      ['sh', '-c', 'cd frontend && npm run build'],
+    ]);
+  });
+
+  it('should send an empty build_commands array when the build textarea is blank', async () => {
+    const dialog = new PipelineEditDialog(mockProps);
+    const showPromise = dialog.show();
+
+    switchToCmdTab('build');
+    const saveBtn = document.querySelector('#pipeline-edit-save') as HTMLButtonElement;
+    saveBtn.click();
+    await showPromise;
+
+    const updateCall = (mockProps.context.pipelineClient.update as any).mock.calls[0];
+    expect(updateCall[2].build_commands).toEqual([]);
+  });
+
+  it('should preserve build_commands when saving from the test tab', async () => {
+    mockProps.pipeline!.build_commands = [['sh', '-c', 'make build']];
+    const dialog = new PipelineEditDialog(mockProps);
+    const showPromise = dialog.show();
+
+    // The build textarea is not rendered from the test tab; the stored value
+    // must still be parsed from the pipeline and sent on save.
+    const saveBtn = document.querySelector('#pipeline-edit-save') as HTMLButtonElement;
+    saveBtn.click();
+    await showPromise;
+
+    const updateCall = (mockProps.context.pipelineClient.update as any).mock.calls[0];
+    expect(updateCall[2].build_commands).toEqual([['sh', '-c', 'make build']]);
   });
 
   it('should call update and close on save', async () => {
@@ -606,6 +685,44 @@ describe('PipelineEditDialog', () => {
 
       const createCall = (props.context.pipelineClient.create as any).mock.calls[0];
       expect(createCall[0].serve_commands).toBeNull();
+    });
+
+    it('should send build_commands on create when provided', async () => {
+      const props = mkCreateProps();
+      const dialog = new PipelineEditDialog(props);
+      const showPromise = dialog.show();
+
+      switchToCmdTab('build');
+      const nameInput = document.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
+      nameInput.value = 'New Pipe';
+      const textarea = document.querySelector('textarea[name="build_commands"]') as HTMLTextAreaElement;
+      textarea.value = 'cd frontend && npm run build';
+
+      const saveBtn = document.querySelector('#pipeline-edit-save') as HTMLButtonElement;
+      saveBtn.click();
+      await showPromise;
+
+      const createCall = (props.context.pipelineClient.create as any).mock.calls[0];
+      expect(createCall[0].build_commands).toEqual([
+        ['sh', '-c', 'cd frontend && npm run build'],
+      ]);
+    });
+
+    it('should send null build_commands on create when the build textarea is blank', async () => {
+      const props = mkCreateProps();
+      const dialog = new PipelineEditDialog(props);
+      const showPromise = dialog.show();
+
+      switchToCmdTab('build');
+      const nameInput = document.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
+      nameInput.value = 'New Pipe';
+
+      const saveBtn = document.querySelector('#pipeline-edit-save') as HTMLButtonElement;
+      saveBtn.click();
+      await showPromise;
+
+      const createCall = (props.context.pipelineClient.create as any).mock.calls[0];
+      expect(createCall[0].build_commands).toBeNull();
     });
 
     it('should surface backend validation errors inline instead of alert', async () => {

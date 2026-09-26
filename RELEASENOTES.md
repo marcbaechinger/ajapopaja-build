@@ -73,6 +73,9 @@ commands and a much broader tool set.
 * **Slash commands** in the AssistantPanel (e.g. `/test`, `/git pull`).
 * **`/test` and the `run_tests` tool** execute a pipeline’s configured test
   commands asynchronously and report the result back to the assistant.
+* **Build commands** – pipelines can now store `build_commands`, editable in a
+  new **Build** tab of the pipeline editor, with a matching `run_build`
+  assistant tool and `POST /pipelines/{id}/run/build` endpoint.
 * **New tools** – read GitHub issues and pull requests, pull from the remote,
   update a task spec (`update_task_spec`), delete a task, and open a task diff
   using `DiffView`.

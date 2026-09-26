@@ -142,6 +142,7 @@ export class Pipeline {
   test_commands?: string[][] | null;
   lint_commands?: string[][] | null;
   serve_commands?: string[][] | null;
+  build_commands?: string[][] | null;
   version: number = 1;
   created_at?: string;
   updated_at?: string;
@@ -164,6 +165,7 @@ export class Pipeline {
     if (json.test_commands !== undefined) this.test_commands = Array.isArray(json.test_commands) ? json.test_commands : null;
     if (json.lint_commands !== undefined) this.lint_commands = Array.isArray(json.lint_commands) ? json.lint_commands : null;
     if (json.serve_commands !== undefined) this.serve_commands = Array.isArray(json.serve_commands) ? json.serve_commands : null;
+    if (json.build_commands !== undefined) this.build_commands = Array.isArray(json.build_commands) ? json.build_commands : null;
     if (json.version !== undefined) this.version = Number(json.version);
     if (json.created_at !== undefined) this.created_at = String(json.created_at);
     if (json.updated_at !== undefined) this.updated_at = String(json.updated_at);

@@ -30,7 +30,7 @@ export interface PipelineEditDialogProps {
 
 type RepoTab = 'local' | 'remote';
 
-type CommandsTab = 'test' | 'lint' | 'serve';
+type CommandsTab = 'test' | 'lint' | 'build' | 'serve';
 
 const READONLY_CLASS = ' opacity-60 cursor-not-allowed';
 
@@ -260,18 +260,31 @@ export class PipelineEditDialog extends BaseDialog<void> {
     );
   }
 
+  private renderBuildCommands(): string {
+    return this.renderCommandTextarea(
+      'build_commands',
+      'Build Commands',
+      this.pipeline.build_commands || [],
+      'One command per line, e.g.&#10;cd frontend &amp;&amp; npm run build&#10;cd backend &amp;&amp; uv build',
+      'Commands run to build the project. One per line. Leave empty to skip building.'
+    );
+  }
+
   private renderCommandsTabs(): string {
     const activeContent =
       this.activeCmdTab === 'test'
         ? this.renderTestCommands()
         : this.activeCmdTab === 'lint'
           ? this.renderLintCommands()
-          : this.renderServeCommands();
+          : this.activeCmdTab === 'build'
+            ? this.renderBuildCommands()
+            : this.renderServeCommands();
     return `
       <div class="flex flex-col gap-3">
         <div class="flex gap-1 border-b border-app-border">
           <button type="button" data-cmd-tab="test" class="${this.cmdTabClass('test')}">Test</button>
           <button type="button" data-cmd-tab="lint" class="${this.cmdTabClass('lint')}">Lint</button>
+          <button type="button" data-cmd-tab="build" class="${this.cmdTabClass('build')}">Build</button>
           <button type="button" data-cmd-tab="serve" class="${this.cmdTabClass('serve')}">Serve</button>
         </div>
         ${activeContent}
@@ -512,6 +525,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
     const repoTokenInput = this.dialog.querySelector('input[name="repo_token"]') as HTMLInputElement;
     const testCommandsInput = this.dialog.querySelector('textarea[name="test_commands"]') as HTMLTextAreaElement;
     const lintCommandsInput = this.dialog.querySelector('textarea[name="lint_commands"]') as HTMLTextAreaElement;
+    const buildCommandsInput = this.dialog.querySelector('textarea[name="build_commands"]') as HTMLTextAreaElement;
     const serveCommandsInput = this.dialog.querySelector('textarea[name="serve_commands"]') as HTMLTextAreaElement;
 
     // When saving from the other command tab the hidden textarea is not
@@ -523,12 +537,16 @@ export class PipelineEditDialog extends BaseDialog<void> {
     const lintText =
       lintCommandsInput?.value ??
       (this.pipeline.lint_commands || []).map(argsToCommand).join('\n');
+    const buildText =
+      buildCommandsInput?.value ??
+      (this.pipeline.build_commands || []).map(argsToCommand).join('\n');
     const serveText =
       serveCommandsInput?.value ??
       (this.pipeline.serve_commands || []).map(argsToCommand).join('\n');
 
     const testCommands = parseTestCommands(testText);
     const lintCommands = parseTestCommands(lintText);
+    const buildCommands = parseTestCommands(buildText);
     const serveCommands = parseTestCommands(serveText);
 
     const btnLabel = create ? 'Create Pipeline' : 'Save Changes';
@@ -546,12 +564,14 @@ export class PipelineEditDialog extends BaseDialog<void> {
           doc_root?: string;
           test_commands?: string[][] | null;
           lint_commands?: string[][] | null;
+          build_commands?: string[][] | null;
           serve_commands?: string[][] | null;
         } = {
           name: nameInput?.value.trim() || '',
           doc_root: docRootInput?.value.trim() || 'design',
           test_commands: testCommands.length > 0 ? testCommands : null,
           lint_commands: lintCommands.length > 0 ? lintCommands : null,
+          build_commands: buildCommands.length > 0 ? buildCommands : null,
           serve_commands: serveCommands.length > 0 ? serveCommands : null,
         };
 
@@ -588,10 +608,12 @@ export class PipelineEditDialog extends BaseDialog<void> {
           doc_root?: string;
           test_commands?: string[][] | null;
           lint_commands?: string[][] | null;
+          build_commands?: string[][] | null;
           serve_commands?: string[][] | null;
         } = {
           test_commands: testCommands,
           lint_commands: lintCommands,
+          build_commands: buildCommands,
           serve_commands: serveCommands,
         };
 

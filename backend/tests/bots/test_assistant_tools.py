@@ -25,7 +25,7 @@ from api.assistant.tools.file_tools import (
     list_project_structure,
     read_source_file,
 )
-from api.assistant.tools.pipeline_tools import run_lint, run_tests
+from api.assistant.tools.pipeline_tools import run_build, run_lint, run_tests
 from core.models.models import Pipeline
 
 
@@ -194,6 +194,54 @@ async def test_run_lint_started_and_reports_result_async(init_mock_db):
             finished.set()
 
         result = await run_lint(str(pipeline.id))
+        assert result["status"] == "started"
+        assert result.get("run_id")
+
+        CommandRunner.register_on_complete(
+            result["run_id"], on_complete, {"id": "legacy_id"}
+        )
+
+        await asyncio.wait_for(finished.wait(), timeout=30)
+        assert captured["results"]["passed"] is True
+        assert captured["results"]["commands"][0]["exit_code"] == 0
+        assert captured["results"]["run_id"] == result["run_id"]
+        assert captured["tool_ref"]["id"] == "legacy_id"
+
+
+@pytest.mark.asyncio
+async def test_run_build_no_build_commands(init_mock_db):
+    """run_build reports a no_build status when a pipeline has no commands."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pipeline = Pipeline(name="No Build Pipeline", workspace_path=tmp_dir)
+        await pipeline.insert()
+
+        result = await run_build(str(pipeline.id))
+        assert result["status"] == "no_build"
+        assert "no build commands" in result["message"]
+
+
+@pytest.mark.asyncio
+async def test_run_build_started_and_reports_result_async(init_mock_db):
+    """run_build returns immediately and delivers the result via CommandRunner."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        git.Repo.init(tmp_dir)
+
+        pipeline = Pipeline(
+            name="Build Pipeline",
+            workspace_path=tmp_dir,
+            build_commands=[["sh", "-c", "echo building && exit 0"]],
+        )
+        await pipeline.insert()
+
+        finished = asyncio.Event()
+        captured = {}
+
+        async def on_complete(results, tool_ref):
+            captured["results"] = results
+            captured["tool_ref"] = tool_ref
+            finished.set()
+
+        result = await run_build(str(pipeline.id))
         assert result["status"] == "started"
         assert result.get("run_id")
 

@@ -95,6 +95,30 @@ async def run_lint(pipeline_id: str) -> Dict[str, Any]:
     return await _dispatch_pipeline_run(pipeline_id, commands, "lint")
 
 
+@register_tool(tool_type=WRITE_ACCESS)
+async def run_build(pipeline_id: str) -> Dict[str, Any]:
+    """
+    Runs the configured build commands for a pipeline.
+
+    If the pipeline has no build commands defined, returns a ``no_build`` status
+    immediately. Otherwise the build is executed asynchronously against the
+    pipeline workspace (in its own background task so a long-running build never
+    blocks this call) and the result is reported back through the assistant when
+    it completes.
+
+    Args:
+        pipeline_id: The identifier of the pipeline whose build to run.
+    """
+    pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
+    commands = _resolved_commands(pipeline.build_commands)
+    if not commands:
+        return {
+            "status": "no_build",
+            "message": f"Pipeline {pipeline_id} has no build commands defined.",
+        }
+    return await _dispatch_pipeline_run(pipeline_id, commands, "build")
+
+
 def _resolved_commands(commands):
     """Filters a stored command list down to non-empty argv lists.
 
