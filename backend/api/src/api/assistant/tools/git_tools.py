@@ -423,10 +423,4 @@ async def git_pull(
     Returns:
         The output of the git pull command, or an error message on failure.
     """
-    try:
-        repo = await git_utils.get_repo_for_pipeline(pipeline_id, task_id, use_sandbox)
-        return repo.git.pull()
-    except git.exc.GitCommandError as e:
-        return f"Error executing git command: {e}"
-    except Exception as e:
-        return f"Error: {str(e)}"
+    return await git_utils.pull(pipeline_id, task_id, use_sandbox)

@@ -250,3 +250,26 @@ async def test_assistant_tool_drop():
     ):
         msg = await git_drop_top_commit("p1")
     assert msg == "dropped ok"
+
+
+@pytest.mark.asyncio
+async def test_assistant_tool_pull():
+    """git_pull delegates to the utility and is WRITE_ACCESS."""
+    from unittest.mock import AsyncMock, patch
+
+    from api.assistant.tools.git_tools import git_pull
+    from api.bot.tool_registry import registry
+
+    # Registered as a write-access tool.
+    reg = registry.get_tool("git_pull")
+    assert reg is not None
+    assert reg.type == "write_access"
+
+    with patch(
+        "core.utils.git_utils.pull",
+        new_callable=AsyncMock,
+        return_value="pulled ok",
+    ) as mock_pull:
+        msg = await git_pull("p1")
+    assert msg == "pulled ok"
+    mock_pull.assert_awaited_once_with("p1", None, False)

@@ -44,6 +44,7 @@ describe('HistoryDialog', () => {
         behind: 0,
       }),
       getGitLog: vi.fn().mockResolvedValue({ commits: [commit] }),
+      pull: vi.fn().mockResolvedValue({ status: 'ok', message: 'Already up to date.' }),
       ...overrides,
     } as any;
   }
@@ -184,5 +185,78 @@ describe('HistoryDialog', () => {
 
     expect(client.getGitStatus).toHaveBeenCalledWith('pipeline-42');
     expect(client.getGitLog).toHaveBeenCalledWith('pipeline-42');
+  });
+
+  it('renders a pull button in the dialog header', () => {
+    const dialog = new HistoryDialog('p1', makeClient());
+    const header = dialog['dialog'].querySelector('#dialog-header-actions');
+    const button = header?.querySelector('#history-pull-btn') as HTMLButtonElement;
+
+    expect(button).not.toBeNull();
+    expect(button.textContent).toContain('Pull');
+  });
+
+  it('pulls from origin and reloads status and log when clicked', async () => {
+    const client = makeClient();
+    const dialog = new HistoryDialog('p1', client);
+    await dialog['load']();
+
+    const button = dialog['dialog'].querySelector('#history-pull-btn') as HTMLButtonElement;
+    button.click();
+
+    await vi.waitFor(() => expect(client.pull).toHaveBeenCalledWith('p1'));
+    await vi.waitFor(() => expect(client.getGitStatus).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(client.getGitLog).toHaveBeenCalledTimes(2));
+  });
+
+  it('shows an error when the backend reports a pull failure', async () => {
+    const client = makeClient({
+      pull: vi.fn().mockResolvedValue({
+        status: 'ok',
+        message: 'Error executing git command: no remote',
+      }),
+    });
+    const dialog = new HistoryDialog('p1', client);
+    await dialog['load']();
+
+    (dialog['dialog'].querySelector('#history-pull-btn') as HTMLButtonElement).click();
+
+    await vi.waitFor(() => {
+      expect(bodyOf(dialog).textContent).toContain('Error executing git command');
+    });
+  });
+
+  it('shows an error when the pull request rejects', async () => {
+    const client = makeClient({
+      pull: vi.fn().mockRejectedValue(new Error('pull boom')),
+    });
+    const dialog = new HistoryDialog('p1', client);
+    await dialog['load']();
+
+    (dialog['dialog'].querySelector('#history-pull-btn') as HTMLButtonElement).click();
+
+    await vi.waitFor(() => {
+      expect(bodyOf(dialog).textContent).toContain('pull boom');
+    });
+  });
+
+  it('disables the pull button while a pull is in progress', async () => {
+    let resolvePull: (value: any) => void = () => {};
+    const client = makeClient({
+      pull: vi.fn().mockImplementation(
+        () => new Promise((resolve) => { resolvePull = resolve; })
+      ),
+    });
+    const dialog = new HistoryDialog('p1', client);
+    await dialog['load']();
+
+    const button = dialog['dialog'].querySelector('#history-pull-btn') as HTMLButtonElement;
+    button.click();
+
+    await vi.waitFor(() => expect(button.disabled).toBe(true));
+    expect(button.textContent).toContain('Pulling');
+
+    resolvePull({ status: 'ok', message: 'done' });
+    await vi.waitFor(() => expect(button.disabled).toBe(false));
   });
 });

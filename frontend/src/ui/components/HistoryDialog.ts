@@ -33,6 +33,8 @@ export class HistoryDialog extends BaseDialog {
   private commits: GitLogEntry[] = [];
   private statusError: string | null = null;
   private logError: string | null = null;
+  private pullError: string | null = null;
+  private pulling = false;
   private loading = true;
 
   constructor(pipelineId: string, pipelineClient: PipelineClient) {
@@ -44,7 +46,56 @@ export class HistoryDialog extends BaseDialog {
     });
     this.pipelineId = pipelineId;
     this.pipelineClient = pipelineClient;
+    this.attachPullButtonListener();
     this.refreshBody();
+  }
+
+  protected renderHeaderActions(): string {
+    return `
+      <button
+        id="history-pull-btn"
+        type="button"
+        class="inline-flex items-center gap-1.5 rounded-md border border-app-border bg-app-surface px-2.5 py-1 text-xs font-semibold text-app-text hover:bg-app-bg hover:border-app-accent-1 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+        title="Pull latest changes from origin"
+      >
+        ${Icon.render('refresh', { size: 14 })}
+        <span>Pull</span>
+      </button>
+    `;
+  }
+
+  private attachPullButtonListener(): void {
+    const button = this.dialog.querySelector('#history-pull-btn');
+    button?.addEventListener('click', () => void this.handlePull());
+  }
+
+  private setPullButtonState(): void {
+    const button = this.dialog.querySelector('#history-pull-btn') as HTMLButtonElement | null;
+    if (!button) return;
+    button.disabled = this.pulling;
+    const label = button.querySelector('span');
+    if (label) label.textContent = this.pulling ? 'Pulling…' : 'Pull';
+  }
+
+  private async handlePull(): Promise<void> {
+    if (this.pulling) return;
+    this.pulling = true;
+    this.pullError = null;
+    this.setPullButtonState();
+
+    try {
+      const result = await this.pipelineClient.pull(this.pipelineId);
+      const message = result?.message || '';
+      if (/^error/i.test(message)) {
+        this.pullError = message;
+      }
+    } catch (e: any) {
+      this.pullError = e?.message || 'Failed to pull from origin.';
+    } finally {
+      this.pulling = false;
+      this.setPullButtonState();
+      await this.load();
+    }
   }
 
   private refreshBody() {
@@ -68,9 +119,19 @@ export class HistoryDialog extends BaseDialog {
 
     return `
       <div class="flex flex-col gap-3">
+        ${this.renderPullError()}
         ${this.renderStatus()}
         ${this.renderLog()}
       </div>
+    `;
+  }
+
+  private renderPullError(): string {
+    if (!this.pullError) return '';
+    return `
+      <section class="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-400" role="alert">
+        ${escapeHtml(this.pullError)}
+      </section>
     `;
   }
 

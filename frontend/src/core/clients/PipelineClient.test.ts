@@ -853,6 +853,34 @@ describe('PipelineClient git endpoints', () => {
       await expect(client.getGitLog('pipe-1')).rejects.toThrow('Server Error');
     });
   });
+
+  describe('pull', () => {
+    it('should POST to the pipeline pull URL and return the result', async () => {
+      const payload = { status: 'ok', message: 'Already up to date.' };
+      (fetch as any).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(payload),
+      });
+
+      const result = await client.pull('pipe-1');
+
+      expect(result).toEqual(payload);
+
+      const url = new URL((fetch as any).mock.calls[0][0]);
+      expect(url.pathname).toBe('/pipelines/pipe-1/pull');
+      expect((fetch as any).mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('should propagate pull errors', async () => {
+      (fetch as any).mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({ detail: 'Pull failed' }),
+      });
+
+      await expect(client.pull('pipe-1')).rejects.toThrow('Pull failed');
+    });
+  });
 });
 
 describe('PipelineClient dev server endpoints', () => {

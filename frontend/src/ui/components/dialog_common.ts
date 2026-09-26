@@ -46,6 +46,8 @@ export abstract class BaseDialog<T = void> {
 
   private renderLayout(options: DialogOptions, maxWidth: string, maxHeight: string) {
     const iconHtml = options.iconSvg ? `<span class="text-app-accent-2">${options.iconSvg}</span>` : '';
+    const headerActions = this.renderHeaderActions ? this.renderHeaderActions() : '';
+    const headerActionsHtml = typeof headerActions === 'string' ? headerActions : '';
 
     this.dialog.innerHTML = `
       <div class="dialog-backdrop pointer-events-auto"></div>
@@ -56,9 +58,12 @@ export abstract class BaseDialog<T = void> {
               ${iconHtml}
               ${options.title}
             </h3>
-            <button id="dialog-close-btn" class="text-app-muted hover:text-app-text transition-colors cursor-pointer p-1 rounded hover:bg-app-surface">
-              ${Icon.render('close', { size: 20 })}
-            </button>
+            <div class="flex items-center gap-2 shrink-0">
+              <div id="dialog-header-actions" class="flex items-center gap-2">${headerActionsHtml}</div>
+              <button id="dialog-close-btn" class="text-app-muted hover:text-app-text transition-colors cursor-pointer p-1 rounded hover:bg-app-surface">
+                ${Icon.render('close', { size: 20 })}
+              </button>
+            </div>
           </div>
           <div id="dialog-body-container" class="p-0 overflow-y-auto overflow-x-hidden grow custom-scrollbar">
             <!-- Body will be injected here -->
@@ -69,6 +74,12 @@ export abstract class BaseDialog<T = void> {
         </div>
       </div>
     `;
+
+    if (headerActions && typeof headerActions !== 'string') {
+      this.dialog
+        .querySelector('#dialog-header-actions')
+        ?.appendChild(headerActions);
+    }
 
     const bodyContainer = this.dialog.querySelector('#dialog-body-container') as HTMLElement;
     const bodyContent = this.renderBody();
@@ -109,6 +120,7 @@ export abstract class BaseDialog<T = void> {
 
   // Abstract methods for child classes to implement
   protected abstract renderBody(): string | HTMLElement;
+  protected renderHeaderActions?(): string | HTMLElement; // Optional
   protected renderFooter?(): string | HTMLElement; // Optional
 
   // Unified show method returning a promise

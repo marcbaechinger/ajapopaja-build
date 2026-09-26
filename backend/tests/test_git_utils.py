@@ -541,6 +541,37 @@ async def test_drop_top_commit_no_remote():
 
 
 @pytest.mark.asyncio
+async def test_pull_success(tmp_path):
+    origin = _make_origin(tmp_path)
+    ws = tmp_path / "workspace"
+    _git(tmp_path, ["clone", str(origin), str(ws)])
+
+    # Push an update to the origin from a second clone.
+    other = tmp_path / "other"
+    _git(tmp_path, ["clone", str(origin), str(other)])
+    (other / "readme.md").write_text("updated\n")
+    _git(other, ["add", "."])
+    _git(other, ["commit", "-m", "Update readme"])
+    _git(other, ["push", "origin", "HEAD"])
+
+    with _patch_pipeline_and_repo(git.Repo(str(ws))):
+        msg = await git_utils.pull("p1")
+
+    assert "Error" not in msg
+    assert (ws / "readme.md").read_text() == "updated\n"
+
+
+@pytest.mark.asyncio
+async def test_pull_reports_exception():
+    repo = MagicMock()
+    repo.git.pull.side_effect = RuntimeError("pull exploded")
+    with _patch_pipeline_and_repo(repo):
+        msg = await git_utils.pull("p1")
+
+    assert "pull exploded" in msg
+
+
+@pytest.mark.asyncio
 async def test_get_commit_diff_success(tmp_path):
     origin = _make_origin(tmp_path)
     ws = tmp_path / "workspace"

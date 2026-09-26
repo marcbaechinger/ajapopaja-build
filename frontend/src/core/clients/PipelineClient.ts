@@ -117,6 +117,13 @@ export class PipelineClient extends BaseClient {
     return await response.json();
   }
 
+  async pull(pipelineId: string): Promise<{ status: string; message: string }> {
+    const response = await this.fetch(`${this.baseUrl}/pipelines/${pipelineId}/pull`, {
+      method: 'POST',
+    });
+    return await response.json();
+  }
+
   async getDevServerStatus(id: string): Promise<DevServerStatus> {
     const response = await this.fetch(`${this.baseUrl}/pipelines/${id}/dev/status`);
     return await response.json();

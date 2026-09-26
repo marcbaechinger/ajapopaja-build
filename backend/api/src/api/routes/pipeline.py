@@ -220,6 +220,16 @@ async def drop_top_commit(
     return {"status": "ok", "message": msg}
 
 
+@router.post("/{pipeline_id}/pull", response_model=dict)
+async def pull_pipeline(
+    pipeline_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Pull the latest changes from the remote origin into the working tree."""
+    msg = await git_utils.pull(pipeline_id)
+    return {"status": "ok", "message": msg}
+
+
 class CommitDiff(BaseModel):
     commit_hash: str
     patch: str

@@ -308,6 +308,27 @@ async def get_pipeline_and_repo(
     return pipeline, get_repo(str(workspace_path))
 
 
+async def pull(
+    pipeline_id: str,
+    task_id: str | None = None,
+    use_sandbox: bool = False,
+) -> str:
+    """Fetch and pull the latest changes from the remote origin.
+
+    Updates the local checkout to stay in sync with the remote repository.
+    Returns the output of the ``git pull`` command, or a human-readable error
+    message (prefixed with "Error") when the pull fails.
+    """
+    try:
+        _, repo = await get_pipeline_and_repo(pipeline_id, task_id, use_sandbox)
+        output = repo.git.pull()
+        return output or "Already up to date."
+    except git.exc.GitCommandError as e:
+        return f"Error executing git command: {e}"
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+
 async def drop_top_commit(
     pipeline_id: str,
     task_id: str | None = None,

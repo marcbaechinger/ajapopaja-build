@@ -594,6 +594,29 @@ async def test_drop_top_commit_endpoint(async_client, init_mock_db):
 
 
 @pytest.mark.asyncio
+async def test_pull_endpoint(async_client, init_mock_db):
+    """POST /api/pipelines/{id}/pull returns status and message."""
+    with patch(
+        "api.routes.pipeline.git_utils.pull",
+        new_callable=AsyncMock,
+        return_value="Already up to date.",
+    ) as mock_pull:
+        response = await async_client.post("/api/pipelines/p1/pull")
+        assert response.status_code == status.HTTP_200_OK
+        body = response.json()
+        assert body == {"status": "ok", "message": "Already up to date."}
+        mock_pull.assert_awaited_once_with("p1")
+
+
+@pytest.mark.asyncio
+async def test_pull_endpoint_unauthenticated(async_client, init_mock_db):
+    """The pull route requires authentication."""
+    app.dependency_overrides.clear()
+    response = await async_client.post("/api/pipelines/p1/pull")
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.asyncio
 async def test_get_commit_diff_endpoint(async_client, init_mock_db):
     """GET /api/pipelines/{id}/commits/{sha}/diff returns the JSON diff shape."""
     diff = {
