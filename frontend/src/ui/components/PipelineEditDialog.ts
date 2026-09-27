@@ -30,7 +30,7 @@ export interface PipelineEditDialogProps {
 
 type RepoTab = 'local' | 'remote';
 
-type CommandsTab = 'test' | 'lint' | 'build' | 'serve';
+type CommandsTab = 'build' | 'lint' | 'test' | 'serve';
 
 const READONLY_CLASS = ' opacity-60 cursor-not-allowed';
 
@@ -282,9 +282,9 @@ export class PipelineEditDialog extends BaseDialog<void> {
     return `
       <div class="flex flex-col gap-3">
         <div class="flex gap-1 border-b border-app-border">
-          <button type="button" data-cmd-tab="test" class="${this.cmdTabClass('test')}">Test</button>
-          <button type="button" data-cmd-tab="lint" class="${this.cmdTabClass('lint')}">Lint</button>
           <button type="button" data-cmd-tab="build" class="${this.cmdTabClass('build')}">Build</button>
+          <button type="button" data-cmd-tab="lint" class="${this.cmdTabClass('lint')}">Lint</button>
+          <button type="button" data-cmd-tab="test" class="${this.cmdTabClass('test')}">Test</button>
           <button type="button" data-cmd-tab="serve" class="${this.cmdTabClass('serve')}">Serve</button>
         </div>
         ${activeContent}
