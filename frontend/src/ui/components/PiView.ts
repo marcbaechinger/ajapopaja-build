@@ -22,6 +22,16 @@ import DOMPurify from 'dompurify';
 import './Keybinding.css';
 
 /**
+ * Classes for the Markdown-rendered ("Format as markup") view of a block.
+ * `prose-theme` supplies the base typography; the `prose-*` modifiers tighten
+ * the vertical rhythm so consecutive elements do not stand apart with large
+ * gaps in the dense, terminal-style PiView log.
+ */
+const FORMATTED_MARKDOWN_CLASS =
+  'piview-formatted prose-theme prose-p:my-1 prose-headings:my-1 prose-ul:my-1 ' +
+  'prose-ol:my-1 prose-li:my-0 prose-pre:my-1 prose-blockquote:my-1 prose-table:my-1';
+
+/**
  * Minimal interface describing the Pi-session capabilities a standalone Pi
  * activity-log view needs. `CoderBotService` satisfies this structurally, but
  * `PiView` never depends on the concrete type so it can be reused for any
@@ -1357,7 +1367,7 @@ export class PiView {
     contentNodes.forEach((n) => n.remove());
 
     const formatted = document.createElement('div');
-    formatted.className = 'piview-formatted prose-theme';
+    formatted.className = FORMATTED_MARKDOWN_CLASS;
     formatted.setAttribute('data-role', 'formatted');
     formatted.innerHTML = this.renderMarkdown(text);
     wrapper.appendChild(formatted);
@@ -1384,7 +1394,7 @@ export class PiView {
     let formatted = wrapper.querySelector('[data-role="formatted"]') as HTMLElement | null;
     if (!formatted) {
       formatted = document.createElement('div');
-      formatted.className = 'piview-formatted prose-theme';
+      formatted.className = FORMATTED_MARKDOWN_CLASS;
       formatted.setAttribute('data-role', 'formatted');
       wrapper.appendChild(formatted);
     }
