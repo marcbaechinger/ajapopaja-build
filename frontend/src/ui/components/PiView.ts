@@ -217,6 +217,11 @@ export class PiView {
    */
   render(): void {
     this.root.appendChild(this.buildLogArea());
+    // Delegate action clicks on the root so the handler is always attached,
+    // regardless of whether the footer is rendered (per-block and toolbar
+    // buttons all live under the root).
+    this.root.addEventListener('click', this.handleClick);
+    this.unsubs.push(() => this.root.removeEventListener('click', this.handleClick));
     if (this.showFooter) {
       this.root.appendChild(this.buildFooter());
       this.updateThinkingBtn();
@@ -478,11 +483,6 @@ export class PiView {
     actionsRow.appendChild(rightActions);
 
     footer.appendChild(actionsRow);
-
-    // Delegate action clicks on the root so the handler survives footer rebuilds
-    // and only listens while this view is alive.
-    this.root.addEventListener('click', this.handleClick);
-    this.unsubs.push(() => this.root.removeEventListener('click', this.handleClick));
 
     return footer;
   }

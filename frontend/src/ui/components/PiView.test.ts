@@ -501,6 +501,41 @@ describe('PiView', () => {
     expect(mount.querySelector('#log-blocks')).not.toBeNull();
   });
 
+  it('showFooter: false still wires up per-block header, copy and format actions', () => {
+    const writeText = vi.fn(async (_text: string) => { });
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount, { showFooter: false });
+    view.render();
+
+    emitBlocks([
+      { id: 'think', kind: 'thinking', text: 'hmm' },
+      { id: 'm1', kind: 'text', text: '**bold** and *italic*' },
+    ]);
+
+    // Header collapse: the delegated click handler must fire even without a footer.
+    const thinkingEl = mount.querySelector('.piview-thinking') as HTMLElement;
+    const body = thinkingEl.querySelector('[data-role="body"]') as HTMLElement;
+    expect(body.classList.contains('hidden')).toBe(false);
+    (thinkingEl.querySelector('[data-role="header"]') as HTMLElement).click();
+    expect(body.classList.contains('hidden')).toBe(true);
+
+    // Per-block copy: the delegated click handler must fire even without a footer.
+    const blockEl = mount.querySelectorAll<HTMLElement>('#log-blocks > div')[1];
+    (blockEl.querySelector('.piview-copy') as HTMLButtonElement).click();
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(writeText.mock.calls[0][0]).toContain('**bold** and *italic*');
+
+    // Format as markup: the delegated click handler must fire even without a footer.
+    (blockEl.querySelector('.piview-format') as HTMLButtonElement).click();
+    const formatted = blockEl.querySelector('.piview-formatted') as HTMLElement;
+    expect(formatted).not.toBeNull();
+    expect(formatted.querySelector('strong')?.textContent).toBe('bold');
+    expect(formatted.querySelector('em')?.textContent).toBe('italic');
+
+    view.destroy();
+  });
+
   it('updateStopButtonVisibility hides/shows the stop button via state changes', () => {
     const { service, listeners } = createStubService({ isActive: vi.fn(() => false) });
     const view = new PiView(service, mount);
