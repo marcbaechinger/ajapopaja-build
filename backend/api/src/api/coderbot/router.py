@@ -13,11 +13,18 @@
 # limitations under the License.
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from api.auth import get_current_user
-from core.models.models import Task
+from core.models.models import Pipeline, Task
 
-from .manager import coderbot_manager
+from .manager import (
+    InteractiveSessionAlreadyActiveError,
+    InteractiveSessionBusyError,
+    InteractiveSessionNotSupportedError,
+    NoActiveInteractiveSessionError,
+    coderbot_manager,
+)
 from .session import read_session_history
 
 router = APIRouter(
@@ -25,6 +32,12 @@ router = APIRouter(
     tags=["coderbot"],
     dependencies=[Depends(get_current_user)],
 )
+
+
+class InteractiveMessageRequest(BaseModel):
+    """Request body for sending a user message to an interactive session."""
+
+    message: str
 
 
 @router.get("/session")
@@ -67,3 +80,50 @@ async def stop_coderbot(task_id: str):
             status_code=404, detail="Active session not found for this task"
         )
     return {"status": "success", "message": "CoderBot termination signaled"}
+
+
+# ---------------------------------------------------------------------------
+# Interactive Pi session (user-driven, long-lived, runs in the remote repo)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/interactive/session")
+async def get_interactive_session():
+    """Return the active interactive session so the UI can re-attach, or null."""
+    return coderbot_manager.get_interactive_session()
+
+
+@router.post("/interactive/start/{pipeline_id}", status_code=202)
+async def start_interactive_session(pipeline_id: str):
+    """Start an interactive Pi session for a remote pipeline repository."""
+    pipeline = await Pipeline.get(pipeline_id)
+    if not pipeline:
+        raise HTTPException(status_code=404, detail="Pipeline not found")
+
+    try:
+        return await coderbot_manager.start_interactive_session(pipeline)
+    except InteractiveSessionAlreadyActiveError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except InteractiveSessionNotSupportedError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/interactive/message", status_code=202)
+async def send_interactive_message(request: InteractiveMessageRequest):
+    """Send a user message to the active interactive session."""
+    try:
+        await coderbot_manager.send_interactive_message(request.message)
+    except NoActiveInteractiveSessionError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except InteractiveSessionBusyError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return {"status": "success", "message": "Message sent"}
+
+
+@router.post("/interactive/stop")
+async def stop_interactive_session():
+    """Stop the active interactive session."""
+    stopped = await coderbot_manager.stop_interactive_session()
+    if not stopped:
+        raise HTTPException(status_code=404, detail="No active interactive session")
+    return {"status": "success", "message": "Interactive session stopped"}

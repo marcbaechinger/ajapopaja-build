@@ -35,4 +35,45 @@ export class CoderBotClient extends BaseClient {
     const data = await res.json();
     return Array.isArray(data?.events) ? data.events : [];
   }
+
+  // ---------------------------------------------------------------------------
+  // Interactive session endpoints
+  // ---------------------------------------------------------------------------
+
+  async startInteractiveSession(pipelineId: string): Promise<{
+    pipeline_id: string;
+    is_active: boolean;
+    start_time: string | null;
+    busy: boolean;
+  }> {
+    const res = await this.fetch(`/api/coderbot/interactive/start/${pipelineId}`, {
+      method: 'POST',
+    });
+    return await res.json();
+  }
+
+  async sendInteractiveMessage(message: string): Promise<void> {
+    await this.fetch(`/api/coderbot/interactive/message`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message }),
+    });
+  }
+
+  async stopInteractiveSession(): Promise<void> {
+    await this.fetch(`/api/coderbot/interactive/stop`, {
+      method: 'POST',
+    });
+  }
+
+  async getInteractiveSession(): Promise<{
+    pipeline_id: string;
+    is_active: boolean;
+    start_time: string | null;
+    busy: boolean;
+  } | null> {
+    const res = await this.fetch(`/api/coderbot/interactive/session`, {});
+    if (!res.ok) return null;
+    return await res.json();
+  }
 }

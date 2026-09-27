@@ -23,6 +23,7 @@ import { DevServerDialog } from '../components/DevServerDialog.ts';
 import { DiffDialog } from '../components/DiffDialog.ts';
 import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
 import { IteratePullRequestDialog } from '../components/IteratePullRequestDialog.ts';
+import { InteractiveCodingView } from '../components/InteractiveCodingView.ts';
 
 vi.mock('../components/ConfirmationDialog.ts', () => ({
   ConfirmationDialog: vi.fn(function ConfirmationDialog() {
@@ -71,6 +72,19 @@ vi.mock('../components/IteratePullRequestDialog.ts', () => ({
 vi.mock('../components/DiffDialog.ts', () => ({
   DiffDialog: vi.fn(function DiffDialog() {
     return { show: vi.fn() };
+  }),
+}));
+
+// Mock the interactive coding view so its inner PiView is not mounted in unit
+// tests; the host slot/toggle behaviour is what is under test here.
+vi.mock('../components/InteractiveCodingView.ts', () => ({
+  InteractiveCodingView: vi.fn(function InteractiveCodingView() {
+    return {
+      render: vi.fn(),
+      destroy: vi.fn(),
+      sendMessage: vi.fn(),
+      stopSession: vi.fn(),
+    };
   }),
 }));
 
@@ -1238,5 +1252,184 @@ describe('PipelineDetailView Dev Server', () => {
 
     expect(DevServerDialog).toHaveBeenCalledTimes(1);
     expect(DevServerDialog).toHaveBeenCalledWith(mockContext, 'p1');
+  });
+});
+
+describe('PipelineDetailView Interactive Session', () => {
+  let mockContext: any;
+  let container: HTMLElement;
+  let dataManagerHandlers: Record<string, Function> = {};
+
+  const getAction = (name: string) =>
+    mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === name)![1];
+
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    dataManagerHandlers = {};
+    LocalStorageManager.resetInstances();
+    vi.clearAllMocks();
+
+    mockContext = {
+      actionRegistry: { register: vi.fn(), execute: vi.fn() },
+      wsClient: { on: vi.fn() },
+      dataManager: {
+        on: vi.fn((event: string, handler: Function) => {
+          dataManagerHandlers[event] = handler;
+          return () => {};
+        }),
+        updateTask: vi.fn(),
+        updatePipeline: vi.fn(),
+      },
+      authService: {
+        getUser: vi.fn().mockReturnValue({ username: 'testuser' }),
+        getAccessToken: vi.fn().mockReturnValue('token'),
+      },
+      pipelineClient: {
+        get: vi.fn().mockResolvedValue({
+          id: 'p1',
+          name: 'Pipe 1',
+          repo_uri: 'https://github.com/example/repo.git',
+        }),
+        getGitStatus: vi.fn().mockResolvedValue({ staged: 0, unstaged: 0, untracked: 0 }),
+      },
+      taskClient: {
+        listByPipeline: vi.fn().mockResolvedValue([]),
+        listCompletedByPipeline: vi.fn().mockResolvedValue({ tasks: [], total_count: 0 }),
+      },
+      pullRequestClient: { getPullRequestsByPipeline: vi.fn().mockResolvedValue([]) },
+      systemClient: { isOllamaAvailable: vi.fn().mockResolvedValue(true) },
+      coderBotService: {
+        getCurrentSession: vi.fn(() => null),
+        refreshSession: vi.fn().mockResolvedValue(null),
+        onSessionChange: vi.fn(() => () => {}),
+        reconnect: vi.fn().mockResolvedValue(undefined),
+      },
+      interactiveCodingService: {
+        getCurrentSession: vi.fn(() => null),
+        refreshSession: vi.fn().mockResolvedValue(null),
+        onSessionChange: vi.fn(() => () => {}),
+        startSession: vi.fn().mockResolvedValue(undefined),
+        stopSession: vi.fn().mockResolvedValue(undefined),
+      },
+    };
+
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn(() => null),
+      setItem: vi.fn(),
+    });
+  });
+
+  it('shows the start button for remote pipelines', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await view.loadPipeline();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const startBtn = container.querySelector('#start-interactive-btn') as HTMLElement;
+    expect(startBtn).not.toBeNull();
+    expect(startBtn.classList.contains('hidden')).toBe(false);
+  });
+
+  it('hides the start button for local pipelines', async () => {
+    mockContext.pipelineClient.get.mockResolvedValue({ id: 'p1', name: 'Pipe 1' });
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await view.loadPipeline();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const startBtn = container.querySelector('#start-interactive-btn') as HTMLElement;
+    expect(startBtn.classList.contains('hidden')).toBe(true);
+  });
+
+  it('start_interactive_session calls the service for remote pipelines', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await view.loadPipeline();
+
+    const action = getAction('start_interactive_session');
+    await action(null, document.createElement('button'));
+
+    expect(mockContext.interactiveCodingService.startSession).toHaveBeenCalledWith('p1');
+  });
+
+  it('start_interactive_session is a no-op for local pipelines', async () => {
+    mockContext.pipelineClient.get.mockResolvedValue({ id: 'p1', name: 'Pipe 1' });
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await view.loadPipeline();
+
+    const action = getAction('start_interactive_session');
+    await action(null, document.createElement('button'));
+
+    expect(mockContext.interactiveCodingService.startSession).not.toHaveBeenCalled();
+  });
+
+  it('stop_interactive_session calls the service', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+
+    const action = getAction('stop_interactive_session');
+    await action(null, document.createElement('button'));
+
+    expect(mockContext.interactiveCodingService.stopSession).toHaveBeenCalledWith('p1');
+  });
+
+  it('shows the InteractiveCodingView XOR the TaskItem and switches on start/stop', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await view.loadPipeline();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const selected = container.querySelector('#selected-task-view') as HTMLElement;
+    const mount = container.querySelector('#interactive-coding-view-mount') as HTMLElement;
+    expect(selected.classList.contains('hidden')).toBe(false);
+    expect(mount.classList.contains('hidden')).toBe(true);
+
+    // The session starts (e.g. from another tab): the handler re-attaches and
+    // switches into interactive mode.
+    mockContext.interactiveCodingService.getCurrentSession.mockReturnValue({
+      pipelineId: 'p1',
+      active: true,
+      busy: false,
+    });
+    mockContext.interactiveCodingService.refreshSession.mockResolvedValue({
+      pipelineId: 'p1',
+      active: true,
+      busy: false,
+    });
+
+    dataManagerHandlers['ws:INTERACTIVE_STARTED:p1']({ pipeline_id: 'p1' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(InteractiveCodingView).toHaveBeenCalled();
+    expect((view as any).interactiveMode).toBe(true);
+    expect(selected.classList.contains('hidden')).toBe(true);
+    expect(mount.classList.contains('hidden')).toBe(false);
+
+    // Toggling back shows the TaskItem while keeping the session mounted.
+    getAction('toggle_interactive_view')(null, document.createElement('button'));
+    expect(selected.classList.contains('hidden')).toBe(false);
+    expect(mount.classList.contains('hidden')).toBe(true);
+
+    // Stopping switches back to the TaskItem and tears the view down.
+    mockContext.interactiveCodingService.getCurrentSession.mockReturnValue({
+      pipelineId: 'p1',
+      active: false,
+      busy: false,
+    });
+    dataManagerHandlers['ws:INTERACTIVE_STOPPED:p1']({ pipeline_id: 'p1' });
+    expect((view as any).interactiveMode).toBe(false);
+    expect(selected.classList.contains('hidden')).toBe(false);
+    expect(mount.classList.contains('hidden')).toBe(true);
+    expect((view as any).interactiveCodingView).toBeNull();
   });
 });

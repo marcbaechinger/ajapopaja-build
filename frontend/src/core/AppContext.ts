@@ -31,6 +31,7 @@ import { AuthService } from './AuthService.ts';
 
 import { AssistantService } from './AssistantService';
 import { CoderBotService } from './CoderBotService.ts';
+import { InteractiveCodingService } from './InteractiveCodingService.ts';
 import { DevProcessService } from './DevProcessService.ts';
 import { SearchDialog } from '../ui/components/SearchDialog';
 import { AssistantPanel } from '../ui/components/AssistantPanel';
@@ -60,6 +61,7 @@ export class AppContext {
   public readonly authService: AuthService;
   public readonly assistantService: AssistantService;
   public readonly coderBotService: CoderBotService;
+  public readonly interactiveCodingService: InteractiveCodingService;
   public readonly devProcessService: DevProcessService;
   private state: AppState;
 
@@ -80,6 +82,11 @@ export class AppContext {
     this.dataManager = new DataManager(this.wsClient);
     this.assistantService = new AssistantService(this.wsClient, this.authService);
     this.coderBotService = new CoderBotService(this.wsClient, this.authService);
+    this.interactiveCodingService = new InteractiveCodingService(
+      this.wsClient,
+      this.authService,
+      this.coderBotClient
+    );
     this.devProcessService = new DevProcessService(this.wsClient);
 
     this.initOnePrompt();

@@ -38,6 +38,7 @@ import { PullRequestDialog } from '../components/PullRequestDialog.ts';
 import { DiffDialog } from '../components/DiffDialog.ts';
 import { IteratePullRequestDialog } from '../components/IteratePullRequestDialog.ts';
 import { CoderBotDialog } from '../components/CoderBotDialog.ts';
+import { InteractiveCodingView } from '../components/InteractiveCodingView.ts';
 import { DevServerDialog } from '../components/DevServerDialog.ts';
 import { PiView } from '../components/PiView.ts';
 import { PipelineHeaderView, type DocbotState, type ReviewbotState, type CoderbotState } from '../components/PipelineHeaderView.ts';
@@ -70,6 +71,11 @@ export class PipelineDetailView extends View {
   private pendingSpecEditTaskId: string | null = null;
   private enginePiView: PiView | null = null;
   private enginePiMountedKey: string | null = null;
+
+  // Interactive coding session shown next to (never together with) the TaskItem.
+  private interactiveMode: boolean = false;
+  private interactiveCodingView: InteractiveCodingView | null = null;
+  private interactiveSession: { pipelineId: string; active: boolean } | null = null;
 
   private loadPendingReviews() {
     this.pendingReviews = this.storage.get<string[]>(`pending_reviews:${this.pipelineId}`, []) || [];
@@ -255,6 +261,20 @@ export class PipelineDetailView extends View {
       'ARCHBOT_COMPLETED': () => { this.archbotState = { status: 'none', taskId: null }; },
       'CODERBOT_STARTED': (p) => { this.coderbotState = { status: 'inProgress', taskId: p.task_id }; },
       'CODERBOT_COMPLETED': (p) => { this.coderbotState = { status: 'completed', taskId: p.task_id }; },
+      'INTERACTIVE_STARTED': (p) => {
+        if (p?.pipeline_id && p.pipeline_id !== this.pipelineId) return;
+        // Re-attach to the freshly started session, then switch into the
+        // interactive view for this pipeline.
+        Promise.resolve(this.context.interactiveCodingService?.refreshSession?.()).then(() => {
+          this.interactiveMode = true;
+          this.syncInteractiveSession();
+        });
+      },
+      'INTERACTIVE_STOPPED': (p) => {
+        if (p?.pipeline_id && p.pipeline_id !== this.pipelineId) return;
+        this.interactiveMode = false;
+        this.syncInteractiveSession();
+      },
       'DEV_PROCESS_STARTED': (p) => {
         this.devProcessState = {
           running: true,
@@ -477,6 +497,37 @@ export class PipelineDetailView extends View {
         console.error('Trigger CoderBot error:', error);
         alert('Failed to trigger CoderBot');
       }
+    });
+
+    this.context.actionRegistry.register('start_interactive_session', async () => {
+      // Only remote pipelines (repo_uri set) support an interactive session; the
+      // button is hidden otherwise.
+      if (!this.pipeline?.repo_uri) return;
+
+      try {
+        await this.context.interactiveCodingService.startSession(this.pipelineId);
+        this.interactiveMode = true;
+        this.syncInteractiveSession();
+      } catch (error) {
+        console.error('Start interactive session error:', error);
+        alert('Failed to start interactive session');
+      }
+    });
+
+    this.context.actionRegistry.register('toggle_interactive_view', () => {
+      this.interactiveMode = !this.interactiveMode;
+      this.syncInteractiveSession();
+    });
+
+    this.context.actionRegistry.register('stop_interactive_session', async () => {
+      try {
+        await this.context.interactiveCodingService.stopSession(this.pipelineId);
+      } catch (error) {
+        console.error('Stop interactive session error:', error);
+        alert('Failed to stop interactive session');
+      }
+      this.interactiveMode = false;
+      this.syncInteractiveSession();
     });
 
     this.context.actionRegistry.register('open_review_dialog', async (_e, el) => {
@@ -1179,6 +1230,7 @@ export class PipelineDetailView extends View {
       this.scheduleRefreshGitStatus();
       this.loadDevServerStatus();
       this.updateHeader();
+      this.syncInteractiveSession();
     } catch (error) {
       console.error('Error loading pipeline:', error);
     }
@@ -1347,9 +1399,25 @@ export class PipelineDetailView extends View {
       <div class="flex flex-col gap-8 min-w-0 lg:min-w-[350px]">
         <div class="bg-app-surface/30 p-6 rounded-3xl border border-app-border/30 flex flex-col">
           ${TaskForm.render()}
+          <div id="interactive-session-bar" class="mt-6 flex flex-wrap items-center gap-2">
+            <button id="start-interactive-btn" data-action-click="start_interactive_session" type="button"
+              class="hidden px-3 py-1.5 rounded text-xs font-medium bg-app-accent-2 text-white hover:bg-app-accent-2/80 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
+              title="Start an interactive Pi coding session in the pipeline repository">
+              ${'\u26a1'} Start Interactive Session
+            </button>
+            <button id="toggle-interactive-btn" data-action-click="toggle_interactive_view" type="button"
+              class="hidden px-3 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer">
+              Switch to Interactive Session
+            </button>
+            <button id="stop-interactive-btn" data-action-click="stop_interactive_session" type="button"
+              class="hidden px-3 py-1.5 rounded text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer">
+              Stop Interactive Session
+            </button>
+          </div>
           <div id="selected-task-view" class="mt-6">
             <p class="text-app-muted/60 text-xs italic text-center border border-dashed border-app-border/40 rounded-xl py-6 px-3">Select a task from the backlog to open it here.</p>
           </div>
+          <div id="interactive-coding-view-mount" class="mt-6 hidden"></div>
           <div id="col-prep" class="space-y-10 mt-6">
             <p class="text-app-muted animate-pulse text-center py-10">Loading backlog...</p>
           </div>
@@ -1406,8 +1474,18 @@ export class PipelineDetailView extends View {
     const unsub = this.context.coderBotService?.onSessionChange?.(cb);
     if (unsub) this.unsubs.push(unsub);
 
+    // React to interactive session changes so the slot/tabs stay accurate and
+    // re-attach after a reload.
+    const interactiveCb = () => this.syncInteractiveSession();
+    const interactiveUnsub =
+      this.context.interactiveCodingService?.onSessionChange?.(interactiveCb);
+    if (interactiveUnsub) this.unsubs.push(interactiveUnsub);
+
     // Reconnect a running CoderBot session to this view (e.g. after a reload).
     this.refreshEnginePiSlot();
+    Promise.resolve(this.context.interactiveCodingService?.refreshSession?.()).then(() => {
+      this.syncInteractiveSession();
+    });
   }
 
   private async checkOllama() {
@@ -1425,6 +1503,7 @@ export class PipelineDetailView extends View {
       this.enginePiView.destroy();
       this.enginePiView = null;
     }
+    this.teardownInteractiveCodingView();
     this.unsubs.forEach(unsub => unsub());
     this.unsubs = [];
     this.pendingSpecEditTaskId = null;
@@ -1773,6 +1852,97 @@ export class PipelineDetailView extends View {
   private async refreshEnginePiSlot() {
     await this.context.coderBotService?.refreshSession?.();
     this.updateEnginePiSlot();
+  }
+
+  /** Whether the active interactive session belongs to the current pipeline. */
+  private isInteractiveSessionMine(): boolean {
+    const session = this.context.interactiveCodingService?.getCurrentSession?.();
+    return !!session && !!session.active && session.pipelineId === this.pipelineId;
+  }
+
+  /**
+   * Synchronises the interactive session slot: mounts/tears down the
+   * InteractiveCodingView and keeps the TaskItem/InteractiveCodingView
+   * visibility mutually exclusive.
+   */
+  private syncInteractiveSession() {
+    if (!this.container) return;
+
+    const session = this.context.interactiveCodingService?.getCurrentSession?.() ?? null;
+    this.interactiveSession = session?.pipelineId
+      ? { pipelineId: session.pipelineId, active: !!session.active }
+      : null;
+
+    if (this.isInteractiveSessionMine()) {
+      if (!this.interactiveCodingView) {
+        const mount = this.container.querySelector(
+          '#interactive-coding-view-mount'
+        ) as HTMLElement | null;
+        if (mount) {
+          this.interactiveCodingView = new InteractiveCodingView(
+            this.context.interactiveCodingService,
+            mount,
+            {
+              pipelineId: this.pipelineId,
+              onStop: () => {
+                this.interactiveMode = false;
+                this.context.interactiveCodingService.stopSession(this.pipelineId).catch((e: unknown) => {
+                  console.error('Failed to stop interactive session:', e);
+                });
+                this.syncInteractiveSession();
+              },
+            }
+          );
+          this.interactiveCodingView.render();
+        }
+      }
+    } else {
+      this.teardownInteractiveCodingView();
+      this.interactiveMode = false;
+    }
+
+    this.updateInteractiveSlot();
+  }
+
+  private teardownInteractiveCodingView() {
+    if (this.interactiveCodingView) {
+      this.interactiveCodingView.destroy();
+      this.interactiveCodingView = null;
+    }
+  }
+
+  /**
+   * Shows/hides the session controls and ensures only one of the TaskItem and
+   * the InteractiveCodingView is visible at a time.
+   */
+  private updateInteractiveSlot() {
+    if (!this.container) return;
+    const startBtn = this.container.querySelector('#start-interactive-btn') as HTMLElement | null;
+    const toggleBtn = this.container.querySelector('#toggle-interactive-btn') as HTMLElement | null;
+    const stopBtn = this.container.querySelector('#stop-interactive-btn') as HTMLElement | null;
+    const selected = this.container.querySelector('#selected-task-view') as HTMLElement | null;
+    const mount = this.container.querySelector('#interactive-coding-view-mount') as HTMLElement | null;
+
+    const isRemote = !!this.pipeline?.repo_uri;
+    const mine =
+      !!this.interactiveSession &&
+      this.interactiveSession.active &&
+      this.interactiveSession.pipelineId === this.pipelineId;
+
+    startBtn?.classList.toggle('hidden', !isRemote || mine);
+    toggleBtn?.classList.toggle('hidden', !mine);
+    stopBtn?.classList.toggle('hidden', !mine);
+
+    // Only one of the TaskItem and the InteractiveCodingView is visible at once.
+    const showInteractive = mine && this.interactiveMode;
+    selected?.classList.toggle('hidden', showInteractive);
+    mount?.classList.toggle('hidden', !showInteractive);
+
+    if (toggleBtn) {
+      toggleBtn.textContent = this.interactiveMode
+        ? 'Switch to Task'
+        : 'Switch to Interactive Session';
+    }
   }
 
   private refreshBacklog() {

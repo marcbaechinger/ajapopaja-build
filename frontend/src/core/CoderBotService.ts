@@ -16,69 +16,31 @@
 
 import { WebSocketClient } from './WebSocketClient.ts';
 import { AuthService } from './AuthService.ts';
+import { PiLogReducer } from './PiLogReducer.ts';
+import type { RenderBlock } from './PiLogReducer.ts';
+
+export type { RenderBlock, BlockKind } from './PiLogReducer.ts';
 
 export type CoderBotListener = (content: string) => void;
 
-export type BlockKind =
-  | 'text'
-  | 'thinking'
-  | 'tool'
-  | 'bash'
-  | 'notice'
-  | 'error'
-  | 'divider'
-  | 'verification';
-
-/**
- * A single structured, rendered line/block in the CoderBot activity log.
- */
-export interface RenderBlock {
-  id: string;
-  kind: BlockKind;
-  /** Accumulated content for text/thinking/bash blocks. */
-  text?: string;
-  /** Headline (e.g. "→ Calling write"). */
-  header?: string;
-  /** Extra detail lines (tool args, queue items, retry info). */
-  sub?: string[];
-  /** Marks error blocks for red tinting. */
-  error?: boolean;
-  /**
-   * The original command/argument captured when a tool started (e.g. the bash
-   * command or the file a read/write tool operated on). Preserving it keeps
-   * "what was executed" visible after the tool completes and its header becomes
-   * "✓ bash finished"; the view prepends it before the result/output.
-   */
-  command?: string;
-}
-
 type BlockListener = (blocks: RenderBlock[]) => void;
-
-interface OpenBlock {
-  block: RenderBlock;
-  buffer: string;
-  /** The original command/argument captured at tool start (see RenderBlock.command). */
-  command?: string;
-}
 
 /**
  * Service to manage the real-time activity log of the CoderBot.
  *
  * It subscribes to the structured `CODERBOT_RPC_EVENT` stream (the raw Pi RPC event
  * forwarded by the backend) and reduces it into a list of stable `RenderBlock`s that
- * the UI renders. Legacy `ASSISTANT_STREAM` handling is preserved for bots other than
- * CoderBot.
+ * the UI renders. The reduction itself lives in the shared {@link PiLogReducer},
+ * which the interactive coding service reuses for an identical log rendering.
+ * Legacy `ASSISTANT_STREAM` handling is preserved for bots other than CoderBot.
  */
 export class CoderBotService {
   private wsClient: WebSocketClient;
   private authService: AuthService;
   private messageHistory: string = '';
-  private blocks: RenderBlock[] = [];
-  /** Live blocks still receiving streaming deltas, keyed by a logical key. */
-  private openBlocks: Map<string, OpenBlock> = new Map();
-  private nextBlockId: number = 1;
+  /** Shared RPC-event -> RenderBlock reducer. */
+  private logReducer = new PiLogReducer();
   private listeners: Set<CoderBotListener> = new Set();
-  private blockListeners: Set<BlockListener> = new Set();
   private stateListeners: Set<(active: boolean) => void> = new Set();
   private sessionListeners: Set<() => void> = new Set();
   private currentTaskId: string | null = null;
@@ -88,17 +50,6 @@ export class CoderBotService {
   private loadedSessionKey: string | null = null;
   /** In-flight history load so concurrent reconnects share one fetch. */
   private historyLoadPromise: Promise<void> | null = null;
-  /**
-   * Depth counter for notification suspension. While > 0, {@link emitBlocks}
-   * only records that an update is pending instead of notifying listeners.
-   * Used to batch the (potentially enormous) history replay into a single
-   * snapshot: replaying a long session otherwise fires one full block-list
-   * notification per persisted RPC event, which makes listeners reconcile the
-   * growing log once per event (O(n²)) and freezes the page for seconds.
-   */
-  private emitSuspensionDepth: number = 0;
-  /** Whether an emit was requested while notifications were suspended. */
-  private emitPending: boolean = false;
   /**
    * Wall-clock start (epoch ms) of the current/last session, as reported by the
    * backend so the "Running since" elapsed-time display can resume from the real
@@ -150,7 +101,7 @@ export class CoderBotService {
 
     this.wsClient.on('CODERBOT_RPC_EVENT', (msg) => {
       if (msg.payload?.bot_type === 'coderbot') {
-        this.handleRpcEvent(msg.payload?.event);
+        this.logReducer.handleEvent(msg.payload?.event);
       }
     });
 
@@ -158,7 +109,7 @@ export class CoderBotService {
     // so the user can see whether the mandatory test suite passed or failed.
     this.wsClient.on('CODERBOT_VERIFICATION', (msg) => {
       if (msg.payload?.bot_type === 'coderbot') {
-        this.addVerificationBlock(msg.payload.result);
+        this.logReducer.addVerificationBlock(msg.payload.result);
       }
     });
 
@@ -166,359 +117,12 @@ export class CoderBotService {
     // so PiView can tell the user the mandatory test suite is now running.
     this.wsClient.on('CODERBOT_VERIFICATION_STARTED', (msg) => {
       if (msg.payload?.bot_type === 'coderbot') {
-        this.addBlock({ kind: 'notice', text: '● Verification: running tests…' });
+        this.logReducer.addBlock({
+          kind: 'notice',
+          text: '● Verification: running tests…',
+        });
       }
     });
-  }
-
-  // ---------------------------------------------------------------------------
-  // RPC event -> render block reducer
-  // ---------------------------------------------------------------------------
-
-  private handleRpcEvent(event: any) {
-    const type = event?.type;
-    if (!type) return;
-
-    switch (type) {
-      case 'message_update':
-        this.handleMessageUpdate(event.assistantMessageEvent);
-        break;
-      case 'message_start':
-      case 'message_end':
-        // Close any streaming text/thinking blocks so each message's content stays
-        // in its own block (contentIndex restarts at 0 per message).
-        this.closeStreamingBlocks(['text', 'thinking']);
-        break;
-      case 'agent_start':
-        this.addBlock({ kind: 'notice', text: '● Agent started' });
-        break;
-      case 'agent_end':
-        this.addBlock({
-          kind: 'notice',
-          text: `● Agent run completed${event.willRetry ? ' — will auto-retry' : ''}`,
-        });
-        break;
-      case 'agent_settled':
-        this.addBlock({ kind: 'notice', text: '● Agent settled (no pending work)' });
-        break;
-      case 'bash_execution_update':
-        this.handleBashUpdate(event);
-        break;
-      case 'tool_execution_start':
-        this.handleToolStart(event);
-        break;
-      case 'tool_execution_update':
-        this.handleToolUpdate(event);
-        break;
-      case 'tool_execution_end':
-        this.finishTool(event, event.isError);
-        break;
-      case 'queue_update':
-        this.handleQueueUpdate(event);
-        break;
-      case 'compaction_start':
-        this.addBlock({
-          kind: 'notice',
-          text: `● Compacting… (${event.reason || 'threshold'})`,
-        });
-        break;
-      case 'compaction_end':
-        this.handleCompactionEnd(event);
-        break;
-      case 'auto_retry_start':
-        this.addBlock({
-          kind: 'notice',
-          text: `● Auto-retry (${event.attempt}/${event.maxAttempts})…`,
-        });
-        break;
-      case 'auto_retry_end':
-        this.addBlock({
-          kind: 'notice',
-          text: event.success
-            ? `● Auto-retry succeeded (attempt ${event.attempt})`
-            : `● Auto-retry failed: ${event.finalError || 'unknown error'}`,
-          error: !event.success,
-        });
-        break;
-      case 'summarization_retry_scheduled':
-        this.addBlock({
-          kind: 'notice',
-          text: `● Summarization retry scheduled (${event.attempt}/${event.maxAttempts})…`,
-        });
-        break;
-      case 'summarization_retry_attempt_start':
-        this.addBlock({
-          kind: 'notice',
-          text: `● Retrying summarization…`,
-        });
-        break;
-      case 'summarization_retry_finished':
-        this.addBlock({ kind: 'notice', text: '● Summarization retry finished' });
-        break;
-      case 'extension_error':
-        this.addBlock({
-          kind: 'error',
-          text: `Extension error (${event.extensionPath || ''}): ${event.error || event.event || ''}`,
-          error: true,
-        });
-        break;
-      default:
-        // Unknown/ignored event types are logged on the backend; nothing to render.
-        break;
-    }
-  }
-
-  private handleMessageUpdate(delta: any) {
-    const deltaType = delta?.type;
-    if (deltaType === 'text_delta' && delta.delta) {
-      this.appendStreaming('text', `text:${delta.contentIndex ?? 0}`, delta.delta);
-    } else if (deltaType === 'thinking_delta' && delta.delta) {
-      this.appendStreaming('thinking', `thinking:${delta.contentIndex ?? 0}`, delta.delta);
-    } else if (deltaType === 'toolcall_start') {
-      this.openToolCall(delta.id, delta.toolName ?? 'tool');
-    } else if (deltaType === 'toolcall_delta') {
-      const open = this.openBlocks.get(`tool:${delta.id}`);
-      if (open) {
-        open.buffer += delta.delta ?? '';
-        this.updateBlock(open.block.id, { text: open.buffer });
-      }
-    } else if (deltaType === 'toolcall_end') {
-      const open = this.openBlocks.get(`tool:${delta.id}`);
-      if (open) {
-        this.updateBlock(open.block.id, {
-          header: `✓ ${delta.toolCall?.name ?? 'tool'}`,
-        });
-      }
-    }
-  }
-
-  private openToolCall(id: unknown, name: string) {
-    if (id === undefined || id === null) {
-      id = `gen_${this.nextBlockId}`;
-    }
-    const key = `tool:${id}`;
-    if (this.openBlocks.has(key)) {
-      return;
-    }
-    const block: RenderBlock = {
-      id: this.nextId(),
-      kind: 'tool',
-      header: `→ Calling ${name}…`,
-      text: '',
-    };
-    this.openBlocks.set(key, { block, buffer: '' });
-    this.blocks.push(block);
-    this.emitBlocks();
-  }
-
-  private handleBashUpdate(event: any) {
-    const key = `bash:${event.id ?? '_no_id'}`;
-    this.appendStreaming('bash', key, event.delta ?? '');
-  }
-
-  private handleToolStart(event: any) {
-    const key = `tool:${event.toolCallId}`;
-    let open = this.openBlocks.get(key);
-    if (!open) {
-      const block: RenderBlock = {
-        id: this.nextId(),
-        kind: 'tool',
-        header: `→ Running ${event.toolName ?? 'tool'}…`,
-        text: '',
-      };
-      open = { block, buffer: '' };
-      this.openBlocks.set(key, open);
-      this.blocks.push(block);
-    } else {
-      this.updateBlock(open.block.id, {
-        header: `→ Running ${event.toolName ?? 'tool'}…`,
-      });
-    }
-    const args = event.args?.command ?? this.previewArgs(event.args);
-    if (args) {
-      const command = String(args);
-      open.buffer = command;
-      open.command = command;
-      this.updateBlock(open.block.id, { text: open.buffer, command });
-    }
-  }
-
-  private handleToolUpdate(event: any) {
-    const open = this.openBlocks.get(`tool:${event.toolCallId}`);
-    if (!open) return;
-    const partial = event.partialResult?.content;
-    let text = '';
-    if (Array.isArray(partial)) {
-      text = partial.map((p: any) => p?.text ?? '').join('');
-    } else if (typeof partial === 'string') {
-      text = partial;
-    }
-    if (text) {
-      open.buffer = text;
-      this.updateBlock(open.block.id, { text });
-    }
-  }
-
-  private finishTool(event: any, isError: boolean) {
-    const open = this.openBlocks.get(`tool:${event.toolCallId}`);
-    if (!open) return;
-    const result = event.result?.content;
-    let text = open.buffer;
-    if (Array.isArray(result)) {
-      const joined = result.map((p: any) => p?.text ?? '').join('');
-      if (joined) text = joined;
-    } else if (typeof result === 'string' && result) {
-      text = result;
-    }
-    this.updateBlock(open.block.id, {
-      header: isError ? `✕ ${event.toolName ?? 'tool'} failed` : `✓ ${event.toolName ?? 'tool'} finished`,
-      text,
-      error: isError,
-      // Keep the executed command/file so it stays visible after completion.
-      command: open.command,
-    });
-    this.openBlocks.delete(`tool:${event.toolCallId}`);
-  }
-
-  private handleQueueUpdate(event: any) {
-    const parts: string[] = [];
-    const steering = event.steering ?? [];
-    const followUp = event.followUp ?? [];
-    if (steering.length) parts.push(`steering: ${steering.join(' · ')}`);
-    if (followUp.length) parts.push(`follow-up: ${followUp.join(' · ')}`);
-    this.addBlock({ kind: 'notice', text: parts.length ? `● Queue — ${parts.join(' | ')}` : '● Queue empty' });
-  }
-
-  private handleCompactionEnd(event: any) {
-    const result = event.result;
-    if (event.aborted) {
-      this.addBlock({ kind: 'notice', text: '● Compaction aborted', error: true });
-      return;
-    }
-    if (!result || event.errorMessage) {
-      this.addBlock({
-        kind: 'notice',
-        text: `● Compaction failed: ${event.errorMessage || 'unknown error'}`,
-        error: true,
-      });
-      return;
-    }
-    const tokensBefore = result.tokensBefore ?? '?';
-    const tokensAfter = event.estimatedTokensAfter ?? result.estimatedTokensAfter ?? '?';
-    this.addBlock({
-      kind: 'notice',
-      text: `● Compacted ${tokensBefore} → ${tokensAfter} tokens (will retry: ${event.willRetry ? 'yes' : 'no'})`,
-    });
-  }
-
-  private previewArgs(args: any): string {
-    if (!args) return '';
-    try {
-      return JSON.stringify(args);
-    } catch {
-      return String(args);
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Block helpers
-  // ---------------------------------------------------------------------------
-
-  private nextId(): string {
-    return `blk_${this.nextBlockId++}`;
-  }
-
-  /**
-   * Reducer for a `CODERBOT_VERIFICATION` broadcast. Builds a single
-   * `verification`-kind block summarizing the post-run test suite.
-   */
-  private addVerificationBlock(result: any) {
-    const passed = !!result?.passed;
-    const commands: any[] = Array.isArray(result?.commands)
-      ? result.commands
-      : [];
-    const sub: string[] = [];
-    for (const entry of commands) {
-      const cmd = entry?.cmd ?? '';
-      const exitCode = entry?.exit_code;
-      sub.push(`- ${cmd}  → exit code ${exitCode}`);
-      // Append the (truncated) output tail only for failed commands, matching
-      // the backend's PR summary annotation.
-      if (!passed && exitCode !== 0 && entry?.output_tail) {
-        sub.push(entry.output_tail.slice(0, 500));
-      }
-    }
-    this.addBlock({
-      kind: 'verification',
-      text: passed ? '● Verification: PASSED' : '● Verification: FAILED',
-      sub,
-      error: !passed,
-    });
-  }
-
-  private addBlock(opts: Omit<RenderBlock, 'id'>) {
-    const block: RenderBlock = { id: this.nextId(), ...opts };
-    this.blocks.push(block);
-    this.emitBlocks();
-    return block.id;
-  }
-
-  private appendStreaming(kind: BlockKind, key: string, delta: string) {
-    let open = this.openBlocks.get(key);
-    if (!open) {
-      const block: RenderBlock = { id: this.nextId(), kind, text: '' };
-      open = { block, buffer: '' };
-      this.openBlocks.set(key, open);
-      this.blocks.push(block);
-    }
-    open.buffer += delta;
-    open.block.text = open.buffer;
-    this.emitBlocks();
-  }
-
-  private closeStreamingBlocks(kinds: BlockKind[]) {
-    for (const [key, open] of this.openBlocks) {
-      const kind = open.block.kind;
-      if (kinds.includes(kind)) {
-        this.openBlocks.delete(key);
-      }
-    }
-    // No visual change; closing just separates message boundaries.
-  }
-
-  private updateBlock(id: string, patch: Partial<RenderBlock>) {
-    const block = this.blocks.find((b) => b.id === id);
-    if (!block) return;
-    Object.assign(block, patch);
-    this.emitBlocks();
-  }
-
-  private emitBlocks() {
-    if (this.emitSuspensionDepth > 0) {
-      this.emitPending = true;
-      return;
-    }
-    const snapshot = this.blocks.slice();
-    this.blockListeners.forEach((l) => l(snapshot));
-  }
-
-  /**
-   * Suspends block notifications until the returned release function is called.
-   * Calls are nestable. When the outermost release runs and an update was
-   * requested while suspended, a single consolidated snapshot is emitted.
-   */
-  private suspendEmits(): () => void {
-    this.emitSuspensionDepth++;
-    let released = false;
-    return () => {
-      if (released) return;
-      released = true;
-      this.emitSuspensionDepth = Math.max(0, this.emitSuspensionDepth - 1);
-      if (this.emitSuspensionDepth === 0 && this.emitPending) {
-        this.emitPending = false;
-        this.emitBlocks();
-      }
-    };
   }
 
   // ---------------------------------------------------------------------------
@@ -527,7 +131,7 @@ export class CoderBotService {
 
   /** Returns the structured activity log blocks. */
   public getHistory(): RenderBlock[] {
-    return this.blocks.slice();
+    return this.logReducer.getBlocks();
   }
 
   public getRawHistory(): string {
@@ -543,11 +147,9 @@ export class CoderBotService {
   }
 
   public clearHistory() {
-    this.blocks = [];
-    this.openBlocks.clear();
+    this.logReducer.clear();
     this.messageHistory = '';
     this.currentTaskId = null;
-    this.emitBlocks();
     this.notify('');
   }
 
@@ -558,8 +160,7 @@ export class CoderBotService {
 
   /** Subscribe to structured activity-log changes. Receives the full block list. */
   public onBlocks(listener: BlockListener): () => void {
-    this.blockListeners.add(listener);
-    return () => this.blockListeners.delete(listener);
+    return this.logReducer.onBlocks(listener);
   }
 
   public onSessionStateChange(listener: (active: boolean) => void): () => void {
@@ -658,7 +259,7 @@ export class CoderBotService {
 
     const key = `${this.currentPipelineId ?? ''}:${this.currentTaskId}`;
     if (this.loadedSessionKey === key) {
-      this.emitBlocks();
+      this.logReducer.emit();
       return;
     }
 
@@ -701,16 +302,12 @@ export class CoderBotService {
       // listener (e.g. PiView) reconcile the whole, ever-growing log once per token
       // (O(n²)), freezing the main thread. Instead we emit exactly one snapshot
       // once the replay has finished.
-      const releaseEmits = this.suspendEmits();
+      const releaseEmits = this.logReducer.suspendEmits();
       try {
-        this.blocks = [];
-        this.openBlocks.clear();
-        this.nextBlockId = 1;
+        this.logReducer.clear();
         for (const event of events) {
-          this.handleRpcEvent(event);
+          this.logReducer.handleEvent(event);
         }
-        // Re-publish the fully rebuilt log once (even when it is empty).
-        this.emitBlocks();
       } finally {
         releaseEmits();
       }

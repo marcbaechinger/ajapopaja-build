@@ -12,12 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import status
 
 from api.auth import get_current_user
+from api.coderbot.manager import (
+    InteractiveSessionAlreadyActiveError,
+    InteractiveSessionBusyError,
+    InteractiveSessionNotSupportedError,
+    NoActiveInteractiveSessionError,
+)
 from api.main import app
 
 
@@ -75,5 +81,233 @@ async def test_stop_coderbot_authenticated(async_client, init_mock_db):
             assert response.status_code == status.HTTP_200_OK
             assert response.json()["status"] == "success"
             mock_stop.assert_called_once_with("task_123")
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# Interactive session routes
+# ---------------------------------------------------------------------------
+
+
+def _authenticate():
+    mock_user = AsyncMock()
+    mock_user.username = "testuser"
+    app.dependency_overrides[get_current_user] = lambda: mock_user
+
+
+@pytest.mark.asyncio
+async def test_interactive_session_unauthenticated(async_client, init_mock_db):
+    response = await async_client.get("/api/coderbot/interactive/session")
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.asyncio
+async def test_interactive_start_unauthenticated(async_client, init_mock_db):
+    response = await async_client.post("/api/coderbot/interactive/start/p1")
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.asyncio
+async def test_interactive_message_unauthenticated(async_client, init_mock_db):
+    response = await async_client.post(
+        "/api/coderbot/interactive/message", json={"message": "hi"}
+    )
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.asyncio
+async def test_interactive_stop_unauthenticated(async_client, init_mock_db):
+    response = await async_client.post("/api/coderbot/interactive/stop")
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.asyncio
+async def test_get_interactive_session(async_client, init_mock_db):
+    _authenticate()
+    try:
+        with patch(
+            "api.coderbot.router.coderbot_manager.get_interactive_session"
+        ) as mock_get:
+            mock_get.return_value = {
+                "pipeline_id": "p1",
+                "is_active": True,
+                "start_time": None,
+                "busy": False,
+            }
+            response = await async_client.get("/api/coderbot/interactive/session")
+            assert response.status_code == status.HTTP_200_OK
+            assert response.json()["pipeline_id"] == "p1"
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_start_interactive_session(async_client, init_mock_db):
+    _authenticate()
+    try:
+        with (
+            patch(
+                "api.coderbot.router.Pipeline.get", new_callable=AsyncMock
+            ) as mock_get,
+            patch(
+                "api.coderbot.router.coderbot_manager.start_interactive_session",
+                new_callable=AsyncMock,
+            ) as mock_start,
+        ):
+            pipeline = MagicMock()
+            pipeline.repo_uri = "https://github.com/example/repo.git"
+            mock_get.return_value = pipeline
+            mock_start.return_value = {
+                "pipeline_id": "p1",
+                "is_active": True,
+                "start_time": None,
+                "busy": False,
+            }
+
+            response = await async_client.post("/api/coderbot/interactive/start/p1")
+            assert response.status_code == status.HTTP_202_ACCEPTED
+            assert response.json()["pipeline_id"] == "p1"
+            mock_start.assert_awaited_once_with(pipeline)
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_start_interactive_session_pipeline_not_found(async_client, init_mock_db):
+    _authenticate()
+    try:
+        with patch(
+            "api.coderbot.router.Pipeline.get", new_callable=AsyncMock
+        ) as mock_get:
+            mock_get.return_value = None
+            response = await async_client.post("/api/coderbot/interactive/start/nope")
+            assert response.status_code == status.HTTP_404_NOT_FOUND
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_start_interactive_session_non_remote_pipeline(
+    async_client, init_mock_db
+):
+    _authenticate()
+    try:
+        with (
+            patch(
+                "api.coderbot.router.Pipeline.get", new_callable=AsyncMock
+            ) as mock_get,
+            patch(
+                "api.coderbot.router.coderbot_manager.start_interactive_session",
+                new_callable=AsyncMock,
+            ) as mock_start,
+        ):
+            mock_get.return_value = MagicMock(repo_uri=None)
+            mock_start.side_effect = InteractiveSessionNotSupportedError("remote only")
+            response = await async_client.post("/api/coderbot/interactive/start/p1")
+            assert response.status_code == status.HTTP_400_BAD_REQUEST
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_start_interactive_session_already_active(async_client, init_mock_db):
+    _authenticate()
+    try:
+        with (
+            patch(
+                "api.coderbot.router.Pipeline.get", new_callable=AsyncMock
+            ) as mock_get,
+            patch(
+                "api.coderbot.router.coderbot_manager.start_interactive_session",
+                new_callable=AsyncMock,
+            ) as mock_start,
+        ):
+            mock_get.return_value = MagicMock()
+            mock_start.side_effect = InteractiveSessionAlreadyActiveError("active")
+            response = await async_client.post("/api/coderbot/interactive/start/p1")
+            assert response.status_code == status.HTTP_409_CONFLICT
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_send_interactive_message(async_client, init_mock_db):
+    _authenticate()
+    try:
+        with patch(
+            "api.coderbot.router.coderbot_manager.send_interactive_message",
+            new_callable=AsyncMock,
+        ) as mock_send:
+            response = await async_client.post(
+                "/api/coderbot/interactive/message", json={"message": "do it"}
+            )
+            assert response.status_code == status.HTTP_202_ACCEPTED
+            mock_send.assert_awaited_once_with("do it")
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_send_interactive_message_no_session(async_client, init_mock_db):
+    _authenticate()
+    try:
+        with patch(
+            "api.coderbot.router.coderbot_manager.send_interactive_message",
+            new_callable=AsyncMock,
+        ) as mock_send:
+            mock_send.side_effect = NoActiveInteractiveSessionError("none")
+            response = await async_client.post(
+                "/api/coderbot/interactive/message", json={"message": "hi"}
+            )
+            assert response.status_code == status.HTTP_404_NOT_FOUND
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_send_interactive_message_busy(async_client, init_mock_db):
+    _authenticate()
+    try:
+        with patch(
+            "api.coderbot.router.coderbot_manager.send_interactive_message",
+            new_callable=AsyncMock,
+        ) as mock_send:
+            mock_send.side_effect = InteractiveSessionBusyError("busy")
+            response = await async_client.post(
+                "/api/coderbot/interactive/message", json={"message": "hi"}
+            )
+            assert response.status_code == status.HTTP_409_CONFLICT
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_stop_interactive_session(async_client, init_mock_db):
+    _authenticate()
+    try:
+        with patch(
+            "api.coderbot.router.coderbot_manager.stop_interactive_session",
+            new_callable=AsyncMock,
+        ) as mock_stop:
+            mock_stop.return_value = True
+            response = await async_client.post("/api/coderbot/interactive/stop")
+            assert response.status_code == status.HTTP_200_OK
+            assert response.json()["status"] == "success"
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_stop_interactive_session_not_found(async_client, init_mock_db):
+    _authenticate()
+    try:
+        with patch(
+            "api.coderbot.router.coderbot_manager.stop_interactive_session",
+            new_callable=AsyncMock,
+        ) as mock_stop:
+            mock_stop.return_value = False
+            response = await async_client.post("/api/coderbot/interactive/stop")
+            assert response.status_code == status.HTTP_404_NOT_FOUND
     finally:
         app.dependency_overrides.clear()

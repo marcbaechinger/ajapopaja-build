@@ -14,11 +14,18 @@
 
 import asyncio
 import importlib
-from unittest.mock import MagicMock, patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from api.coderbot.manager import CoderBotManager
+from api.coderbot.manager import (
+    CoderBotManager,
+    InteractiveSessionAlreadyActiveError,
+    InteractiveSessionBusyError,
+    InteractiveSessionNotSupportedError,
+    NoActiveInteractiveSessionError,
+)
 from core import config
 
 
@@ -279,3 +286,282 @@ async def test_get_active_session_includes_start_time():
         "is_active": True,
         "start_time": "2026-01-02T03:04:05+00:00",
     }
+
+
+# ---------------------------------------------------------------------------
+# Interactive session management
+# ---------------------------------------------------------------------------
+
+
+def _interactive_session_mock(**overrides):
+    session = MagicMock()
+    session.pipeline_id = "p1"
+    session.bot_type = "interactive"
+    session.start_time = datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
+    session.start_interactive = AsyncMock()
+    session.stop = AsyncMock()
+    session.wait = AsyncMock(return_value=None)
+    # Pretend the session already emitted its own start broadcast by default.
+    session._started_broadcast = True
+    session._stopped_broadcast = False
+    for key, value in overrides.items():
+        setattr(session, key, value)
+    return session
+
+
+@pytest.mark.asyncio
+async def test_start_interactive_session_rejects_second_session():
+    manager = CoderBotManager()
+    manager._interactive_session = MagicMock()
+    pipeline = MagicMock()
+    pipeline.repo_uri = "https://github.com/example/repo.git"
+
+    with pytest.raises(InteractiveSessionAlreadyActiveError):
+        await manager.start_interactive_session(pipeline)
+
+
+@pytest.mark.asyncio
+async def test_start_interactive_session_requires_remote_repo():
+    manager = CoderBotManager()
+    pipeline = MagicMock()
+    pipeline.repo_uri = None
+
+    with pytest.raises(InteractiveSessionNotSupportedError):
+        await manager.start_interactive_session(pipeline)
+
+
+@pytest.mark.asyncio
+async def test_start_interactive_session_runs_in_remote_repo_without_sandbox():
+    manager = CoderBotManager()
+    manager.set_default_model("custom-model:cloud")
+
+    pipeline = MagicMock()
+    pipeline.id = "p1"
+    pipeline.repo_uri = "https://github.com/example/repo.git"
+    pipeline.workspace_abs_path = "/tmp/remote/repo"
+
+    session = _interactive_session_mock()
+
+    with (
+        patch(
+            "api.coderbot.manager.git_utils.ensure_repo_cloned", new_callable=AsyncMock
+        ) as mock_clone,
+        patch(
+            "api.coderbot.manager.InteractivePiSession", return_value=session
+        ) as mock_cls,
+        patch.object(manager, "_watch_interactive_session", new_callable=AsyncMock),
+        patch("api.coderbot.manager.ws_manager.broadcast", new_callable=AsyncMock),
+        patch("api.coderbot.manager.CoderBotSession") as mock_batch,
+    ):
+        info = await manager.start_interactive_session(pipeline)
+
+    mock_clone.assert_awaited_once_with(pipeline)
+    mock_cls.assert_called_once_with(
+        model="custom-model:cloud", cwd="/tmp/remote/repo", pipeline_id="p1"
+    )
+    session.start_interactive.assert_awaited_once_with(cwd="/tmp/remote/repo")
+    # No batch/sandbox session is created for an interactive session.
+    mock_batch.assert_not_called()
+    assert manager._interactive_session is session
+    assert info["pipeline_id"] == "p1"
+    assert info["is_active"] is True
+    assert info["busy"] is False
+    assert info["start_time"] == "2026-01-02T03:04:05+00:00"
+
+
+@pytest.mark.asyncio
+async def test_start_interactive_session_broadcasts_started():
+    manager = CoderBotManager()
+    pipeline = MagicMock()
+    pipeline.id = "p1"
+    pipeline.repo_uri = "https://github.com/example/repo.git"
+    pipeline.workspace_abs_path = "/tmp/remote/repo"
+
+    session = _interactive_session_mock(_started_broadcast=False)
+
+    with (
+        patch(
+            "api.coderbot.manager.git_utils.ensure_repo_cloned", new_callable=AsyncMock
+        ),
+        patch("api.coderbot.manager.InteractivePiSession", return_value=session),
+        patch.object(manager, "_watch_interactive_session", new_callable=AsyncMock),
+        patch(
+            "api.coderbot.manager.ws_manager.broadcast", new_callable=AsyncMock
+        ) as mock_broadcast,
+    ):
+        await manager.start_interactive_session(pipeline)
+
+    started = [
+        c.args[0]
+        for c in mock_broadcast.await_args_list
+        if c.args[0].type == "INTERACTIVE_STARTED"
+    ]
+    assert len(started) == 1
+    assert started[0].payload["pipeline_id"] == "p1"
+    assert started[0].payload["bot_type"] == "interactive"
+
+
+@pytest.mark.asyncio
+async def test_get_interactive_session_returns_info():
+    manager = CoderBotManager()
+    assert manager.get_interactive_session() is None
+
+    session = _interactive_session_mock()
+    manager._interactive_session = session
+    assert manager.get_interactive_session() == {
+        "pipeline_id": "p1",
+        "is_active": True,
+        "start_time": "2026-01-02T03:04:05+00:00",
+        "busy": False,
+    }
+
+
+@pytest.mark.asyncio
+async def test_send_interactive_message_requires_session():
+    manager = CoderBotManager()
+    with pytest.raises(NoActiveInteractiveSessionError):
+        await manager.send_interactive_message("hello")
+
+
+@pytest.mark.asyncio
+async def test_send_interactive_message_rejects_when_busy():
+    manager = CoderBotManager()
+    manager._interactive_session = _interactive_session_mock()
+
+    async def _never():
+        await asyncio.sleep(3600)
+
+    manager._interactive_turn_task = asyncio.create_task(_never())
+    try:
+        with pytest.raises(InteractiveSessionBusyError):
+            await manager.send_interactive_message("again")
+    finally:
+        manager._interactive_turn_task.cancel()
+        try:
+            await manager._interactive_turn_task
+        except asyncio.CancelledError:
+            pass
+
+
+@pytest.mark.asyncio
+async def test_send_interactive_message_spawns_background_turn():
+    manager = CoderBotManager()
+    session = _interactive_session_mock()
+    manager._interactive_session = session
+
+    with patch.object(
+        manager, "_drive_interactive_turn", new_callable=AsyncMock
+    ) as mock_drive:
+        await manager.send_interactive_message("hello")
+        assert manager._interactive_turn_task is not None
+        await manager._interactive_turn_task
+
+    mock_drive.assert_awaited_once_with(session, "hello")
+
+
+@pytest.mark.asyncio
+async def test_drive_interactive_turn_broadcasts_turn_ended():
+    manager = CoderBotManager()
+
+    class FakeInteractiveSession:
+        pipeline_id = "p1"
+        bot_type = "interactive"
+
+        async def send_user_message(self, text):
+            yield "chunk"
+
+    with patch(
+        "api.coderbot.manager.ws_manager.broadcast", new_callable=AsyncMock
+    ) as mock_broadcast:
+        await manager._drive_interactive_turn(FakeInteractiveSession(), "hi")
+
+    types = [c.args[0].type for c in mock_broadcast.await_args_list]
+    assert "INTERACTIVE_TURN_ENDED" in types
+    assert manager._interactive_turn_task is None
+
+
+@pytest.mark.asyncio
+async def test_drive_interactive_turn_broadcasts_error_on_failure():
+    manager = CoderBotManager()
+
+    class FailingInteractiveSession:
+        pipeline_id = "p1"
+        bot_type = "interactive"
+
+        async def send_user_message(self, text):
+            raise RuntimeError("boom")
+            yield ""  # pragma: no cover - marks this an async generator
+
+    with patch(
+        "api.coderbot.manager.ws_manager.broadcast", new_callable=AsyncMock
+    ) as mock_broadcast:
+        await manager._drive_interactive_turn(FailingInteractiveSession(), "hi")
+
+    errors = [
+        c.args[0]
+        for c in mock_broadcast.await_args_list
+        if c.args[0].type == "INTERACTIVE_ERROR"
+    ]
+    assert len(errors) == 1
+    assert errors[0].payload["message"] == "boom"
+    assert manager._interactive_turn_task is None
+
+
+@pytest.mark.asyncio
+async def test_stop_interactive_session_terminates_and_clears():
+    manager = CoderBotManager()
+    session = _interactive_session_mock()
+    manager._interactive_session = session
+
+    with patch(
+        "api.coderbot.manager.ws_manager.broadcast", new_callable=AsyncMock
+    ) as mock_broadcast:
+        stopped = await manager.stop_interactive_session()
+
+    assert stopped is True
+    session.stop.assert_awaited_once()
+    assert manager._interactive_session is None
+    stopped_msgs = [
+        c.args[0]
+        for c in mock_broadcast.await_args_list
+        if c.args[0].type == "INTERACTIVE_STOPPED"
+    ]
+    assert len(stopped_msgs) == 1
+
+
+@pytest.mark.asyncio
+async def test_stop_interactive_session_returns_false_without_session():
+    manager = CoderBotManager()
+    assert await manager.stop_interactive_session() is False
+
+
+@pytest.mark.asyncio
+async def test_watch_interactive_session_broadcasts_stopped_on_unexpected_exit():
+    manager = CoderBotManager()
+    session = _interactive_session_mock()
+    manager._interactive_session = session
+
+    with patch(
+        "api.coderbot.manager.ws_manager.broadcast", new_callable=AsyncMock
+    ) as mock_broadcast:
+        await manager._watch_interactive_session(session)
+
+    assert manager._interactive_session is None
+    stopped_msgs = [
+        c.args[0]
+        for c in mock_broadcast.await_args_list
+        if c.args[0].type == "INTERACTIVE_STOPPED"
+    ]
+    assert len(stopped_msgs) == 1
+
+
+@pytest.mark.asyncio
+async def test_batch_and_interactive_sessions_coexist():
+    manager = CoderBotManager()
+    batch = MagicMock()
+    interactive = MagicMock()
+    manager._active_session = batch
+    manager._interactive_session = interactive
+
+    assert manager._active_session is batch
+    assert manager._interactive_session is interactive

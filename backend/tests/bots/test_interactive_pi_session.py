@@ -13,12 +13,13 @@
 # limitations under the License.
 
 import asyncio
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from api.coderbot.pi_rpc_process import PiRpcProcess
 from api.coderbot.session import InteractivePiSession
+from api.websocket_manager import WSMessage
 
 
 class FakeStdin:
@@ -167,3 +168,132 @@ async def test_send_user_message_yields_nothing_on_failed_ack():
     chunks = [chunk async for chunk in session.send_user_message("Hi")]
 
     assert chunks == []
+
+
+@pytest.mark.asyncio
+async def test_broadcast_rpc_emits_interactive_rpc_event():
+    session = InteractivePiSession(pipeline_id="p1")
+    with patch(
+        "api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock
+    ) as mock_broadcast:
+        await session._broadcast_rpc({"type": "agent_settled"})
+
+    mock_broadcast.assert_awaited_once()
+    msg = mock_broadcast.await_args.args[0]
+    assert isinstance(msg, WSMessage)
+    assert msg.type == "INTERACTIVE_RPC_EVENT"
+    assert msg.payload["pipeline_id"] == "p1"
+    assert msg.payload["bot_type"] == "interactive"
+    assert msg.payload["event"] == {"type": "agent_settled"}
+
+
+@pytest.mark.asyncio
+async def test_broadcast_rpc_is_skipped_without_pipeline_id():
+    session = InteractivePiSession()
+    with patch(
+        "api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock
+    ) as mock_broadcast:
+        await session._broadcast_rpc({"type": "agent_settled"})
+
+    mock_broadcast.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_start_interactive_broadcasts_started_and_records_start_time():
+    session = InteractivePiSession(pipeline_id="p1")
+    session.start = AsyncMock(return_value=FakeProcess())
+    with patch(
+        "api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock
+    ) as mock_broadcast:
+        await session.start_interactive(cwd="/tmp/repo")
+
+    assert session.start_time is not None
+    session.start.assert_awaited_once_with(cwd="/tmp/repo")
+    started = [
+        c.args[0]
+        for c in mock_broadcast.await_args_list
+        if c.args[0].type == "INTERACTIVE_STARTED"
+    ]
+    assert started
+    assert started[0].payload["pipeline_id"] == "p1"
+    assert started[0].payload["bot_type"] == "interactive"
+    assert started[0].payload["start_time"] == session.start_time.isoformat()
+
+
+@pytest.mark.asyncio
+async def test_stop_broadcasts_interactive_stopped():
+    session = InteractivePiSession(pipeline_id="p1")
+    session.process = FakeProcess()
+    with patch(
+        "api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock
+    ) as mock_broadcast:
+        await session.stop()
+
+    assert session.process.returncode == -15
+    stopped = [c.args[0] for c in mock_broadcast.await_args_list]
+    assert any(m.type == "INTERACTIVE_STOPPED" for m in stopped)
+
+
+@pytest.mark.asyncio
+async def test_stop_broadcasts_only_once():
+    session = InteractivePiSession(pipeline_id="p1")
+    session.process = FakeProcess()
+    with patch(
+        "api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock
+    ) as mock_broadcast:
+        await session.stop()
+        await session.close(graceful=False)
+
+    stopped = [
+        c.args[0]
+        for c in mock_broadcast.await_args_list
+        if c.args[0].type == "INTERACTIVE_STOPPED"
+    ]
+    assert len(stopped) == 1
+
+
+@pytest.mark.asyncio
+async def test_close_broadcasts_interactive_stopped():
+    session = InteractivePiSession(pipeline_id="p1")
+    session.process = FakeProcess()
+    with patch(
+        "api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock
+    ) as mock_broadcast:
+        await session.close()
+
+    stopped = [
+        c.args[0]
+        for c in mock_broadcast.await_args_list
+        if c.args[0].type == "INTERACTIVE_STOPPED"
+    ]
+    assert len(stopped) == 1
+
+
+@pytest.mark.asyncio
+async def test_lifecycle_broadcasts_skipped_without_pipeline_id():
+    session = InteractivePiSession()
+    session.process = FakeProcess()
+    with patch(
+        "api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock
+    ) as mock_broadcast:
+        await session._broadcast_started()
+        await session.stop()
+
+    mock_broadcast.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_handle_event_broadcasts_rpc_and_queues():
+    session = InteractivePiSession(pipeline_id="p1")
+    with patch(
+        "api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock
+    ) as mock_broadcast:
+        await session._handle_event(text_delta("Hello"))
+
+    rpc = [
+        c.args[0]
+        for c in mock_broadcast.await_args_list
+        if c.args[0].type == "INTERACTIVE_RPC_EVENT"
+    ]
+    assert len(rpc) == 1
+    assert await session._queue.get() == "Hello"

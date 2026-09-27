@@ -932,26 +932,113 @@ class InteractivePiSession(PiRpcProcess):
         model: Optional[str] = None,
         cwd: Optional[str] = None,
         command_timeout: Optional[float] = None,
+        pipeline_id: Optional[str] = None,
+        bot_type: str = "interactive",
     ):
         super().__init__(model=model, cwd=cwd, command_timeout=command_timeout)
+        self.pipeline_id = pipeline_id
+        self.bot_type = bot_type
+        # Wall-clock time the session started running. Captured in
+        # ``start_interactive`` and exposed to the UI so the reused PiView can
+        # resume its "Running since" timer from the real session start.
+        self.start_time: Optional[datetime] = None
         self._queue: "asyncio.Queue[Any]" = asyncio.Queue()
         # Public alias so callers/tests can inspect the active-turn queue.
         self.queue = self._queue
+        # Guards so the lifecycle broadcasts emitted here and by the manager can
+        # never duplicate when both layers participate in the same transition.
+        self._started_broadcast = False
+        self._stopped_broadcast = False
+
+    async def _broadcast_started(self):
+        """Broadcast ``INTERACTIVE_STARTED`` once per session lifecycle."""
+        if self.pipeline_id is None or self._started_broadcast:
+            return
+        self._started_broadcast = True
+        await ws_manager.broadcast(
+            WSMessage(
+                type="INTERACTIVE_STARTED",
+                payload={
+                    "pipeline_id": self.pipeline_id,
+                    "bot_type": self.bot_type,
+                    "start_time": (
+                        self.start_time.isoformat() if self.start_time else None
+                    ),
+                },
+            )
+        )
+
+    async def _broadcast_stopped(self):
+        """Broadcast ``INTERACTIVE_STOPPED`` once per session lifecycle."""
+        if self.pipeline_id is None or self._stopped_broadcast:
+            return
+        self._stopped_broadcast = True
+        await ws_manager.broadcast(
+            WSMessage(
+                type="INTERACTIVE_STOPPED",
+                payload={
+                    "pipeline_id": self.pipeline_id,
+                    "bot_type": self.bot_type,
+                },
+            )
+        )
+
+    async def _broadcast_rpc(self, event: Dict[str, Any]):
+        """Forward a raw Pi RPC event as ``INTERACTIVE_RPC_EVENT``.
+
+        Skipped when no ``pipeline_id`` was supplied so pure unit tests remain
+        side-effect free. Interactive sessions use a dedicated message type (not
+        ``CODERBOT_RPC_EVENT``/``ASSISTANT_STREAM``) so their output can never
+        leak into the batch CoderBot log.
+        """
+        if self.pipeline_id is None:
+            return
+        await ws_manager.broadcast(
+            WSMessage(
+                type="INTERACTIVE_RPC_EVENT",
+                payload={
+                    "pipeline_id": self.pipeline_id,
+                    "bot_type": self.bot_type,
+                    "event": event,
+                },
+            )
+        )
+
+    async def start_interactive(self, cwd: Optional[str] = None):
+        """Spawn the long-lived Pi process and broadcast the start event."""
+        self.start_time = datetime.now(UTC)
+        self._started_broadcast = False
+        self._stopped_broadcast = False
+        process = await self.start(cwd=cwd)
+        await self._broadcast_started()
+        return process
 
     async def _handle_event(self, event: Dict[str, Any]):
         """Push text deltas for the active turn and mark settled turns.
 
-        ``agent_end`` is deliberately ignored: it only marks the end of one
-        low-level run and retries/compaction can still follow. ``agent_settled``
-        is the signal that Pi will not continue automatically.
+        The raw event is additionally broadcast so the reused PiView can render
+        it structurally. ``agent_end`` is deliberately ignored: it only marks the
+        end of one low-level run and retries/compaction can still follow.
+        ``agent_settled`` is the signal that Pi will not continue automatically.
         """
         event_type = event.get("type")
+        await self._broadcast_rpc(event)
         if event_type == "message_update":
             delta = extract_text_delta(event)
             if delta:
                 await self._queue.put(delta)
         elif event_type == "agent_settled":
             await self._queue.put(dict(self.SETTLED_MARKER))
+
+    async def stop(self):
+        """Forcefully terminate the process and broadcast the stop event."""
+        super().stop()
+        await self._broadcast_stopped()
+
+    async def close(self, graceful: bool = True):
+        """Close the session and broadcast the stop event."""
+        await super().close(graceful=graceful)
+        await self._broadcast_stopped()
 
     async def send_user_message(self, text: str):
         """Send one chat turn and stream the assistant text back.
