@@ -16,6 +16,7 @@
 
 import { PiView } from './PiView.ts';
 import { Icon } from './Icon.ts';
+import { InteractivePromptView } from './InteractivePromptView.ts';
 import type { InteractiveCodingService } from '../../core/InteractiveCodingService.ts';
 
 export interface InteractiveCodingViewOptions {
@@ -29,7 +30,8 @@ export interface InteractiveCodingViewOptions {
  *
  * Wraps (composes, does not extend) the reusable {@link PiView} so the agent's
  * streamed activity log is rendered exactly like the batch CoderBot log, and
- * adds a composer for sending messages plus a Stop Session control.
+ * composes an {@link InteractivePromptView} for sending messages plus a Stop
+ * Session control.
  */
 export class InteractiveCodingView {
   private service: InteractiveCodingService;
@@ -37,8 +39,7 @@ export class InteractiveCodingView {
   private pipelineId: string;
   private onStop?: () => void;
   private piView: PiView | null = null;
-  private textarea: HTMLTextAreaElement | null = null;
-  private sendBtn: HTMLButtonElement | null = null;
+  private promptView: InteractivePromptView | null = null;
   private unsubs: (() => void)[] = [];
 
   constructor(
@@ -66,16 +67,16 @@ export class InteractiveCodingView {
       this.piView.render();
     }
 
-    this.textarea = this.root.querySelector('#interactive-message-input') as HTMLTextAreaElement | null;
-    this.sendBtn = this.root.querySelector('#interactive-send-btn') as HTMLButtonElement | null;
+    const promptMount = this.root.querySelector('#interactive-prompt-mount') as HTMLElement | null;
+    if (promptMount) {
+      this.promptView = new InteractivePromptView(promptMount, {
+        onSubmit: (text) => this.service.sendMessage(text),
+        getPipelineId: () => this.pipelineId,
+        actionHandlers: { '/clear': () => this.service.clearHistory() },
+      });
+      this.promptView.render();
+    }
 
-    this.sendBtn?.addEventListener('click', () => this.sendMessage());
-    this.textarea?.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        this.sendMessage();
-      }
-    });
     this.root.querySelector('#interactive-stop-btn')?.addEventListener('click', () => this.stopSession());
 
     // Re-render the composer state whenever the session or busy state changes.
@@ -83,7 +84,7 @@ export class InteractiveCodingView {
     this.unsubs.push(this.service.onSessionStateChange(() => this.updateComposerState()));
     this.updateComposerState();
 
-    this.textarea?.focus();
+    this.promptView?.focus();
   }
 
   destroy(): void {
@@ -95,29 +96,20 @@ export class InteractiveCodingView {
       }
     });
     this.unsubs = [];
+    if (this.promptView) {
+      this.promptView.destroy();
+      this.promptView = null;
+    }
     if (this.piView) {
       this.piView.destroy();
       this.piView = null;
     }
     this.root.innerHTML = '';
-    this.textarea = null;
-    this.sendBtn = null;
   }
 
-  /** Sends the current composer text to the session. */
+  /** Convenience hook: submits the current composer text (delegates to the prompt view). */
   async sendMessage(): Promise<void> {
-    const text = this.textarea?.value.trim();
-    if (!text || this.service.isBusy()) return;
-
-    try {
-      await this.service.sendMessage(text);
-      if (this.textarea) this.textarea.value = '';
-    } catch (e) {
-      console.error('Failed to send interactive message:', e);
-      alert('Failed to send message to the interactive session.');
-    } finally {
-      this.updateComposerState();
-    }
+    await this.promptView?.submit();
   }
 
   /** Stops the interactive session (or delegates to the host callback). */
@@ -139,19 +131,14 @@ export class InteractiveCodingView {
     const active = this.service.isActive();
     const disabled = busy || !active;
 
-    if (this.textarea) {
-      this.textarea.disabled = disabled;
-      this.textarea.placeholder = busy
+    this.promptView?.setDisabled(disabled);
+    this.promptView?.setPlaceholder(
+      busy
         ? 'The agent is working…'
         : active
           ? 'Describe the change the agent should make…'
-          : 'Session stopped.';
-    }
-    if (this.sendBtn) {
-      this.sendBtn.disabled = disabled;
-      this.sendBtn.classList.toggle('opacity-50', disabled);
-      this.sendBtn.classList.toggle('cursor-not-allowed', disabled);
-    }
+          : 'Session stopped.'
+    );
 
     const status = this.root.querySelector('#interactive-status') as HTMLElement | null;
     if (status) {
@@ -179,14 +166,8 @@ export class InteractiveCodingView {
           </button>
         </div>
         <div id="interactive-piview-mount"></div>
-        <div class="p-3 border-t border-app-border/40 flex items-end gap-2 bg-app-surface/50">
-          <textarea id="interactive-message-input" rows="2"
-            class="flex-1 resize-y px-3 py-2 rounded-lg text-xs bg-black/30 border border-app-border text-app-text placeholder:text-app-muted/60 focus:outline-none focus:border-app-accent-2/60"
-            placeholder="Describe the change the agent should make…"></textarea>
-          <button id="interactive-send-btn" type="button"
-            class="px-3 py-2 rounded text-xs font-medium bg-app-accent-2 text-white hover:bg-app-accent-2/80 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer">
-            ${Icon.render('arrowRight', { size: 14 })} Send
-          </button>
+        <div class="p-3 border-t border-app-border/40 bg-app-surface/50">
+          <div id="interactive-prompt-mount"></div>
         </div>
       </div>
     `;

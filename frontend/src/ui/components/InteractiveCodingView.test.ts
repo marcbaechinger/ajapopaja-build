@@ -18,7 +18,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { InteractiveCodingView } from './InteractiveCodingView.ts';
 import type { InteractiveCodingService } from '../../core/InteractiveCodingService.ts';
 
-const { piViewInstances } = vi.hoisted(() => ({ piViewInstances: [] as any[] }));
+const { piViewInstances, promptViewInstances } = vi.hoisted(() => ({
+  piViewInstances: [] as any[],
+  promptViewInstances: [] as any[],
+}));
 
 vi.mock('./PiView.ts', () => {
   class PiView {
@@ -41,6 +44,45 @@ vi.mock('./PiView.ts', () => {
     }
   }
   return { PiView };
+});
+
+vi.mock('./InteractivePromptView.ts', () => {
+  class InteractivePromptView {
+    root: any;
+    options: any;
+    rendered = false;
+    destroyed = false;
+    disabled = false;
+    placeholder = '';
+    focused = false;
+    constructor(root: any, options: any) {
+      this.root = root;
+      this.options = options;
+      promptViewInstances.push(this);
+    }
+    render() {
+      this.rendered = true;
+    }
+    destroy() {
+      this.destroyed = true;
+    }
+    setDisabled(disabled: boolean) {
+      this.disabled = disabled;
+    }
+    setPlaceholder(text: string) {
+      this.placeholder = text;
+    }
+    focus() {
+      this.focused = true;
+    }
+    getValue() {
+      return '';
+    }
+    submit() {
+      return Promise.resolve();
+    }
+  }
+  return { InteractivePromptView };
 });
 
 function makeService() {
@@ -80,6 +122,7 @@ describe('InteractiveCodingView', () => {
 
   beforeEach(() => {
     piViewInstances.length = 0;
+    promptViewInstances.length = 0;
     document.body.innerHTML = '';
     root = document.createElement('div');
     document.body.appendChild(root);
@@ -99,38 +142,54 @@ describe('InteractiveCodingView', () => {
     expect(piViewInstances[0].root.id).toBe('interactive-piview-mount');
   });
 
-  it('sendMessage sends the composer text and clears it', async () => {
+  it('mounts the InteractivePromptView into the composer slot', () => {
     view.render();
-    const textarea = root.querySelector('#interactive-message-input') as HTMLTextAreaElement;
-    textarea.value = '  please fix it  ';
-    await view.sendMessage();
-    expect(service.sendMessage).toHaveBeenCalledWith('please fix it');
-    expect(textarea.value).toBe('');
+    expect(promptViewInstances).toHaveLength(1);
+    expect(promptViewInstances[0].rendered).toBe(true);
+    expect(promptViewInstances[0].root.id).toBe('interactive-prompt-mount');
+    expect(promptViewInstances[0].focused).toBe(true);
   });
 
-  it('does not send an empty message', async () => {
+  it('wires the prompt onSubmit to the service and the /clear action handler', async () => {
     view.render();
-    await view.sendMessage();
-    expect(service.sendMessage).not.toHaveBeenCalled();
+    const prompt = promptViewInstances[0];
+
+    await prompt.options.onSubmit('hello');
+    expect(service.sendMessage).toHaveBeenCalledWith('hello');
+
+    prompt.options.actionHandlers['/clear']();
+    expect(service.clearHistory).toHaveBeenCalled();
   });
 
-  it('disables the composer while a turn is in flight', () => {
+  it('resolves the pipeline id for prompt templates', () => {
     view.render();
+    expect(promptViewInstances[0].options.getPipelineId()).toBe('p1');
+  });
+
+  it('sendMessage delegates to the prompt view submit', async () => {
+    view.render();
+    const prompt = promptViewInstances[0];
+    const submitSpy = vi.spyOn(prompt, 'submit');
+    await view.sendMessage();
+    expect(submitSpy).toHaveBeenCalled();
+  });
+
+  it('disables the prompt view while a turn is in flight', () => {
+    view.render();
+    expect(promptViewInstances[0].disabled).toBe(false);
+
     service.isBusy.mockReturnValue(true);
     service._fire();
-    const sendBtn = root.querySelector('#interactive-send-btn') as HTMLButtonElement;
-    const textarea = root.querySelector('#interactive-message-input') as HTMLTextAreaElement;
-    expect(sendBtn.disabled).toBe(true);
-    expect(textarea.disabled).toBe(true);
+
+    expect(promptViewInstances[0].disabled).toBe(true);
+    expect(promptViewInstances[0].placeholder).toContain('working');
   });
 
-  it('clicking Send invokes the service', async () => {
+  it('disables the prompt view when the session is not active', () => {
+    service.isActive.mockReturnValue(false);
     view.render();
-    const textarea = root.querySelector('#interactive-message-input') as HTMLTextAreaElement;
-    textarea.value = 'hello';
-    (root.querySelector('#interactive-send-btn') as HTMLButtonElement).click();
-    await Promise.resolve();
-    expect(service.sendMessage).toHaveBeenCalledWith('hello');
+    expect(promptViewInstances[0].disabled).toBe(true);
+    expect(promptViewInstances[0].placeholder).toBe('Session stopped.');
   });
 
   it('stopSession calls the service by default', async () => {
@@ -152,11 +211,13 @@ describe('InteractiveCodingView', () => {
     expect(service.stopSession).not.toHaveBeenCalled();
   });
 
-  it('destroy tears down the inner PiView', () => {
+  it('destroy tears down the inner PiView and prompt view', () => {
     view.render();
-    const inner = piViewInstances[0];
+    const innerPi = piViewInstances[0];
+    const innerPrompt = promptViewInstances[0];
     view.destroy();
-    expect(inner.destroyed).toBe(true);
+    expect(innerPi.destroyed).toBe(true);
+    expect(innerPrompt.destroyed).toBe(true);
     expect(root.innerHTML).toBe('');
   });
 });

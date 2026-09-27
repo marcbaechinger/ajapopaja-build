@@ -20,6 +20,7 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { Icon } from './Icon.ts';
 import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
+import { expandTemplate, filterCommands, findCommand } from './utils/slashCommands.ts';
 
 // Configure marked to wrap tables in a scrollable div
 marked.use({
@@ -60,51 +61,6 @@ marked.use({
 
 type PanelPosition = 'tl' | 'tc' | 'tr' | 'bl' | 'bc' | 'br' | 'center' | 'full';
 type PanelSize = 'normal' | 'expanded';
-
-/**
- * Slash commands that paste a prompt template into the prompt input.
- * The token PIPELINE_ID is substituted with the current pipeline id (when known).
- */
-const PIPELINE_TEMPLATE_COMMANDS: Record<string, string> = {
-  '/backlog': 'Show me the tasks in the backlog (state CREATED) of pipeline PIPELINE_ID',
-  '/build': 'Show me the build commands to build the app of pipeline PIPELINE_ID',
-  '/dd': 'List the design docs of pipeline PIPELINE_ID',
-  '/gd': 'Drop the top commit (that has not been pushed to the remote) of pipeline PIPELINE_ID',
-  '/i': 'Show 5 most recent issues of pipeline PIPELINE_ID',
-  '/gl': 'Show me the commit hashes and message of the last 5 commits in pipeline PIPELINE_ID',
-  '/lint': 'Lint the code of pipeline PIPELINE_ID and give me a summary of the lint findings',
-  '/overview': 'Give me an overview of the project of pipeline PIPELINE_ID . Explain what the application is about and why it is useful for the user. Give a short introduction in the general architecture and design.',
-  '/pr': 'Show me the project structure of pipeline PIPELINE_ID',
-  '/pulls': 'Show me the recent pull request of pipeline PIPELINE_ID',
-  '/readme': 'Show me the README of pipeline PIPELINE_ID',
-  '/review': 'Make a review of the last implemented task of pipeline PIPELINE_ID',
-  '/summary': 'Summarize what we discussed and suggest new tasks to address what we learned (for pipeline PIPELINE_ID)',
-  '/test': 'Run the tests for pipeline PIPELINE_ID',
-};
-
-/**
- * Index of every available slash command (sorted alphanumerically) used for
- * the inline slash command overview panel shown by '/' and '//'.
- */
-const SLASH_COMMAND_INDEX: { command: string; description: string }[] = [
-  { command: '/', description: 'Show all available slash commands' },
-  { command: '/backlog', description: 'Show the tasks in the backlog (state CREATED) of the pipeline' },
-  { command: '/build', description: 'Show the build commands to build the app of the pipeline' },
-  { command: '/clear', description: 'Clear the conversation history' },
-  { command: '/close', description: 'Close the assistant panel' },
-  { command: '/dd', description: 'List the design docs of the pipeline' },
-  { command: '/gd', description: 'Drop the top local commit (that has not been pushed to the remote) of the pipeline' },
-  { command: '/i', description: 'Show the 5 most recent issues of the pipeline' },
-  { command: '/gl', description: 'Show the last 5 commit hashes and messages of the pipeline' },
-  { command: '/lint', description: 'Lint the code of the pipeline and give a summary of the lint findings' },
-  { command: '/overview', description: 'Give an overview of the application, why it is useful, and its general architecture and design' },
-  { command: '/pr', description: 'Show the project structure of the pipeline' },
-  { command: '/pulls', description: 'Show the recent pull requests of the pipeline' },
-  { command: '/readme', description: 'Show the README of the pipeline' },
-  { command: '/review', description: 'Review the last implemented task of the pipeline' },
-  { command: '/summary', description: 'Summarize what we discussed and suggest new tasks to address what we learned' },
-  { command: '/test', description: 'Run the test suite for the pipeline' },
-];
 
 interface PanelSettings {
   position: PanelPosition;
@@ -379,12 +335,11 @@ export class AssistantPanel {
 
     // Prompt template commands: paste the template into the input and
     // place the cursor at the end so the user can edit or accept with Enter.
-    if (Object.prototype.hasOwnProperty.call(PIPELINE_TEMPLATE_COMMANDS, trimmed)) {
-      const template = PIPELINE_TEMPLATE_COMMANDS[trimmed];
-      const pipelineId = this.getPipelineIdFromUrl();
+    const command = findCommand(trimmed, 'assistant');
+    if (command?.type === 'prompt' && command.template !== undefined) {
       const input = this.container.querySelector('#assistant-input') as HTMLTextAreaElement;
       if (input) {
-        input.value = pipelineId ? template.replace('PIPELINE_ID', pipelineId) : template;
+        input.value = expandTemplate(command.template, this.getPipelineIdFromUrl());
         input.rows = 1;
         input.focus();
         input.setSelectionRange(input.value.length, input.value.length);
@@ -400,7 +355,7 @@ export class AssistantPanel {
    * slash commands (the slash command index).
    */
   private addSlashCommandIndex() {
-    const items = SLASH_COMMAND_INDEX.map((entry) => `
+    const items = filterCommands('', 'assistant').map((entry) => `
       <div class="flex items-start gap-2 text-sm">
         <span class="font-mono font-bold text-app-accent-2 shrink-0">${entry.command}</span>
         <span class="text-app-muted">${entry.description}</span>
