@@ -24,7 +24,7 @@ from typing import Any, Dict, Optional, TextIO
 
 import git
 
-from api.assistant.tools.command_runner import run_command_sequence
+from api.assistant.tools.command_runner import run_verification_sequence
 from api.websocket_manager import WSMessage, manager as ws_manager
 from core import config
 from core.models.models import (
@@ -278,19 +278,41 @@ class CoderBotSession(PiRpcProcess):
         )
 
     def _build_test_instruction(self) -> str:
-        """Build the "Mandatory Verification" block listing the test commands
-        that are configured for this pipeline (falling back to the defaults)."""
-        commands = self.get_resolved_verification_commands()
-        lines = "\n".join(f"- `{' '.join(c)}`" for c in commands)
+        """Build the "Mandatory Verification" block listing the build, lint and
+        test commands that are configured for this pipeline.
+
+        The commands are grouped by category (build -> lint -> test). Build and
+        lint are optional: when the pipeline does not configure them they are
+        simply omitted. Tests fall back to the global/default commands exactly
+        like the post-run verification resolver does.
+        """
+        groups: list[tuple[str, list]] = []
+        build_commands = self.get_resolved_build_commands()
+        if build_commands:
+            groups.append(("Build", build_commands))
+        lint_commands = self.get_resolved_lint_commands()
+        if lint_commands:
+            groups.append(("Lint", lint_commands))
+        test_commands = self.get_resolved_verification_commands()
+        if test_commands:
+            groups.append(("Test", test_commands))
+
+        blocks = []
+        for label, commands in groups:
+            lines = "\n".join(f"- `{' '.join(c)}`" for c in commands)
+            blocks.append(f"**{label}**\n{lines}")
+        command_block = "\n\n".join(blocks)
+
         return (
             f"### Mandatory Verification\n"
             f"This repository is a monorepo. Before finishing, you MUST run the full project\n"
-            f"test suite exactly as documented in README.md, fix any failures your changes\n"
-            f"cause, and re-run until green. The required commands are:\n\n"
-            f"{lines}\n\n"
-            f"Do NOT report the task as complete until these tests pass (or, if a failure is\n"
-            f"pre-existing and unrelated to your change, explain it in your summary\n"
-            f"instead). Include the test commands you ran and their outcome in your final\n"
+            f"build, lint and test suite exactly as documented in README.md, fix any\n"
+            f"failures your changes cause, and re-run until green. The required commands\n"
+            f"are:\n\n"
+            f"{command_block}\n\n"
+            f"Do NOT report the task as complete until every configured command passes (or,\n"
+            f"if a failure is pre-existing and unrelated to your change, explain it in your\n"
+            f"summary instead). Include the commands you ran and their outcome in your final\n"
             f"completion summary."
         )
 
@@ -413,10 +435,44 @@ class CoderBotSession(PiRpcProcess):
         Returns:
             A list of argv lists (e.g. ``[["sh", "-c", "..."], ...]``).
         """
-        pipeline_commands = getattr(self.pipeline, "test_commands", None)
+        pipeline_commands = self._get_pipeline_command_list("test_commands")
         if pipeline_commands:
-            return list(pipeline_commands)
+            return pipeline_commands
         return self._get_global_verification_commands()
+
+    def get_resolved_build_commands(self) -> list:
+        """Resolve the pipeline's build commands for post-run verification.
+
+        Build commands have no global/default fallback: when the pipeline does
+        not configure any they are simply not part of the verification run.
+
+        Returns:
+            A list of argv lists, or ``[]`` when build is not configured.
+        """
+        return self._get_pipeline_command_list("build_commands")
+
+    def get_resolved_lint_commands(self) -> list:
+        """Resolve the pipeline's lint commands for post-run verification.
+
+        Lint commands have no global/default fallback: when the pipeline does
+        not configure any they are simply not part of the verification run.
+
+        Returns:
+            A list of argv lists, or ``[]`` when lint is not configured.
+        """
+        return self._get_pipeline_command_list("lint_commands")
+
+    def _get_pipeline_command_list(self, attr: str) -> list:
+        """Return a validated copy of a per-pipeline command list attribute.
+
+        Only an actual non-empty list counts as configured; ``None``, empty
+        lists and non-list values (e.g. auto-created ``MagicMock`` attributes in
+        tests) mean "not configured".
+        """
+        commands = getattr(self.pipeline, attr, None)
+        if isinstance(commands, list) and commands:
+            return list(commands)
+        return []
 
     def _get_global_verification_commands(self) -> list:
         """Returns global config commands or the README-documented defaults."""
@@ -468,14 +524,21 @@ class CoderBotSession(PiRpcProcess):
         return self._get_global_verification_commands()
 
     async def _run_verification(self) -> Dict[str, Any]:
-        """Runs the project test commands in the sandbox and returns results.
+        """Runs the project build, lint and test commands in the sandbox.
 
         The PR is created regardless of the outcome, but the returned dict flags
         any failing command so a human can see the suite was red.
 
-        Delegates execution to ``CommandRunner.run_command_sequence`` (shared
-        with the assistant ``run_tests``/``run_lint`` pipeline tools) so the
-        sandboxed test-running logic lives in a single place. Each command runs
+        Commands are resolved per category via explicit resolvers and executed in
+        the deterministic order **build -> lint -> test**. Every configured
+        category runs even when an earlier one fails, so a single run gives the
+        full picture. Build and lint have no fallback: when the pipeline does not
+        configure them they are skipped. Tests keep their global/default
+        fallback.
+
+        Delegates execution to ``run_verification_sequence`` (shared with the
+        assistant ``run_build``/``run_lint``/``run_tests`` pipeline tools) so the
+        sandboxed command-running logic lives in a single place. Each command runs
         in its own process group under ``CODERBOT_VERIFICATION_TIMEOUT``; a
         command only counts as green when it exited with code 0 (timeouts and
         spawn failures record a ``None`` exit code which marks the verification
@@ -483,10 +546,23 @@ class CoderBotSession(PiRpcProcess):
 
         Returns:
             A dict ``{"commands": [...], "passed": bool}`` where each command
-            entry contains the argv, the exit code and the tail of its output.
+            entry contains the argv, its category (``kind``), the exit code and
+            the tail of its output.
         """
-        commands = self.get_resolved_verification_commands()
-        return await run_command_sequence(commands, str(self.helper.sandbox_path))
+        categories: list = []
+        build_commands = self.get_resolved_build_commands()
+        if build_commands:
+            categories.append(("build", build_commands))
+        lint_commands = self.get_resolved_lint_commands()
+        if lint_commands:
+            categories.append(("lint", lint_commands))
+        test_commands = self.get_resolved_verification_commands()
+        if test_commands:
+            categories.append(("test", test_commands))
+
+        return await run_verification_sequence(
+            categories, str(self.helper.sandbox_path)
+        )
 
     async def _broadcast_rpc(self, event: Dict[str, Any]):
         """Broadcasts a parsed Pi RPC event to connected websocket clients.
@@ -699,8 +775,10 @@ class CoderBotSession(PiRpcProcess):
                 summary_meta.append(f"Status: **{status}**")
                 for entry in verification_results["commands"]:
                     exit_code = entry.get("exit_code")
+                    kind = entry.get("kind")
+                    label = f"[{kind}] " if kind else ""
                     summary_meta.append(
-                        f"- `{entry.get('cmd')}` -> exit code {exit_code}"
+                        f"- {label}`{entry.get('cmd')}` -> exit code {exit_code}"
                     )
                 if not verification_results.get("passed"):
                     for entry in verification_results["commands"]:

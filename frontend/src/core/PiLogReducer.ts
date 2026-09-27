@@ -207,24 +207,50 @@ export class PiLogReducer {
 
   /**
    * Reducer for a `CODERBOT_VERIFICATION`/interactive verification broadcast.
-   * Builds a single `verification`-kind block summarizing the test suite.
+   * Builds a single `verification`-kind block summarizing the command suite.
+   *
+   * Commands are grouped by their category (`kind`) in the order the backend
+   * executed them (build -> lint -> test). A category header is only emitted
+   * when more than one category is present, so a legacy tests-only payload is
+   * rendered exactly as before (apart from the optional `kind` field).
    */
   public addVerificationBlock(result: any) {
     const passed = !!result?.passed;
     const commands: any[] = Array.isArray(result?.commands)
       ? result.commands
       : [];
-    const sub: string[] = [];
+
+    // Group by category while preserving execution order. Entries without a
+    // `kind` fall into a single "test" group for backwards compatibility.
+    const order: string[] = [];
+    const groups = new Map<string, any[]>();
     for (const entry of commands) {
-      const cmd = entry?.cmd ?? '';
-      const exitCode = entry?.exit_code;
-      sub.push(`- ${cmd}  → exit code ${exitCode}`);
-      // Append the (truncated) output tail only for failed commands, matching
-      // the backend's PR summary annotation.
-      if (!passed && exitCode !== 0 && entry?.output_tail) {
-        sub.push(entry.output_tail.slice(0, 500));
+      const kind = entry?.kind ?? 'test';
+      let group = groups.get(kind);
+      if (!group) {
+        group = [];
+        groups.set(kind, group);
+        order.push(kind);
+      }
+      group.push(entry);
+    }
+
+    const grouped = order.length > 1;
+    const sub: string[] = [];
+    for (const kind of order) {
+      if (grouped) sub.push(`${kind} verification:`);
+      for (const entry of groups.get(kind)!) {
+        const cmd = entry?.cmd ?? '';
+        const exitCode = entry?.exit_code;
+        sub.push(`- ${cmd}  → exit code ${exitCode}`);
+        // Append the (truncated) output tail only for failed commands, matching
+        // the backend's PR summary annotation.
+        if (!passed && exitCode !== 0 && entry?.output_tail) {
+          sub.push(entry.output_tail.slice(0, 500));
+        }
       }
     }
+
     this.addBlock({
       kind: 'verification',
       text: passed ? '● Verification: PASSED' : '● Verification: FAILED',

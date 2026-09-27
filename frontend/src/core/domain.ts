@@ -32,6 +32,19 @@ export function isTaskStatus(value: any): value is TaskStatus {
   return Object.values(TaskStatus).includes(value);
 }
 
+export interface VerificationCommandResult {
+  cmd: string;
+  exit_code: number | null;
+  output_tail?: string;
+  /** Command category, e.g. "build" | "lint" | "test". */
+  kind?: string;
+}
+
+export interface VerificationResult {
+  commands: VerificationCommandResult[];
+  passed: boolean;
+}
+
 export interface StateTransition {
   from_status?: TaskStatus | null;
   to_status: TaskStatus;
@@ -51,7 +64,7 @@ export class Task {
   version: number = 1;
   commit_hash?: string | null;
   completion_info?: string | null;
-  verification?: any | null;
+  verification?: VerificationResult | null;
   design_doc?: string | null;
   parent_task_id?: string | null;
   pipeline_id: string = '';

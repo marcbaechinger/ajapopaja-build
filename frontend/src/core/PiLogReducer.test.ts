@@ -129,4 +129,42 @@ describe('PiLogReducer', () => {
     expect(LAST(verif).text).toContain('FAILED');
     expect(LAST(verif).error).toBe(true);
   });
+
+  it('groups verification commands by category', () => {
+    const reducer = new PiLogReducer();
+    reducer.addVerificationBlock({
+      passed: false,
+      commands: [
+        { cmd: 'make build', exit_code: 1, output_tail: 'build fail', kind: 'build' },
+        { cmd: 'make lint', exit_code: 0, kind: 'lint' },
+        { cmd: 'make test', exit_code: 1, output_tail: 'test fail', kind: 'test' },
+      ],
+    });
+    const verif = reducer.getBlocks().filter((b) => b.kind === 'verification');
+    expect(verif).toHaveLength(1);
+    const sub = (LAST(verif).sub ?? []).join('\n');
+    // One block with the existing headline + error tint...
+    expect(LAST(verif).text).toContain('FAILED');
+    expect(LAST(verif).error).toBe(true);
+    // ...whose body groups the commands by category and keeps failed tails.
+    expect(sub).toContain('build verification:');
+    expect(sub).toContain('lint verification:');
+    expect(sub).toContain('test verification:');
+    expect(sub).toContain('make build');
+    expect(sub).toContain('make lint');
+    expect(sub).toContain('make test');
+    expect(sub).toContain('build fail');
+    expect(sub).toContain('test fail');
+  });
+
+  it('renders a legacy tests-only block without category headers', () => {
+    const reducer = new PiLogReducer();
+    reducer.addVerificationBlock({
+      passed: true,
+      commands: [{ cmd: 'pytest', exit_code: 0 }],
+    });
+    const verif = reducer.getBlocks().filter((b) => b.kind === 'verification');
+    const sub = (LAST(verif).sub ?? []).join('\n');
+    expect(sub).toBe('- pytest  → exit code 0');
+  });
 });

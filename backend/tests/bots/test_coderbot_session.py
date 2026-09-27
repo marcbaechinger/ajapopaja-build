@@ -664,6 +664,151 @@ async def test_coderbot_run_verification_timeout_terminates_process_group():
     assert "timed out" in results["commands"][0]["output_tail"]
 
 
+def test_coderbot_resolves_build_and_lint_commands():
+    """Build/lint/test categories resolve to the pipeline's own commands."""
+    session = CoderBotSession(pipeline_id="p1", task_id="t1")
+    session.pipeline = MagicMock(
+        build_commands=[["make", "build"]],
+        lint_commands=[["make", "lint"]],
+        test_commands=[["make", "test"]],
+    )
+    assert session.get_resolved_build_commands() == [["make", "build"]]
+    assert session.get_resolved_lint_commands() == [["make", "lint"]]
+    assert session.get_resolved_verification_commands() == [["make", "test"]]
+
+
+def test_coderbot_build_and_lint_have_no_default_fallback():
+    """Build/lint are only run when the pipeline configures them; tests keep
+    their global fallback."""
+    session = CoderBotSession(pipeline_id="p1", task_id="t1")
+    session.pipeline = MagicMock(
+        build_commands=None, lint_commands=[], test_commands=None
+    )
+    with patch.object(config, "CODERBOT_TEST_COMMANDS_JSON", '[["global-test"]]'):
+        assert session.get_resolved_build_commands() == []
+        assert session.get_resolved_lint_commands() == []
+        assert session.get_resolved_verification_commands() == [["global-test"]]
+
+
+@pytest.mark.asyncio
+async def test_coderbot_run_verification_runs_build_lint_test_in_order():
+    """All configured categories run in build -> lint -> test order and every
+    entry is tagged with its kind."""
+    session = CoderBotSession(pipeline_id="p1", task_id="t1")
+    session.helper = MagicMock()
+    session.helper.sandbox_path = "/tmp/sandbox"
+    session.pipeline = MagicMock(
+        build_commands=[["make", "build"]],
+        lint_commands=[["make", "lint"]],
+        test_commands=[["make", "test"]],
+    )
+
+    def _ok_proc():
+        proc = AsyncMock()
+        proc.communicate = AsyncMock(return_value=(b"ok\n", b""))
+        proc.returncode = 0
+        return proc
+
+    with patch(
+        "api.assistant.tools.command_runner.asyncio.create_subprocess_exec",
+        new_callable=AsyncMock,
+        side_effect=[_ok_proc(), _ok_proc(), _ok_proc()],
+    ) as mock_exec:
+        results = await session._run_verification()
+
+    # The full configured set ran, in the required order.
+    assert [c.args[1] for c in mock_exec.await_args_list] == [
+        "build",
+        "lint",
+        "test",
+    ]
+    assert results["passed"] is True
+    assert [e["kind"] for e in results["commands"]] == ["build", "lint", "test"]
+
+
+@pytest.mark.asyncio
+async def test_coderbot_run_verification_tests_only_has_no_build_lint():
+    """A tests-only pipeline runs exactly the test commands (no fallback build
+    or lint) and tags them as tests."""
+    session = CoderBotSession(pipeline_id="p1", task_id="t1")
+    session.helper = MagicMock()
+    session.helper.sandbox_path = "/tmp/sandbox"
+    session.pipeline = MagicMock(
+        build_commands=None,
+        lint_commands=None,
+        test_commands=[["make", "test"]],
+    )
+
+    ok_proc = AsyncMock()
+    ok_proc.communicate = AsyncMock(return_value=(b"ok\n", b""))
+    ok_proc.returncode = 0
+
+    with patch(
+        "api.assistant.tools.command_runner.asyncio.create_subprocess_exec",
+        new_callable=AsyncMock,
+        return_value=ok_proc,
+    ) as mock_exec:
+        results = await session._run_verification()
+
+    assert mock_exec.await_count == 1
+    assert mock_exec.await_args.args == ("make", "test")
+    assert results["commands"][0]["kind"] == "test"
+
+
+@pytest.mark.asyncio
+async def test_coderbot_run_verification_failing_build_does_not_abort():
+    """A failing build is reported but lint/test still run so one run gives the
+    full picture."""
+    session = CoderBotSession(pipeline_id="p1", task_id="t1")
+    session.helper = MagicMock()
+    session.helper.sandbox_path = "/tmp/sandbox"
+    session.pipeline = MagicMock(
+        build_commands=[["make", "build"]],
+        lint_commands=[["make", "lint"]],
+        test_commands=[["make", "test"]],
+    )
+
+    def _proc(exit_code, out):
+        proc = AsyncMock()
+        proc.communicate = AsyncMock(return_value=(out, b""))
+        proc.returncode = exit_code
+        return proc
+
+    with patch(
+        "api.assistant.tools.command_runner.asyncio.create_subprocess_exec",
+        new_callable=AsyncMock,
+        side_effect=[
+            _proc(2, b"build broke\n"),
+            _proc(0, b"lint ok\n"),
+            _proc(0, b"tests ok\n"),
+        ],
+    ) as mock_exec:
+        results = await session._run_verification()
+
+    assert mock_exec.await_count == 3
+    assert results["passed"] is False
+    assert [e["kind"] for e in results["commands"]] == ["build", "lint", "test"]
+    assert results["commands"][0]["exit_code"] == 2
+
+
+def test_coderbot_test_instruction_lists_configured_categories():
+    """The mandatory verification prompt groups and lists build/lint/test."""
+    session = CoderBotSession(pipeline_id="p1", task_id="t1")
+    session.pipeline = MagicMock(
+        build_commands=[["make", "build"]],
+        lint_commands=[["make", "lint"]],
+        test_commands=[["make", "test"]],
+    )
+    instruction = session._build_test_instruction()
+    assert "Mandatory Verification" in instruction
+    assert "**Build**" in instruction
+    assert "**Lint**" in instruction
+    assert "**Test**" in instruction
+    assert "`make build`" in instruction
+    assert "`make lint`" in instruction
+    assert "`make test`" in instruction
+
+
 @pytest.mark.asyncio
 async def test_coderbot_handle_agent_end_falls_back_after_first_commit(
     init_mock_db,
@@ -812,6 +957,63 @@ async def test_coderbot_handle_agent_end_runs_verification_and_annotates_pr(
 
     # The pull request status is recorded.
     assert prs[0].status == PullRequestStatus.OPEN
+
+
+@pytest.mark.asyncio
+async def test_coderbot_pr_summary_lists_verification_categories(
+    init_mock_db,
+):
+    """The `### Verification` PR summary section tags every executed command
+    with its category and flips to FAILED when any category fails."""
+    task = Task(title="Test Task", pipeline_id="p1", design_doc="D", spec="S")
+    await task.insert()
+
+    session = CoderBotSession(pipeline_id="p1", task_id=str(task.id))
+    session.pipeline = MagicMock(
+        build_commands=[["make", "build"]],
+        lint_commands=[["make", "lint"]],
+        test_commands=[["make", "test"]],
+    )
+    session.helper = MagicMock()
+    session.helper.branch_name = "branch"
+    repo = MagicMock()
+    repo.git.add = MagicMock()
+    repo.git.commit.return_value = "ok"
+    repo.git.diff.return_value = "test-patch"
+    session.helper.get_repo.return_value = repo
+
+    fail_proc = AsyncMock()
+    fail_proc.communicate = AsyncMock(return_value=(b"build broke\n", b""))
+    fail_proc.returncode = 1
+
+    with (
+        patch(
+            "api.coderbot.session.asyncio.create_subprocess_exec",
+            new_callable=AsyncMock,
+            return_value=fail_proc,
+        ),
+        patch("api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock),
+        patch("api.coderbot.session.Task.get", new_callable=AsyncMock) as mock_task_get,
+        patch("core.queries.task.transition_task", new_callable=AsyncMock),
+    ):
+        mock_task_get.return_value = task
+        await session._handle_agent_end(
+            [
+                {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "done."}],
+                }
+            ]
+        )
+
+    prs = await PullRequest.find(PullRequest.task_id == str(task.id)).to_list()
+    assert len(prs) == 1
+    summary = prs[0].summary
+    assert "### Verification" in summary
+    assert "Status: **FAILED**" in summary
+    assert "[build]" in summary
+    assert "[lint]" in summary
+    assert "[test]" in summary
 
 
 @pytest.mark.asyncio

@@ -133,21 +133,57 @@ async def run_single_command(entry: List[str], workspace_path: str) -> Dict[str,
 
 
 async def run_command_sequence(
-    commands: Optional[List[List[str]]], workspace_path: str
+    commands: Optional[List[List[str]]],
+    workspace_path: str,
+    kind: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Runs an ordered sequence of argv lists and aggregates the result.
 
     Returns a dict ``{"commands": [...], "passed": bool}`` where each command
     entry contains the argv, the exit code and the tail of its output. The run
     is only ``passed`` when every command exited with code 0.
+
+    Args:
+        commands: Ordered argv lists to run. ``None``/empty runs nothing.
+        workspace_path: Working directory all commands run in.
+        kind: Optional category tag (e.g. ``"build"``/``"lint"``/``"test"``).
+            When set, every command entry is tagged with it via a ``kind``
+            field so callers can group the results by category.
     """
     results: Dict[str, Any] = {"commands": [], "passed": True}
     for entry in commands or []:
         result = await run_single_command(entry, workspace_path)
+        if kind is not None:
+            result["kind"] = kind
         results["commands"].append(result)
         if result["exit_code"] != 0:
             results["passed"] = False
     return results
+
+
+async def run_verification_sequence(
+    categories: Optional[List[Any]], workspace_path: str
+) -> Dict[str, Any]:
+    """Runs several command categories in a single aggregated verification run.
+
+    ``categories`` is an ordered list of ``(kind, commands)`` pairs. The
+    categories are executed strictly in the given order (CoderBot uses
+    ``build -> lint -> test``) and every configured category is run even when an
+    earlier one fails, so one run reports the full picture. The aggregate keeps
+    the same ``{"commands": [...], "passed": bool}`` shape as
+    :func:`run_command_sequence` and tags each command entry with its category.
+
+    A category with no commands is skipped and does not affect ``passed``.
+    """
+    aggregate: Dict[str, Any] = {"commands": [], "passed": True}
+    for kind, commands in categories or []:
+        if not commands:
+            continue
+        partial = await run_command_sequence(commands, workspace_path, kind=kind)
+        aggregate["commands"].extend(partial["commands"])
+        if not partial["passed"]:
+            aggregate["passed"] = False
+    return aggregate
 
 
 class CommandRunner:
