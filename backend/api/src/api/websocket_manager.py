@@ -14,7 +14,7 @@
 
 import json
 import logging
-from typing import Any, Awaitable, Callable, Dict
+from typing import Any, Awaitable, Callable, Dict, Iterable
 
 from fastapi import WebSocket
 from pydantic import BaseModel, Field
@@ -36,18 +36,27 @@ MessageHandler = Callable[[WSMessage, WebSocket], Awaitable[None]]
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, WebSocket] = {}
+        # client_id -> username for targeted delivery. Populated from the JWT
+        # ``sub`` when the WebSocket is accepted.
+        self.connection_users: Dict[str, str] = {}
         self.handlers: Dict[str, MessageHandler] = {}
 
-    async def connect(self, websocket: WebSocket, client_id: str):
+    async def connect(self, websocket: WebSocket, client_id: str, username: str = None):
         await websocket.accept()
         self.active_connections[client_id] = websocket
+        if username:
+            self.connection_users[client_id] = username
         logger.info(
             f"New WebSocket connection: {client_id}. Total: {len(self.active_connections)}"
         )
 
-    async def add_connection(self, websocket: WebSocket, client_id: str):
-        """Adds an already accepted connection."""
+    async def add_connection(
+        self, websocket: WebSocket, client_id: str, username: str = None
+    ):
+        """Adds an already accepted connection, remembering its user."""
         self.active_connections[client_id] = websocket
+        if username:
+            self.connection_users[client_id] = username
         logger.info(
             f"Accepted connection added: {client_id}. Total: {len(self.active_connections)}"
         )
@@ -56,6 +65,7 @@ class ConnectionManager:
         if client_id and client_id in self.active_connections:
             if self.active_connections[client_id] == websocket:
                 del self.active_connections[client_id]
+                self.connection_users.pop(client_id, None)
                 logger.info(
                     f"WebSocket disconnected: {client_id}. Total: {len(self.active_connections)}"
                 )
@@ -67,6 +77,7 @@ class ConnectionManager:
         ]
         for cid in to_remove:
             del self.active_connections[cid]
+            self.connection_users.pop(cid, None)
             logger.info(
                 f"WebSocket disconnected: {cid}. Total: {len(self.active_connections)}"
             )
@@ -79,6 +90,39 @@ class ConnectionManager:
                 await connection.send_text(data)
             except Exception as e:
                 logger.error(f"Error broadcasting message to {client_id}: {e}")
+
+    async def send_to_client(self, message: WSMessage, client_id: str):
+        """Send a message to a single client. Best-effort."""
+        connection = self.active_connections.get(client_id)
+        if connection is None:
+            logger.warning(f"No connection for client {client_id}; message dropped.")
+            return
+        try:
+            await connection.send_text(message.model_dump_json())
+        except Exception as e:
+            logger.error(f"Error sending message to client {client_id}: {e}")
+
+    async def send_to_users(self, message: WSMessage, usernames: Iterable[str]):
+        """Send a message to every connection belonging to the given users.
+
+        A user may have several tabs/connections; all matching sockets receive
+        the message. Delivery is best-effort and one dropped socket does not
+        abort the loop.
+        """
+        wanted = set(usernames)
+        if not wanted:
+            return
+        data = message.model_dump_json()
+        for client_id, connection in self.active_connections.items():
+            if self.connection_users.get(client_id) not in wanted:
+                continue
+            try:
+                await connection.send_text(data)
+            except Exception as e:
+                logger.error(
+                    f"Error sending message to user {self.connection_users.get(client_id)} "
+                    f"(client {client_id}): {e}"
+                )
 
     def register_handler(self, message_type: str, handler: MessageHandler):
         self.handlers[message_type] = handler

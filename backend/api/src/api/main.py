@@ -41,6 +41,8 @@ from api.oneprompt.ws_handler import (
 )
 from api.auth import ALGORITHM, SECRET_KEY, get_current_user_from_token
 from api.dev_server_ws import register_dev_process_ws
+from api.notifications import register_notification_handlers
+from api.notifications.router import router as notifications_router
 from api.routes.auth import router as auth_router
 from api.routes.dev_server import router as dev_server_router
 from api.routes.docbot import router as docbot_router
@@ -103,6 +105,7 @@ async def lifespan(app: FastAPI):
     register_assistant_handlers()
     register_oneprompt_handlers()
     register_dev_process_ws()
+    register_notification_handlers()
     initialize_oneprompt()
     yield
     logger.info("Shutting down...")
@@ -240,7 +243,7 @@ async def websocket_endpoint(
         return
 
     await websocket.accept()
-    await manager.add_connection(websocket, client_id)
+    await manager.add_connection(websocket, client_id, username)
     try:
         while True:
             data = await websocket.receive_text()
@@ -279,6 +282,7 @@ api_router.include_router(archbot_router)
 api_router.include_router(coderbot_router)
 api_router.include_router(pull_request_router)
 api_router.include_router(dev_server_router)
+api_router.include_router(notifications_router)
 
 app.include_router(api_router)
 

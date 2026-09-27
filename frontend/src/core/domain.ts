@@ -308,6 +308,77 @@ export interface GitLogResponse {
   error?: string | null;
 }
 
+export const NotificationType = {
+  MESSAGE: "message",
+  CONFIRMATION: "confirmation",
+  ACTIONS: "actions",
+} as const;
+
+export type NotificationType = typeof NotificationType[keyof typeof NotificationType];
+
+export function isNotificationType(value: any): value is NotificationType {
+  return Object.values(NotificationType).includes(value);
+}
+
+export const NotificationSeverity = {
+  NORMAL: "normal",
+  WARNING: "warning",
+  ERROR: "error",
+} as const;
+
+export type NotificationSeverity = typeof NotificationSeverity[keyof typeof NotificationSeverity];
+
+export function isNotificationSeverity(value: any): value is NotificationSeverity {
+  return Object.values(NotificationSeverity).includes(value);
+}
+
+/** An action the user can trigger from a notification. */
+export class NotificationAction {
+  name: string = '';
+  label: string = '';
+  data: Record<string, any> = {};
+  style: string = 'default'; // default | primary | danger
+
+  constructor(json: any) {
+    if (!json) return;
+    if (json.name !== undefined) this.name = String(json.name);
+    if (json.label !== undefined) this.label = String(json.label);
+    if (json.data !== undefined && json.data !== null && typeof json.data === 'object') {
+      this.data = json.data;
+    }
+    if (json.style !== undefined) this.style = String(json.style);
+  }
+}
+
+/**
+ * A user-facing notification delivered by the backend. Mirrors the backend
+ * `Notification` model and normalizes raw payloads defensively.
+ */
+export class AppNotification {
+  id: string = '';
+  type: NotificationType = NotificationType.MESSAGE;
+  severity: NotificationSeverity = NotificationSeverity.NORMAL;
+  title: string = '';
+  message: string = '';
+  actions: NotificationAction[] = [];
+  dismissible: boolean = true;
+  created_at?: string;
+
+  constructor(json: any) {
+    if (!json) return;
+    if (json.id !== undefined) this.id = String(json.id);
+    if (json.type !== undefined && isNotificationType(json.type)) this.type = json.type;
+    if (json.severity !== undefined && isNotificationSeverity(json.severity)) this.severity = json.severity;
+    if (json.title !== undefined) this.title = String(json.title);
+    if (json.message !== undefined) this.message = String(json.message);
+    if (json.dismissible !== undefined) this.dismissible = Boolean(json.dismissible);
+    if (json.created_at !== undefined) this.created_at = String(json.created_at);
+    if (Array.isArray(json.actions)) {
+      this.actions = json.actions.map((a: any) => new NotificationAction(a));
+    }
+  }
+}
+
 export interface WSMessage {
   type: string;
   id?: string;

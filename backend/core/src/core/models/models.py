@@ -19,6 +19,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
+from uuid import uuid4
 
 from beanie import Document
 from pydantic import (
@@ -345,6 +346,56 @@ class UserChat(Document):
 
     class Settings:
         name = "assistant_chats"
+
+
+class NotificationType(str, Enum):
+    """Kind of user-facing notification."""
+
+    MESSAGE = "message"  # informational/warning/error banner
+    CONFIRMATION = "confirmation"  # exactly one confirm action
+    ACTIONS = "actions"  # one of N actions (or dismiss)
+
+
+class NotificationSeverity(str, Enum):
+    """Visual/UX severity of a notification."""
+
+    NORMAL = "normal"
+    WARNING = "warning"
+    ERROR = "error"
+
+
+class NotificationAction(BaseModel):
+    """An action the user can trigger from a notification.
+
+    ``name`` is the key of a handler registered on the backend
+    :class:`~core.services.notification_manager.NotificationManager`;
+    ``label`` is the button text shown to the user; ``data`` carries an
+    arbitrary JSON-serializable payload for the handler; ``style`` is a UI hint
+    (``default`` | ``primary`` | ``danger``).
+    """
+
+    name: str  # registry key executed on the backend
+    label: str  # button text shown to the user
+    data: Dict[str, Any] = Field(default_factory=dict)
+    style: str = "default"  # default | primary | danger (UI hint)
+
+
+class Notification(BaseModel):
+    """A user-facing notification delivered over the WebSocket.
+
+    Deliberately does **not** carry delivery targets: those are an api-layer
+    concern and never leak to clients. The model serializes cleanly to JSON and
+    maps 1:1 to the frontend domain model.
+    """
+
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    type: NotificationType
+    severity: NotificationSeverity = NotificationSeverity.NORMAL
+    title: str
+    message: str = ""
+    actions: List[NotificationAction] = Field(default_factory=list)
+    dismissible: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class PullRequestStatus(str, Enum):

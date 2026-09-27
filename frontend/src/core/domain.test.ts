@@ -15,7 +15,16 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { Task, TaskStatus, Pipeline, PipelineStatus, CommitDiff } from './domain';
+import {
+  Task,
+  TaskStatus,
+  Pipeline,
+  PipelineStatus,
+  CommitDiff,
+  AppNotification,
+  NotificationType,
+  NotificationSeverity,
+} from './domain';
 
 describe('Domain Models', () => {
   describe('Task', () => {
@@ -83,6 +92,70 @@ describe('Domain Models', () => {
       // @ts-ignore
       const pipeline = new Pipeline({ name: 'Invalid Status', status: 'junk' });
       expect(pipeline.status).toBe(PipelineStatus.ACTIVE); 
+    });
+  });
+
+  describe('AppNotification', () => {
+    it('should normalize a full raw payload', () => {
+      const notification = new AppNotification({
+        id: 'n-1',
+        type: 'actions',
+        severity: 'warning',
+        title: 'Pick one',
+        message: 'Choose an action',
+        dismissible: true,
+        created_at: '2026-01-01T00:00:00+00:00',
+        actions: [
+          { name: 'noop', label: 'Do nothing', data: { x: 1 }, style: 'primary' },
+        ],
+      });
+
+      expect(notification.id).toBe('n-1');
+      expect(notification.type).toBe(NotificationType.ACTIONS);
+      expect(notification.severity).toBe(NotificationSeverity.WARNING);
+      expect(notification.title).toBe('Pick one');
+      expect(notification.message).toBe('Choose an action');
+      expect(notification.dismissible).toBe(true);
+      expect(notification.created_at).toBe('2026-01-01T00:00:00+00:00');
+      expect(notification.actions).toHaveLength(1);
+      expect(notification.actions[0].name).toBe('noop');
+      expect(notification.actions[0].label).toBe('Do nothing');
+      expect(notification.actions[0].data).toEqual({ x: 1 });
+      expect(notification.actions[0].style).toBe('primary');
+    });
+
+    it('should fall back to safe defaults for missing/invalid fields', () => {
+      const notification = new AppNotification({ title: 'Only title' });
+
+      expect(notification.id).toBe('');
+      expect(notification.type).toBe(NotificationType.MESSAGE);
+      expect(notification.severity).toBe(NotificationSeverity.NORMAL);
+      expect(notification.title).toBe('Only title');
+      expect(notification.message).toBe('');
+      expect(notification.actions).toEqual([]);
+      expect(notification.dismissible).toBe(true);
+    });
+
+    it('should ignore invalid type/severity values', () => {
+      const notification = new AppNotification({
+        type: 'nonsense',
+        severity: 'nonsense',
+      });
+
+      expect(notification.type).toBe(NotificationType.MESSAGE);
+      expect(notification.severity).toBe(NotificationSeverity.NORMAL);
+    });
+
+    it('should normalize action entries defensively', () => {
+      const notification = new AppNotification({
+        actions: [{ name: 'a' }, {}],
+      });
+
+      expect(notification.actions[0].name).toBe('a');
+      expect(notification.actions[0].label).toBe('');
+      expect(notification.actions[0].data).toEqual({});
+      expect(notification.actions[0].style).toBe('default');
+      expect(notification.actions[1].name).toBe('');
     });
   });
 

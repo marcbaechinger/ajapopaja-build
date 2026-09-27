@@ -27,6 +27,15 @@ from core.services.dev_process_manager import (
     DevProcessNotFoundError,
     ProcessInfo,
 )
+from core.services.notification_manager import (
+    NotificationActionAlreadyRegisteredError,
+    NotificationActionContext,
+    NotificationActionNotFoundError,
+    NotificationError,
+    NotificationManager,
+    notification_manager,
+    register_action,
+)
 
 __all__ = [
     "DevProcessManager",
@@ -34,4 +43,11 @@ __all__ = [
     "DevProcessAlreadyRunningError",
     "DevProcessNotFoundError",
     "ProcessInfo",
+    "NotificationManager",
+    "NotificationError",
+    "NotificationActionNotFoundError",
+    "NotificationActionAlreadyRegisteredError",
+    "NotificationActionContext",
+    "notification_manager",
+    "register_action",
 ]

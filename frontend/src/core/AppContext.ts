@@ -33,6 +33,7 @@ import { AssistantService } from './AssistantService';
 import { CoderBotService } from './CoderBotService.ts';
 import { InteractiveCodingService } from './InteractiveCodingService.ts';
 import { DevProcessService } from './DevProcessService.ts';
+import { NotificationService } from './NotificationService.ts';
 import { SearchDialog } from '../ui/components/SearchDialog';
 import { AssistantPanel } from '../ui/components/AssistantPanel';
 import { HealthCheckDialog } from '../ui/components/HealthCheckDialog';
@@ -63,6 +64,7 @@ export class AppContext {
   public readonly coderBotService: CoderBotService;
   public readonly interactiveCodingService: InteractiveCodingService;
   public readonly devProcessService: DevProcessService;
+  public readonly notifications: NotificationService;
   private state: AppState;
 
   constructor(containerId: string, apiBaseUrl: string) {
@@ -88,6 +90,7 @@ export class AppContext {
       this.coderBotClient
     );
     this.devProcessService = new DevProcessService(this.wsClient);
+    this.notifications = new NotificationService(this.wsClient, this.authService);
 
     this.initOnePrompt();
 
