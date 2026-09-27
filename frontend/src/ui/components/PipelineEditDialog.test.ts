@@ -483,6 +483,76 @@ describe('PipelineEditDialog', () => {
     expect(updateCall[2].build_commands).toEqual([['sh', '-c', 'make build']]);
   });
 
+  it('should keep repository input when switching command tabs', async () => {
+    mockProps.pipeline!.repo_uri = 'https://host/org/my-app.git';
+    const dialog = new PipelineEditDialog(mockProps);
+    const showPromise = dialog.show();
+
+    const repoUriInput = document.querySelector('input[name="repo_uri"]') as HTMLInputElement;
+    repoUriInput.value = 'https://host/org/changed.git';
+
+    // Selecting a command tab must only re-render the command area, so the
+    // repository form (and the text just typed) stays untouched.
+    switchToCmdTab('lint');
+
+    const repoUriAfter = document.querySelector('input[name="repo_uri"]') as HTMLInputElement;
+    expect(repoUriAfter.value).toBe('https://host/org/changed.git');
+
+    document.querySelector('#pipeline-edit-cancel')?.dispatchEvent(new MouseEvent('click'));
+    await showPromise;
+  });
+
+  it('should keep command input when switching repository tabs', async () => {
+    const dialog = new PipelineEditDialog(mockProps);
+    const showPromise = dialog.show();
+
+    const textarea = document.querySelector('textarea[name="test_commands"]') as HTMLTextAreaElement;
+    textarea.value = 'make test';
+
+    // Selecting a repository tab must only re-render the repository area.
+    switchToTab('remote');
+
+    const textareaAfter = document.querySelector('textarea[name="test_commands"]') as HTMLTextAreaElement;
+    expect(textareaAfter.value).toBe('make test');
+
+    document.querySelector('#pipeline-edit-cancel')?.dispatchEvent(new MouseEvent('click'));
+    await showPromise;
+  });
+
+  it('should keep typed command text when switching between command tabs', async () => {
+    const dialog = new PipelineEditDialog(mockProps);
+    const showPromise = dialog.show();
+
+    const textarea = document.querySelector('textarea[name="test_commands"]') as HTMLTextAreaElement;
+    textarea.value = 'make test';
+
+    switchToCmdTab('lint');
+    switchToCmdTab('test');
+
+    const textareaAfter = document.querySelector('textarea[name="test_commands"]') as HTMLTextAreaElement;
+    expect(textareaAfter.value).toBe('make test');
+
+    document.querySelector('#pipeline-edit-cancel')?.dispatchEvent(new MouseEvent('click'));
+    await showPromise;
+  });
+
+  it('should keep the pipeline name when switching repository tabs in create mode', async () => {
+    const props = mkCreateProps();
+    const dialog = new PipelineEditDialog(props);
+    const showPromise = dialog.show();
+
+    const nameInput = document.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
+    nameInput.value = 'My New Pipeline';
+
+    switchToTab('remote');
+
+    const nameAfter = document.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
+    expect(nameAfter.value).toBe('My New Pipeline');
+
+    document.querySelector('#pipeline-edit-cancel')?.dispatchEvent(new MouseEvent('click'));
+    await showPromise;
+  });
+
   it('should call update and close on save', async () => {
     const dialog = new PipelineEditDialog(mockProps);
     const showPromise = dialog.show();
@@ -796,6 +866,35 @@ describe('PipelineEditDialog', () => {
         expect(btn.textContent).toContain('Start Dev Server');
       });
       expect(document.querySelector('#dev-server-status')?.textContent).toContain('Stopped');
+
+      clickCancel();
+      await showPromise;
+    });
+
+    it('should not wipe typed repository input when the dev server status arrives', async () => {
+      mockProps.pipeline!.serve_commands = [['sh', '-c', 'make serve']];
+      const client = mockProps.context.pipelineClient as any;
+      let resolveStatus: (value: any) => void = () => {};
+      client.getDevServerStatus = vi.fn(
+        () =>
+          new Promise((resolve) => {
+            resolveStatus = resolve;
+          })
+      );
+
+      const dialog = new PipelineEditDialog(mockProps);
+      const showPromise = dialog.show();
+
+      const workspaceInput = document.querySelector('input[name="workspace_path"]') as HTMLInputElement;
+      workspaceInput.value = '/tmp/typed';
+
+      // Resolve the pending status request; updating the dev-server control
+      // must only re-render that control, not the whole form.
+      resolveStatus({ running: false, status: 'not_started', port: 1224 });
+      await vi.waitFor(() => {
+        expect(document.querySelector('#pipeline-dev-toggle')).not.toBeNull();
+      });
+      expect((document.querySelector('input[name="workspace_path"]') as HTMLInputElement).value).toBe('/tmp/typed');
 
       clickCancel();
       await showPromise;

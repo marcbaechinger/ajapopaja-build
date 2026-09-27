@@ -118,6 +118,84 @@ export class PipelineEditDialog extends BaseDialog<void> {
     this.attachInternalEventListeners();
   }
 
+  /**
+   * Replaces only the repository tab area (tab bar + active form). Called when
+   * the repository tab changes so the command textareas keep their content.
+   */
+  private reRenderRepoTabArea() {
+    const area = this.dialog.querySelector('#repo-tab-area');
+    if (!area) return;
+    area.innerHTML = this.renderRepoTabArea();
+    this.attachRepoTabListeners();
+  }
+
+  /**
+   * Replaces only the commands tab area (tab bar + active textarea). Called
+   * when a command tab changes so the repository form keeps its content.
+   */
+  private reRenderCommandsTabArea() {
+    const area = this.dialog.querySelector('#commands-tab-area');
+    if (!area) return;
+    area.innerHTML = this.renderCommandsTabArea();
+    this.attachCommandsTabListeners();
+  }
+
+  /**
+   * Replaces only the dev-server control so status refreshes do not wipe the
+   * fields the user is editing.
+   */
+  private reRenderDevServerControl() {
+    const area = this.dialog.querySelector('#dev-server-area');
+    if (!area) return;
+    area.innerHTML = this.renderDevServerControl();
+    this.attachDevServerListeners();
+  }
+
+  /**
+   * Copies the values currently rendered in the repository form back onto the
+   * in-memory pipeline. This keeps shared fields (e.g. the pipeline name) and
+   * the active tab's fields intact when switching between repository tabs.
+   */
+  private captureRepoInputs() {
+    const read = (name: string): string | null => {
+      const el = this.dialog.querySelector(`[name="${name}"]`) as HTMLInputElement | HTMLSelectElement | null;
+      return el ? el.value : null;
+    };
+
+    const name = read('pipeline_name');
+    if (name !== null) this.pipeline.name = name;
+    const status = read('pipeline_status');
+    if (status !== null) this.pipeline.status = status as PipelineStatus;
+    const workspace = read('workspace_path');
+    if (workspace !== null) this.pipeline.workspace_path = workspace;
+    const docRoot = read('doc_root');
+    if (docRoot !== null) this.pipeline.doc_root = docRoot;
+    const repoUri = read('repo_uri');
+    if (repoUri !== null) this.pipeline.repo_uri = repoUri;
+    const repoUsername = read('repo_username');
+    if (repoUsername !== null) this.pipeline.repo_username = repoUsername;
+  }
+
+  /**
+   * Copies the value currently rendered in the active command tab back onto the
+   * in-memory pipeline so switching between command tabs does not discard the
+   * commands the user has typed.
+   */
+  private captureCommandInputs() {
+    const fields: Array<'test_commands' | 'lint_commands' | 'build_commands' | 'serve_commands'> = [
+      'test_commands',
+      'lint_commands',
+      'build_commands',
+      'serve_commands',
+    ];
+    for (const field of fields) {
+      const el = this.dialog.querySelector(`textarea[name="${field}"]`) as HTMLTextAreaElement | null;
+      if (el) {
+        this.pipeline[field] = parseTestCommands(el.value);
+      }
+    }
+  }
+
   private tabClass(tab: RepoTab): string {
     const base = 'px-4 py-2 text-xs font-bold uppercase tracking-widest transition-all cursor-pointer border-b-2';
     return tab === this.activeTab
@@ -270,7 +348,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
     );
   }
 
-  private renderCommandsTabs(): string {
+  private renderCommandsTabArea(): string {
     const activeContent =
       this.activeCmdTab === 'test'
         ? this.renderTestCommands()
@@ -280,14 +358,38 @@ export class PipelineEditDialog extends BaseDialog<void> {
             ? this.renderBuildCommands()
             : this.renderServeCommands();
     return `
-      <div class="flex flex-col gap-3">
-        <div class="flex gap-1 border-b border-app-border">
-          <button type="button" data-cmd-tab="build" class="${this.cmdTabClass('build')}">Build</button>
-          <button type="button" data-cmd-tab="lint" class="${this.cmdTabClass('lint')}">Lint</button>
-          <button type="button" data-cmd-tab="test" class="${this.cmdTabClass('test')}">Test</button>
-          <button type="button" data-cmd-tab="serve" class="${this.cmdTabClass('serve')}">Serve</button>
-        </div>
+      <div class="flex gap-1 border-b border-app-border">
+        <button type="button" data-cmd-tab="build" class="${this.cmdTabClass('build')}">Build</button>
+        <button type="button" data-cmd-tab="lint" class="${this.cmdTabClass('lint')}">Lint</button>
+        <button type="button" data-cmd-tab="test" class="${this.cmdTabClass('test')}">Test</button>
+        <button type="button" data-cmd-tab="serve" class="${this.cmdTabClass('serve')}">Serve</button>
+      </div>
+      <div id="commands-tab-content">
         ${activeContent}
+      </div>
+    `;
+  }
+
+  /**
+   * Renders the repository tab bar and the active tab's form fields. This is
+   * the only markup replaced when the repository tab changes, so the command
+   * textareas (and their unsaved input) stay untouched.
+   */
+  private renderRepoTabArea(): string {
+    const create = !this.isEditMode();
+    const remote = this.isRemote();
+    // In create mode both tabs are editable; only the active tab (the user's
+    // selection) determines which fields are sent. In edit mode only the tab
+    // matching the pipeline's type is editable, the other is read-only.
+    const localReadonly = create ? false : remote;
+    const remoteReadonly = create ? false : !remote;
+    return `
+      <div class="flex gap-1 border-b border-app-border">
+        <button type="button" data-tab="local" class="${this.tabClass('local')}">Local Repository</button>
+        <button type="button" data-tab="remote" class="${this.tabClass('remote')}">Remote Repository</button>
+      </div>
+      <div id="repo-tab-content" class="flex flex-col gap-4">
+        ${this.activeTab === 'local' ? this.renderLocalTab(localReadonly, create) : this.renderRemoteTab(remoteReadonly, create)}
       </div>
     `;
   }
@@ -345,21 +447,16 @@ export class PipelineEditDialog extends BaseDialog<void> {
   protected renderBody(): string {
     if (!this.props) return '';
     const create = !this.isEditMode();
-    const remote = this.isRemote();
-    // In create mode both tabs are editable; only the active tab (the user's
-    // selection) determines which fields are sent. In edit mode only the tab
-    // matching the pipeline's type is editable, the other is read-only.
-    const localReadonly = create ? false : remote;
-    const remoteReadonly = create ? false : !remote;
+    const devServerControl = this.renderDevServerControl();
     return `
       <div class="flex flex-col gap-4 p-4">
-        <div class="flex gap-1 border-b border-app-border">
-          <button type="button" data-tab="local" class="${this.tabClass('local')}">Local Repository</button>
-          <button type="button" data-tab="remote" class="${this.tabClass('remote')}">Remote Repository</button>
+        <div id="repo-tab-area" class="flex flex-col gap-4">
+          ${this.renderRepoTabArea()}
         </div>
-        ${this.activeTab === 'local' ? this.renderLocalTab(localReadonly, create) : this.renderRemoteTab(remoteReadonly, create)}
-        ${this.renderCommandsTabs()}
-        ${this.renderDevServerControl()}
+        <div id="commands-tab-area" class="flex flex-col gap-3">
+          ${this.renderCommandsTabArea()}
+        </div>
+        ${devServerControl ? `<div id="dev-server-area">${devServerControl}</div>` : ''}
         <div id="pipeline-edit-error" class="hidden text-xs text-red-400 font-bold"></div>
         ${create ? '' : `
         <div class="flex col-span-2">
@@ -383,26 +480,38 @@ export class PipelineEditDialog extends BaseDialog<void> {
     this.dialog.querySelector('#pipeline-edit-cancel')?.addEventListener('click', () => this.close());
     this.dialog.querySelector('#pipeline-edit-save')?.addEventListener('click', () => this.handleSave());
 
+    this.attachRepoTabListeners();
+    this.attachCommandsTabListeners();
+    this.attachDevServerListeners();
+  }
+
+  private attachRepoTabListeners() {
     this.dialog.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const tab = btn.dataset.tab as RepoTab;
         if (tab && tab !== this.activeTab) {
+          this.captureRepoInputs();
           this.activeTab = tab;
-          this.reRender();
+          this.reRenderRepoTabArea();
         }
       });
     });
+  }
 
+  private attachCommandsTabListeners() {
     this.dialog.querySelectorAll<HTMLButtonElement>('[data-cmd-tab]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const tab = btn.dataset.cmdTab as CommandsTab;
         if (tab && tab !== this.activeCmdTab) {
+          this.captureCommandInputs();
           this.activeCmdTab = tab;
-          this.reRender();
+          this.reRenderCommandsTabArea();
         }
       });
     });
+  }
 
+  private attachDevServerListeners() {
     this.dialog.querySelector('#pipeline-dev-toggle')?.addEventListener('click', () => {
       void this.toggleDevServer();
     });
@@ -467,7 +576,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
       this.devServerRunning = this.isRunning(status);
       this.devServerPort = typeof status?.port === 'number' ? status.port : null;
       this.devServerError = null;
-      this.reRender();
+      this.reRenderDevServerControl();
     } catch (error) {
       console.error('Failed to load dev server status:', error);
     }
@@ -481,7 +590,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
     const wasRunning = this.devServerRunning;
     this.devServerLoading = true;
     this.devServerError = null;
-    this.reRender();
+    this.reRenderDevServerControl();
 
     try {
       if (wasRunning) {
@@ -499,7 +608,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
       this.devServerError = error instanceof Error ? error.message : String(error);
     } finally {
       this.devServerLoading = false;
-      this.reRender();
+      this.reRenderDevServerControl();
     }
   }
 
