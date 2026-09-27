@@ -210,9 +210,7 @@ export class PiLogReducer {
    * Builds a single `verification`-kind block summarizing the command suite.
    *
    * Commands are grouped by their category (`kind`) in the order the backend
-   * executed them (build -> lint -> test). A category header is only emitted
-   * when more than one category is present, so a legacy tests-only payload is
-   * rendered exactly as before (apart from the optional `kind` field).
+   * executed them (build -> lint -> test).
    */
   public addVerificationBlock(result: any) {
     const passed = !!result?.passed;
@@ -220,12 +218,11 @@ export class PiLogReducer {
       ? result.commands
       : [];
 
-    // Group by category while preserving execution order. Entries without a
-    // `kind` fall into a single "test" group for backwards compatibility.
+    // Group by category, preserving the backend's execution order.
     const order: string[] = [];
     const groups = new Map<string, any[]>();
     for (const entry of commands) {
-      const kind = entry?.kind ?? 'test';
+      const kind = entry?.kind;
       let group = groups.get(kind);
       if (!group) {
         group = [];
@@ -235,10 +232,9 @@ export class PiLogReducer {
       group.push(entry);
     }
 
-    const grouped = order.length > 1;
     const sub: string[] = [];
     for (const kind of order) {
-      if (grouped) sub.push(`${kind} verification:`);
+      sub.push(`${kind} verification:`);
       for (const entry of groups.get(kind)!) {
         const cmd = entry?.cmd ?? '';
         const exitCode = entry?.exit_code;
