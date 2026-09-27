@@ -38,6 +38,16 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
 # docker/pi-agent/models.json (qwen3.6:27b, deepseek-v4.1-flash:cloud) are exposed.
 RUN mkdir -p /root/.pi/agent
 COPY docker/pi-agent/models.json /root/.pi/agent/models.json
+
+# Bundle the Pi skill library into a stable, read-only image location. Skills
+# are staged per session type (interactive vs. CoderBot) from here rather than
+# installed into the global user skill root, so each session type can expose a
+# different skill set. Models stay global (the single models.json above).
+COPY .pi/skills /opt/ajapopaja/pi/skills
+ENV PI_SKILLS_LIBRARY_DIR=/opt/ajapopaja/pi/skills
+ENV INTERACTIVE_SKILLS=ajapopaja
+# The bundled ajapopaja skill's mcp_client.py helper requires httpx.
+RUN pip install --no-cache-dir httpx
 # Copy backend workspace definition
 COPY backend/pyproject.toml backend/uv.lock ./backend/
 COPY backend/api/pyproject.toml ./backend/api/

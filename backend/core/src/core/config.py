@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -97,6 +98,26 @@ BASEBOT_LOG_ENABLED = os.getenv("BASEBOT_LOG_ENABLED", "true").lower() == "true"
 # Default model used by CoderBotManager when spawning Pi sessions.
 # If unset, no --model flag is passed to Pi (None).
 CODERBOT_DEFAULT_MODEL: Optional[str] = os.getenv("CODERBOT_DEFAULT_MODEL")
+
+# Read-only directory (baked into the Docker image) that holds the bundled Pi
+# skills. Models stay global (a single /root/.pi/agent/models.json); skills are
+# staged per session type from this library so interactive and CoderBot sessions
+# can expose different skill sets.
+PI_SKILLS_LIBRARY_DIR = Path(
+    os.getenv("PI_SKILLS_LIBRARY_DIR", "/opt/ajapopaja/pi/skills")
+).resolve()
+
+
+def _parse_skill_list(raw: str) -> list[str]:
+    """Split a comma/whitespace-separated skill-name list into clean names."""
+    return [s for s in re.split(r"[,\s]+", raw.strip()) if s]
+
+
+# Skills exposed to each session type. CoderBot defaults to none (unchanged
+# behaviour); interactive sessions expose the bundled ajapopaja skill. Both are
+# overridable via the environment (forwarded from /etc/ajapopaja-build.env).
+CODERBOT_SKILLS = _parse_skill_list(os.getenv("CODERBOT_SKILLS", ""))
+INTERACTIVE_SKILLS = _parse_skill_list(os.getenv("INTERACTIVE_SKILLS", "ajapopaja"))
 
 # Run the documented project test suite in the sandbox after Pi finishes.
 CODERBOT_RUN_TESTS = os.getenv("CODERBOT_RUN_TESTS", "true").lower() == "true"

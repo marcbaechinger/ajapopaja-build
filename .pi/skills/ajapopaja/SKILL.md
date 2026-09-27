@@ -12,7 +12,7 @@ This skill provides a CLI interface to interact with the Ajapopaja Build MCP ser
 The helper script is bundled in this directory. Run it with `python3` (it requires the `httpx` package):
 
 ```bash
-python3 ./mcp_client.py --url http://localhost:8000 <command> ...
+python3 ./mcp_client.py --url http://localhost:${PORT:-8081} <command> ...
 ```
 
 If `httpx` is not installed, install it once:
@@ -21,21 +21,21 @@ If `httpx` is not installed, install it once:
 pip install httpx
 ```
 
-The default server URL is `http://localhost:8000`. Override it with `--url` if the server runs elsewhere.
+The Ajapopaja API listens on `$PORT` inside the container, which defaults to `8081`. The examples below use `http://localhost:${PORT:-8081}`; substitute the real port if `PORT` is set to something else.
 
 ### Authentication
 
 If the MCP server requires authentication (i.e. `MCP_AUTHENTICATION_ENABLED` is `true`), pass a bearer token with `--auth-token` so every RPC request includes an `Authorization: Bearer …` header:
 
 ```bash
-python3 ./mcp_client.py --url http://localhost:8000 --auth-token <token> <command> ...
+python3 ./mcp_client.py --url http://localhost:${PORT:-8081} --auth-token <token> <command> ...
 ```
 
 Alternatively, set the `MCP_AUTH_TOKEN` environment variable instead of passing `--auth-token`:
 
 ```bash
 export MCP_AUTH_TOKEN=<token>
-python3 ./mcp_client.py --url http://localhost:8000 <command> ...
+python3 ./mcp_client.py --url http://localhost:${PORT:-8081} <command> ...
 ```
 
 If the server has authentication disabled (the default), the token is optional and can be omitted.
@@ -54,7 +54,7 @@ The core loop for working on tasks is:
 Fetch the next available `scheduled` task for a pipeline and move it to `inprogress`:
 
 ```bash
-python3 ./mcp_client.py --url http://localhost:8000 get-task <pipeline_id>
+python3 ./mcp_client.py --url http://localhost:${PORT:-8081} get-task <pipeline_id>
 ```
 
 ### 2. Implement the Task
@@ -62,13 +62,13 @@ python3 ./mcp_client.py --url http://localhost:8000 get-task <pipeline_id>
 Retrieve the full task details (specification, design document, and history) to understand what to build:
 
 ```bash
-python3 ./mcp_client.py --url http://localhost:8000 get-task-details <task_id>
+python3 ./mcp_client.py --url http://localhost:${PORT:-8081} get-task-details <task_id>
 ```
 
 If the task requires a design document (`want_design_doc` is True), provide one before implementing. This moves the task to `proposed` status:
 
 ```bash
-python3 ./mcp_client.py --url http://localhost:8000 update-design-doc <task_id> --design-doc "# Design Doc Content" --version <v>
+python3 ./mcp_client.py --url http://localhost:${PORT:-8081} update-design-doc <task_id> --design-doc "# Design Doc Content" --version <v>
 ```
 
 Then implement the task in the workspace.
@@ -82,7 +82,7 @@ After implementing, propose a commit message for the commit that captures the ch
 Commit the change, then mark the task as `implemented` with the commit hash and a completion summary:
 
 ```bash
-python3 ./mcp_client.py --url http://localhost:8000 complete-task <task_id> --commit <hash> --info "summary" --version <v>
+python3 ./mcp_client.py --url http://localhost:${PORT:-8081} complete-task <task_id> --commit <hash> --info "summary" --version <v>
 ```
 
 ## Auxiliary Actions
@@ -92,34 +92,34 @@ The following actions support the main workflow but are not part of the core loo
 ### List Available Tools
 Check what the MCP server currently supports.
 ```bash
-python3 ./mcp_client.py --url http://localhost:8000 list
+python3 ./mcp_client.py --url http://localhost:${PORT:-8081} list
 ```
 
 ### Search for Tasks
 Search tasks by keywords, status, or pipeline.
 ```bash
 # Search by keyword
-python3 ./mcp_client.py --url http://localhost:8000 search-tasks --keywords "search term"
+python3 ./mcp_client.py --url http://localhost:${PORT:-8081} search-tasks --keywords "search term"
 
 # Filter by status
-python3 ./mcp_client.py --url http://localhost:8000 search-tasks --statuses scheduled inprogress
+python3 ./mcp_client.py --url http://localhost:${PORT:-8081} search-tasks --statuses scheduled inprogress
 
 # Paginated search
-python3 ./mcp_client.py --url http://localhost:8000 search-tasks --limit 5 --page 0
+python3 ./mcp_client.py --url http://localhost:${PORT:-8081} search-tasks --limit 5 --page 0
 ```
 
 ### Get Task Status
 Check the current status and verification results for a task.
 ```bash
-python3 ./mcp_client.py --url http://localhost:8000 get-task-status <task_id>
+python3 ./mcp_client.py --url http://localhost:${PORT:-8081} get-task-status <task_id>
 ```
 
 ### Update Task Specification
 Update the specification for a task.
 ```bash
-python3 ./mcp_client.py --url http://localhost:8000 update-task-spec <task_id> --spec "new spec" --version <v>
+python3 ./mcp_client.py --url http://localhost:${PORT:-8081} update-task-spec <task_id> --spec "new spec" --version <v>
 ```
 
 ## Troubleshooting
-- If you get a `307 Redirect` or `405 Method Not Allowed`, ensure the URL ends with `/mcp/` or use the `--url http://localhost:8000` default which handles it.
-- Ensure the FastAPI server is running on the specified port (default 8000).
+- If you get a `307 Redirect` or `405 Method Not Allowed`, ensure the URL ends with `/mcp/` or use the `--url http://localhost:${PORT:-8081}` default which handles it.
+- Ensure the FastAPI server is running on the specified port (default `8081`, configurable via `$PORT`).

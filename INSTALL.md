@@ -64,7 +64,14 @@ docker build --build-arg BUILD_VERSION=$(git rev-parse --short HEAD) \
 - **Node.js 22** and the **`pi` coding agent** (installed globally via npm).
 - A pi model configuration at `/root/.pi/agent/models.json` exposing only the
   models listed in `docker/pi-agent/models.json`
-  (`qwen3.6:27b` and `deepseek-v4.1-flash:cloud`).
+  (`qwen3.6:27b` and `deepseek-v4.1-flash:cloud`). Models are global: every Pi
+  session sees the same model list.
+- A **Pi skill library** at `/opt/ajapopaja/pi/skills` (the bundled
+  `ajapopaja` skill). Skills are staged per session type rather than installed
+  globally, so interactive and CoderBot sessions can expose different skill
+  sets (see `PI_SKILLS_LIBRARY_DIR`, `INTERACTIVE_SKILLS` and `CODERBOT_SKILLS`
+  below). The `httpx` package required by the bundled `mcp_client.py` helper is
+  pre-installed.
 - Git configured with `safe.directory '*'` so it can operate on mounted
   workspaces owned by a different host user.
 
@@ -108,6 +115,9 @@ CODERBOT_DEFAULT_MODEL=deepseek-v4.1-flash:cloud
 | `BASEBOT_LOG_ENABLED` | No | Set `false` to disable bot logging. Default: `true`. |
 | `CODERBOT_RUN_TESTS` | No | When `true` (default), CoderBot runs the project's documented test suite (see `README.md`) in the sandbox after Pi finishes, surfacing the results on the PR. Set `false` to skip this post-run verification. |
 | `CODERBOT_TEST_COMMANDS_JSON` | No | Optional JSON list of argv test commands overriding the README-documented ones. E.g. `[["sh","-c","cd backend && uv run pytest"]]`. When unset or invalid, the README commands are used. |
+| `PI_SKILLS_LIBRARY_DIR` | No | Read-only directory (baked into the image) holding the bundled Pi skills. Default: `/opt/ajapopaja/pi/skills`. |
+| `INTERACTIVE_SKILLS` | No | Comma/whitespace-separated list of skills from the library exposed to **interactive** Pi sessions. Default: `ajapopaja`. |
+| `CODERBOT_SKILLS` | No | Comma/whitespace-separated list of skills from the library exposed to **batch CoderBot** sessions. Default: empty (no skills). |
 
 ### 3.3 Important notes
 

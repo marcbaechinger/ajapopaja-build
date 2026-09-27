@@ -23,7 +23,10 @@ import asyncio
 import json
 import logging
 import uuid
+from pathlib import Path
 from typing import Any, Dict, Optional
+
+from .skills import PiSkillStager
 
 logger = logging.getLogger(__name__)
 
@@ -52,12 +55,15 @@ class PiRpcProcess:
         model: Optional[str] = None,
         cwd: Optional[str] = None,
         command_timeout: Optional[float] = None,
+        skill_names: Optional[list] = None,
     ):
         self.model = model
         self.cwd = cwd
         self.command_timeout = (
             self.COMMAND_TIMEOUT if command_timeout is None else command_timeout
         )
+        self.skill_names = list(skill_names or [])
+        self._skill_stager: Optional[PiSkillStager] = None
         self.process: Optional[asyncio.subprocess.Process] = None
         self._pending_commands: Dict[str, asyncio.Future] = {}
         self._read_task: Optional[asyncio.Task] = None
@@ -86,6 +92,13 @@ class PiRpcProcess:
             return self.process
 
         effective_cwd = cwd if cwd is not None else self.cwd
+
+        # Stage the configured Pi skills into the session's workspace right
+        # before spawning. Best-effort: never let a missing skill break the run.
+        self._skill_stager = PiSkillStager.from_config(self.skill_names)
+        if effective_cwd:
+            self._skill_stager.stage(Path(effective_cwd))
+
         cmd = self.build_command()
         logger.info(
             "Spawning Pi RPC process: %s (cwd=%s)", " ".join(cmd), effective_cwd
@@ -230,6 +243,7 @@ class PiRpcProcess:
         ``graceful=True`` closes stdin (EOF) so Pi can dispose its runtime and
         exit on its own. ``graceful=False`` terminates the process immediately.
         """
+        self._cleanup_skills()
         process = self.process
         if process is None or process.returncode is not None:
             return
@@ -251,7 +265,13 @@ class PiRpcProcess:
 
     def stop(self) -> None:
         """Forcefully terminate the running Pi subprocess."""
+        self._cleanup_skills()
         self._terminate()
+
+    def _cleanup_skills(self) -> None:
+        """Remove any skills staged for this session (idempotent)."""
+        if self._skill_stager is not None:
+            self._skill_stager.cleanup()
 
     def _terminate(self):
         process = self.process

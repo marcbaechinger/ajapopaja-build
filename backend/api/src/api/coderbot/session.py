@@ -167,7 +167,7 @@ class CoderBotSession(PiRpcProcess):
         pr: Optional[PullRequest] = None,
         comments: Optional[str] = None,
     ):
-        super().__init__(model=model)
+        super().__init__(model=model, skill_names=config.CODERBOT_SKILLS)
         self.pipeline_id = pipeline_id
         self.task_id = task_id
         self.model = model
@@ -935,7 +935,12 @@ class InteractivePiSession(PiRpcProcess):
         pipeline_id: Optional[str] = None,
         bot_type: str = "interactive",
     ):
-        super().__init__(model=model, cwd=cwd, command_timeout=command_timeout)
+        super().__init__(
+            model=model,
+            cwd=cwd,
+            command_timeout=command_timeout,
+            skill_names=config.INTERACTIVE_SKILLS,
+        )
         self.pipeline_id = pipeline_id
         self.bot_type = bot_type
         # Wall-clock time the session started running. Captured in

@@ -14,7 +14,8 @@
 
 import asyncio
 import json
-from unittest.mock import AsyncMock, patch
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -333,3 +334,75 @@ def test_stop_terminates_process():
     session.stop()
 
     assert session.process.terminated is True
+
+
+# ---------------------------------------------------------------------------
+# Skill staging
+# ---------------------------------------------------------------------------
+@pytest.mark.asyncio
+async def test_start_stages_configured_skills():
+    with (
+        patch(
+            "api.coderbot.pi_rpc_process.asyncio.create_subprocess_exec",
+            new_callable=AsyncMock,
+        ) as mock_exec,
+        patch("api.coderbot.pi_rpc_process.PiSkillStager") as mock_stager_cls,
+    ):
+        mock_exec.return_value = FakeProcess()
+        stager = mock_stager_cls.from_config.return_value
+        session = PiRpcProcess(cwd="/work", skill_names=["ajapopaja"])
+
+        await session.start()
+
+        mock_stager_cls.from_config.assert_called_once_with(["ajapopaja"])
+        stager.stage.assert_called_once_with(Path("/work"))
+        assert session._skill_stager is stager
+
+
+@pytest.mark.asyncio
+async def test_start_stages_into_cwd_override():
+    with (
+        patch(
+            "api.coderbot.pi_rpc_process.asyncio.create_subprocess_exec",
+            new_callable=AsyncMock,
+        ) as mock_exec,
+        patch("api.coderbot.pi_rpc_process.PiSkillStager") as mock_stager_cls,
+    ):
+        mock_exec.return_value = FakeProcess()
+        stager = mock_stager_cls.from_config.return_value
+        session = PiRpcProcess(cwd="/work", skill_names=["ajapopaja"])
+
+        await session.start(cwd="/sandbox")
+
+        stager.stage.assert_called_once_with(Path("/sandbox"))
+
+
+@pytest.mark.asyncio
+async def test_close_cleans_up_staged_skills():
+    session = PiRpcProcess()
+    session.process = FakeProcess()
+    stager = MagicMock()
+    session._skill_stager = stager
+
+    await session.close(graceful=True)
+
+    stager.cleanup.assert_called_once_with()
+
+
+def test_stop_cleans_up_staged_skills():
+    session = PiRpcProcess()
+    session.process = FakeProcess()
+    stager = MagicMock()
+    session._skill_stager = stager
+
+    session.stop()
+
+    stager.cleanup.assert_called_once_with()
+
+
+def test_cleanup_is_safe_without_stager():
+    session = PiRpcProcess()
+    session._skill_stager = None
+
+    # Must not raise.
+    session._cleanup_skills()

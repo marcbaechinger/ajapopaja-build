@@ -120,6 +120,11 @@ commands and a much broader tool set.
   works from any location.
 * New `update_task_spec` MCP/CLI command, a configurable MCP endpoint, and a
   cleaner `mcp_client` interface.
+* **Per‑session Pi skills** – the bundled skill library is baked into the image
+  and staged per session type, so the interactive coding session exposes the
+  `ajapopaja` skill while batch CoderBot sessions expose none by default. Models
+  stay global; skills are configurable via `INTERACTIVE_SKILLS` and
+  `CODERBOT_SKILLS`.
 
 ### 🔒 Security & reliability
 
