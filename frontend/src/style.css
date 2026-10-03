@@ -374,38 +374,58 @@ mark.piview-search-current {
 
 /* Markdown-rendered blocks ("Format as markup" toggle) */
 .piview-formatted {
-  @apply prose-theme text-[12px] leading-relaxed;
+  /*
+   * The PiView log is a dense, terminal-style surface (`text-[11px]
+   * leading-tight`), so the typography plugin's long-form defaults
+   * (`line-height: 1.75`, generous block margins) make rendered Markdown look
+   * bloated next to the raw log. `leading-snug` (1.375) is the tightest line
+   * height that still reads comfortably at prose size; it is inherited by
+   * paragraphs, list items and code blocks alike.
+   */
+  @apply prose-theme text-[12px] leading-snug;
 }
 
 /*
- * The PiView log is a dense, terminal-style surface, so the default prose
- * vertical rhythm (tuned for long-form documents) leaves every Markdown element
- * standing alone with large gaps above and below. Tighten the spacing between
- * elements while keeping a small separation so adjacent blocks still read as
- * distinct. `pre` needs `!important` to win over the shared `.prose-theme pre`
- * rule above, which pins block padding/margins with `!` utilities for the
- * document editors.
+ * The typography plugin tunes its vertical rhythm for long-form documents, so
+ * every Markdown element stands apart with large gaps above and below. Because
+ * `@apply prose-theme` scopes those rules under `.piview-formatted`, we can
+ * override them here (unlayered rules beat the plugin's layered utilities and
+ * these come later in source order than the scoped `@apply` output). The
+ * spacing is tightened to a few pixels so the rendered block stays as dense as
+ * the surrounding terminal-style log. `pre` needs `!important` to win over the
+ * shared `.prose-theme pre` rule above, which pins block padding/margins with
+ * `!` utilities for the document editors.
  */
 .piview-formatted :where(p, ul, ol, dl, blockquote, figure, table) {
-  margin-top: 0.35em;
-  margin-bottom: 0.35em;
-}
-
-.piview-formatted :where(h1, h2, h3, h4, h5, h6) {
-  margin-top: 0.5em;
+  margin-top: 0.2em;
   margin-bottom: 0.2em;
 }
 
+.piview-formatted :where(h1, h2, h3, h4, h5, h6) {
+  margin-top: 0.4em;
+  margin-bottom: 0.15em;
+}
+
 .piview-formatted :where(li) {
-  margin-top: 0.1em;
-  margin-bottom: 0.1em;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+/* Elements that pin their own (taller) line height: inherit the container's. */
+.piview-formatted :where(pre, table, figcaption) {
+  line-height: inherit;
+}
+
+.piview-formatted :where(hr) {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
 }
 
 .piview-formatted pre {
-  margin-top: 0.35em !important;
-  margin-bottom: 0.35em !important;
-  padding-top: 0.5rem !important;
-  padding-bottom: 0.5rem !important;
+  margin-top: 0.25em !important;
+  margin-bottom: 0.25em !important;
+  padding-top: 0.4rem !important;
+  padding-bottom: 0.4rem !important;
 }
 
 .piview-formatted > :first-child {
