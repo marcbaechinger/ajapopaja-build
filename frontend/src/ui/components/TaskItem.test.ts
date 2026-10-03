@@ -180,6 +180,19 @@ describe('TaskItem', () => {
     expect(html).toContain('title="View Commit Diff"');
   });
 
+  it('should render the implementation duration for newer processed states', () => {
+    const history = [
+      { from_status: TaskStatus.CREATED, to_status: TaskStatus.INPROGRESS, timestamp: '2026-04-12T10:00:00Z', by: 'user' },
+      { from_status: TaskStatus.INPROGRESS, to_status: TaskStatus.PULL_REQUEST_AVAILABLE, timestamp: '2026-04-12T10:05:30Z', by: 'system' },
+    ];
+    for (const status of [TaskStatus.PULL_REQUEST_AVAILABLE, TaskStatus.SUBMITTED]) {
+      const task = { ...mockTask, status, commit_hash: 'abcdef123', history };
+      const html = TaskItem.render(task as any);
+      expect(html).toContain('title="Implementation Duration"');
+      expect(html).toContain('Impl: 5m 30s');
+    }
+  });
+
   const BOT_TARGET_ACTIONS = ['trigger_docbot', 'trigger_reviewbot', 'open_review_dialog'];
 
   describe('bot-trigger gating', () => {

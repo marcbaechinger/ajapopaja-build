@@ -95,6 +95,21 @@ describe('HistoryItemView', () => {
     expect(html).not.toContain('<details');
   });
 
+  it('should render implementation duration for a SUBMITTED task without an IMPLEMENTED transition', () => {
+    const submittedTask = {
+      ...baseTask,
+      status: TaskStatus.SUBMITTED,
+      history: [
+        { from_status: TaskStatus.CREATED, to_status: TaskStatus.INPROGRESS, timestamp: '2026-04-12T10:00:00Z', by: 'user' },
+        { from_status: TaskStatus.INPROGRESS, to_status: TaskStatus.PULL_REQUEST_AVAILABLE, timestamp: '2026-04-12T10:05:30Z', by: 'system' },
+        { from_status: TaskStatus.PULL_REQUEST_AVAILABLE, to_status: TaskStatus.SUBMITTED, timestamp: '2026-04-12T10:10:00Z', by: 'system' },
+      ],
+    };
+    const html = HistoryItemView.render(submittedTask as any);
+    expect(html).toContain('Impl:');
+    expect(html).toContain('5m 30s');
+  });
+
   it('should omit the commit hash when not present', () => {
     const html = HistoryItemView.render({ ...baseTask, commit_hash: null } as any);
     expect(html).not.toContain('data-action-click="open_diff_view"');

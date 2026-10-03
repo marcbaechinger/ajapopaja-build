@@ -24,6 +24,7 @@ import {
   AppNotification,
   NotificationType,
   NotificationSeverity,
+  isProcessedStatus,
 } from './domain';
 
 describe('Domain Models', () => {
@@ -72,6 +73,31 @@ describe('Domain Models', () => {
       const task = new Task(json);
       expect(task.history[0].to_status).toBe(TaskStatus.INPROGRESS);
       expect(task.history[1].to_status).toBe(TaskStatus.CREATED); // fallback for invalid
+    });
+  });
+
+  describe('isProcessedStatus', () => {
+    it('should include the processed states', () => {
+      for (const status of [
+        TaskStatus.IMPLEMENTED,
+        TaskStatus.PULL_REQUEST_AVAILABLE,
+        TaskStatus.SUBMITTED,
+        TaskStatus.DISCARDED,
+        TaskStatus.FAILED,
+      ]) {
+        expect(isProcessedStatus(status)).toBe(true);
+      }
+    });
+
+    it('should exclude states where the implementation interval is not finished', () => {
+      for (const status of [
+        TaskStatus.CREATED,
+        TaskStatus.SCHEDULED,
+        TaskStatus.PROPOSED,
+        TaskStatus.INPROGRESS,
+      ]) {
+        expect(isProcessedStatus(status)).toBe(false);
+      }
     });
   });
 

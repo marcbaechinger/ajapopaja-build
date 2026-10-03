@@ -34,20 +34,29 @@ export function formatMs(durationMs: number): string | null {
 export function calculateDuration(task: Task): string | null {
   if (!task.history || task.history.length === 0) return null;
 
-  // Use the last INPROGRESS entry as the start of the current/final implementation attempt
-  const inProgressEntries = task.history.filter(t => t.to_status === TaskStatus.INPROGRESS);
+  // Consider history chronologically so the "first exit after the start" rule
+  // is stable regardless of the order the backend delivered the entries in.
+  const history = [...task.history].sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  );
+
+  // Use the last INPROGRESS entry as the start of the current/final
+  // implementation attempt (preserves rework-loop semantics).
+  const inProgressEntries = history.filter(t => t.to_status === TaskStatus.INPROGRESS);
   if (inProgressEntries.length === 0) return null;
   const inProgressEntry = inProgressEntries[inProgressEntries.length - 1];
-
-  const implementedEntry = task.history.find(t => t.to_status === TaskStatus.IMPLEMENTED);
-
-  if (!inProgressEntry || !implementedEntry) return null;
-
   const start = new Date(inProgressEntry.timestamp).getTime();
-  const end = new Date(implementedEntry.timestamp).getTime();
-  const durationMs = end - start;
 
-  return formatMs(durationMs);
+  // The implementation interval ends at the first transition out of INPROGRESS
+  // into any other status. Enumerating terminal statuses here would make this
+  // helper stale every time a new processed state is introduced.
+  const exitEntry = history.find(
+    t => t.to_status !== TaskStatus.INPROGRESS && new Date(t.timestamp).getTime() > start
+  );
+  if (!exitEntry) return null;
+
+  const end = new Date(exitEntry.timestamp).getTime();
+  return formatMs(end - start);
 }
 
 export function calculateDesignDuration(task: Task): string | null {

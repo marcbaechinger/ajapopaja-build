@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { Task, TaskStatus } from '../../core/domain.ts';
+import { Task, TaskStatus, isProcessedStatus } from '../../core/domain.ts';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { calculateDuration, calculateDesignDuration } from './utils/duration.ts';
@@ -219,7 +219,7 @@ export class TaskItem {
                           title="View Commit Diff">
                     ${task.commit_hash.substring(0, 7)}
                   </button>
-                  ${isImplemented && calculateDuration(task) ? `
+                  ${isProcessedStatus(task.status) && calculateDuration(task) ? `
                     <div class="text-[10px] text-app-muted flex items-center gap-1" title="Implementation Duration">
                       ${Icon.render('clock', { size: 12 })}
                       Impl: ${calculateDuration(task)}

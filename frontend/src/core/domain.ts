@@ -32,6 +32,26 @@ export function isTaskStatus(value: any): value is TaskStatus {
   return Object.values(TaskStatus).includes(value);
 }
 
+/**
+ * States reached after the task's (last) implementation interval has ended.
+ *
+ * A *processed* task has finished its INPROGRESS work interval, so an
+ * implementation duration is computable. This is intentionally broader than
+ * the History Feed membership (IMPLEMENTED / SUBMITTED / DISCARDED): the latter
+ * is a narrower UI concern and must not be changed implicitly.
+ */
+export const PROCESSED_STATUSES: readonly TaskStatus[] = [
+  TaskStatus.IMPLEMENTED,
+  TaskStatus.PULL_REQUEST_AVAILABLE,
+  TaskStatus.SUBMITTED,
+  TaskStatus.DISCARDED, // includes design rejected / task cancelled
+  TaskStatus.FAILED,
+];
+
+export function isProcessedStatus(status: TaskStatus): boolean {
+  return PROCESSED_STATUSES.includes(status);
+}
+
 export interface VerificationCommandResult {
   cmd: string;
   exit_code: number | null;

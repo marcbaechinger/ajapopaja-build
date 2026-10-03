@@ -53,6 +53,64 @@ describe('duration utils', () => {
       expect(calculateDuration(task as any)).toBe('5m 30s');
     });
 
+    it('should end the interval on a transition to PULL_REQUEST_AVAILABLE', () => {
+      const task = {
+        history: [
+          { to_status: TaskStatus.INPROGRESS, timestamp: '2026-04-12T10:00:00Z' },
+          { to_status: TaskStatus.PULL_REQUEST_AVAILABLE, timestamp: '2026-04-12T10:05:30Z' }
+        ]
+      };
+      expect(calculateDuration(task as any)).toBe('5m 30s');
+    });
+
+    it('should use the first exit for INPROGRESS -> PULL_REQUEST_AVAILABLE -> SUBMITTED', () => {
+      const task = {
+        history: [
+          { to_status: TaskStatus.INPROGRESS, timestamp: '2026-04-12T10:00:00Z' },
+          { to_status: TaskStatus.PULL_REQUEST_AVAILABLE, timestamp: '2026-04-12T10:05:30Z' },
+          { to_status: TaskStatus.SUBMITTED, timestamp: '2026-04-12T10:20:00Z' }
+        ]
+      };
+      expect(calculateDuration(task as any)).toBe('5m 30s');
+    });
+
+    it.each([
+      TaskStatus.DISCARDED,
+      TaskStatus.FAILED,
+    ])('should compute the interval for INPROGRESS -> %s', (exitStatus) => {
+      const task = {
+        history: [
+          { to_status: TaskStatus.CREATED, timestamp: '2026-04-12T09:59:00Z' },
+          { to_status: TaskStatus.INPROGRESS, timestamp: '2026-04-12T10:00:00Z' },
+          { to_status: exitStatus, timestamp: '2026-04-12T10:05:30Z' }
+        ]
+      };
+      expect(calculateDuration(task as any)).toBe('5m 30s');
+    });
+
+    it('should still use the last INPROGRESS after a rework loop through a PR', () => {
+      const task = {
+        history: [
+          { to_status: TaskStatus.INPROGRESS, timestamp: '2026-04-12T09:00:00Z' },
+          { to_status: TaskStatus.PULL_REQUEST_AVAILABLE, timestamp: '2026-04-12T09:10:00Z' },
+          { to_status: TaskStatus.CREATED, timestamp: '2026-04-12T09:20:00Z' },
+          { to_status: TaskStatus.INPROGRESS, timestamp: '2026-04-12T10:00:00Z' },
+          { to_status: TaskStatus.IMPLEMENTED, timestamp: '2026-04-12T10:05:30Z' }
+        ]
+      };
+      expect(calculateDuration(task as any)).toBe('5m 30s');
+    });
+
+    it('should return null when the interval is still open', () => {
+      const task = {
+        history: [
+          { to_status: TaskStatus.INPROGRESS, timestamp: '2026-04-12T10:00:00Z' },
+          { to_status: TaskStatus.INPROGRESS, timestamp: '2026-04-12T10:05:00Z' }
+        ]
+      };
+      expect(calculateDuration(task as any)).toBeNull();
+    });
+
     it('should return null if entries are missing', () => {
       expect(calculateDuration({ history: [] } as any)).toBeNull();
       expect(calculateDuration({ history: [{ to_status: TaskStatus.INPROGRESS }] } as any)).toBeNull();
