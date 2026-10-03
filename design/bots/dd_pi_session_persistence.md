@@ -20,8 +20,8 @@ persistence layer** on top of that native capability so the backend can
 *pause*, *persist* and *resume* a Pi session, and then shows how the three
 requested use cases are implemented on top of it.
 
-The plan is deliberately additive: existing endpoints, websocket messages and
-frontend services keep working (with a session UID added to payloads), and
+The plan is deliberately incremental: the new `/coderbot/sessions/*` API
+replaces the old session endpoints, websocket payloads gain a session UID, and
 persistence can be switched off with a config flag to fall back to today's
 ephemeral `--no-session` behaviour.
 
@@ -220,7 +220,48 @@ PI_SESSIONS_ROOT/
 * Native session files and `events.jsonl` are both append‑only, so a crash
   loses at most the last event.
 
-### 5.4 Data Model
+### 5.4 Docker Deployment & Host Persistence
+
+In production the backend runs in the `ajapopaja-build` container (`Dockerfile`),
+started by the systemd unit via `docker-compose.yml` with
+`env_file: /etc/ajapopaja-build.env`. `PI_SESSIONS_ROOT` follows the same rules
+as the existing `SANDBOX_ROOT` and `WORKSPACES_ROOT`:
+
+* **Default location.** `PI_SESSIONS_ROOT` defaults to
+  `SANDBOX_ROOT / "pi_sessions"`, i.e. `/data/ajapopaja/sandboxes/pi_sessions`
+  with the image default. The backend creates the directory tree on demand.
+* **Not persisted by default.** The shipped `docker-compose.yml` only
+  bind‑mounts `/home`, `/Users` and `/tmp/nvimsocket`; the `/data/ajapopaja/...`
+  tree lives in the container's writable layer. Out of the box a session
+  therefore survives a backend restart but **not** a container recreation
+  (`docker compose down`, an image reload, or a systemd restart).
+* **Mapping to a host directory.** To keep sessions across container restarts,
+  bind‑mount the host directory that should hold them and point the env var at
+  the same path so host and container see the identical absolute path (the
+  pattern already used for `WORKSPACES_ROOT`). For example, add to the
+  `volumes:` list of `docker-compose.yml`:
+
+  ```yaml
+  - /data/ajapopaja/sandboxes:/data/ajapopaja/sandboxes
+  ```
+
+  and set `SANDBOX_ROOT=/data/ajapopaja/sandboxes` (or an explicit
+  `PI_SESSIONS_ROOT=/data/ajapopaja/sandboxes/pi_sessions`) in
+  `/etc/ajapopaja-build.env`. A directory under an already mounted root also
+  works, e.g. `PI_SESSIONS_ROOT=/home/<user>/.ajapopaja/pi_sessions`.
+* **Identical host/container paths.** Pi writes absolute paths into its session
+  files, and the `PiSession` record stores `cwd`, `pi_session_file` and
+  `workspace_path`. Mounting the same path on both sides keeps those paths valid
+  after a restart, which is why the compose file maps host paths unchanged.
+* **Forwarding and permissions.** Every env‑file variable is forwarded into the
+  container automatically, so no extra `-e` flags are needed; restart the
+  service (`systemctl restart ajapopaja-build`) after changing the compose file
+  or the env file. The container runs as root and the image already relaxes
+  git's `safe.directory` check; the mounted session root only needs to be
+  writable by root.
+* The variables that control this are listed in section 9.
+
+### 5.5 Data Model
 
 New `PiSession` document in `backend/core/src/core/models/models.py`:
 
@@ -294,7 +335,7 @@ class PullRequest(Document):
 These are optional, so existing documents remain valid; no migration is
 required.
 
-### 5.5 Manager Redesign
+### 5.6 Manager Redesign
 
 Replace the single interactive slot with a **registry** while keeping the
 one‑running‑process invariant.
@@ -349,9 +390,9 @@ class PiSessionHandle:
   did not survive the restart) and, if `PI_SESSION_AUTO_RESUME` is set, resumes
   the most recent interactive one.
 * `get_interactive_session()` returns the most recent `RUNNING`/`PAUSED`
-  interactive record for backward compatibility, now carrying `uid`.
+  interactive record, now carrying `uid`.
 
-### 5.6 Process Layer Changes
+### 5.7 Process Layer Changes
 
 `backend/api/src/api/coderbot/pi_rpc_process.py`:
 
@@ -392,21 +433,21 @@ async def capture_session_identity(self) -> dict:
 Both session classes gain:
 
 * `session_uid`, `session_dir`, `session_file` attributes;
-* an optional `event_log` used from `_handle_event` (see 5.8);
+* an optional `event_log` used from `_handle_event` (see 5.9);
 * `build_command()` overrides that supply `session_dir`/`session_name`/
   `resume_session_file`.
 
 `InteractivePiSession.build_command()` already appends
 `--append-system-prompt`; that stays and is re‑applied on resume.
 
-### 5.7 Workspace Persistence
+### 5.8 Workspace Persistence
 
 Interactive sessions need no snapshot — they run in the live pipeline repo.
 Batch sessions run in a sandbox that is currently deleted. The design changes:
 
-* `SandboxGitHelper` accepts an explicit `workspace_path` (default remains
-  `SANDBOX_ROOT/<bot_type>/<task_id>` for backward compatibility) so the
-  session can point it at `PI_SESSIONS_ROOT/<uid>/workspace`.
+* `SandboxGitHelper` accepts an explicit `workspace_path` (the default stays
+  `SANDBOX_ROOT/<bot_type>/<task_id>`, which the other bots continue to use) so
+  the session can point it at `PI_SESSIONS_ROOT/<uid>/workspace`.
 * `CoderBotSession.run()` stops calling `helper.cleanup()` when
   `PI_SESSION_RETAIN_BATCH_WORKSPACE` is enabled. Instead it records
   `base_commit` (HEAD before CoderBot's commit) on the `PiSession`.
@@ -422,7 +463,7 @@ a fresh path, check out `base_commit`, apply the linked PR's `patch` with
 `git apply --3way` (the same mechanism as `_apply_existing_patch`). The design
 keeps `base_commit`/`branch_name`/PR patch exactly for this recovery path.
 
-### 5.8 Event Log for UI Replay
+### 5.9 Event Log for UI Replay
 
 Interactive sessions do not persist events today. Introduce a small shared
 `SessionEventLog` helper (in `session.py` or a new `pi_session_store.py`) with
@@ -435,11 +476,10 @@ the same JSONL shape as the batch log:
 * Path: `PI_SESSIONS_ROOT/<uid>/events.jsonl`.
 * `_handle_event` appends and then broadcasts, for **both** session classes.
 * `read_session_events(uid)` reads it back for the history endpoint.
-* The existing `read_session_history(task_id)` is kept and delegates to the
-  task's `pi_session_uid` when present, otherwise falls back to the legacy
-  `SANDBOX_ROOT/logs/...` path. This keeps old tasks replayable.
+* `read_session_history(task_id)` resolves the task's `pi_session_uid` and
+  reads that session's `events.jsonl`.
 
-### 5.9 Startup Reconciliation
+### 5.10 Startup Reconciliation
 
 In `backend/api/src/api/main.py` lifespan, after `init_db()`:
 
@@ -456,7 +496,7 @@ await coderbot_manager.reconcile_on_startup()
 3. Sweep expired workspaces.
 4. Optionally auto‑resume the newest interactive session.
 
-### 5.10 Concurrency & Resource Guarantees
+### 5.11 Concurrency & Resource Guarantees
 
 * Only one `RUNNING` Pi process globally, guarded by `_run_lock` and
   `_running_uid` (same spirit as today's `_interactive_lock`).
@@ -582,8 +622,7 @@ commit and pull request is created") and linked to the same session UID.
 
 ## 7. API Changes
 
-`backend/api/src/api/coderbot/router.py` (new, with backward‑compatible
-aliases):
+`backend/api/src/api/coderbot/router.py` (new):
 
 | Method | Path | Purpose |
 |--------|------|---------|
@@ -597,16 +636,12 @@ aliases):
 | `GET` | `/coderbot/sessions/{uid}/history` | Raw RPC events for UI replay. |
 | `GET` | `/coderbot/sessions/{uid}/messages` | Final `AgentMessage[]` via Pi `get_messages` (optional). |
 
-Existing endpoints are retained and delegate to a UID internally:
-
-| Existing | Behaviour after change |
-|----------|------------------------|
-| `GET /coderbot/session` | Returns the current/last **batch** session, now with `session_uid`. |
-| `GET /coderbot/session/{task_id}/history` | Delegates to the task's `pi_session_uid`; falls back to legacy logs. |
-| `POST /coderbot/interactive/start/{pipeline_id}` | Creates a new `PiSession`, returns `session_uid`. |
-| `POST /coderbot/interactive/message` | Uses the running interactive UID (or an explicit one). |
-| `POST /coderbot/interactive/stop` | Now means **pause** by default; `?discard=true` deletes. |
-| `POST /pull_requests/{pr_id}/iterate` | Accepts an optional `session_uid` to resume the batch session instead of starting a fresh one. |
+The old `/coderbot/session`, `/coderbot/session/{task_id}/history` and
+`/coderbot/interactive/*` routes are removed rather than kept as aliases; the
+frontend and bundled scripts are migrated to the session endpoints above. The
+one existing route that is extended is `POST /pull_requests/{pr_id}/iterate`,
+which accepts an optional `session_uid` to resume the batch session instead of
+starting a fresh one.
 
 All websocket payloads (`INTERACTIVE_STARTED/STOPPED/RPC_EVENT/TURN_ENDED`,
 `CODERBOT_*`) gain a `session_uid` field; the frontend filters on it when more
@@ -658,24 +693,25 @@ New environment variables in `backend/core/src/core/config.py`:
 
 ---
 
-## 10. Migration & Rollout
+## 10. Implementation Plan
+
+Each phase is delivered in order and is only considered complete once the unit
+tests relevant to that phase have been added/updated and the full backend and
+frontend suites pass before work continues with the next phase.
 
 1. **Phase 1 – persistence primitives (no behaviour change):** add `PiSession`
    model, `PI_SESSIONS_ROOT`, `session_dir`/`get_state` capture, `events.jsonl`
    for both session types. Keep spawning with `--no-session` until
    `PI_SESSION_PERSISTENCE_ENABLED` is enabled.
 2. **Phase 2 – session registry & lifecycle:** manager registry, pause/resume,
-   new router endpoints, websocket `session_uid`. Keep the old endpoints as
-   aliases.
+   new router endpoints, websocket `session_uid`.
 3. **Phase 3 – workspace retention:** `SandboxGitHelper` path override, stop
    deleting the batch sandbox, retention sweeper, startup reconciliation.
 4. **Phase 4 – frontend:** session list/resume, history replay, localStorage
    UID, PR "continue session" affordance.
-5. **Phase 5 – polish:** `get_messages`/`get_entries` powered history, stats
-   (`get_session_stats`), optional auto‑resume, per‑user scoping.
 
-No data migration is required: `pi_session_uid` is nullable and old batch logs
-remain readable through the legacy history fallback.
+No data migration is required: `pi_session_uid` is nullable, so existing
+documents remain valid.
 
 ---
 
@@ -695,7 +731,7 @@ Backend (pytest, mirroring `backend/tests/bots/`):
   `pi_session_file` and re‑appends the system instruction.
 * `test_pi_session_store.py`: `events.jsonl` append/read, `meta.json`
   recovery, TTL sweep.
-* `test_coderbot_session_history.py` (extend): UID path + legacy fallback.
+* `test_coderbot_session_history.py` (extend): UID path.
 * Use‑case tests with a fake Pi subprocess and the Beanie test DB for all three
   flows (pause A / resume A, restart reconcile, batch resume → PR‑2).
 * Router tests for the new endpoints (200/404/409).
@@ -742,7 +778,7 @@ Finally, run the documented monorepo suite: `cd backend && uv run pytest` and
 | Manager | `backend/api/src/api/coderbot/manager.py` | session registry, lifecycle (`pause`/`resume`/`discard`/`reconcile`), single‑run guard. |
 | Store | `backend/api/src/api/coderbot/pi_session_store.py` (new) | `PI_SESSIONS_ROOT` layout, `events.jsonl`, `meta.json`, GC. |
 | Sandbox | `backend/api/src/api/bot/git_helper.py` | explicit `workspace_path`; retention mode. |
-| Router | `backend/api/src/api/coderbot/router.py` | `/coderbot/sessions/*` endpoints + legacy aliases. |
+| Router | `backend/api/src/api/coderbot/router.py` | `/coderbot/sessions/*` endpoints, replacing the old `/coderbot/interactive/*` routes. |
 | Startup | `backend/api/src/api/main.py` | `reconcile_on_startup()`. |
 | PR route | `backend/api/src/api/routes/pull_request.py` | optional `session_uid` on iterate. |
 | Frontend | `CoderBotClient.ts`, `InteractiveCodingService.ts`, `CoderBotService.ts`, `InteractiveCodingView.ts`, `PipelineDetailView.ts`, `IteratePullRequestDialog.ts` | session UID, pause/resume, history replay, resume affordances. |
