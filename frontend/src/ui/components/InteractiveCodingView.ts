@@ -67,6 +67,20 @@ export class InteractiveCodingView {
       this.piView.render();
     }
 
+    // Header controls that drive the reused PiView's rendering toggles. The
+    // PiView's own footer is hidden (showFooter: false), so these buttons are
+    // the only affordance for the display options.
+    this.root
+      .querySelector('#interactive-thinking-toggle-btn')
+      ?.addEventListener('click', () => this.handleDisplayToggle('thinking'));
+    this.root
+      .querySelector('#interactive-collapse-blocks-btn')
+      ?.addEventListener('click', () => this.handleDisplayToggle('collapse'));
+    this.root
+      .querySelector('#interactive-error-toggle-btn')
+      ?.addEventListener('click', () => this.handleDisplayToggle('error'));
+    this.updateDisplayButtons();
+
     const promptMount = this.root.querySelector('#interactive-prompt-mount') as HTMLElement | null;
     if (promptMount) {
       this.promptView = new InteractivePromptView(promptMount, {
@@ -164,6 +178,64 @@ export class InteractiveCodingView {
     }
   }
 
+  /**
+   * Applies a header display-toggle click to the reused PiView and refreshes
+   * the associated header button state.
+   */
+  private handleDisplayToggle(action: 'thinking' | 'collapse' | 'error'): void {
+    if (!this.piView) return;
+    if (action === 'thinking') {
+      this.piView.toggleThinking();
+    } else if (action === 'collapse') {
+      this.piView.toggleBlocksCollapse();
+    } else {
+      this.piView.toggleErrorVisibility();
+    }
+    this.updateDisplayButtons();
+  }
+
+  /**
+   * Refreshes the header rendering-control buttons so their icons, pressed
+   * state and accessible labels mirror the PiView's current display state.
+   */
+  private updateDisplayButtons(): void {
+    const thinking = this.root.querySelector(
+      '#interactive-thinking-toggle-btn'
+    ) as HTMLButtonElement | null;
+    if (thinking) {
+      const expanded = this.piView?.isThinkingExpanded() ?? true;
+      thinking.innerHTML = Icon.render(expanded ? 'chevronDown' : 'chevronRight', { size: 14 });
+      thinking.setAttribute('aria-pressed', String(expanded));
+      const label = expanded ? 'Collapse all thinking blocks' : 'Expand all thinking blocks';
+      thinking.title = label;
+      thinking.setAttribute('aria-label', label);
+    }
+
+    const collapse = this.root.querySelector(
+      '#interactive-collapse-blocks-btn'
+    ) as HTMLButtonElement | null;
+    if (collapse) {
+      const collapsed = this.piView?.areBlocksCollapsed() ?? false;
+      collapse.innerHTML = Icon.render(collapsed ? 'plus' : 'minus', { size: 14 });
+      collapse.setAttribute('aria-pressed', String(collapsed));
+      const label = collapsed ? 'Expand all blocks' : 'Collapse all blocks';
+      collapse.title = label;
+      collapse.setAttribute('aria-label', label);
+    }
+
+    const error = this.root.querySelector(
+      '#interactive-error-toggle-btn'
+    ) as HTMLButtonElement | null;
+    if (error) {
+      const visible = this.piView?.isErrorVisible() ?? true;
+      error.innerHTML = Icon.render(visible ? 'eye' : 'eyeOff', { size: 14 });
+      error.setAttribute('aria-pressed', String(visible));
+      const label = visible ? 'Hide error blocks' : 'Show error blocks';
+      error.title = label;
+      error.setAttribute('aria-label', label);
+    }
+  }
+
   private template(): string {
     return `
       <div class="flex flex-col bg-app-surface/30 rounded-3xl border border-app-border/30 overflow-hidden">
@@ -173,11 +245,33 @@ export class InteractiveCodingView {
             <h3 class="text-sm font-bold text-app-text truncate">Interactive Coding Session</h3>
             <span id="interactive-status" class="text-[10px] font-bold uppercase tracking-widest text-app-muted">Session active</span>
           </div>
-          <button id="interactive-pause-btn" type="button"
-            class="px-3 py-1.5 rounded text-xs font-medium bg-amber-600 text-white hover:bg-amber-700 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
-            title="Stop the agent now; the session stays resumable">
-            ${Icon.render('clock', { size: 14 })} Pause
-          </button>
+          <div class="flex items-center gap-2 shrink-0">
+            <div id="interactive-display-controls" class="flex items-center gap-1" role="group" aria-label="Log display options">
+              <button id="interactive-thinking-toggle-btn" type="button"
+                class="p-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center justify-center cursor-pointer"
+                aria-pressed="true" title="Collapse all thinking blocks"
+                aria-label="Collapse all thinking blocks">
+                ${Icon.render('chevronDown', { size: 14 })}
+              </button>
+              <button id="interactive-collapse-blocks-btn" type="button"
+                class="p-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center justify-center cursor-pointer"
+                aria-pressed="false" title="Collapse all blocks"
+                aria-label="Collapse all blocks">
+                ${Icon.render('minus', { size: 14 })}
+              </button>
+              <button id="interactive-error-toggle-btn" type="button"
+                class="p-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center justify-center cursor-pointer"
+                aria-pressed="true" title="Hide error blocks"
+                aria-label="Hide error blocks">
+                ${Icon.render('eye', { size: 14 })}
+              </button>
+            </div>
+            <button id="interactive-pause-btn" type="button"
+              class="px-3 py-1.5 rounded text-xs font-medium bg-amber-600 text-white hover:bg-amber-700 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
+              title="Stop the agent now; the session stays resumable">
+              ${Icon.render('clock', { size: 14 })} Pause
+            </button>
+          </div>
         </div>
         <div id="interactive-piview-mount"></div>
         <div class="p-3 border-t border-app-border/40 bg-app-surface/50">

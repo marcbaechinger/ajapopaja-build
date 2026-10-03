@@ -30,6 +30,9 @@ vi.mock('./PiView.ts', () => {
     options: any;
     rendered = false;
     destroyed = false;
+    thinkingExpanded = true;
+    blocksCollapsed = false;
+    errorVisible = true;
     constructor(service: any, root: any, options: any) {
       this.service = service;
       this.root = root;
@@ -41,6 +44,24 @@ vi.mock('./PiView.ts', () => {
     }
     destroy() {
       this.destroyed = true;
+    }
+    toggleThinking() {
+      this.thinkingExpanded = !this.thinkingExpanded;
+    }
+    toggleBlocksCollapse() {
+      this.blocksCollapsed = !this.blocksCollapsed;
+    }
+    toggleErrorVisibility() {
+      this.errorVisible = !this.errorVisible;
+    }
+    isThinkingExpanded() {
+      return this.thinkingExpanded;
+    }
+    areBlocksCollapsed() {
+      return this.blocksCollapsed;
+    }
+    isErrorVisible() {
+      return this.errorVisible;
     }
   }
   return { PiView };
@@ -249,6 +270,34 @@ describe('InteractiveCodingView', () => {
     service._fire();
     expect(status.textContent).toBe('Paused');
     expect(promptViewInstances[0].placeholder).toContain('Session paused');
+  });
+
+  it('renders the three display toggle buttons in the header', () => {
+    view.render();
+    expect(root.querySelector('#interactive-thinking-toggle-btn')).not.toBeNull();
+    expect(root.querySelector('#interactive-collapse-blocks-btn')).not.toBeNull();
+    expect(root.querySelector('#interactive-error-toggle-btn')).not.toBeNull();
+  });
+
+  it('wires the header display buttons to the PiView toggles', () => {
+    view.render();
+    const pi = piViewInstances[0];
+
+    const thinkingBtn = root.querySelector('#interactive-thinking-toggle-btn') as HTMLButtonElement;
+    const collapseBtn = root.querySelector('#interactive-collapse-blocks-btn') as HTMLButtonElement;
+    const errorBtn = root.querySelector('#interactive-error-toggle-btn') as HTMLButtonElement;
+
+    thinkingBtn.click();
+    expect(pi.thinkingExpanded).toBe(false);
+    expect(thinkingBtn.getAttribute('aria-pressed')).toBe('false');
+
+    collapseBtn.click();
+    expect(pi.blocksCollapsed).toBe(true);
+    expect(collapseBtn.getAttribute('aria-pressed')).toBe('true');
+
+    errorBtn.click();
+    expect(pi.errorVisible).toBe(false);
+    expect(errorBtn.getAttribute('aria-pressed')).toBe('false');
   });
 
   it('destroy tears down the inner PiView and prompt view', () => {

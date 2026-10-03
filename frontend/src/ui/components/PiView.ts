@@ -1633,11 +1633,26 @@ export class PiView {
     }
   }
 
+  /** Whether `thinking` blocks are currently expanded (for embedding hosts). */
+  isThinkingExpanded(): boolean {
+    return this.thinkingExpanded;
+  }
+
+  /** Whether `tool`/`verification` blocks are currently collapsed (for embedding hosts). */
+  areBlocksCollapsed(): boolean {
+    return this.blocksCollapsed;
+  }
+
+  /** Whether `error` blocks are currently visible (for embedding hosts). */
+  isErrorVisible(): boolean {
+    return this.errorVisible;
+  }
+
   /**
    * Toggles the global expanded/collapsed state of all `thinking` blocks.
    * Newly rendered thinking blocks follow the current state.
    */
-  private toggleThinking() {
+  toggleThinking() {
     this.thinkingExpanded = !this.thinkingExpanded;
     const log = this.logContainer;
     const prev = log ? log.scrollTop : 0;
@@ -1677,7 +1692,7 @@ export class PiView {
    * Toggles global collapsed state of all `tool`/`verification` blocks.
    * Newly rendered blocks follow the current state.
    */
-  private toggleBlocksCollapse() {
+  toggleBlocksCollapse() {
     this.blocksCollapsed = !this.blocksCollapsed;
     const log = this.logContainer;
     const prev = log ? log.scrollTop : 0;
@@ -1714,7 +1729,7 @@ export class PiView {
    * Toggles the visibility of all `error` blocks. New error blocks follow
    * the current state.
    */
-  private toggleErrorVisibility() {
+  toggleErrorVisibility() {
     this.errorVisible = !this.errorVisible;
     const log = this.logContainer;
     const prev = log ? log.scrollTop : 0;
