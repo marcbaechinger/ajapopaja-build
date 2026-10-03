@@ -39,6 +39,29 @@ def mock_workspaces_root(monkeypatch):
     monkeypatch.setattr(config, "WORKSPACES_ROOT", Path("/tmp"))
 
 
+@pytest.fixture(autouse=True)
+def isolate_pi_sessions_root(monkeypatch, tmp_path):
+    """Keep every test's Pi session files inside pytest's tmp dir.
+
+    Several code paths (e.g. ``CoderBotManager.process_task`` and
+    ``start_interactive_session``) write a ``meta.json`` sidecar through
+    :mod:`api.coderbot.pi_session_store` as a best-effort recovery aid. Without
+    this fixture those writes land in the real ``config.PI_SESSIONS_ROOT``
+    (``/data/ajapopaja/pi_sessions``) and leave orphaned session directories
+    behind after a test run.
+
+    Tests that need a specific layout can still override
+    ``config.PI_SESSIONS_ROOT`` themselves; their ``monkeypatch`` wins for the
+    duration of the test.
+    """
+    sessions_root = tmp_path / "pi_sessions"
+    # Patch both the attribute and the environment variable: some tests call
+    # ``importlib.reload(config)``, which re-reads the env var and would
+    # otherwise discard the attribute patch.
+    monkeypatch.setattr(config, "PI_SESSIONS_ROOT", sessions_root)
+    monkeypatch.setenv("PI_SESSIONS_ROOT", str(sessions_root))
+
+
 @pytest.fixture
 async def init_mock_db():
     mongodb_uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
