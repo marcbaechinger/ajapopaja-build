@@ -17,8 +17,7 @@
 import type { RenderBlock } from '../../core/CoderBotService.ts';
 import { Icon } from './Icon.ts';
 import { KeybindingManager } from './KeybindingManager.ts';
-import { marked } from 'marked';
-import DOMPurify from 'dompurify';
+import { renderMarkdown } from './utils/markdown.ts';
 import './Keybinding.css';
 
 /**
@@ -87,6 +86,14 @@ export interface PiViewOptions {
    * frame. Default false (renders synchronously, as before).
    */
   deferInitialRender?: boolean;
+
+  /**
+   * Automatically render completed `text` blocks (the assistant's visible
+   * answer) as sanitized styled Markdown HTML. Streaming/`thinking`/`tool`/…
+   * blocks are never auto-formatted; they keep their raw rendering unless the
+   * user clicks "Format as markup". Default true.
+   */
+  autoFormatText?: boolean;
 
   /**
    * Optional callback invoked when the user activates the "Open in Dialog"
@@ -203,6 +210,32 @@ export class PiView {
   /** Raw (unrendered) text captured per formatted block, used for re-rendering. */
   private formattedRawText: Map<string, string> = new Map();
 
+  /** Whether completed `text` blocks are auto-rendered as Markdown. */
+  private autoFormatText: boolean;
+
+  /**
+   * IDs of `text` blocks the user explicitly switched back to raw. Prevents a
+   * later snapshot (or completion) from silently re-formatting them. Cleared
+   * when the user re-enables formatting or the block is removed.
+   */
+  private rawTextOverride: Set<string> = new Set();
+
+  /**
+   * Completed `text` blocks waiting to be auto-formatted. Drained on an idle
+   * callback (with a small per-callback budget) so replaying a long session
+   * does not run `marked.parse` + DOMPurify for every block in a single frame.
+   */
+  private pendingAutoFormat: string[] = [];
+  private autoFormatHandle: number | null = null;
+  private autoFormatScheduled: boolean = false;
+
+  /**
+   * Latest block snapshot per id, kept in sync by {@link applyBlock}. Lets the
+   * deferred auto-format drain look up a block without re-reading the whole
+   * history and without depending on the service exposing the same objects.
+   */
+  private blockById: Map<string, RenderBlock> = new Map();
+
   constructor(service: PiSessionService, mount: HTMLElement, options: PiViewOptions = {}) {
     this.service = service;
     this.root = mount;
@@ -210,6 +243,7 @@ export class PiView {
     this.isFollowMode = options.followInitially ?? true;
     this.logHeightClass = options.logHeightClass ?? 'h-[60vh]';
     this.deferInitialRender = options.deferInitialRender ?? false;
+    this.autoFormatText = options.autoFormatText ?? true;
     this.emptyStateAction = options.emptyStateAction;
     this.onOpenDialog = options.onOpenDialog;
     this.keyboardBindings = options.keyboardBindings ?? {};
@@ -255,6 +289,10 @@ export class PiView {
       this.renderFrameHandle = null;
     }
     this.pendingBlocks = null;
+    if (this.autoFormatHandle !== null) {
+      this.cancelScheduledAutoFormat();
+    }
+    this.pendingAutoFormat = [];
     this.unsubs.forEach((unsub) => {
       try {
         unsub();
@@ -1056,10 +1094,13 @@ export class PiView {
         el.remove();
         this.blockEls.delete(id);
         this.blockTimestamps.delete(id);
+        this.blockById.delete(id);
         // Drop any Markdown-formatting state for the removed block.
         this.formattedBlocks.delete(id);
         this.formattedContent.delete(id);
         this.formattedRawText.delete(id);
+        this.rawTextOverride.delete(id);
+        this.pendingAutoFormat = this.pendingAutoFormat.filter((pendingId) => pendingId !== id);
       }
     }
     blocks.forEach((block) => this.applyBlock(block));
@@ -1072,6 +1113,7 @@ export class PiView {
   }
 
   private applyBlock(block: RenderBlock) {
+    this.blockById.set(block.id, block);
     let el = this.blockEls.get(block.id);
     if (!el) {
       el = this.createBlockEl(block);
@@ -1179,7 +1221,18 @@ export class PiView {
         el.textContent = block.text ?? '';
         break;
       }
-      case 'text':
+      case 'text': {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'piview-text';
+        const raw = document.createElement('div');
+        raw.setAttribute('data-role', 'raw');
+        raw.className = 'whitespace-pre-wrap break-all';
+        raw.textContent = block.text ?? '';
+        wrapper.appendChild(raw);
+        if (this.shouldFormatText(block)) this.enqueueAutoFormat(block.id);
+        el = wrapper;
+        break;
+      }
       default: {
         el = document.createElement('div');
         el.className = 'whitespace-pre-wrap break-all';
@@ -1244,6 +1297,33 @@ export class PiView {
   }
 
   private updateBlockEl(el: HTMLElement, block: RenderBlock) {
+    // The assistant's visible answer is auto-rendered on completion. While it is
+    // still streaming (or if the user opted it back to raw) keep the cheap,
+    // pre-formatted plain-text update.
+    if (block.kind === 'text') {
+      if (this.formattedBlocks.has(block.id)) {
+        // Only re-parse if the source actually changed (normally never after
+        // completion).
+        if (this.formattedRawText.get(block.id) !== this.blockToText(block)) {
+          this.refreshFormattedEl(el, block.id, block);
+        }
+        return;
+      }
+      if (this.shouldFormatText(block)) {
+        this.applyFormat(el, block.id, this.blockToText(block), { silent: true });
+        return;
+      }
+      const raw = el.querySelector('[data-role="raw"]') as HTMLElement | null;
+      const txt = block.text ?? '';
+      if (raw) {
+        if (raw.textContent !== txt) raw.textContent = txt;
+      } else {
+        // Wrapper unexpectedly missing its raw child: reuse the existing
+        // button-preserving plain-text replacement used by the generic path.
+        this.replaceTextPreservingActions(el, txt);
+      }
+      return;
+    }
     // While a block is rendered as styled Markdown, keep that rendering in sync
     // with any newly streamed content instead of touching the raw nodes.
     if (this.formattedBlocks.has(block.id)) {
@@ -1271,20 +1351,28 @@ export class PiView {
       }
     } else {
       const txt = block.text ?? block.header ?? '';
-      // Preserve the per-block action buttons while replacing text content.
-      const actionBtns = Array.from(
-        el.querySelectorAll('.piview-copy, .piview-format')
-      ) as HTMLElement[];
-      actionBtns.forEach((btn) => btn.remove());
-      if (el.textContent !== txt) {
-        el.textContent = txt;
-      }
-      actionBtns.forEach((btn) => el.appendChild(btn));
+      this.replaceTextPreservingActions(el, txt);
     }
     // Apply error tinting to error blocks.
     if (block.kind === 'error' && !el.classList.contains('text-red-400')) {
       el.classList.add('text-red-400');
     }
+  }
+
+  /**
+   * Replaces a block's inline text while preserving its per-block action
+   * buttons (copy / format). Shared by the generic update path and the `text`
+   * fallback when a wrapper is missing its raw child.
+   */
+  private replaceTextPreservingActions(el: HTMLElement, txt: string) {
+    const actionBtns = Array.from(
+      el.querySelectorAll('.piview-copy, .piview-format')
+    ) as HTMLElement[];
+    actionBtns.forEach((btn) => btn.remove());
+    if (el.textContent !== txt) {
+      el.textContent = txt;
+    }
+    actionBtns.forEach((btn) => el.appendChild(btn));
   }
 
   // ---------------------------------------------------------------------------
@@ -1293,8 +1381,8 @@ export class PiView {
 
   /**
    * Toggles a single block between its raw text and a Markdown-rendered, styled
-   * HTML representation (using `marked` + `dompurify`). A second click restores
-   * the original content nodes exactly as they were.
+   * HTML representation (using the shared `renderMarkdown`). A second click
+   * restores the original content nodes exactly as they were.
    */
   private toggleFormatBlock(id: string) {
     const wrapper = this.blockEls.get(id);
@@ -1305,11 +1393,15 @@ export class PiView {
       const block = this.findBlock(id);
       const text = block ? this.blockToText(block) : this.extractText(wrapper);
       if (!text) return;
+      // Re-formatting explicitly clears any "stay raw" opt-out.
+      this.rawTextOverride.delete(id);
       this.applyFormat(wrapper, id, text);
     }
   }
 
   private findBlock(id: string): RenderBlock | undefined {
+    const cached = this.blockById.get(id);
+    if (cached) return cached;
     return this.service.getHistory().find((b) => b.id === id);
   }
 
@@ -1348,13 +1440,7 @@ export class PiView {
     return (clone.textContent ?? '').trim();
   }
 
-  /** Converts Markdown to sanitized, styled HTML. */
-  private renderMarkdown(text: string): string {
-    const rawHtml = marked.parse(text, { async: false }) as string;
-    return DOMPurify.sanitize(rawHtml);
-  }
-
-  private applyFormat(wrapper: HTMLElement, id: string, text: string) {
+  private applyFormat(wrapper: HTMLElement, id: string, text: string, opts: { silent?: boolean } = {}) {
     // Snapshot the original content nodes (excluding action buttons) so we can
     // restore the block exactly when the rendering is toggled back off.
     const contentNodes = Array.from(wrapper.childNodes).filter((n) => {
@@ -1369,11 +1455,12 @@ export class PiView {
     const formatted = document.createElement('div');
     formatted.className = FORMATTED_MARKDOWN_CLASS;
     formatted.setAttribute('data-role', 'formatted');
-    formatted.innerHTML = this.renderMarkdown(text);
+    formatted.innerHTML = renderMarkdown(text);
     wrapper.appendChild(formatted);
     wrapper.classList.add('piview-formatted-active');
     this.formattedBlocks.add(id);
-    this.showToast('Rendered Markdown');
+    this.refreshFormatButton(wrapper, id);
+    if (!opts.silent) this.showToast('Rendered Markdown');
   }
 
   private revertFormat(wrapper: HTMLElement, id: string) {
@@ -1384,12 +1471,36 @@ export class PiView {
     (this.formattedContent.get(id) ?? []).forEach((n) => wrapper.appendChild(n));
     this.formattedContent.delete(id);
     this.formattedRawText.delete(id);
+    // Remember that the user explicitly wants the raw view for this block so a
+    // later snapshot/completion does not silently re-format it.
+    this.rawTextOverride.add(id);
+    this.refreshFormatButton(wrapper, id);
     this.showToast('Showing raw text');
+  }
+
+  /**
+   * Updates the per-block format button's label/icon to reflect whether the
+   * block is currently rendered as Markdown. Called after the auto-format path
+   * (which runs after the button was created) as well as on manual toggles.
+   */
+  private refreshFormatButton(wrapper: HTMLElement, id: string) {
+    const btn = wrapper.querySelector('.piview-format') as HTMLElement | null;
+    if (!btn) return;
+    const formatted = this.formattedBlocks.has(id);
+    const label = formatted ? 'Show raw text' : 'Format as markup';
+    btn.setAttribute('title', label);
+    btn.setAttribute('aria-label', label);
+    btn.innerHTML = this.cleanIcon(
+      Icon.render(formatted ? 'eyeOff' : 'documentation', { size: 12, label })
+    );
   }
 
   /** Re-renders a formatted block when new content is streamed into it. */
   private refreshFormattedEl(wrapper: HTMLElement, id: string, block: RenderBlock) {
     const text = this.blockToText(block);
+    // Nothing to do when the rendered source is unchanged (e.g. a non-text
+    // block whose snapshot did not affect it). Avoids re-parsing on every update.
+    if (this.formattedRawText.get(id) === text) return;
     this.formattedRawText.set(id, text);
     let formatted = wrapper.querySelector('[data-role="formatted"]') as HTMLElement | null;
     if (!formatted) {
@@ -1398,7 +1509,100 @@ export class PiView {
       formatted.setAttribute('data-role', 'formatted');
       wrapper.appendChild(formatted);
     }
-    formatted.innerHTML = this.renderMarkdown(text);
+    formatted.innerHTML = renderMarkdown(text);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Automatic Markdown rendering of completed `text` blocks
+  // ---------------------------------------------------------------------------
+
+  /** Whether a block should be auto-formatted as Markdown. */
+  private shouldFormatText(block: RenderBlock): boolean {
+    return (
+      this.autoFormatText &&
+      block.kind === 'text' &&
+      !!block.complete &&
+      !!block.text &&
+      !this.rawTextOverride.has(block.id)
+    );
+  }
+
+  /**
+   * Queues a completed `text` block for auto-formatting. Completion is rare
+   * (once per response element) but a history replay can enqueue many blocks at
+   * once, so the actual parse is deferred to an idle callback with a small
+   * budget rather than blocking the reconcile frame.
+   */
+  private enqueueAutoFormat(id: string) {
+    if (this.pendingAutoFormat.includes(id)) return;
+    this.pendingAutoFormat.push(id);
+    this.scheduleAutoFormatDrain();
+  }
+
+  private scheduleAutoFormatDrain() {
+    if (this.autoFormatScheduled) return;
+    this.autoFormatScheduled = true;
+    const run = () => {
+      this.autoFormatHandle = null;
+      this.autoFormatScheduled = false;
+      this.drainAutoFormat();
+    };
+    const ric = (globalThis as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number })
+      .requestIdleCallback;
+    if (typeof ric === 'function') {
+      this.autoFormatHandle = ric(run, { timeout: 200 });
+    } else {
+      this.autoFormatHandle = globalThis.setTimeout(run, 0) as unknown as number;
+    }
+  }
+
+  private cancelScheduledAutoFormat() {
+    if (this.autoFormatHandle === null) {
+      this.autoFormatScheduled = false;
+      return;
+    }
+    const cic = (globalThis as unknown as { cancelIdleCallback?: (handle: number) => void })
+      .cancelIdleCallback;
+    if (typeof cic === 'function') {
+      cic(this.autoFormatHandle);
+    } else {
+      globalThis.clearTimeout(this.autoFormatHandle as unknown as number);
+    }
+    this.autoFormatHandle = null;
+    this.autoFormatScheduled = false;
+  }
+
+  /**
+   * Formats a bounded number of queued blocks, then reschedules itself if more
+   * remain. Each block is parsed at most once because `applyFormat` records it
+   * in `formattedBlocks`.
+   */
+  private drainAutoFormat(budgetMs: number = 5) {
+    const start = Date.now();
+    while (this.pendingAutoFormat.length > 0) {
+      const id = this.pendingAutoFormat.shift()!;
+      const el = this.blockEls.get(id);
+      const block = this.blockById.get(id);
+      if (!el || !block) continue;
+      if (this.formattedBlocks.has(id)) continue;
+      if (!this.shouldFormatText(block)) continue;
+      this.applyFormat(el, id, this.blockToText(block), { silent: true });
+      if (Date.now() - start >= budgetMs) break;
+    }
+    if (this.pendingAutoFormat.length > 0 && this.autoFormatHandle === null) {
+      this.autoFormatScheduled = false;
+      this.scheduleAutoFormatDrain();
+    }
+  }
+
+  /**
+   * Synchronously drains the auto-format queue. Exposed for tests so they do
+   * not depend on idle-callback timing, and safe to call at any time.
+   */
+  public flushAutoFormat(): void {
+    this.cancelScheduledAutoFormat();
+    // Ignore the time budget when explicitly flushing.
+    this.drainAutoFormat(Number.POSITIVE_INFINITY);
   }
 
   // ---------------------------------------------------------------------------

@@ -45,6 +45,13 @@ export interface RenderBlock {
    * "✓ bash finished"; the view prepends it before the result/output.
    */
   command?: string;
+  /**
+   * True once the reducer closed the streaming buffer for this block, i.e. the
+   * response element is complete and no further deltas will be appended. Used
+   * by the view to auto-render the assistant Markdown exactly once, on
+   * completion, instead of on every streamed token.
+   */
+  complete?: boolean;
 }
 
 type BlockListener = (blocks: RenderBlock[]) => void;
@@ -459,13 +466,21 @@ export class PiLogReducer {
   }
 
   private closeStreamingBlocks(kinds: BlockKind[]) {
+    let changed = false;
     for (const [key, open] of this.openBlocks) {
       const kind = open.block.kind;
       if (kinds.includes(kind)) {
+        if (!open.block.complete) {
+          open.block.complete = true;
+          changed = true;
+        }
         this.openBlocks.delete(key);
       }
     }
-    // No visual change; closing just separates message boundaries.
+    // Emit once per close transition (not once per message_start/end event) so
+    // listeners can react to the "response element completed" boundary. The
+    // emit goes through emitBlocks() and therefore respects suspendEmits().
+    if (changed) this.emitBlocks();
   }
 
   private updateBlock(id: string, patch: Partial<RenderBlock>) {

@@ -170,4 +170,57 @@ describe('PiLogReducer', () => {
     const sub = (LAST(verif).sub ?? []).join('\n');
     expect(sub).toBe('test verification:\n- pytest  → exit code 0');
   });
+
+  it('marks a streamed block complete on message_end and emits once per boundary', () => {
+    const reducer = new PiLogReducer();
+    reducer.handleEvent({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'hi' },
+    });
+    expect(LAST(reducer.getBlocks()).complete).toBeFalsy();
+
+    const listener = vi.fn();
+    reducer.onBlocks(listener);
+
+    // Closing the text buffer flips `complete` and emits exactly once.
+    reducer.handleEvent({ type: 'message_end' });
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(LAST(reducer.getBlocks()).complete).toBe(true);
+
+    // A following boundary with no open streaming block must not emit again.
+    reducer.handleEvent({ type: 'message_start' });
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(LAST(reducer.getBlocks()).complete).toBe(true);
+  });
+
+  it('marks thinking blocks complete when their stream closes', () => {
+    const reducer = new PiLogReducer();
+    reducer.handleEvent({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'thinking_delta', contentIndex: 0, delta: 'hmm' },
+    });
+    expect(LAST(reducer.getBlocks()).complete).toBeFalsy();
+    reducer.handleEvent({ type: 'message_end' });
+    expect(LAST(reducer.getBlocks()).complete).toBe(true);
+  });
+
+  it('defers the completion emit while emits are suspended', () => {
+    const reducer = new PiLogReducer();
+    reducer.handleEvent({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'x' },
+    });
+    const listener = vi.fn();
+    reducer.onBlocks(listener);
+
+    const release = reducer.suspendEmits();
+    reducer.handleEvent({ type: 'message_end' });
+    // Suspended: no notification yet, but the flag is already applied.
+    expect(listener).not.toHaveBeenCalled();
+    expect(LAST(reducer.getBlocks()).complete).toBe(true);
+
+    release();
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect((listener.mock.calls[0][0] as RenderBlock[])[0].complete).toBe(true);
+  });
 });

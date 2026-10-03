@@ -15,6 +15,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { marked } from 'marked';
 import { PiView, type PiSessionService } from './PiView.ts';
 import type { RenderBlock } from '../../core/CoderBotService.ts';
 
@@ -1643,6 +1644,294 @@ describe('PiView keyboard tooltips', () => {
       new KeyboardEvent('keydown', { key: 'o', bubbles: true })
     );
     expect(onOpenDialog).toHaveBeenCalledTimes(1);
+
+    view.destroy();
+  });
+});
+
+describe('PiView automatic Markdown rendering', () => {
+  let mount: HTMLElement;
+
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    mount = document.createElement('div');
+    document.body.appendChild(mount);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('renders a streaming text block as raw text (no formatted HTML)', () => {
+    const parseSpy = vi.spyOn(marked, 'parse');
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    emitBlocks([{ id: 't1', kind: 'text', text: '**bo', complete: false }]);
+
+    const blockEl = mount.querySelector('#log-blocks > div') as HTMLElement;
+    expect(blockEl.querySelector('.piview-formatted')).toBeNull();
+    expect(blockEl.querySelector('[data-role="raw"]')?.textContent).toBe('**bo');
+    expect(parseSpy).not.toHaveBeenCalled();
+
+    view.destroy();
+  });
+
+  it('auto-renders a completed text block as sanitized Markdown', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    emitBlocks([{ id: 't2', kind: 'text', text: '# Head\n\n**bold** and *italic*', complete: true }]);
+    // Completed on first sight (history replay): formatted on the queued drain.
+    expect(mount.querySelector('.piview-formatted')).toBeNull();
+    view.flushAutoFormat();
+
+    const formatted = mount.querySelector('.piview-formatted') as HTMLElement;
+    expect(formatted).not.toBeNull();
+    expect(formatted.querySelector('h1')?.textContent).toBe('Head');
+    expect(formatted.querySelector('strong')?.textContent).toBe('bold');
+    expect(formatted.querySelector('em')?.textContent).toBe('italic');
+    // The raw pre-wrap child is replaced, not nested next to the formatted div.
+    expect(mount.querySelector('[data-role="raw"]')).toBeNull();
+
+    view.destroy();
+  });
+
+  it('auto-formats a block when it transitions from streaming to complete', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    emitBlocks([{ id: 't3', kind: 'text', text: '**bo', complete: false }]);
+    const blockEl = mount.querySelector('#log-blocks > div') as HTMLElement;
+    expect(blockEl.querySelector('.piview-formatted')).toBeNull();
+
+    emitBlocks([{ id: 't3', kind: 'text', text: '**bold**', complete: true }]);
+    expect(blockEl.querySelector('.piview-formatted')).not.toBeNull();
+    expect(blockEl.querySelector('.piview-formatted strong')?.textContent).toBe('bold');
+
+    view.destroy();
+  });
+
+  it('only auto-formats text blocks; other kinds stay raw until manually formatted', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    emitBlocks([
+      { id: 'th', kind: 'thinking', text: '**think**', complete: true },
+      { id: 'tl', kind: 'tool', header: '→ write', text: '**tool**', complete: true },
+      { id: 'tx', kind: 'text', text: '**text**', complete: true },
+    ]);
+    view.flushAutoFormat();
+
+    const byId = (id: string) =>
+      Array.from(mount.querySelectorAll<HTMLElement>('#log-blocks > div')).find(
+        (e) => e.getAttribute('data-block-id') === id
+      )!;
+    expect(byId('th').querySelector('.piview-formatted')).toBeNull();
+    expect(byId('tl').querySelector('.piview-formatted')).toBeNull();
+    expect(byId('tx').querySelector('.piview-formatted')).not.toBeNull();
+
+    // Non-text blocks keep the manual toggle.
+    (byId('th').querySelector('.piview-format') as HTMLButtonElement).click();
+    expect(byId('th').querySelector('.piview-formatted')).not.toBeNull();
+
+    view.destroy();
+  });
+
+  it('honours autoFormatText: false', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount, { autoFormatText: false });
+    view.render();
+
+    emitBlocks([{ id: 'off', kind: 'text', text: '**bold**', complete: true }]);
+    view.flushAutoFormat();
+    expect(mount.querySelector('.piview-formatted')).toBeNull();
+    expect(mount.querySelector('[data-role="raw"]')?.textContent).toBe('**bold**');
+
+    view.destroy();
+  });
+
+  it('sanitizes auto-rendered Markdown so unsafe scripts are removed', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    emitBlocks([
+      { id: 's1', kind: 'text', text: 'hi <script>alert(1)</script> there', complete: true },
+    ]);
+    view.flushAutoFormat();
+
+    const formatted = mount.querySelector('.piview-formatted') as HTMLElement;
+    expect(formatted).not.toBeNull();
+    expect(formatted.querySelector('script')).toBeNull();
+    expect(mount.textContent).toContain('hi');
+
+    view.destroy();
+  });
+
+  it('parses Markdown once per completed block, not on every streamed delta', () => {
+    const parseSpy = vi.spyOn(marked, 'parse');
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    emitBlocks([{ id: 'p1', kind: 'text', text: 'a', complete: false }]);
+    emitBlocks([{ id: 'p1', kind: 'text', text: 'ab', complete: false }]);
+    emitBlocks([{ id: 'p1', kind: 'text', text: 'abc', complete: false }]);
+    expect(parseSpy).not.toHaveBeenCalled();
+
+    emitBlocks([{ id: 'p1', kind: 'text', text: 'abcd', complete: true }]);
+    view.flushAutoFormat();
+    expect(parseSpy).toHaveBeenCalledTimes(1);
+
+    // A later snapshot with the same source does not re-parse.
+    emitBlocks([{ id: 'p1', kind: 'text', text: 'abcd', complete: true }]);
+    view.flushAutoFormat();
+    expect(parseSpy).toHaveBeenCalledTimes(1);
+
+    view.destroy();
+  });
+
+  it('stays raw after the user reverts an auto-formatted text block', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    emitBlocks([{ id: 'r1', kind: 'text', text: '**bold**', complete: true }]);
+    view.flushAutoFormat();
+    const blockEl = mount.querySelector('#log-blocks > div') as HTMLElement;
+    const formatBtn = blockEl.querySelector('.piview-format') as HTMLButtonElement;
+    expect(blockEl.querySelector('.piview-formatted')).not.toBeNull();
+
+    formatBtn.click();
+    expect(blockEl.querySelector('.piview-formatted')).toBeNull();
+    expect(blockEl.textContent).toContain('**bold**');
+
+    // A later complete snapshot must not silently re-format it.
+    emitBlocks([{ id: 'r1', kind: 'text', text: '**bold**', complete: true }]);
+    view.flushAutoFormat();
+    expect(blockEl.querySelector('.piview-formatted')).toBeNull();
+
+    // Re-formatting explicitly clears the override.
+    formatBtn.click();
+    expect(blockEl.querySelector('.piview-formatted')).not.toBeNull();
+
+    view.destroy();
+  });
+
+  it('stays raw when reverted before completion, then the block completes', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    emitBlocks([{ id: 'r2', kind: 'text', text: '**bo', complete: false }]);
+    const blockEl = mount.querySelector('#log-blocks > div') as HTMLElement;
+    const formatBtn = blockEl.querySelector('.piview-format') as HTMLButtonElement;
+    formatBtn.click();
+    expect(blockEl.querySelector('.piview-formatted')).not.toBeNull();
+    formatBtn.click();
+    expect(blockEl.querySelector('.piview-formatted')).toBeNull();
+
+    emitBlocks([{ id: 'r2', kind: 'text', text: '**bold**', complete: true }]);
+    view.flushAutoFormat();
+    expect(blockEl.querySelector('.piview-formatted')).toBeNull();
+    expect(blockEl.textContent).toContain('**bold**');
+
+    view.destroy();
+  });
+
+  it('copying an auto-formatted block still returns the raw Markdown', async () => {
+    const writeText = vi.fn(async (_text: string) => { });
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    emitBlocks([{ id: 'c1', kind: 'text', text: '# Title\n\n**bold**', complete: true }]);
+    view.flushAutoFormat();
+    const blockEl = mount.querySelector('#log-blocks > div') as HTMLElement;
+    (blockEl.querySelector('.piview-copy') as HTMLButtonElement).click();
+
+    expect(writeText).toHaveBeenCalledTimes(1);
+    const copied = writeText.mock.calls[0][0] as string;
+    expect(copied).toContain('# Title');
+    expect(copied).toContain('**bold**');
+
+    view.destroy();
+  });
+
+  it('does not format a replayed history synchronously and flushes identically', () => {
+    const parseSpy = vi.spyOn(marked, 'parse');
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    const history: RenderBlock[] = [];
+    for (let i = 0; i < 12; i++) {
+      history.push({ id: `h${i}`, kind: 'text', text: `# Head ${i}`, complete: true });
+    }
+    emitBlocks(history);
+
+    // The reconcile pass only queued the blocks; nothing was parsed yet.
+    expect(parseSpy).not.toHaveBeenCalled();
+    expect(mount.querySelectorAll('.piview-formatted').length).toBe(0);
+
+    view.flushAutoFormat();
+    expect(mount.querySelectorAll('.piview-formatted').length).toBe(12);
+
+    view.destroy();
+  });
+
+  it('clears auto-format state when a block is removed', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    emitBlocks([{ id: 'x1', kind: 'text', text: '**bold**', complete: true }]);
+    view.flushAutoFormat();
+
+    const internals = view as unknown as {
+      formattedBlocks: Set<string>;
+      rawTextOverride: Set<string>;
+      formattedContent: Map<string, Node[]>;
+      formattedRawText: Map<string, string>;
+      pendingAutoFormat: string[];
+    };
+    expect(internals.formattedBlocks.has('x1')).toBe(true);
+
+    // Simulate a queued id that then vanishes in the same/next reconcile.
+    internals.pendingAutoFormat.push('x1');
+    emitBlocks([]);
+
+    expect(internals.formattedBlocks.has('x1')).toBe(false);
+    expect(internals.formattedContent.has('x1')).toBe(false);
+    expect(internals.formattedRawText.has('x1')).toBe(false);
+    expect(internals.rawTextOverride.has('x1')).toBe(false);
+    expect(internals.pendingAutoFormat).not.toContain('x1');
+
+    view.destroy();
+  });
+
+  it('flips the format button label/icon between raw and formatted', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    emitBlocks([{ id: 'l1', kind: 'text', text: '**bold**', complete: true }]);
+    const blockEl = mount.querySelector('#log-blocks > div') as HTMLElement;
+    const formatBtn = blockEl.querySelector('.piview-format') as HTMLButtonElement;
+    expect(formatBtn.getAttribute('aria-label')).toBe('Format as markup');
+
+    view.flushAutoFormat();
+    expect(formatBtn.getAttribute('aria-label')).toBe('Show raw text');
+    expect(formatBtn.getAttribute('title')).toBe('Show raw text');
+
+    formatBtn.click();
+    expect(formatBtn.getAttribute('aria-label')).toBe('Format as markup');
 
     view.destroy();
   });

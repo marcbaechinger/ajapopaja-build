@@ -16,48 +16,10 @@
 
 import { AppContext } from '../../core/AppContext.ts';
 import type { AssistantResponse } from '../../core/AssistantService.ts';
-import { marked } from 'marked';
-import DOMPurify from 'dompurify';
 import { Icon } from './Icon.ts';
 import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
 import { expandTemplate, filterCommands, findCommand } from './utils/slashCommands.ts';
-
-// Configure marked to wrap tables in a scrollable div
-marked.use({
-  renderer: {
-    table(token: any) {
-      let header = '';
-      // header
-      let cell = '';
-      for (let i = 0; i < token.header.length; i++) {
-        cell += this.tablecell(token.header[i]);
-      }
-      header += this.tablerow({ text: cell });
-
-      let body = '';
-      for (let i = 0; i < token.rows.length; i++) {
-        const row = token.rows[i];
-        cell = '';
-        for (let j = 0; j < row.length; j++) {
-          cell += this.tablecell(row[j]);
-        }
-        body += this.tablerow({ text: cell });
-      }
-      if (body) body = `<tbody>${body}</tbody>`;
-
-      return `
-        <div class="overflow-x-auto my-4 border border-app-border rounded-lg">
-          <table class="w-full text-sm text-left bg-app-bg" style="margin-top: 0; margin-bottom: 0">
-            <thead class="bg-app-surface text-app-muted uppercase text-[10px] tracking-widest font-bold">
-              ${header}
-            </thead>
-            ${body}
-          </table>
-        </div>
-      `;
-    }
-  }
-});
+import { renderMarkdown } from './utils/markdown.ts';
 
 type PanelPosition = 'tl' | 'tc' | 'tr' | 'bl' | 'bc' | 'br' | 'center' | 'full';
 type PanelSize = 'normal' | 'expanded';
@@ -437,7 +399,7 @@ export class AssistantPanel {
         }
 
         bubble.dataset.rawContent = (bubble.dataset.rawContent || '') + (response.content || '');
-        bubble.innerHTML = DOMPurify.sanitize(marked.parse(bubble.dataset.rawContent) as string);
+        bubble.innerHTML = renderMarkdown(bubble.dataset.rawContent);
 
         const details = this.currentAssistantMessage.querySelector('.thinking-container') as HTMLDetailsElement;
         if (details && !details.classList.contains('hidden') && !details.hasAttribute('data-user-interacted')) {
@@ -517,7 +479,7 @@ export class AssistantPanel {
         <div class="${isUser ? 'bg-app-accent-2 text-white rounded-tr-none' : (isError ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-app-bg border-app-border text-app-text rounded-tl-none')} 
                     p-3 rounded-2xl border text-sm prose-theme prose-xs prose-p:my-0 shadow-sm">
           ${thinkingHtml}
-          <div class="bubble-content">${isUser ? text : (text ? DOMPurify.sanitize(marked.parse(text) as string) : '<span class="animate-pulse">...</span>')}</div>
+          <div class="bubble-content">${isUser ? text : (text ? renderMarkdown(text) : '<span class="animate-pulse">...</span>')}</div>
         </div>
         ${isAssistant ? `
           <button class="copy-btn absolute -right-2 -top-2 p-1.5 bg-app-surface/90 hover:bg-app-surface border border-app-border rounded-lg text-app-muted hover:text-app-accent-2 transition-all opacity-0 group-hover:opacity-100 cursor-pointer focus:ring-2 focus:ring-app-accent-2 outline-none z-10 shadow-md" title="Copy Markdown">
