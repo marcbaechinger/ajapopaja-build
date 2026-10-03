@@ -14,6 +14,11 @@
   when a late `INTERACTIVE_STARTED` broadcast arrives.
 * **Session rename** – `PATCH /api/coderbot/sessions/{uid}` updates a session
   label and broadcasts a `SESSION_UPDATED` websocket message.
+* **Sessions survive container restarts** – sessions are now persisted under a
+  dedicated host path (`PI_SESSIONS_ROOT`, default `/data/ajapopaja/pi_sessions`)
+  that is bind-mounted 1:1 into the container, instead of living in the
+  container's writable layer. Interactive and batch sessions therefore survive
+  `docker compose down`, image reloads and systemd restarts.
 
 
 ## 0.4.0 – IDE‑style workspace, remote repositories, and richer agent tooling

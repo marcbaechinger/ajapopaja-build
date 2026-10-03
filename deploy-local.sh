@@ -18,6 +18,9 @@ sudo mkdir -p $DEST_DIR
 echo "2b. Copying docker-compose.yml to /data/ajapopaja/..."
 sudo cp docker-compose.yml /data/ajapopaja/docker-compose.yml
 
+echo "2c. Ensuring session directory /data/ajapopaja/pi_sessions exists..."
+sudo mkdir -p /data/ajapopaja/pi_sessions
+
 echo "3. Exporting image to $DEST_DIR/$IMAGE_NAME.tar..."
 docker save -o $DEST_DIR/$IMAGE_NAME.tar $IMAGE_NAME:$VERSION
 sudo chmod 644 $DEST_DIR/$IMAGE_NAME.tar
@@ -31,6 +34,7 @@ DATABASE_NAME=ajapopaja_build_prod
 PORT=8081
 DEV_SERVER_PORT=1224
 WORKSPACES_ROOT=/home/marc-baechinger/monolit/code
+PI_SESSIONS_ROOT=/data/ajapopaja/pi_sessions
 CODERBOT_DEFAULT_MODEL=deepseek-v4.1-flash:cloud
 REMOTE_PR_MODE=gitea_pr
 EOT"

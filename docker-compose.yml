@@ -14,5 +14,6 @@ services:
       - /home:/home
       - /Users:/Users
       - /tmp/nvimsocket:/tmp/nvimsocket
+      - /data/ajapopaja/pi_sessions:/data/ajapopaja/pi_sessions
     extra_hosts:
       - "host.docker.internal:host-gateway"

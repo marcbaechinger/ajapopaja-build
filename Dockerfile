@@ -82,6 +82,11 @@ ENV FRONTEND_DIST_PATH=/app/frontend_dist
 ENV PYTHONPATH=/app/backend/api/src:/app/backend/core/src:/app/backend/mcp/src
 ENV WORKSPACES_ROOT=/workspaces
 
+# Persistent agent-session root. Mounted 1:1 from the host in docker-compose.yml
+# so interactive and batch sessions survive container restarts.
+ENV PI_SESSIONS_ROOT=/data/ajapopaja/pi_sessions
+RUN mkdir -p /data/ajapopaja/pi_sessions
+
 # Create default workspaces directory
 RUN mkdir -p /workspaces
 

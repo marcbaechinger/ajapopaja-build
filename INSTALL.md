@@ -94,6 +94,7 @@ PORT=8081
 DEV_SERVER_PORT=1224
 OLLAMA_HOST=http://host.docker.internal:11434
 WORKSPACES_ROOT=/home/marc-baechinger/monolit/code
+PI_SESSIONS_ROOT=/data/ajapopaja/pi_sessions
 CODERBOT_DEFAULT_MODEL=deepseek-v4.1-flash:cloud
 ```
 
@@ -109,6 +110,7 @@ CODERBOT_DEFAULT_MODEL=deepseek-v4.1-flash:cloud
 | `OLLAMA_MODEL` | No | Default model for the built-in AI Assistant. Default: `gpt-oss:20b` (or `gpt-oss:120b` when `OLLAMA_API_KEY` is set). |
 | `OLLAMA_API_KEY` | No | Optional API key for cloud-hosted/proxied Ollama. When set, the app connects to `https://ollama.com`. |
 | `WORKSPACES_ROOT` | **Yes** | Absolute path (on the host) to the directory containing the git repositories the app manages. Must exist and be mounted into the container. |
+| `PI_SESSIONS_ROOT` | No | Absolute path where interactive and batch Pi sessions are persisted. Default: `/data/ajapopaja/pi_sessions`. The path is created on demand, but it must be mounted **identically** (`host:container`) into the container to survive restarts (see 3.3). |
 | `CODERBOT_DEFAULT_MODEL` | No | Model used by the CoderBot when spawning `pi` sessions. If unset, no `--model` flag is passed to `pi`. |
 | `SANDBOX_ROOT` | No | Directory inside the container where bot sandboxes are created. Default: `/data/ajapopaja/sandboxes`. |
 | `MCP_AUTHENTICATION_ENABLED` | No | Set `true` to enable MCP authentication. Default: `false`. |
@@ -126,6 +128,13 @@ CODERBOT_DEFAULT_MODEL=deepseek-v4.1-flash:cloud
   root under `/home` (e.g. `/home/<user>/monolit/code`) is visible inside the
   container at the same path. If you use a different root, add a matching
   `-v <host-path>:<host-path>` mount to the service file.
+- **`PI_SESSIONS_ROOT` must be mounted into the container.** Interactive and
+  batch Pi sessions are persisted under this root so they survive container
+  restarts. The shipped `docker-compose.yml` mounts
+  `/data/ajapopaja/pi_sessions:/data/ajapopaja/pi_sessions` (host and container
+  paths **must be identical** – the backend stores absolute paths). If you
+  change `PI_SESSIONS_ROOT`, add a matching `host:container` volume with the
+  same absolute path on both sides, then recreate the container.
 - **`host.docker.internal`** resolves to the host machine from inside the
   container. It is enabled by the `extra_hosts` entry in `docker-compose.yml`.
 - **All env-file variables are forwarded automatically.** The service uses
@@ -203,6 +212,7 @@ services:
       - /home:/home
       - /Users:/Users
       - /tmp/nvimsocket:/tmp/nvimsocket
+      - /data/ajapopaja/pi_sessions:/data/ajapopaja/pi_sessions
     extra_hosts:
       - "host.docker.internal:host-gateway"
 ```
@@ -341,6 +351,30 @@ compose file includes the `extra_hosts` entry
 The path set in `WORKSPACES_ROOT` must exist on the host and be mounted into the
 container. Create the directory and add a matching `volumes` entry to
 `docker-compose.yml` if it is not under `/home` or `/Users`.
+
+### Interactive or batch sessions are lost after a restart
+
+Sessions are stored under `PI_SESSIONS_ROOT` (default
+`/data/ajapopaja/pi_sessions`). If they disappear when the container is
+recreated, the host directory is not mounted. Make sure the compose file at
+`/data/ajapopaja/docker-compose.yml` contains
+`/data/ajapopaja/pi_sessions:/data/ajapopaja/pi_sessions`, re-copy the compose
+file (or run `deploy-local.sh`), and restart the service. The host and container
+paths must be identical because Pi and `PiSession` store absolute paths.
+Existing sessions created under the old default
+(`/data/ajapopaja/sandboxes/pi_sessions`) can be preserved by setting
+`PI_SESSIONS_ROOT=/data/ajapopaja/sandboxes/pi_sessions` **and** mounting that
+path instead.
+
+To verify persistence manually:
+
+1. Start an interactive session and note its UID.
+2. `sudo systemctl restart ajapopaja-build` (or
+   `docker compose down && docker compose up -d`).
+3. Confirm `GET /api/coderbot/sessions` still lists the session as `paused` and
+   that resuming it replays the history (`events.jsonl`).
+4. Confirm the files exist on the host under
+   `/data/ajapopaja/pi_sessions/<uid>/` and are root-owned.
 
 ### The pipeline dev server is not reachable from the host
 

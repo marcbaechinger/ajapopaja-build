@@ -104,9 +104,13 @@ PI_SESSION_PERSISTENCE_ENABLED = (
     os.getenv("PI_SESSION_PERSISTENCE_ENABLED", "true").lower() == "true"
 )
 
-# Root of the per-session directories. Defaults to ``SANDBOX_ROOT/pi_sessions``.
+# Root of the per-session directories. Defaults to a dedicated, host-mounted
+# path (``/data/ajapopaja/pi_sessions``) so interactive and batch sessions
+# survive container restarts. Overridable via the environment; the path is
+# created on demand by the session store, so it need not pre-exist on dev
+# machines.
 PI_SESSIONS_ROOT = Path(
-    os.getenv("PI_SESSIONS_ROOT", str(SANDBOX_ROOT / "pi_sessions"))
+    os.getenv("PI_SESSIONS_ROOT", "/data/ajapopaja/pi_sessions")
 ).resolve()
 
 # Write the raw-RPC ``events.jsonl`` used to replay the activity log in the UI.
