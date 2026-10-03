@@ -529,7 +529,12 @@ export class SessionManagerPanel {
       return;
     }
 
-    const currentUid = service.getCurrentSession?.()?.uid ?? null;
+    const currentSession = service.getCurrentSession?.() ?? null;
+    const currentUid = currentSession?.uid ?? null;
+    // `uid` identifies the session that was last started/persisted; it survives a
+    // pause. Only treat the row as active (i.e. offer Pause) while the service
+    // reports the session as actually running.
+    const isCurrentActive = !!currentSession?.active;
     const switchingUid = service.isSwitching?.() ?? null;
 
     const groupsHtml = GROUPS.filter((group) => group.key !== 'discarded' || this.showDiscarded)
@@ -539,8 +544,8 @@ export class SessionManagerPanel {
         const items = sessions
           .map((session) =>
             SessionListItemView.render(session, {
-              isActive: session.uid === currentUid,
-              busy: session.uid === currentUid && !!service.isBusy?.(),
+              isActive: isCurrentActive && session.uid === currentUid,
+              busy: isCurrentActive && session.uid === currentUid && !!service.isBusy?.(),
               switchingUid,
               pipelineName: this.resolvePipelineName(session.pipeline_id),
               showDiscard: session.uid !== currentUid,

@@ -71,6 +71,19 @@ describe('SessionListItemView', () => {
     expect(el.querySelector('[data-session-action="switch"]')).toBeNull();
   });
 
+  it('shows Switch for a paused row even when it is marked active', () => {
+    const el = mount(SessionListItemView.render(session({ status: 'paused' }), { isActive: true }));
+    expect(el.querySelector('[data-session-action="pause"]')).toBeNull();
+    expect(el.querySelector('[data-session-action="switch"]')).not.toBeNull();
+  });
+
+  it('shows Cancel (not Pause) for a starting row', () => {
+    const el = mount(SessionListItemView.render(session({ status: 'starting' })));
+    const button = el.querySelector('[data-session-action="pause"]');
+    expect(button).not.toBeNull();
+    expect(button?.textContent).toContain('Cancel');
+  });
+
   it('hides resumable actions for discarded sessions', () => {
     const el = mount(SessionListItemView.render(session({ status: 'discarded' })));
     expect(el.querySelector('[data-session-action="switch"]')).toBeNull();

@@ -145,6 +145,57 @@ describe('SessionManagerPanel', () => {
     expect(service.switchSession).toHaveBeenCalledWith('u2');
   });
 
+  it('switches the active row to a Switch action after pausing', async () => {
+    const sessions = [makeSession('u1', { status: 'running' }) as any];
+    let active = true;
+    const listeners = new Set<(s: any[]) => void>();
+    const service = {
+      getSessions: vi.fn(() => sessions),
+      getSession: vi.fn((uid: string) => sessions.find((s) => s.uid === uid)),
+      getCurrentSession: vi.fn(() => ({ pipelineId: 'p1', uid: 'u1', active, busy: false })),
+      isBusy: vi.fn(() => false),
+      isSessionsLoading: vi.fn(() => false),
+      getSessionsError: vi.fn(() => null),
+      isSwitching: vi.fn(() => null),
+      onSessionsChange: vi.fn((l: (s: any[]) => void) => {
+        listeners.add(l);
+        return () => listeners.delete(l);
+      }),
+      onSessionChange: vi.fn(() => () => {}),
+      refreshSessions: vi.fn().mockResolvedValue([]),
+      switchSession: vi.fn().mockResolvedValue(undefined),
+      pauseSession: vi.fn().mockImplementation(async () => {
+        active = false;
+        sessions[0].status = 'paused';
+        listeners.forEach((l) => l(sessions));
+      }),
+      discardSession: vi.fn().mockResolvedValue(undefined),
+      renameSession: vi.fn().mockResolvedValue(undefined),
+      getResumeHint: vi.fn(() => null),
+      dismissResumeHint: vi.fn(),
+    };
+    const context = {
+      interactiveCodingService: service,
+      dataManager: { getPipeline: vi.fn(() => ({ name: 'Pipeline A' })) },
+      wsClient: { send: vi.fn() },
+    };
+    const panel = new SessionManagerPanel(context as any);
+    panel.open();
+
+    let body = panel['container'].querySelector('#session-manager-body') as HTMLElement;
+    const pauseBtn = body.querySelector('[data-session-action="pause"]') as HTMLElement;
+    expect(pauseBtn).not.toBeNull();
+
+    pauseBtn.click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    body = panel['container'].querySelector('#session-manager-body') as HTMLElement;
+    expect(service.pauseSession).toHaveBeenCalled();
+    expect(body.querySelector('[data-session-action="pause"]')).toBeNull();
+    expect(body.querySelector('[data-session-action="switch"]')).not.toBeNull();
+  });
+
   it('confirms before discarding', async () => {
     const { context, service } = makeContext([makeSession('u2')]);
     const panel = new SessionManagerPanel(context as any);

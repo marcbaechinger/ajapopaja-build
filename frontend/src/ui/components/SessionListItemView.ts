@@ -179,9 +179,12 @@ export class SessionListItemView {
       : '';
 
     let primaryAction = '';
-    if (isActive || session.status === 'starting') {
+    if (session.status === 'starting') {
       primaryAction = `<button type="button" data-session-action="pause" data-session-uid="${escapeHtml(uid)}"
-        class="text-[11px] px-3 py-1 rounded bg-amber-600 text-white hover:bg-amber-700 transition-colors cursor-pointer font-medium">${session.status === 'starting' ? 'Cancel' : 'Pause'}</button>`;
+        class="text-[11px] px-3 py-1 rounded bg-amber-600 text-white hover:bg-amber-700 transition-colors cursor-pointer font-medium">Cancel</button>`;
+    } else if (isActive && isRunning) {
+      primaryAction = `<button type="button" data-session-action="pause" data-session-uid="${escapeHtml(uid)}"
+        class="text-[11px] px-3 py-1 rounded bg-amber-600 text-white hover:bg-amber-700 transition-colors cursor-pointer font-medium">Pause</button>`;
     } else if (meta.resumable) {
       primaryAction = `<button type="button" data-session-action="switch" data-session-uid="${escapeHtml(uid)}"
         class="text-[11px] px-3 py-1 rounded bg-app-accent-2 text-white hover:brightness-110 transition-colors cursor-pointer font-medium flex items-center gap-1 ${isSwitching ? 'opacity-60 cursor-wait' : ''}"
