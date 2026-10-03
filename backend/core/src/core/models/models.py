@@ -115,6 +115,9 @@ class Task(Document):
     deleted: bool = False
     history: List[StateTransition] = Field(default_factory=list)
     review_md: Optional[str] = None
+    # Original batch Pi session that implemented this task. Optional, so
+    # existing documents remain valid without a migration.
+    pi_session_uid: Optional[str] = None
 
     class Settings:
         name = "tasks"
@@ -422,8 +425,71 @@ class PullRequest(Document):
     #   "push"   -> committed to the cloned repo and pushed to the remote
     #   "submit" -> committed to the cloned repo and sent as a pull request
     apply_mode: Optional[str] = None
+    # Pi session that produced this pull request. Optional, so existing
+    # documents remain valid without a migration.
+    pi_session_uid: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     class Settings:
         name = "pull_requests"
+
+
+class PiSessionKind(str, Enum):
+    INTERACTIVE = "interactive"
+    CODERBOT = "coderbot"  # batch task run
+
+
+class PiSessionStatus(str, Enum):
+    STARTING = "starting"
+    RUNNING = "running"
+    PAUSED = "paused"  # deliberately stopped, resumable
+    COMPLETED = "completed"  # batch finished, resumable
+    FAILED = "failed"  # resumable
+    DISCARDED = "discarded"  # resources released
+
+
+class PiSession(Document):
+    """Durable backend record for a Pi agent session.
+
+    The ``uid`` is the stable handle that survives backend restarts and is the
+    primary key of the ``pi_sessions`` collection and the on-disk directory.
+    """
+
+    uid: str  # UUID4, primary handle
+    kind: PiSessionKind
+    status: PiSessionStatus = PiSessionStatus.STARTING
+    owner: Optional[str] = None  # username, for scoping
+    label: Optional[str] = None  # human readable (Pi session name)
+
+    # Relationships
+    pipeline_id: Optional[str] = None
+    task_id: Optional[str] = None
+    pull_request_ids: List[str] = Field(default_factory=list)
+
+    # Where Pi stores its conversation
+    pi_session_id: Optional[str] = None  # from get_state
+    pi_session_file: Optional[str] = None  # absolute path, from get_state
+    session_dir: Optional[str] = None  # our --session-dir for this uid
+
+    # Runtime / resume inputs
+    cwd: Optional[str] = None
+    workspace_path: Optional[str] = None  # retained batch sandbox
+    model: Optional[str] = None
+    skill_names: List[str] = Field(default_factory=list)
+    bot_type: str = "interactive"  # websocket discriminator
+
+    # Reconstruction / audit
+    base_commit: Optional[str] = None
+    branch_name: Optional[str] = None
+
+    # Bookkeeping
+    resume_count: int = 0
+    last_error: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    last_active_at: Optional[datetime] = None
+    discarded_at: Optional[datetime] = None
+
+    class Settings:
+        name = "pi_sessions"

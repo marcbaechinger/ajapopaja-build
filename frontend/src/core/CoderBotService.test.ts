@@ -415,4 +415,31 @@ describe('CoderBotService session tracking / reconnect', () => {
     // mount the PiView even though the active value did not change.
     expect(spy).toHaveBeenCalledTimes(2);
   });
+
+  it('tracks and persists the backend session_uid from CODERBOT_STARTED', () => {
+    ws.dispatch('CODERBOT_STARTED', {
+      task_id: 't1',
+      pipeline_id: 'p1',
+      session_uid: 'uid-1',
+    });
+    expect(service.getCurrentSession()?.sessionUid).toBe('uid-1');
+    const stored = JSON.parse(localStorage.getItem('ajapopaja:coderbot:session')!);
+    expect(stored.session_uid).toBe('uid-1');
+  });
+
+  it('resumeSession posts the follow-up instruction and adopts the uid', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ status: 'success', task_id: 't1', pipeline_id: 'p1' }),
+    });
+
+    await service.resumeSession('uid-2', 'please iterate');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/coderbot/sessions/uid-2/resume',
+      expect.objectContaining({ method: 'POST' })
+    );
+    expect(service.getCurrentSession()?.sessionUid).toBe('uid-2');
+    expect(service.isActive()).toBe(true);
+  });
 });

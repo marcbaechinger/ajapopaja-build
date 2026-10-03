@@ -27,6 +27,11 @@ from api.coderbot.manager import (
     NoActiveInteractiveSessionError,
 )
 from core import config
+from core.models.models import (
+    PiSession,
+    PiSessionKind,
+    PiSessionStatus,
+)
 
 
 @pytest.mark.asyncio
@@ -117,7 +122,7 @@ async def test_manager_set_default_model():
 
 
 @pytest.mark.asyncio
-async def test_manager_process_task_passes_default_model():
+async def test_manager_process_task_passes_default_model(init_mock_db):
     manager = CoderBotManager()
     manager.set_default_model("custom-model:cloud")
 
@@ -128,13 +133,19 @@ async def test_manager_process_task_passes_default_model():
     with patch("api.coderbot.manager.CoderBotSession") as mock_session_cls:
         await manager.process_task(task)
 
-        mock_session_cls.assert_called_once_with(
-            pipeline_id="p1", task_id="t1", model="custom-model:cloud"
-        )
+        assert mock_session_cls.call_count == 1
+        kwargs = mock_session_cls.call_args.kwargs
+        assert kwargs["pipeline_id"] == "p1"
+        assert kwargs["task_id"] == "t1"
+        assert kwargs["model"] == "custom-model:cloud"
+        assert kwargs["session_uid"]
+        assert kwargs["session_record"] is not None
 
 
 @pytest.mark.asyncio
-async def test_manager_process_task_passes_none_model_by_default(monkeypatch):
+async def test_manager_process_task_passes_none_model_by_default(
+    monkeypatch, init_mock_db
+):
     monkeypatch.delenv("CODERBOT_DEFAULT_MODEL", raising=False)
     importlib.reload(config)
     manager = CoderBotManager()
@@ -146,9 +157,13 @@ async def test_manager_process_task_passes_none_model_by_default(monkeypatch):
     with patch("api.coderbot.manager.CoderBotSession") as mock_session_cls:
         await manager.process_task(task)
 
-        mock_session_cls.assert_called_once_with(
-            pipeline_id="p1", task_id="t1", model=None
-        )
+        assert mock_session_cls.call_count == 1
+        kwargs = mock_session_cls.call_args.kwargs
+        assert kwargs["pipeline_id"] == "p1"
+        assert kwargs["task_id"] == "t1"
+        assert kwargs["model"] is None
+        assert kwargs["session_uid"]
+        assert kwargs["session_record"] is not None
 
 
 @pytest.mark.asyncio
@@ -245,10 +260,12 @@ async def test_get_active_session_returns_active_session():
     mock.pipeline_id = "p1"
     mock.task_id = "t1"
     mock.start_time = None
+    mock.session_uid = None
     manager._active_session = mock
     assert manager.get_active_session() == {
         "pipeline_id": "p1",
         "task_id": "t1",
+        "session_uid": None,
         "is_active": True,
         "start_time": None,
     }
@@ -261,10 +278,12 @@ async def test_get_active_session_returns_last_session_inactive():
     mock.pipeline_id = "p1"
     mock.task_id = "t1"
     mock.start_time = None
+    mock.session_uid = None
     manager._last_session = mock
     assert manager.get_active_session() == {
         "pipeline_id": "p1",
         "task_id": "t1",
+        "session_uid": None,
         "is_active": False,
         "start_time": None,
     }
@@ -279,10 +298,12 @@ async def test_get_active_session_includes_start_time():
     mock.pipeline_id = "p1"
     mock.task_id = "t1"
     mock.start_time = datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
+    mock.session_uid = None
     manager._active_session = mock
     assert manager.get_active_session() == {
         "pipeline_id": "p1",
         "task_id": "t1",
+        "session_uid": None,
         "is_active": True,
         "start_time": "2026-01-02T03:04:05+00:00",
     }
@@ -297,6 +318,10 @@ def _interactive_session_mock(**overrides):
     session = MagicMock()
     session.pipeline_id = "p1"
     session.bot_type = "interactive"
+    session.session_uid = "u1"
+    session.session_id = None
+    session.session_file = None
+    session.session_dir = None
     session.start_time = datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
     session.start_interactive = AsyncMock()
     session.stop = AsyncMock()
@@ -331,7 +356,9 @@ async def test_start_interactive_session_requires_remote_repo():
 
 
 @pytest.mark.asyncio
-async def test_start_interactive_session_runs_in_remote_repo_without_sandbox():
+async def test_start_interactive_session_runs_in_remote_repo_without_sandbox(
+    init_mock_db,
+):
     manager = CoderBotManager()
     manager.set_default_model("custom-model:cloud")
 
@@ -356,21 +383,25 @@ async def test_start_interactive_session_runs_in_remote_repo_without_sandbox():
         info = await manager.start_interactive_session(pipeline)
 
     mock_clone.assert_awaited_once_with(pipeline)
-    mock_cls.assert_called_once_with(
-        model="custom-model:cloud", cwd="/tmp/remote/repo", pipeline_id="p1"
-    )
+    mock_cls.assert_called_once()
+    kwargs = mock_cls.call_args.kwargs
+    assert kwargs["model"] == "custom-model:cloud"
+    assert kwargs["cwd"] == "/tmp/remote/repo"
+    assert kwargs["pipeline_id"] == "p1"
+    assert kwargs["session_uid"]
     session.start_interactive.assert_awaited_once_with(cwd="/tmp/remote/repo")
     # No batch/sandbox session is created for an interactive session.
     mock_batch.assert_not_called()
     assert manager._interactive_session is session
     assert info["pipeline_id"] == "p1"
+    assert info["uid"] == "u1"
     assert info["is_active"] is True
     assert info["busy"] is False
     assert info["start_time"] == "2026-01-02T03:04:05+00:00"
 
 
 @pytest.mark.asyncio
-async def test_start_interactive_session_broadcasts_started():
+async def test_start_interactive_session_broadcasts_started(init_mock_db):
     manager = CoderBotManager()
     pipeline = MagicMock()
     pipeline.id = "p1"
@@ -410,6 +441,7 @@ async def test_get_interactive_session_returns_info():
     manager._interactive_session = session
     assert manager.get_interactive_session() == {
         "pipeline_id": "p1",
+        "uid": "u1",
         "is_active": True,
         "start_time": "2026-01-02T03:04:05+00:00",
         "busy": False,
@@ -565,3 +597,118 @@ async def test_batch_and_interactive_sessions_coexist():
 
     assert manager._active_session is batch
     assert manager._interactive_session is interactive
+
+
+# ---------------------------------------------------------------------------
+# Durable session registry lifecycle
+# ---------------------------------------------------------------------------
+def _pipeline():
+    pipeline = MagicMock()
+    pipeline.id = "p1"
+    pipeline.repo_uri = "https://github.com/example/repo.git"
+    pipeline.workspace_abs_path = "/tmp/remote/repo"
+    return pipeline
+
+
+@pytest.mark.asyncio
+async def test_registry_create_pause_resume_list_discard(init_mock_db):
+    manager = CoderBotManager()
+    session = _interactive_session_mock(_started_broadcast=False)
+
+    with (
+        patch(
+            "api.coderbot.manager.git_utils.ensure_repo_cloned", new_callable=AsyncMock
+        ),
+        patch("api.coderbot.manager.InteractivePiSession", return_value=session),
+        patch.object(manager, "_watch_interactive_session", new_callable=AsyncMock),
+        patch("api.coderbot.manager.ws_manager.broadcast", new_callable=AsyncMock),
+    ):
+        record = await manager.create_interactive_session(_pipeline())
+
+        assert record.status == PiSessionStatus.RUNNING
+        assert record.uid in manager._sessions
+
+        listed = await manager.list_sessions(kind=PiSessionKind.INTERACTIVE)
+        assert [r.uid for r in listed] == [record.uid]
+
+        assert await manager.pause_session(record.uid) is True
+        paused = await manager.get_session(record.uid)
+        assert paused.status == PiSessionStatus.PAUSED
+
+        resumed = await manager.resume_session(record.uid)
+        assert resumed.status == PiSessionStatus.RUNNING
+        assert resumed.resume_count == 1
+
+        assert await manager.discard_session(record.uid) is True
+        assert record.uid not in manager._sessions
+        discarded = await PiSession.find_one(PiSession.uid == record.uid)
+        assert discarded.status == PiSessionStatus.DISCARDED
+
+
+@pytest.mark.asyncio
+async def test_pause_current_when_resuming(init_mock_db):
+    manager = CoderBotManager()
+    session = _interactive_session_mock(_started_broadcast=False)
+
+    with (
+        patch(
+            "api.coderbot.manager.git_utils.ensure_repo_cloned", new_callable=AsyncMock
+        ),
+        patch("api.coderbot.manager.InteractivePiSession", return_value=session),
+        patch.object(manager, "_watch_interactive_session", new_callable=AsyncMock),
+        patch("api.coderbot.manager.ws_manager.broadcast", new_callable=AsyncMock),
+    ):
+        first = await manager.create_interactive_session(_pipeline())
+        second = await manager.create_interactive_session(_pipeline())
+        # resume the first session, pausing the currently running second one
+        await manager.pause_session(second.uid)
+        manager._running_uid = second.uid
+        resumed = await manager.resume_session(first.uid, pause_current=True)
+
+    assert resumed.uid == first.uid
+    second_record = await manager.get_session(second.uid)
+    assert second_record.status == PiSessionStatus.PAUSED
+
+
+@pytest.mark.asyncio
+async def test_reconcile_on_startup_flips_running_to_paused(init_mock_db):
+    manager = CoderBotManager()
+    record = PiSession(
+        uid="u-run",
+        kind=PiSessionKind.INTERACTIVE,
+        status=PiSessionStatus.RUNNING,
+        pipeline_id="p1",
+    )
+    await record.insert()
+
+    await manager.reconcile_on_startup()
+
+    reloaded = await manager.get_session("u-run")
+    assert reloaded.status == PiSessionStatus.PAUSED
+    assert reloaded.last_error == "server restarted"
+
+
+@pytest.mark.asyncio
+async def test_discard_unknown_session_raises(init_mock_db):
+    from api.coderbot.manager import PiSessionNotFoundError
+
+    manager = CoderBotManager()
+    with pytest.raises(PiSessionNotFoundError):
+        await manager.discard_session("missing")
+
+
+@pytest.mark.asyncio
+async def test_resume_without_pausing_raises_when_busy(init_mock_db):
+    from api.coderbot.manager import PiSessionBusyError
+
+    manager = CoderBotManager()
+    record = PiSession(
+        uid="uid",
+        kind=PiSessionKind.INTERACTIVE,
+        status=PiSessionStatus.PAUSED,
+        pipeline_id="p1",
+    )
+    await record.insert()
+    manager._running_uid = "other"
+    with pytest.raises(PiSessionBusyError):
+        await manager.resume_session("uid", pause_current=False)

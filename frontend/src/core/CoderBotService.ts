@@ -45,6 +45,7 @@ export class CoderBotService {
   private sessionListeners: Set<() => void> = new Set();
   private currentTaskId: string | null = null;
   private currentPipelineId: string | null = null;
+  private currentSessionUid: string | null = null;
   private isSessionActive: boolean = false;
   /** Key of the session whose history has already been replayed (dedupe). */
   private loadedSessionKey: string | null = null;
@@ -78,6 +79,7 @@ export class CoderBotService {
         this.setSessionStartTime(Date.now());
       }
       this.currentPipelineId = msg.payload?.pipeline_id ?? this.currentPipelineId;
+      this.currentSessionUid = msg.payload?.session_uid ?? this.currentSessionUid;
       this.setSessionActive(true);
       this.persistSession();
       this.notifySessionChange();
@@ -190,9 +192,44 @@ export class CoderBotService {
   }
 
   /** Returns the current (or last) CoderBot session, or null when none. */
-  public getCurrentSession(): { pipelineId: string | null; taskId: string | null; active: boolean } | null {
+  public getCurrentSession(): { pipelineId: string | null; taskId: string | null; sessionUid?: string; active: boolean } | null {
     if (!this.currentTaskId) return null;
-    return { pipelineId: this.currentPipelineId, taskId: this.currentTaskId, active: this.isSessionActive };
+    return {
+      pipelineId: this.currentPipelineId,
+      taskId: this.currentTaskId,
+      sessionUid: this.currentSessionUid ?? undefined,
+      active: this.isSessionActive,
+    };
+  }
+
+  /**
+   * Resume a persisted batch session and enqueue a follow-up instruction.
+   *
+   * The backend respawns Pi with the session's native conversation file and the
+   * retained workspace so the agent continues with its original context. The
+   * resulting run produces a new commit and pull request linked to the same UID.
+   */
+  public async resumeSession(uid: string, message: string): Promise<void> {
+    const token = this.authService.getAccessToken();
+    const response = await fetch(`/api/coderbot/sessions/${uid}/resume`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ message }),
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      throw new Error(error.detail || 'Failed to resume CoderBot session');
+    }
+    const data = await response.json().catch(() => null);
+    if (data?.task_id) this.currentTaskId = data.task_id;
+    if (data?.pipeline_id) this.currentPipelineId = data.pipeline_id;
+    this.currentSessionUid = uid;
+    this.setSessionActive(true);
+    this.persistSession();
+    this.notifySessionChange();
   }
 
   /** Returns the wall-clock start (epoch ms) of the current session, or null. */
@@ -228,6 +265,7 @@ export class CoderBotService {
       if (session && session.task_id) {
         this.currentPipelineId = session.pipeline_id ?? this.currentPipelineId;
         this.currentTaskId = session.task_id;
+        if (session.session_uid) this.currentSessionUid = session.session_uid;
         this.setSessionActive(!!session.is_active);
         this.setSessionStartTime(this.parseStartTime(session.start_time));
         this.persistSession();
@@ -320,11 +358,12 @@ export class CoderBotService {
 
   private persistSession() {
     try {
-      const data = {
+      const data: Record<string, unknown> = {
         pipeline_id: this.currentPipelineId,
         task_id: this.currentTaskId,
         active: this.isSessionActive,
       };
+      if (this.currentSessionUid) data.session_uid = this.currentSessionUid;
       if (!data.task_id) {
         localStorage.removeItem(CoderBotService.SESSION_STORAGE_KEY);
         return;
@@ -343,6 +382,7 @@ export class CoderBotService {
       if (s && s.task_id) {
         this.currentTaskId = s.task_id;
         this.currentPipelineId = s.pipeline_id || null;
+        this.currentSessionUid = s.session_uid || null;
         this.isSessionActive = !!s.active;
       }
     } catch (e) {
@@ -350,7 +390,7 @@ export class CoderBotService {
     }
   }
 
-  private async fetchSession(): Promise<{ pipeline_id?: string; task_id?: string; is_active?: boolean; start_time?: string | null } | null> {
+  private async fetchSession(): Promise<{ pipeline_id?: string; task_id?: string; session_uid?: string; is_active?: boolean; start_time?: string | null } | null> {
     const token = this.authService.getAccessToken();
     const response = await fetch('/api/coderbot/session', {
       headers: { 'Authorization': `Bearer ${token}` },

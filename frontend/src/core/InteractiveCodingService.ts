@@ -23,6 +23,7 @@ import type { PiSessionService } from '../ui/components/PiView.ts';
 
 export interface InteractiveSessionInfo {
   pipelineId: string | null;
+  uid: string | null;
   active: boolean;
   busy: boolean;
 }
@@ -47,9 +48,12 @@ export class InteractiveCodingService implements PiSessionService {
   private logReducer = new PiLogReducer();
 
   private currentPipelineId: string | null = null;
+  private sessionUid: string | null = null;
   private isSessionActive: boolean = false;
   private sessionStartTime: number | null = null;
   private busy: boolean = false;
+
+  private static readonly SESSION_STORAGE_KEY = 'ajapopaja:interactive:session';
 
   private listeners: Set<MessageListener> = new Set();
   private stateListeners: Set<SessionStateListener> = new Set();
@@ -104,6 +108,9 @@ export class InteractiveCodingService implements PiSessionService {
     if (!payload || payload.bot_type !== 'interactive') return false;
     const pid = payload.pipeline_id;
     if (this.currentPipelineId && pid && pid !== this.currentPipelineId) return false;
+    // When a specific backend session UID is tracked, prefer the matching one.
+    const uid = payload.session_uid;
+    if (this.sessionUid && uid && uid !== this.sessionUid) return false;
     return true;
   }
 
@@ -112,11 +119,15 @@ export class InteractiveCodingService implements PiSessionService {
     if (payload.pipeline_id) {
       this.currentPipelineId = payload.pipeline_id;
     }
+    if (payload.session_uid) {
+      this.sessionUid = payload.session_uid;
+    }
     // A brand-new session begins: reset the log and session state.
     this.logReducer.clear();
     this.setStartTime(this.parseStartTime(payload.start_time));
     this.setBusy(false);
     this.setActive(true);
+    this.persistSession();
     this.notifySessionChange();
   }
 
@@ -168,6 +179,97 @@ export class InteractiveCodingService implements PiSessionService {
     this.notifySessionChange();
   }
 
+  /**
+   * Pause the active interactive session, keeping it resumable on the backend.
+   * Unlike :meth:`stopSession` (which uses the legacy endpoint) this targets the
+   * durable session UID and persists it for a later resume.
+   */
+  public async pauseSession(): Promise<void> {
+    const uid = this.sessionUid;
+    if (uid && typeof (this.client as any).pauseSession === 'function') {
+      await (this.client as any).pauseSession(uid);
+    } else {
+      await this.client.stopInteractiveSession();
+    }
+    this.setBusy(false);
+    this.setActive(false);
+    this.persistSession();
+    this.notifySessionChange();
+  }
+
+  /** Resume a previously paused/completed session and replay its event log. */
+  public async resumeSession(uid: string): Promise<void> {
+    const client = this.client as any;
+    const info = client.resumeSession ? await client.resumeSession(uid) : null;
+    this.sessionUid = uid;
+    if (info?.pipeline_id) this.currentPipelineId = info.pipeline_id;
+    this.setStartTime(info?.last_active_at ? this.parseStartTime(info.last_active_at) : Date.now());
+    this.setBusy(false);
+    this.setActive(true);
+    this.persistSession();
+    await this.loadSessionHistory(uid);
+    this.notifySessionChange();
+  }
+
+  /** List durable sessions from the backend (optionally filtered). */
+  public async listSessions(options?: {
+    kind?: string;
+    status?: string;
+    pipelineId?: string;
+  }): Promise<any[]> {
+    const client = this.client as any;
+    if (typeof client.listSessions !== 'function') return [];
+    return await client.listSessions(options);
+  }
+
+  /** Replay the persisted raw RPC events of a durable session. */
+  public async loadSessionHistory(uid: string): Promise<void> {
+    const client = this.client as any;
+    if (typeof client.getSessionEvents !== 'function') return;
+    let events: any[] = [];
+    try {
+      events = await client.getSessionEvents(uid);
+    } catch (e) {
+      console.error('Failed to load interactive session history', e);
+    }
+    const releaseEmits = this.logReducer.suspendEmits();
+    try {
+      this.logReducer.clear();
+      for (const event of events) {
+        this.logReducer.handleEvent(event);
+      }
+    } finally {
+      releaseEmits();
+    }
+  }
+
+  private persistSession() {
+    try {
+      if (!this.sessionUid) {
+        localStorage.removeItem(InteractiveCodingService.SESSION_STORAGE_KEY);
+        return;
+      }
+      localStorage.setItem(
+        InteractiveCodingService.SESSION_STORAGE_KEY,
+        JSON.stringify({ uid: this.sessionUid, pipeline_id: this.currentPipelineId })
+      );
+    } catch (e) {
+      /* localStorage may be unavailable. */
+    }
+  }
+
+  /** Read the session UID persisted by a previous page load, or null. */
+  public getPersistedSessionUid(): string | null {
+    try {
+      const raw = localStorage.getItem(InteractiveCodingService.SESSION_STORAGE_KEY);
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      return data?.uid ?? null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   /** Refresh the session from the backend (e.g. after a page reload). */
   public async refreshSession(): Promise<InteractiveSessionInfo | null> {
     try {
@@ -195,6 +297,7 @@ export class InteractiveCodingService implements PiSessionService {
   public getCurrentSession(): InteractiveSessionInfo {
     return {
       pipelineId: this.currentPipelineId,
+      uid: this.sessionUid,
       active: this.isSessionActive,
       busy: this.busy,
     };

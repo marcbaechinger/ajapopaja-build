@@ -29,6 +29,8 @@ from api.websocket_manager import WSMessage, manager as ws_manager
 from core import config
 from core.models.models import (
     Pipeline,
+    PiSession,
+    PiSessionStatus,
     PullRequest,
     PullRequestStatus,
     Task,
@@ -45,6 +47,15 @@ from .pi_parsers import (
     extract_tool_call_name,
 )
 from .pi_rpc_process import DEFAULT_COMMAND_TIMEOUT, PiRpcProcess  # noqa: F401
+from .pi_session_store import (
+    SessionEventLog,
+    ensure_session_dir,
+    pi_sessions_dir,
+    read_session_events,
+    recover_session_file,
+    workspace_dir as pi_workspace_dir,
+    write_meta,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -114,14 +125,14 @@ def slugify(task_id: str) -> str:
     return sanitized
 
 
-def read_session_history(task_id: str) -> list:
+async def read_session_history(task_id: str, session_uid: Optional[str] = None) -> list:
     """Replay the persisted Pi RPC events of a CoderBot session for a task.
 
-    Each session writes its events as JSONL lines (``type == "pi_rpc_event"``)
-    under ``SANDBOX_ROOT/logs/{slugify(task_id)}``. Returns the ordered list of raw
-    RPC events (the same shape the ``CODERBOT_RPC_EVENT`` websocket message carries)
-    so the client can reduce them into its activity log. Reads the most recent log
-    file(s) so the latest run of a task wins.
+    The task's ``pi_session_uid`` is resolved (when not supplied explicitly) and
+    the session's on-disk ``events.jsonl`` under ``PI_SESSIONS_ROOT`` is
+    preferred. Otherwise the legacy per-task
+    ``SANDBOX_ROOT/logs/{slugify(task_id)}`` files are read, so existing
+    installations keep working without a migration.
 
     Note: the session start time is deliberately NOT read back from the files here.
     It is delivered for the active (or last) session via the ``/coderbot/session``
@@ -129,6 +140,19 @@ def read_session_history(task_id: str) -> list:
     history replay avoid the extra, comparatively expensive file scan that used to
     be needed just to recover the start timestamp.
     """
+    if session_uid is None:
+        try:
+            task = await Task.get(task_id)
+            if task is not None:
+                session_uid = getattr(task, "pi_session_uid", None)
+        except Exception:  # pragma: no cover - DB unavailable
+            session_uid = None
+
+    if session_uid:
+        events = read_session_events(session_uid)
+        if events:
+            return events
+
     log_dir = config.SANDBOX_ROOT / "logs" / slugify(task_id)
     events: list = []
     if not log_dir.exists():
@@ -154,6 +178,11 @@ def read_session_history(task_id: str) -> list:
     return events
 
 
+async def read_task_session_history(task_id: str) -> list:
+    """Backwards-compatible alias for :func:`read_session_history`."""
+    return await read_session_history(task_id)
+
+
 class CoderBotSession(PiRpcProcess):
     """
     Orchestrates the Pi coding agent via its headless RPC mode.
@@ -166,8 +195,37 @@ class CoderBotSession(PiRpcProcess):
         model: Optional[str] = None,
         pr: Optional[PullRequest] = None,
         comments: Optional[str] = None,
+        session_uid: Optional[str] = None,
+        session_record: Optional[PiSession] = None,
+        resume_session_file: Optional[str] = None,
+        persist: Optional[bool] = None,
     ):
-        super().__init__(model=model, skill_names=config.CODERBOT_SKILLS)
+        self.session_uid = session_uid or (
+            getattr(session_record, "uid", None) if session_record else None
+        )
+        self.session_record = session_record
+        if self.session_uid and config.PI_SESSION_PERSISTENCE_ENABLED:
+            self.session_dir: Optional[str] = str(pi_sessions_dir(self.session_uid))
+            ensure_session_dir(self.session_uid)
+        else:
+            self.session_dir = None
+
+        if resume_session_file is None and session_record is not None:
+            resume_session_file = getattr(session_record, "pi_session_file", None)
+        if resume_session_file is None and self.session_uid:
+            resume_session_file = recover_session_file(self.session_uid)
+        self.resume_session_file = resume_session_file
+
+        if persist is None:
+            persist = config.PI_SESSION_PERSISTENCE_ENABLED
+
+        super().__init__(
+            model=model,
+            skill_names=config.CODERBOT_SKILLS,
+            session_dir=self.session_dir,
+            resume_session_file=resume_session_file,
+            persist=persist,
+        )
         self.pipeline_id = pipeline_id
         self.task_id = task_id
         self.model = model
@@ -178,12 +236,21 @@ class CoderBotSession(PiRpcProcess):
         # patch applied as unstaged changes and writes the updated result back
         # onto the same PR document instead of inserting a new one.
         self.iteration_mode = pr is not None
+        # When resuming a completed session in place we must not re-clone the
+        # sandbox: the retained working tree is reused as-is.
+        self.resume_in_place = False
+        self.resume_message: Optional[str] = None
         # The ``agent_end`` record captured by ``_handle_event``. ``run()`` reads
         # its ``messages`` payload after the process has exited.
         self.agent_end_event: Optional[Dict[str, Any]] = None
         self.helper: Optional[SandboxGitHelper] = None
         self.pipeline: Optional[Pipeline] = None
         self.log_file: Optional[TextIO] = None
+        # Best-effort retained event log for UI replay (separate from the legacy
+        # per-task ``coderbot_*.jsonl`` log).
+        self.event_log: Optional[SessionEventLog] = (
+            SessionEventLog(self.session_uid) if self.session_uid else None
+        )
         # Wall-clock time the session started running. Captured in ``run()`` and
         # exposed to the UI (via the manager/API) so the elapsed-time indicator can
         # resume from the real session start instead of when the PiView was mounted.
@@ -582,6 +649,7 @@ class CoderBotSession(PiRpcProcess):
                     "task_id": self.task_id,
                     "pipeline_id": self.pipeline_id,
                     "bot_type": "coderbot",
+                    "session_uid": self.session_uid,
                     "event": event,
                 },
             )
@@ -599,6 +667,7 @@ class CoderBotSession(PiRpcProcess):
                     "task_id": self.task_id,
                     "pipeline_id": self.pipeline_id,
                     "bot_type": "coderbot",
+                    "session_uid": self.session_uid,
                 },
             )
         )
@@ -616,6 +685,8 @@ class CoderBotSession(PiRpcProcess):
         logger.debug(f"Received event: {event_type}")
 
         self._log_event({"type": "pi_rpc_event", "event": event})
+        if self.event_log is not None:
+            self.event_log.append(event)
         await self._broadcast_rpc(event)
 
         if event_type == "message_update":
@@ -805,6 +876,8 @@ class CoderBotSession(PiRpcProcess):
                 self.pr.branch_name = self.helper.branch_name
                 self.pr.patch = patch
                 self.pr.updated_at = datetime.now(UTC)
+                if self.session_uid:
+                    self.pr.pi_session_uid = self.session_uid
                 await self.pr.save()
                 logger.info(f"PullRequest {self.pr.id} updated in DB.")
                 pr = self.pr
@@ -819,10 +892,31 @@ class CoderBotSession(PiRpcProcess):
                     branch_name=self.helper.branch_name,
                     patch=patch,
                     status=PullRequestStatus.OPEN,
+                    pi_session_uid=self.session_uid,
                 )
                 await pr.insert()
                 logger.info(f"PullRequest {pr.id} created in DB.")
                 pr_id = str(pr.id)
+
+            # Link the task and session record so the run can later be resumed.
+            if task is not None and self.session_uid:
+                try:
+                    task.pi_session_uid = self.session_uid
+                    await task.save()
+                except Exception:  # pragma: no cover - defensive
+                    logger.debug("Failed to link task to Pi session", exc_info=True)
+            await self._save_session_record(
+                status=PiSessionStatus.COMPLETED,
+                base_commit=parent_commit_hash,
+                branch_name=self.helper.branch_name,
+                pull_request_ids=(
+                    (list(self.session_record.pull_request_ids) + [pr_id])
+                    if self.session_record is not None
+                    and pr_id not in (self.session_record.pull_request_ids or [])
+                    else [pr_id]
+                ),
+                last_active_at=datetime.now(UTC),
+            )
 
             # Update task status.
             # In iteration mode the task is already PULL_REQUEST_AVAILABLE, so the
@@ -849,9 +943,36 @@ class CoderBotSession(PiRpcProcess):
             )
         except Exception as e:
             logger.error(f"Error creating PR: {e}", exc_info=True)
+            await self._save_session_record(
+                status=PiSessionStatus.FAILED, last_error=str(e)
+            )
         finally:
-            logger.info("Cleaning up sandbox.")
-            self.helper.cleanup()
+            if self._should_retain_workspace():
+                logger.info(
+                    "Retaining sandbox workspace for session %s.", self.session_uid
+                )
+            else:
+                logger.info("Cleaning up sandbox.")
+                self.helper.cleanup()
+
+    def _should_retain_workspace(self) -> bool:
+        """Whether the sandbox tree must survive this session for a resume."""
+        return bool(self.session_uid) and config.PI_SESSION_RETAIN_BATCH_WORKSPACE
+
+    async def _save_session_record(self, **fields) -> None:
+        """Best-effort update of the durable Pi session record."""
+        record = self.session_record
+        if record is None:
+            return
+        for key, value in fields.items():
+            if hasattr(record, key):
+                setattr(record, key, value)
+        record.updated_at = datetime.now(UTC)
+        try:
+            await record.save()
+        except Exception:  # pragma: no cover - DB unavailable
+            logger.debug("Failed to save Pi session record", exc_info=True)
+        write_meta(record)
 
     async def run(self):
         """Runs the Pi subprocess and manages the RPC communication."""
@@ -868,7 +989,11 @@ class CoderBotSession(PiRpcProcess):
         await ws_manager.broadcast(
             WSMessage(
                 type="CODERBOT_STARTED",
-                payload={"pipeline_id": self.pipeline_id, "task_id": self.task_id},
+                payload={
+                    "pipeline_id": self.pipeline_id,
+                    "task_id": self.task_id,
+                    "session_uid": self.session_uid,
+                },
             )
         )
 
@@ -901,11 +1026,32 @@ class CoderBotSession(PiRpcProcess):
 
         self.pipeline = pipeline
 
+        retain_workspace = self._should_retain_workspace()
+        workspace_path = (
+            str(pi_workspace_dir(self.session_uid)) if retain_workspace else None
+        )
+        await self._save_session_record(
+            status=PiSessionStatus.RUNNING,
+            cwd=workspace_path or str(pipeline.workspace_abs_path),
+            workspace_path=workspace_path,
+            model=self.model,
+            pipeline_id=self.pipeline_id,
+            task_id=self.task_id,
+        )
+
         logger.info(f"Setting up sandbox for task {self.task_id}")
         self.helper = SandboxGitHelper(
-            "coderbot", self.task_id, pipeline.workspace_abs_path
+            "coderbot",
+            self.task_id,
+            pipeline.workspace_abs_path,
+            workspace_path=workspace_path,
         )
-        self.helper.setup_sandbox()
+        if self.resume_in_place:
+            # A previously persisted batch workspace is reused as-is so the
+            # agent's branch, files and unstaged state match what it last saw.
+            self.helper.reuse_existing()
+        else:
+            self.helper.setup_sandbox()
 
         if self.iteration_mode:
             # In iteration mode the existing PR patch is already present in the
@@ -913,6 +1059,8 @@ class CoderBotSession(PiRpcProcess):
             # to address the user's review comments.
             self._apply_existing_patch()
             initial_prompt = await self.get_iteration_prompt(task)
+        elif self.resume_in_place and self.resume_message:
+            initial_prompt = await self.get_resume_prompt(task, self.resume_message)
         else:
             initial_prompt = await self.get_initial_prompt(task)
 
@@ -925,6 +1073,23 @@ class CoderBotSession(PiRpcProcess):
                 logger.info(f"--model for pi coding agent: {self.model}")
 
             await self.start(cwd=str(self.helper.sandbox_path))
+
+            if self.session_uid and self.should_persist:
+                # Capture Pi's native session identity right after spawn so the
+                # record can be resumed even if the run crashes later.
+                try:
+                    await self.capture_session_identity()
+                    await self._save_session_record(
+                        pi_session_id=self.session_id,
+                        pi_session_file=self.session_file,
+                        session_dir=self.session_dir,
+                    )
+                except Exception:  # pragma: no cover - defensive
+                    logger.warning(
+                        "Failed to capture Pi session identity for %s",
+                        self.session_uid,
+                        exc_info=True,
+                    )
 
             if not self.process or not self.process.stdin:
                 error_msg = "Failed to open stdin to Pi."
@@ -974,18 +1139,53 @@ class CoderBotSession(PiRpcProcess):
                 logger.warning(
                     f"Failed to mark task {self.task_id} as FAILED", exc_info=True
                 )
-            if self.helper:
+            if self.helper and not self._should_retain_workspace():
                 self.helper.cleanup()
         finally:
             logger.info(f"Finalizing session for task {self.task_id}")
             self._log_event({"type": "session_end"})
             await self._close_log_file()
+            await self._finish_session_record()
             await ws_manager.broadcast(
                 WSMessage(
                     type="CODERBOT_COMPLETED",
-                    payload={"pipeline_id": self.pipeline_id, "task_id": self.task_id},
+                    payload={
+                        "pipeline_id": self.pipeline_id,
+                        "task_id": self.task_id,
+                        "session_uid": self.session_uid,
+                    },
                 )
             )
+
+    async def _finish_session_record(self) -> None:
+        """Ensure the durable record is not left dangling in ``RUNNING``."""
+        record = self.session_record
+        if record is None:
+            return
+        if record.status == PiSessionStatus.RUNNING:
+            await self._save_session_record(status=PiSessionStatus.FAILED)
+
+    async def get_resume_prompt(self, task: Task, message: str) -> str:
+        """Build the prompt used when resuming a completed batch session.
+
+        The retained workspace already contains the agent's previous changes, so
+        the user's instruction is appended to the standard task information
+        instead of re-explaining the whole task.
+        """
+        design_doc = task.design_doc or "No design document provided."
+        spec = task.spec or "No specification provided."
+        return (
+            f"Please continue working on the following task.\n\n"
+            f"### Task: {task.title}\n\n"
+            f"### Specification\n{spec}\n\n"
+            f"### Design Document\n{design_doc}\n\n"
+            f"### Follow-up Instruction\n{message}\n\n"
+            f"The working tree contains your previous changes for this task. "
+            f"Continue from that state, address the follow-up instruction and "
+            f"produce a new commit and pull request.\n\n"
+            f"{self._build_repo_scope_instruction()}\n\n"
+            f"{self._build_test_instruction()}"
+        )
 
 
 class InteractivePiSession(PiRpcProcess):
@@ -1012,12 +1212,38 @@ class InteractivePiSession(PiRpcProcess):
         command_timeout: Optional[float] = None,
         pipeline_id: Optional[str] = None,
         bot_type: str = "interactive",
+        session_uid: Optional[str] = None,
+        session_record: Optional[PiSession] = None,
+        resume_session_file: Optional[str] = None,
+        persist: Optional[bool] = None,
     ):
+        self.session_uid = session_uid or (
+            getattr(session_record, "uid", None) if session_record else None
+        )
+        self.session_record = session_record
+        if self.session_uid and config.PI_SESSION_PERSISTENCE_ENABLED:
+            self.session_dir: Optional[str] = str(pi_sessions_dir(self.session_uid))
+            ensure_session_dir(self.session_uid)
+        else:
+            self.session_dir = None
+
+        if resume_session_file is None and session_record is not None:
+            resume_session_file = getattr(session_record, "pi_session_file", None)
+        if resume_session_file is None and self.session_uid:
+            resume_session_file = recover_session_file(self.session_uid)
+        self.resume_session_file = resume_session_file
+
+        if persist is None:
+            persist = config.PI_SESSION_PERSISTENCE_ENABLED
+
         super().__init__(
             model=model,
             cwd=cwd,
             command_timeout=command_timeout,
             skill_names=config.INTERACTIVE_SKILLS,
+            session_dir=self.session_dir,
+            resume_session_file=resume_session_file,
+            persist=persist,
         )
         self.pipeline_id = pipeline_id
         self.bot_type = bot_type
@@ -1025,6 +1251,9 @@ class InteractivePiSession(PiRpcProcess):
         # ``start_interactive`` and exposed to the UI so the reused PiView can
         # resume its "Running since" timer from the real session start.
         self.start_time: Optional[datetime] = None
+        self.event_log: Optional[SessionEventLog] = (
+            SessionEventLog(self.session_uid) if self.session_uid else None
+        )
         self._queue: "asyncio.Queue[Any]" = asyncio.Queue()
         # Public alias so callers/tests can inspect the active-turn queue.
         self.queue = self._queue
@@ -1096,6 +1325,7 @@ class InteractivePiSession(PiRpcProcess):
                 payload={
                     "pipeline_id": self.pipeline_id,
                     "bot_type": self.bot_type,
+                    "session_uid": self.session_uid,
                     "start_time": (
                         self.start_time.isoformat() if self.start_time else None
                     ),
@@ -1114,6 +1344,7 @@ class InteractivePiSession(PiRpcProcess):
                 payload={
                     "pipeline_id": self.pipeline_id,
                     "bot_type": self.bot_type,
+                    "session_uid": self.session_uid,
                 },
             )
         )
@@ -1134,6 +1365,7 @@ class InteractivePiSession(PiRpcProcess):
                 payload={
                     "pipeline_id": self.pipeline_id,
                     "bot_type": self.bot_type,
+                    "session_uid": self.session_uid,
                     "event": event,
                 },
             )
@@ -1145,8 +1377,25 @@ class InteractivePiSession(PiRpcProcess):
         self._started_broadcast = False
         self._stopped_broadcast = False
         process = await self.start(cwd=cwd)
+        if self.session_uid and self.should_persist:
+            try:
+                await self.capture_session_identity()
+            except Exception:  # pragma: no cover - defensive
+                logger.warning(
+                    "Failed to capture interactive Pi session identity for %s",
+                    self.session_uid,
+                    exc_info=True,
+                )
         await self._broadcast_started()
         return process
+
+    async def resume_interactive(self, cwd: Optional[str] = None):
+        """Respawn Pi with the stored session file and re-apply the system prompt.
+
+        Identical to :meth:`start_interactive`; named separately for call-site
+        clarity and to bump the manager's ``resume_count``.
+        """
+        return await self.start_interactive(cwd=cwd)
 
     async def _handle_event(self, event: Dict[str, Any]):
         """Push text deltas for the active turn and mark settled turns.
@@ -1157,6 +1406,8 @@ class InteractivePiSession(PiRpcProcess):
         ``agent_settled`` is the signal that Pi will not continue automatically.
         """
         event_type = event.get("type")
+        if self.event_log is not None:
+            self.event_log.append(event)
         await self._broadcast_rpc(event)
         if event_type == "message_update":
             delta = extract_text_delta(event)
@@ -1202,9 +1453,3 @@ class InteractivePiSession(PiRpcProcess):
             ):
                 return
             yield item
-
-
-# The design/refactor notes refer to the batch session as either
-# ``CoderBotSession`` or ``PiSession``. Keep the shorter name available as an
-# alias so callers can use whichever they prefer.
-PiSession = CoderBotSession

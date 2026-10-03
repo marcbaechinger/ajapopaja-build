@@ -311,3 +311,90 @@ async def test_stop_interactive_session_not_found(async_client, init_mock_db):
             assert response.status_code == status.HTTP_404_NOT_FOUND
     finally:
         app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# Durable session routes
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_list_sessions(async_client, init_mock_db):
+    _authenticate()
+    try:
+        with patch(
+            "api.coderbot.router.coderbot_manager.list_sessions",
+            new_callable=AsyncMock,
+        ) as mock_list:
+            mock_list.return_value = []
+            response = await async_client.get("/api/coderbot/sessions")
+            assert response.status_code == status.HTTP_200_OK
+            assert response.json() == {"sessions": []}
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_create_session_pipeline_not_found(async_client, init_mock_db):
+    _authenticate()
+    try:
+        with patch(
+            "api.coderbot.router.Pipeline.get", new_callable=AsyncMock
+        ) as mock_get:
+            mock_get.return_value = None
+            response = await async_client.post(
+                "/api/coderbot/sessions",
+                json={"pipeline_id": "nope", "kind": "interactive"},
+            )
+            assert response.status_code == status.HTTP_404_NOT_FOUND
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_pause_session_not_found(async_client, init_mock_db):
+    _authenticate()
+    try:
+        from api.coderbot.manager import PiSessionNotFoundError
+
+        with patch(
+            "api.coderbot.router.coderbot_manager.pause_session",
+            new_callable=AsyncMock,
+        ) as mock_pause:
+            mock_pause.side_effect = PiSessionNotFoundError("missing")
+            response = await async_client.post("/api/coderbot/sessions/missing/pause")
+            assert response.status_code == status.HTTP_404_NOT_FOUND
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_session_history_returns_events(async_client, init_mock_db):
+    _authenticate()
+    try:
+        with patch(
+            "api.coderbot.router.read_session_events",
+            return_value=[{"type": "agent_start"}],
+        ):
+            response = await async_client.get("/api/coderbot/sessions/u1/history")
+            assert response.status_code == status.HTTP_200_OK
+            assert response.json()["events"] == [{"type": "agent_start"}]
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_send_session_message_targets_manager(async_client, init_mock_db):
+    _authenticate()
+    try:
+        with patch(
+            "api.coderbot.router.coderbot_manager.send_session_message",
+            new_callable=AsyncMock,
+        ) as mock_send:
+            response = await async_client.post(
+                "/api/coderbot/sessions/u1/message", json={"message": "hi"}
+            )
+            assert response.status_code == status.HTTP_202_ACCEPTED
+            mock_send.assert_awaited_once_with("u1", "hi")
+    finally:
+        app.dependency_overrides.clear()

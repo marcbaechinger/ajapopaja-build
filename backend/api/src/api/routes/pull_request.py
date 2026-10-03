@@ -60,6 +60,7 @@ class AcceptPullRequestRequest(BaseModel):
 
 class IteratePullRequestRequest(BaseModel):
     comments: str
+    session_uid: Optional[str] = None
 
 
 # =============================================================================
@@ -536,6 +537,20 @@ async def iterate_pull_request(pr_id: str, request: IteratePullRequestRequest):
     comments = (request.comments or "").strip()
     if not comments:
         raise HTTPException(status_code=400, detail="Comments are required to iterate")
+
+    if request.session_uid:
+        # Continue the original batch session with its full context instead of
+        # starting a fresh iteration run.
+        try:
+            await coderbot_manager.resume_session(
+                request.session_uid, message=comments
+            )
+        except Exception as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        return {
+            "status": "success",
+            "message": "PullRequest iteration enqueued on session",
+        }
 
     await coderbot_manager.process_pr_iteration(pr, comments)
     return {"status": "success", "message": "PullRequest iteration enqueued"}

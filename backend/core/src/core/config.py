@@ -95,6 +95,58 @@ MCP_AUTHENTICATION_ENABLED = (
 # Bot Logging
 BASEBOT_LOG_ENABLED = os.getenv("BASEBOT_LOG_ENABLED", "true").lower() == "true"
 
+# ---------------------------------------------------------------------------
+# Pi session persistence
+# ---------------------------------------------------------------------------
+# Master switch. When disabled Pi is spawned with ``--no-session`` and the whole
+# persistence layer degrades to the previous ephemeral behaviour.
+PI_SESSION_PERSISTENCE_ENABLED = (
+    os.getenv("PI_SESSION_PERSISTENCE_ENABLED", "true").lower() == "true"
+)
+
+# Root of the per-session directories. Defaults to ``SANDBOX_ROOT/pi_sessions``.
+PI_SESSIONS_ROOT = Path(
+    os.getenv("PI_SESSIONS_ROOT", str(SANDBOX_ROOT / "pi_sessions"))
+).resolve()
+
+# Write the raw-RPC ``events.jsonl`` used to replay the activity log in the UI.
+PI_SESSION_EVENT_LOG_ENABLED = (
+    os.getenv("PI_SESSION_EVENT_LOG_ENABLED", "true").lower() == "true"
+)
+
+# Keep the batch sandbox working tree around so a completed batch run can be
+# resumed and iterated on in place.
+PI_SESSION_RETAIN_BATCH_WORKSPACE = (
+    os.getenv("PI_SESSION_RETAIN_BATCH_WORKSPACE", "true").lower() == "true"
+)
+
+# Age (days) after which a workspace belonging to a not-running session is
+# garbage collected. Set to <= 0 to disable the sweeper.
+try:
+    PI_SESSION_WORKSPACE_TTL_DAYS = float(
+        os.getenv("PI_SESSION_WORKSPACE_TTL_DAYS", "14")
+    )
+except ValueError as e:  # pragma: no cover - defensive
+    raise RuntimeError("PI_SESSION_WORKSPACE_TTL_DAYS must be a number") from e
+
+# Resume the newest interactive session automatically at startup.
+PI_SESSION_AUTO_RESUME = (
+    os.getenv("PI_SESSION_AUTO_RESUME", "false").lower() == "true"
+)
+
+# Number of Pi processes that may run concurrently (1 batch + 1 interactive by
+# default to match the historical behaviour). Values < 1 are clamped to 1.
+try:
+    PI_SESSION_MAX_RUNNING = max(1, int(os.getenv("PI_SESSION_MAX_RUNNING", "2")))
+except ValueError as e:  # pragma: no cover - defensive
+    raise RuntimeError("PI_SESSION_MAX_RUNNING must be an integer") from e
+
+# Cap on retained paused sessions per owner.
+try:
+    PI_SESSION_MAX_PAUSED = int(os.getenv("PI_SESSION_MAX_PAUSED", "50"))
+except ValueError as e:  # pragma: no cover - defensive
+    raise RuntimeError("PI_SESSION_MAX_PAUSED must be an integer") from e
+
 # Default model used by CoderBotManager when spawning Pi sessions.
 # If unset, no --model flag is passed to Pi (None).
 CODERBOT_DEFAULT_MODEL: Optional[str] = os.getenv("CODERBOT_DEFAULT_MODEL")

@@ -49,6 +49,7 @@ from api.routes.docbot import router as docbot_router
 from api.routes.editor_commands import router as editor_router
 from api.reviewbot.router import router as reviewbot_router
 from api.archbot.router import router as archbot_router
+from api.coderbot.manager import coderbot_manager
 from api.coderbot.router import router as coderbot_router
 from api.routes.pull_request import router as pull_request_router
 from api.routes.pipeline import router as pipeline_router
@@ -102,6 +103,10 @@ async def lifespan(app: FastAPI):
     logger.info("Application starting up...")
     logger.info("Initializing database...")
     await init_db()
+    try:
+        await coderbot_manager.reconcile_on_startup()
+    except Exception:  # pragma: no cover - never block startup on reconciliation
+        logger.warning("Pi session reconciliation failed", exc_info=True)
     register_assistant_handlers()
     register_oneprompt_handlers()
     register_dev_process_ws()

@@ -26,6 +26,7 @@ from core import config
 from core.models.models import (
     DesignDocHistory,
     Pipeline,
+    PiSession,
     PullRequest,
     Task,
     User,
@@ -46,7 +47,15 @@ async def init_mock_db():
     db = client[test_db_name]
     await init_beanie(
         database=db,
-        document_models=[Pipeline, Task, DesignDocHistory, User, UserChat, PullRequest],
+        document_models=[
+            Pipeline,
+            Task,
+            DesignDocHistory,
+            User,
+            UserChat,
+            PullRequest,
+            PiSession,
+        ],
     )
     yield test_db_name
     await client.drop_database(test_db_name)

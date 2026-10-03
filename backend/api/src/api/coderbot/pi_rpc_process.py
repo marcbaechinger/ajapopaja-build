@@ -56,6 +56,10 @@ class PiRpcProcess:
         cwd: Optional[str] = None,
         command_timeout: Optional[float] = None,
         skill_names: Optional[list] = None,
+        session_dir: Optional[str] = None,
+        session_name: Optional[str] = None,
+        resume_session_file: Optional[str] = None,
+        persist: Optional[bool] = None,
     ):
         self.model = model
         self.cwd = cwd
@@ -63,6 +67,18 @@ class PiRpcProcess:
             self.COMMAND_TIMEOUT if command_timeout is None else command_timeout
         )
         self.skill_names = list(skill_names or [])
+        self.session_dir = str(session_dir) if session_dir else None
+        self.session_name = session_name
+        self.resume_session_file = (
+            str(resume_session_file) if resume_session_file else None
+        )
+        # ``None`` falls back to the global persistence switch so callers that
+        # simply want "whatever the deployment is configured for" do not have to
+        # read the config themselves.
+        self.persist = persist
+        # Populated by :meth:`capture_session_identity` from Pi's ``get_state``.
+        self.session_id: Optional[str] = None
+        self.session_file: Optional[str] = None
         self._skill_stager: Optional[PiSkillStager] = None
         self.process: Optional[asyncio.subprocess.Process] = None
         self._pending_commands: Dict[str, asyncio.Future] = {}
@@ -71,11 +87,29 @@ class PiRpcProcess:
     # ------------------------------------------------------------------
     # Process lifecycle
     # ------------------------------------------------------------------
+    @property
+    def should_persist(self) -> bool:
+        """Whether Pi should write a resumable native session file."""
+        if self.persist is None:
+            from core import config
+
+            return bool(config.PI_SESSION_PERSISTENCE_ENABLED)
+        return bool(self.persist)
+
     def build_command(self) -> list:
         """Return the argv used to spawn Pi in RPC mode."""
-        cmd = ["pi", "--mode", "rpc", "--no-session"]
+        cmd = ["pi", "--mode", "rpc"]
         if self.model is not None:
             cmd.extend(["--model", self.model])
+        if not self.should_persist:
+            cmd.append("--no-session")
+        else:
+            if self.session_dir:
+                cmd.extend(["--session-dir", self.session_dir])
+            if self.session_name:
+                cmd.extend(["--name", self.session_name])
+            if self.resume_session_file:
+                cmd.extend(["--session", self.resume_session_file])
         return cmd
 
     async def start(self, cwd: Optional[str] = None) -> asyncio.subprocess.Process:
@@ -233,6 +267,22 @@ class PiRpcProcess:
     async def prompt(self, message: str) -> Dict[str, Any]:
         """Send a user prompt to Pi and return its acknowledgement response."""
         return await self.send_command("prompt", {"message": message})
+
+    async def capture_session_identity(self) -> Dict[str, Any]:
+        """Call ``get_state`` and remember the native Pi session identity.
+
+        Returns the raw ``data`` payload from Pi's response. ``sessionId``,
+        ``sessionFile`` and ``sessionName`` are stored on the instance so the
+        caller can persist them on the backend session record.
+        """
+        response = await self.send_command("get_state")
+        data = response.get("data", {}) if isinstance(response, dict) else {}
+        if not isinstance(data, dict):
+            data = {}
+        self.session_id = data.get("sessionId")
+        self.session_file = data.get("sessionFile")
+        self.session_name = data.get("sessionName")
+        return data
 
     # ------------------------------------------------------------------
     # Shutdown

@@ -15,11 +15,14 @@
 import json
 from unittest.mock import patch
 
+import pytest
+
 from api.coderbot import session as session_module
 from api.coderbot.session import read_session_history
 
 
-def test_read_session_history_replays_rpc_events(tmp_path):
+@pytest.mark.asyncio
+async def test_read_session_history_replays_rpc_events(tmp_path):
     task_dir = tmp_path / "logs" / "t1"
     task_dir.mkdir(parents=True)
     log = task_dir / "coderbot_20260101_000000.jsonl"
@@ -37,13 +40,14 @@ def test_read_session_history_replays_rpc_events(tmp_path):
     log.write_text("\n".join(json.dumps(line) for line in lines) + "\n")
 
     with patch.object(session_module.config, "SANDBOX_ROOT", tmp_path):
-        events = read_session_history("t1")
+        events = await read_session_history("t1")
 
     assert len(events) == 2
     assert events[0]["type"] == "agent_start"
     assert events[1]["type"] == "message_update"
 
 
-def test_read_session_history_empty_when_no_log(tmp_path):
+@pytest.mark.asyncio
+async def test_read_session_history_empty_when_no_log(tmp_path):
     with patch.object(session_module.config, "SANDBOX_ROOT", tmp_path):
-        assert read_session_history("t1") == []
+        assert await read_session_history("t1") == []

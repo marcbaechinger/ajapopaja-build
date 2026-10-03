@@ -42,6 +42,10 @@ function makeService(): {
     sendInteractiveMessage: ReturnType<typeof vi.fn>;
     stopInteractiveSession: ReturnType<typeof vi.fn>;
     getInteractiveSession: ReturnType<typeof vi.fn>;
+    pauseSession: ReturnType<typeof vi.fn>;
+    resumeSession: ReturnType<typeof vi.fn>;
+    listSessions: ReturnType<typeof vi.fn>;
+    getSessionEvents: ReturnType<typeof vi.fn>;
   };
 } {
   const ws = new FakeWS();
@@ -55,6 +59,15 @@ function makeService(): {
     sendInteractiveMessage: vi.fn().mockResolvedValue(undefined),
     stopInteractiveSession: vi.fn().mockResolvedValue(undefined),
     getInteractiveSession: vi.fn().mockResolvedValue(null),
+    pauseSession: vi.fn().mockResolvedValue(undefined),
+    resumeSession: vi.fn().mockResolvedValue({
+      uid: 'u1',
+      kind: 'interactive',
+      status: 'running',
+      pipeline_id: 'p1',
+    }),
+    listSessions: vi.fn().mockResolvedValue([]),
+    getSessionEvents: vi.fn().mockResolvedValue([]),
   };
   const service = new InteractiveCodingService(
     ws as unknown as WebSocketClient,
@@ -224,5 +237,45 @@ describe('InteractiveCodingService', () => {
     expect(listener).toHaveBeenCalledWith(false);
     ws.dispatch('INTERACTIVE_STARTED', { pipeline_id: 'p1', bot_type: 'interactive' });
     expect(listener).toHaveBeenCalledWith(true);
+  });
+
+  it('tracks the session uid from INTERACTIVE_STARTED', () => {
+    ws.dispatch('INTERACTIVE_STARTED', {
+      pipeline_id: 'p1',
+      bot_type: 'interactive',
+      session_uid: 'uid-1',
+    });
+    expect(service.getCurrentSession().uid).toBe('uid-1');
+  });
+
+  it('pauseSession calls pauseSession with the uid', async () => {
+    ws.dispatch('INTERACTIVE_STARTED', {
+      pipeline_id: 'p1',
+      bot_type: 'interactive',
+      session_uid: 'uid-1',
+    });
+    await service.pauseSession();
+    expect(client.pauseSession).toHaveBeenCalledWith('uid-1');
+    expect(service.isActive()).toBe(false);
+  });
+
+  it('resumeSession adopts the session and replays its history', async () => {
+    client.getSessionEvents.mockResolvedValue([
+      {
+        type: 'message_update',
+        assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'replayed' },
+      },
+    ]);
+    await service.resumeSession('uid-2');
+    expect(client.resumeSession).toHaveBeenCalledWith('uid-2');
+    expect(service.getCurrentSession().uid).toBe('uid-2');
+    expect(texts(service.getHistory())[0].text).toBe('replayed');
+  });
+
+  it('listSessions delegates to the client', async () => {
+    client.listSessions.mockResolvedValue([{ uid: 'u1' }]);
+    const sessions = await service.listSessions({ kind: 'interactive' });
+    expect(client.listSessions).toHaveBeenCalledWith({ kind: 'interactive' });
+    expect(sessions).toEqual([{ uid: 'u1' }]);
   });
 });

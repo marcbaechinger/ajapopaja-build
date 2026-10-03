@@ -310,7 +310,8 @@ def test_build_command_appends_system_instruction():
 
     cmd = session.build_command()
 
-    assert cmd[:4] == ["pi", "--mode", "rpc", "--no-session"]
+    assert cmd[:3] == ["pi", "--mode", "rpc"]
+    assert "--no-session" not in cmd
     assert cmd.count("--append-system-prompt") == 1
     instruction = cmd[cmd.index("--append-system-prompt") + 1]
 
@@ -352,7 +353,6 @@ def test_build_command_keeps_model_and_adds_instruction():
         "pi",
         "--mode",
         "rpc",
-        "--no-session",
         "--model",
         "custom:cloud",
         "--append-system-prompt",

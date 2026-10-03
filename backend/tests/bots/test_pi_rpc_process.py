@@ -279,7 +279,6 @@ async def test_start_builds_expected_command():
             "pi",
             "--mode",
             "rpc",
-            "--no-session",
             "--model",
             "custom:cloud",
             stdin=asyncio.subprocess.PIPE,
@@ -302,7 +301,7 @@ async def test_start_omits_model_and_accepts_cwd_override():
         await session.start(cwd="/sandbox")
 
         args = mock_exec.await_args.args
-        assert args == ("pi", "--mode", "rpc", "--no-session")
+        assert args == ("pi", "--mode", "rpc")
         assert mock_exec.await_args.kwargs["cwd"] == "/sandbox"
 
 
@@ -406,3 +405,74 @@ def test_cleanup_is_safe_without_stager():
 
     # Must not raise.
     session._cleanup_skills()
+
+
+# ---------------------------------------------------------------------------
+# Session persistence flags
+# ---------------------------------------------------------------------------
+def test_build_command_includes_session_dir_and_name():
+    session = PiRpcProcess(
+        model="m",
+        session_dir="/sessions/uid1/pi-sessions",
+        session_name="my-session",
+    )
+    cmd = session.build_command()
+    assert cmd == [
+        "pi",
+        "--mode",
+        "rpc",
+        "--model",
+        "m",
+        "--session-dir",
+        "/sessions/uid1/pi-sessions",
+        "--name",
+        "my-session",
+    ]
+    assert "--no-session" not in cmd
+
+
+def test_build_command_includes_resume_session_file():
+    session = PiRpcProcess(resume_session_file="/sessions/uid1/file.jsonl")
+    cmd = session.build_command()
+    assert cmd == [
+        "pi",
+        "--mode",
+        "rpc",
+        "--session",
+        "/sessions/uid1/file.jsonl",
+    ]
+
+
+def test_build_command_persist_false_adds_no_session():
+    session = PiRpcProcess(
+        model="m", session_dir="/s", persist=False, session_name="n"
+    )
+    cmd = session.build_command()
+    assert cmd == ["pi", "--mode", "rpc", "--model", "m", "--no-session"]
+
+
+@pytest.mark.asyncio
+async def test_capture_session_identity_parses_get_state():
+    session = PiRpcProcess()
+    session.process = make_loopback_process(
+        overrides={
+            "get_state": {
+                "data": {
+                    "sessionId": "sid-1",
+                    "sessionFile": "/tmp/sid-1.jsonl",
+                    "sessionName": "hello",
+                }
+            }
+        }
+    )
+    read_task = asyncio.create_task(session._read_loop())
+
+    data = await session.capture_session_identity()
+
+    assert data["sessionId"] == "sid-1"
+    assert session.session_id == "sid-1"
+    assert session.session_file == "/tmp/sid-1.jsonl"
+    assert session.session_name == "hello"
+
+    session.process.stdout.push(b"")
+    await read_task

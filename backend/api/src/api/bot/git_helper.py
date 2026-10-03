@@ -22,12 +22,23 @@ from core import config
 
 
 class SandboxGitHelper:
-    def __init__(self, bot_type: str, task_id: str, source_repo_path: Path):
+    def __init__(
+        self,
+        bot_type: str,
+        task_id: str,
+        source_repo_path: Path,
+        workspace_path: Path | str | None = None,
+    ):
         self.bot_type = bot_type
         self.task_id = task_id
         self.source_repo_path = source_repo_path
-        # Non-colliding paths: sandbox/coderbot/task_id vs sandbox/docbot/task_id
-        self.sandbox_path = config.SANDBOX_ROOT / bot_type / task_id
+        # Non-colliding paths: sandbox/coderbot/task_id vs sandbox/docbot/task_id.
+        # A caller may override the path (used by the persistent Pi sessions that
+        # retain their workspace under PI_SESSIONS_ROOT/<uid>/workspace).
+        if workspace_path is not None:
+            self.sandbox_path = Path(workspace_path)
+        else:
+            self.sandbox_path = config.SANDBOX_ROOT / bot_type / task_id
         self.branch_name = f"{bot_type}/{task_id}"
 
     def setup_sandbox(self):
@@ -43,6 +54,19 @@ class SandboxGitHelper:
         # Create and checkout branch
         repo.git.checkout("-b", self.branch_name)
         return repo
+
+    def reuse_existing(self) -> git.Repo:
+        """Return the repository of an already-materialised sandbox in place.
+
+        Used when resuming a persisted batch session: the retained working tree
+        must not be re-cloned because the agent's branch and unstaged changes are
+        part of the resume state.
+        """
+        if not self.sandbox_path.exists():
+            raise FileNotFoundError(
+                f"Retained sandbox workspace not found: {self.sandbox_path}"
+            )
+        return self.get_repo()
 
     def get_repo(self) -> git.Repo:
         return git.Repo(str(self.sandbox_path))
