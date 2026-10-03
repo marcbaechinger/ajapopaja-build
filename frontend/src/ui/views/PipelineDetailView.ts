@@ -39,6 +39,8 @@ import { DiffDialog } from '../components/DiffDialog.ts';
 import { IteratePullRequestDialog } from '../components/IteratePullRequestDialog.ts';
 import { CoderBotDialog } from '../components/CoderBotDialog.ts';
 import { InteractiveCodingView } from '../components/InteractiveCodingView.ts';
+import { SessionListItemView } from '../components/SessionListItemView.ts';
+import type { PiSessionSummary } from '../../core/InteractiveCodingService.ts';
 import { DevServerDialog } from '../components/DevServerDialog.ts';
 import { PiView } from '../components/PiView.ts';
 import { PipelineHeaderView, type DocbotState, type ReviewbotState, type CoderbotState } from '../components/PipelineHeaderView.ts';
@@ -76,6 +78,7 @@ export class PipelineDetailView extends View {
   private interactiveMode: boolean = false;
   private interactiveCodingView: InteractiveCodingView | null = null;
   private interactiveSession: { pipelineId: string; active: boolean } | null = null;
+  private sessionListClickHandler: ((e: Event) => void) | null = null;
 
   private loadPendingReviews() {
     this.pendingReviews = this.storage.get<string[]>(`pending_reviews:${this.pipelineId}`, []) || [];
@@ -512,6 +515,16 @@ export class PipelineDetailView extends View {
         console.error('Start interactive session error:', error);
         alert('Failed to start interactive session');
       }
+    });
+
+    this.context.actionRegistry.register('resume_interactive_session', async (_e, el) => {
+      const uid = el.getAttribute('data-session-uid');
+      if (!uid) return;
+      await this.switchToSession(uid);
+    });
+
+    this.context.actionRegistry.register('open_pipeline_sessions', () => {
+      this.context.sessionManagerPanel?.open(this.pipelineId);
     });
 
     this.context.actionRegistry.register('toggle_interactive_view', () => {
@@ -1405,6 +1418,16 @@ export class PipelineDetailView extends View {
               title="Start an interactive Pi coding session in the pipeline repository">
               ${'\u26a1'} Start Interactive Session
             </button>
+            <button id="resume-interactive-btn" data-action-click="resume_interactive_session" type="button"
+              class="hidden px-3 py-1.5 rounded text-xs font-medium bg-app-accent-2 text-white hover:bg-app-accent-2/80 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
+              title="Resume the paused interactive session for this pipeline">
+              ${'\u25b6'} Resume Session
+            </button>
+            <button id="start-new-interactive-btn" data-action-click="start_interactive_session" type="button"
+              class="hidden px-3 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-muted hover:text-app-text transition-colors cursor-pointer"
+              title="Start a new interactive session (pauses the current one)">
+              Start new
+            </button>
             <button id="toggle-interactive-btn" data-action-click="toggle_interactive_view" type="button"
               class="hidden px-3 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer">
               Switch to Interactive Session
@@ -1413,7 +1436,13 @@ export class PipelineDetailView extends View {
               class="hidden px-3 py-1.5 rounded text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer">
               Stop Interactive Session
             </button>
+            <button id="manage-sessions-btn" data-action-click="open_pipeline_sessions" type="button"
+              class="hidden px-3 py-1.5 rounded text-xs font-medium text-app-muted hover:text-app-accent-2 border border-app-border hover:border-app-accent-2/40 transition-colors cursor-pointer"
+              title="Open the session manager for this pipeline">
+              Sessions
+            </button>
           </div>
+          <div id="pipeline-session-list" class="mt-3 flex flex-col gap-2"></div>
           <div id="selected-task-view" class="mt-6">
             <p class="text-app-muted/60 text-xs italic text-center border border-dashed border-app-border/40 rounded-xl py-6 px-3">Select a task from the backlog to open it here.</p>
           </div>
@@ -1486,6 +1515,63 @@ export class PipelineDetailView extends View {
     Promise.resolve(this.context.interactiveCodingService?.refreshSession?.()).then(() => {
       this.syncInteractiveSession();
     });
+
+    // Inline per-pipeline session rows use `data-session-action` so they never
+    // collide with the global action registry.
+    this.sessionListClickHandler = (e: Event) => this.handleSessionListClick(e);
+    this.container.addEventListener('click', this.sessionListClickHandler);
+    void this.context.interactiveCodingService?.refreshSessions?.({ kind: 'interactive' });
+  }
+
+  private handleSessionListClick(event: Event): void {
+    const target = (event.target as HTMLElement)?.closest?.('[data-session-action]') as HTMLElement | null;
+    if (!target) return;
+    if (!this.container?.contains(target)) return;
+    const action = target.getAttribute('data-session-action');
+    const uid = target.getAttribute('data-session-uid') ?? '';
+    const service = this.context.interactiveCodingService;
+    if (!service) return;
+
+    if (action === 'switch' && uid) {
+      void this.switchToSession(uid);
+    } else if (action === 'pause') {
+      void service.pauseSession?.();
+    } else if (action === 'open') {
+      const session = service.getSession?.(uid);
+      if (session?.pipeline_id) window.location.hash = `#/pipeline/${session.pipeline_id}`;
+    } else if (action === 'discard' && uid) {
+      void new ConfirmationDialog(
+        'Discard session',
+        'Discard this session? This deletes the retained workspace and Pi conversation.',
+        'Discard'
+      )
+        .show()
+        .then((confirmed) => {
+          if (confirmed) service.discardSession?.(uid).then(() => this.syncInteractiveSession());
+        });
+    }
+  }
+
+  /** Switch to a session, confirming when the current agent is mid-turn. */
+  private async switchToSession(uid: string): Promise<void> {
+    const service = this.context.interactiveCodingService;
+    if (!service?.switchSession) return;
+    try {
+      if (service.isBusy?.()) {
+        const confirmed = await new ConfirmationDialog(
+          'Switch session?',
+          'The current session is still working. Switching will interrupt it and pause the session.',
+          'Switch & interrupt'
+        ).show();
+        if (!confirmed) return;
+      }
+      await service.switchSession(uid);
+      this.interactiveMode = true;
+      this.syncInteractiveSession();
+    } catch (error) {
+      console.error('Switch interactive session error:', error);
+      alert('Failed to switch the interactive session');
+    }
   }
 
   private async checkOllama() {
@@ -1503,6 +1589,10 @@ export class PipelineDetailView extends View {
       this.enginePiView.destroy();
       this.enginePiView = null;
     }
+    if (this.sessionListClickHandler && this.container) {
+      this.container.removeEventListener('click', this.sessionListClickHandler);
+    }
+    this.sessionListClickHandler = null;
     this.teardownInteractiveCodingView();
     this.unsubs.forEach(unsub => unsub());
     this.unsubs = [];
@@ -1918,6 +2008,8 @@ export class PipelineDetailView extends View {
   private updateInteractiveSlot() {
     if (!this.container) return;
     const startBtn = this.container.querySelector('#start-interactive-btn') as HTMLElement | null;
+    const resumeBtn = this.container.querySelector('#resume-interactive-btn') as HTMLElement | null;
+    const startNewBtn = this.container.querySelector('#start-new-interactive-btn') as HTMLElement | null;
     const toggleBtn = this.container.querySelector('#toggle-interactive-btn') as HTMLElement | null;
     const stopBtn = this.container.querySelector('#stop-interactive-btn') as HTMLElement | null;
     const selected = this.container.querySelector('#selected-task-view') as HTMLElement | null;
@@ -1929,7 +2021,18 @@ export class PipelineDetailView extends View {
       this.interactiveSession.active &&
       this.interactiveSession.pipelineId === this.pipelineId;
 
-    startBtn?.classList.toggle('hidden', !isRemote || mine);
+    const resumable = this.pipelineResumableSessions();
+    const hasPaused = resumable.length > 0 && isRemote && !mine;
+
+    startBtn?.classList.toggle('hidden', !isRemote || mine || hasPaused);
+    resumeBtn?.classList.toggle('hidden', !hasPaused);
+    startNewBtn?.classList.toggle('hidden', !hasPaused);
+    const manageBtn = this.container.querySelector('#manage-sessions-btn') as HTMLElement | null;
+    manageBtn?.classList.toggle('hidden', !isRemote);
+    if (resumeBtn && resumable[0]) {
+      resumeBtn.setAttribute('data-session-uid', resumable[0].uid);
+      resumeBtn.textContent = '\u25b6 Resume Session';
+    }
     toggleBtn?.classList.toggle('hidden', !mine);
     stopBtn?.classList.toggle('hidden', !mine);
 
@@ -1943,6 +2046,44 @@ export class PipelineDetailView extends View {
         ? 'Switch to Task'
         : 'Switch to Interactive Session';
     }
+
+    this.renderPipelineSessionList(isRemote ? resumable : []);
+  }
+
+  /** Resumable (paused/completed/failed) sessions belonging to this pipeline. */
+  private pipelineResumableSessions(): PiSessionSummary[] {
+    const service = this.context.interactiveCodingService;
+    if (!service?.getSessions) return [];
+    try {
+      return service
+        .getSessions()
+        .filter(
+          (s) =>
+            s.pipeline_id === this.pipelineId &&
+            (s.status === 'paused' || s.status === 'completed' || s.status === 'failed')
+        );
+    } catch {
+      return [];
+    }
+  }
+
+  /** Render the inline list of resumable sessions for this pipeline. */
+  private renderPipelineSessionList(sessions: PiSessionSummary[]) {
+    const list = this.container?.querySelector('#pipeline-session-list') as HTMLElement | null;
+    if (!list) return;
+    if (sessions.length === 0) {
+      list.innerHTML = '';
+      return;
+    }
+    list.innerHTML = sessions
+      .map((session) =>
+        SessionListItemView.render(session, {
+          pipelineName: this.pipeline?.name ?? null,
+          showDiscard: true,
+          showOpenPipeline: false,
+        })
+      )
+      .join('');
   }
 
   private refreshBacklog() {

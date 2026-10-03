@@ -1,5 +1,21 @@
 # Release Notes
 
+## Unreleased – Interactive session manager
+
+* **Session manager drawer** – a global right‑hand panel (Sessions button in the
+  dashboard and pipeline headers, `Ctrl/Cmd+J`) lists every durable Pi session
+  grouped by status (Active, Paused, Completed, Failed, Discarded) with search,
+  status filters and a batch‑session toggle. Selecting a paused session pauses
+  the current one and resumes the target atomically.
+* **Per‑pipeline resume** – pipeline detail views show a paused session banner
+  and an inline session list; the primary action becomes **Resume Session** when
+  the pipeline already has a paused session.
+* **Replay‑race fix** – resuming a session no longer loses its replayed history
+  when a late `INTERACTIVE_STARTED` broadcast arrives.
+* **Session rename** – `PATCH /api/coderbot/sessions/{uid}` updates a session
+  label and broadcasts a `SESSION_UPDATED` websocket message.
+
+
 ## 0.4.0 – IDE‑style workspace, remote repositories, and richer agent tooling
 
 This release rebuilds the dashboard around an IDE‑style workspace, adds

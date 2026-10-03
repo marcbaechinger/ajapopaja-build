@@ -25,6 +25,8 @@ export interface InteractiveCodingViewOptions {
   onStop?: () => void;
   /** Invoked by the "Pause" control (defaults to service.pauseSession). */
   onPause?: () => void;
+  /** Invoked by the "Switch session" link (defaults to opening the session manager). */
+  onSwitchSession?: () => void;
 }
 
 /**
@@ -41,6 +43,7 @@ export class InteractiveCodingView {
   private pipelineId: string;
   private onStop?: () => void;
   private onPause?: () => void;
+  private onSwitchSession?: () => void;
   private piView: PiView | null = null;
   private promptView: InteractivePromptView | null = null;
   private unsubs: (() => void)[] = [];
@@ -55,6 +58,7 @@ export class InteractiveCodingView {
     this.pipelineId = options.pipelineId;
     this.onStop = options.onStop;
     this.onPause = options.onPause;
+    this.onSwitchSession = options.onSwitchSession;
   }
 
   render(): void {
@@ -83,6 +87,7 @@ export class InteractiveCodingView {
 
     this.root.querySelector('#interactive-stop-btn')?.addEventListener('click', () => this.stopSession());
     this.root.querySelector('#interactive-pause-btn')?.addEventListener('click', () => this.pauseSession());
+    this.root.querySelector('#interactive-switch-session-btn')?.addEventListener('click', () => this.switchSession());
 
     // Re-render the composer state whenever the session or busy state changes.
     this.unsubs.push(this.service.onSessionChange(() => this.updateComposerState()));
@@ -153,6 +158,18 @@ export class InteractiveCodingView {
     }
   }
 
+  /**
+   * Opens the global session manager. Hosts can override this through
+   * {@link InteractiveCodingViewOptions.onSwitchSession}.
+   */
+  switchSession(): void {
+    if (this.onSwitchSession) {
+      this.onSwitchSession();
+      return;
+    }
+    window.dispatchEvent(new CustomEvent('toggle-session-manager'));
+  }
+
   private updateComposerState() {
     const busy = this.service.isBusy();
     const active = this.service.isActive();
@@ -187,6 +204,11 @@ export class InteractiveCodingView {
             <h3 class="text-sm font-bold text-app-text truncate">Interactive Coding Session</h3>
             <span id="interactive-status" class="text-[10px] font-bold uppercase tracking-widest text-app-muted">Session active</span>
           </div>
+          <button id="interactive-switch-session-btn" type="button"
+            class="px-2.5 py-1.5 rounded text-xs font-medium text-app-muted hover:text-app-accent-2 border border-app-border hover:border-app-accent-2/40 transition-colors flex items-center gap-1.5 cursor-pointer"
+            title="Switch to another session">
+            Switch session
+          </button>
           <button id="interactive-pause-btn" type="button"
             class="px-3 py-1.5 rounded text-xs font-medium bg-amber-600 text-white hover:bg-amber-700 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer">
             ${Icon.render('clock', { size: 14 })} Pause

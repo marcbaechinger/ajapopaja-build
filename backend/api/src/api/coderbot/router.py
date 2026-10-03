@@ -12,12 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from datetime import UTC, datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from api.auth import get_current_user
+from api.websocket_manager import WSMessage, manager as ws_manager
 from core.models.models import (
     PiSessionKind,
     PiSessionStatus,
@@ -62,6 +64,12 @@ class SessionMessageRequest(BaseModel):
     """Request body for sending a follow-up message to a session."""
 
     message: str
+
+
+class UpdateSessionRequest(BaseModel):
+    """Request body for updating the mutable fields of a session."""
+
+    label: Optional[str] = None
 
 
 class ResumeSessionRequest(BaseModel):
@@ -175,6 +183,20 @@ async def get_session(uid: str):
     return _session_payload(record)
 
 
+@router.patch("/sessions/{uid}")
+async def update_session(uid: str, request: UpdateSessionRequest):
+    """Update the mutable fields (currently the label) of a session."""
+    record = await _get_session_or_404(uid)
+    if request.label is not None:
+        record.label = request.label
+    record.updated_at = datetime.now(UTC)
+    await record.save()
+
+    payload = _session_payload(record)
+    await ws_manager.broadcast(WSMessage(type="SESSION_UPDATED", payload=payload))
+    return payload
+
+
 @router.post("/sessions/{uid}/pause")
 async def pause_session(uid: str):
     """Persist and stop a session, keeping it resumable."""
@@ -188,9 +210,7 @@ async def pause_session(uid: str):
 
 
 @router.post("/sessions/{uid}/resume")
-async def resume_session(
-    uid: str, request: Optional[ResumeSessionRequest] = None
-):
+async def resume_session(uid: str, request: Optional[ResumeSessionRequest] = None):
     """Respawn Pi with the session's stored native session file."""
     try:
         record = await coderbot_manager.resume_session(

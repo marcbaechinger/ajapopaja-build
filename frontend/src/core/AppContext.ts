@@ -36,6 +36,8 @@ import { DevProcessService } from './DevProcessService.ts';
 import { NotificationService } from './NotificationService.ts';
 import { SearchDialog } from '../ui/components/SearchDialog';
 import { AssistantPanel } from '../ui/components/AssistantPanel';
+import { SessionManagerPanel } from '../ui/components/SessionManagerPanel';
+import { SessionManagerButton } from '../ui/components/SessionManagerButton';
 import { HealthCheckDialog } from '../ui/components/HealthCheckDialog';
 import { handleQuickPromptButtonClick } from '../ui/components/QuickPromptButton';
 import { registerTaskElaborateSpecAction } from '../ui/components/SpecSection';
@@ -65,6 +67,7 @@ export class AppContext {
   public readonly interactiveCodingService: InteractiveCodingService;
   public readonly devProcessService: DevProcessService;
   public readonly notifications: NotificationService;
+  public readonly sessionManagerPanel: SessionManagerPanel;
   private state: AppState;
 
   constructor(containerId: string, apiBaseUrl: string) {
@@ -96,6 +99,8 @@ export class AppContext {
 
     // Initialize singleton components
     new AssistantPanel(this);
+    this.sessionManagerPanel = new SessionManagerPanel(this);
+    this.setupSessionManager();
     
     const savedTheme = document.documentElement.getAttribute('data-theme') as 'light' | 'dark' | null;
     this.state = {
@@ -160,6 +165,14 @@ export class AppContext {
       }
     });
 
+    this.actionRegistry.register('toggle_session_manager', (_e, el) => {
+      if (!this.authService.isAuthenticated()) return;
+      // A button inside a pipeline header scopes the panel to that pipeline.
+      const pipelineId =
+        el.closest('[data-pipeline-id]')?.getAttribute('data-pipeline-id') ?? null;
+      this.sessionManagerPanel.toggle(pipelineId || null);
+    });
+
     this.actionRegistry.register('open_health_check', () => {
       if (this.authService.isAuthenticated()) {
         new HealthCheckDialog(this).show();
@@ -180,6 +193,45 @@ export class AppContext {
         e.preventDefault();
         this.actionRegistry.execute('toggle_assistant', e, document.body);
       }
+
+      // Ctrl+J or Cmd+J for the session manager.
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'j') {
+        e.preventDefault();
+        this.actionRegistry.execute('toggle_session_manager', e, document.body);
+      }
+    });
+  }
+
+  /**
+   * Keep the header session buttons in sync with the service cache and kick off
+   * the initial session discovery. The panel itself subscribes to the service;
+   * this only updates the always-visible badge counters.
+   */
+  private setupSessionManager() {
+    const updateButtons = () => {
+      const sessions = this.interactiveCodingService.getSessions();
+      const pausedCount = sessions.filter((s) =>
+        s.status === 'paused' || s.status === 'completed' || s.status === 'failed'
+      ).length;
+      SessionManagerButton.updateAll(document, {
+        pausedCount,
+        busy: this.interactiveCodingService.isBusy(),
+      });
+    };
+
+    this.interactiveCodingService.onSessionsChange(updateButtons);
+    this.interactiveCodingService.onSessionChange(updateButtons);
+
+    // Buttons are (re)rendered on every navigation; refresh them after the
+    // view has mounted.
+    window.addEventListener('hashchange', () => setTimeout(updateButtons, 0));
+    window.addEventListener('toggle-session-manager', () =>
+      this.sessionManagerPanel.toggle()
+    );
+
+    updateButtons();
+    void this.interactiveCodingService.initialize().then(updateButtons).catch(() => {
+      /* discovery is best-effort */
     });
   }
 

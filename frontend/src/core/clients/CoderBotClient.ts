@@ -68,6 +68,7 @@ export class CoderBotClient extends BaseClient {
 
   async startInteractiveSession(pipelineId: string): Promise<{
     pipeline_id: string;
+    uid?: string | null;
     is_active: boolean;
     start_time: string | null;
     busy: boolean;
@@ -94,6 +95,7 @@ export class CoderBotClient extends BaseClient {
 
   async getInteractiveSession(): Promise<{
     pipeline_id: string;
+    uid?: string | null;
     is_active: boolean;
     start_time: string | null;
     busy: boolean;
@@ -111,6 +113,7 @@ export class CoderBotClient extends BaseClient {
     kind?: string;
     status?: string;
     pipelineId?: string;
+    includeDiscarded?: boolean;
   }): Promise<PiSessionSummary[]> {
     const params = new URLSearchParams();
     if (options?.kind) params.set('kind', options.kind);
@@ -120,7 +123,11 @@ export class CoderBotClient extends BaseClient {
     const res = await this.fetch(`/api/coderbot/sessions${query ? `?${query}` : ''}`, {});
     if (!res.ok) return [];
     const data = await res.json();
-    return Array.isArray(data?.sessions) ? data.sessions : [];
+    const sessions = Array.isArray(data?.sessions) ? (data.sessions as PiSessionSummary[]) : [];
+    if (options?.includeDiscarded === false) {
+      return sessions.filter((s) => s.status !== 'discarded');
+    }
+    return sessions;
   }
 
   async createSession(
@@ -146,9 +153,15 @@ export class CoderBotClient extends BaseClient {
     await this.fetch(`/api/coderbot/sessions/${uid}/pause`, { method: 'POST' });
   }
 
-  async resumeSession(uid: string): Promise<PiSessionSummary> {
+  async resumeSession(uid: string, message?: string): Promise<PiSessionSummary> {
     const res = await this.fetch(`/api/coderbot/sessions/${uid}/resume`, {
       method: 'POST',
+      ...(message !== undefined
+        ? {
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message }),
+          }
+        : {}),
     });
     return await res.json();
   }
@@ -162,6 +175,15 @@ export class CoderBotClient extends BaseClient {
     if (!res.ok) return [];
     const data = await res.json();
     return Array.isArray(data?.events) ? data.events : [];
+  }
+
+  async updateSessionLabel(uid: string, label: string): Promise<PiSessionSummary> {
+    const res = await this.fetch(`/api/coderbot/sessions/${uid}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label }),
+    });
+    return await res.json();
   }
 
   async sendSessionMessage(uid: string, message: string): Promise<void> {

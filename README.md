@@ -61,6 +61,13 @@ Agents work on real code inside isolated sandboxes and report back through the U
   pipeline's repository. The agent is pinned to that repository (no
   filesystem‑wide searches outside it) and can read and manage pipeline tasks
   through the bundled `ajapopaja` skill using the pipeline's UID.
+- **Session manager** – a global right‑hand drawer (Sessions button in every
+  header, `Ctrl/Cmd+J`) lists the single active session plus every paused,
+  completed or failed session with status, pipeline, label, turn count, model
+  and relative activity. Switching is one safe action: the backend pauses the
+  current session and resumes the chosen one with its history intact. Pipeline
+  detail views surface a `Resume` primary action and an inline per‑pipeline
+  session list.
 - **Configurable keyboard shortcuts** – PiView ships with global shortcuts
   (`/` focus search, `f` toggle follow, `n`/`N` next/prev error, `c` copy,
   `x` clear, `s` stop, `t` thinking, `b` collapse, `e` error visibility, `k`

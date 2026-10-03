@@ -16,6 +16,7 @@
 
 import { ButtonComponent } from './ButtonComponent.ts';
 import { Icon } from './Icon.ts';
+import { SessionManagerButton } from './SessionManagerButton.ts';
 
 export class HeaderDialogButtons {
   static render(pipelineId: string): string {
@@ -27,6 +28,7 @@ export class HeaderDialogButtons {
            icon: Icon.render('search', { size: 16, className: 'group-hover:scale-110 transition-transform' }),
            title: 'Global Search (Ctrl+K)'
          })}
+         <span data-pipeline-id="${pipelineId}">${SessionManagerButton.render({ compact: true })}</span>
          ${ButtonComponent.render({
            action: 'toggle_assistant',
            icon: Icon.render('lightning', { size: 16, className: 'group-hover:scale-110 transition-transform' }),

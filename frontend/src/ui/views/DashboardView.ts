@@ -20,6 +20,7 @@ import { Pipeline, PipelineStatus, Task } from '../../core/domain.ts';
 import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
 import { PipelineEditDialog } from '../components/PipelineEditDialog.ts';
 import { PipelineItemView } from '../components/PipelineItemView.ts';
+import { SessionManagerButton } from '../components/SessionManagerButton.ts';
 
 // Sort weight per pipeline status. Lower weight renders first.
 // Unknown/non-conforming statuses fall back to 3 (last).
@@ -209,6 +210,7 @@ export class DashboardView extends View {
           </div>
         </div>
         <div class="flex items-center gap-4">
+          ${SessionManagerButton.render()}
           <button data-action-click="open_search" class="flex items-center gap-2 bg-app-bg hover:bg-app-surface px-4 py-2 rounded-xl border border-app-border text-app-muted hover:text-app-accent-2 transition-all cursor-pointer group" title="Global Search (Ctrl+K)">
             <svg class="w-4 h-4 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
             <span class="text-xs font-bold uppercase tracking-widest">Search</span>
