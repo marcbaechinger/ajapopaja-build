@@ -1432,4 +1432,68 @@ describe('PipelineDetailView Interactive Session', () => {
     expect(mount.classList.contains('hidden')).toBe(true);
     expect((view as any).interactiveCodingView).toBeNull();
   });
+
+  it('shows Task editor / Coding Agent tabs and switches between the two DOM fragments without re-rendering', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await view.loadPipeline();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const tablist = container.querySelector('#content-tablist') as HTMLElement;
+    expect(tablist).not.toBeNull();
+    // No session yet: the tab list is hidden, and the removed redundant buttons
+    // are gone from the DOM.
+    expect(tablist.classList.contains('hidden')).toBe(true);
+    expect(container.querySelector('#toggle-interactive-btn')).toBeNull();
+    expect(container.querySelector('#stop-interactive-btn')).toBeNull();
+    expect(container.querySelector('#manage-sessions-btn')).toBeNull();
+
+    // A session starts: the tabs appear and the Coding Agent tab becomes active.
+    mockContext.interactiveCodingService.getCurrentSession.mockReturnValue({
+      pipelineId: 'p1',
+      active: true,
+      busy: false,
+    });
+    mockContext.interactiveCodingService.refreshSession.mockResolvedValue({
+      pipelineId: 'p1',
+      active: true,
+      busy: false,
+    });
+    dataManagerHandlers['ws:INTERACTIVE_STARTED:p1']({ pipeline_id: 'p1' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const selected = container.querySelector('#selected-task-view') as HTMLElement;
+    const mount = container.querySelector('#interactive-coding-view-mount') as HTMLElement;
+    const taskTab = container.querySelector('#tab-task-editor') as HTMLElement;
+    const codingTab = container.querySelector('#tab-coding-agent') as HTMLElement;
+    expect(tablist.classList.contains('hidden')).toBe(false);
+    expect(taskTab.textContent).toContain('Task editor');
+    expect(codingTab.textContent).toContain('Coding Agent');
+    expect(codingTab.getAttribute('aria-selected')).toBe('true');
+    expect(taskTab.getAttribute('aria-selected')).toBe('false');
+    expect(selected.classList.contains('hidden')).toBe(true);
+    expect(mount.classList.contains('hidden')).toBe(false);
+
+    const mountCountBefore = (InteractiveCodingView as any).mock.calls.length;
+    const selectedNode = selected;
+    const mountNode = mount;
+
+    // Switching back to the Task editor only toggles visibility: the TaskItem and
+    // the InteractiveCodingView DOM fragments are the exact same in-memory nodes.
+    getAction('select_content_tab')(null, taskTab);
+    expect(selected.classList.contains('hidden')).toBe(false);
+    expect(mount.classList.contains('hidden')).toBe(true);
+    expect(taskTab.getAttribute('aria-selected')).toBe('true');
+    expect(container.querySelector('#selected-task-view')).toBe(selectedNode);
+    expect(container.querySelector('#interactive-coding-view-mount')).toBe(mountNode);
+    expect((InteractiveCodingView as any).mock.calls.length).toBe(mountCountBefore);
+
+    // Switching back to the Coding Agent reuses the already-mounted view.
+    getAction('select_content_tab')(null, codingTab);
+    expect(selected.classList.contains('hidden')).toBe(true);
+    expect(mount.classList.contains('hidden')).toBe(false);
+    expect((InteractiveCodingView as any).mock.calls.length).toBe(mountCountBefore);
+  });
 });
