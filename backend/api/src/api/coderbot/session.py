@@ -1033,6 +1033,58 @@ class InteractivePiSession(PiRpcProcess):
         self._started_broadcast = False
         self._stopped_broadcast = False
 
+    def build_command(self) -> list:
+        """Return the argv used to spawn the interactive Pi RPC process.
+
+        Extends the base command with ``--append-system-prompt`` so the
+        repository/search scope and task-management instruction are installed
+        once, before the first user turn. Passing the instruction as a process
+        argument (rather than as a prompt message) keeps it out of the
+        user-authored chat history.
+        """
+        cmd = super().build_command()
+        cmd.extend(["--append-system-prompt", self._build_system_instruction()])
+        return cmd
+
+    def _build_system_instruction(self) -> str:
+        """Build the system instruction appended to interactive Pi sessions.
+
+        Unlike the batch :class:`CoderBotSession`, which runs in an isolated
+        sandbox, an interactive session works directly in the user's live
+        repository. The instruction therefore pins the agent to that
+        repository, forbids filesystem-wide searches and points it at the
+        bundled ``ajapopaja`` skill for pipeline task management.
+
+        The Pipeline UID is the ``pipeline_id`` the session was started for;
+        the agent passes it when reading tasks from that pipeline.
+        """
+        pipeline_uid = self.pipeline_id or "unknown"
+        return (
+            "### Repository Scope\n"
+            "You work exclusively inside the Git repository that is your current "
+            "working directory. Every file you may read, search or edit lives "
+            "inside it. You MUST NOT read, search or edit anything outside that "
+            "directory. If you need something outside the repository, ask the "
+            "user first.\n\n"
+            "### Search Scope\n"
+            "Run every search (`grep`, `rg`, `find`, `ls`, glob, …) only inside "
+            "the repository working directory. Never search the filesystem root "
+            "(`/`), the home directory or any absolute path outside the "
+            "repository: those searches are slow and return no relevant results. "
+            "Run commands from the repository root and keep paths relative to "
+            "it.\n\n"
+            "### Ajapopaja Skill\n"
+            "The bundled `ajapopaja` skill is available and can be used to read "
+            "and manage tasks for this pipeline: `get-task <pipeline_id>`, "
+            "`get-task-details <task_id>`, `search-tasks`, "
+            "`update-task-design-doc` (`update-design-doc`) and `complete-task`. "
+            "See the skill's `SKILL.md` for details.\n\n"
+            "### Pipeline UID\n"
+            "The UID of the Pipeline this session was started for is "
+            f"**`{pipeline_uid}`**. Pass it when reading tasks from this "
+            f"pipeline, e.g. `get-task {pipeline_uid}`."
+        )
+
     async def _broadcast_started(self):
         """Broadcast ``INTERACTIVE_STARTED`` once per session lifecycle."""
         if self.pipeline_id is None or self._started_broadcast:
