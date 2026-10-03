@@ -1413,7 +1413,7 @@ export class PipelineDetailView extends View {
       <div class="flex flex-col gap-8 min-w-0 lg:min-w-[350px]">
         <div class="bg-app-surface/30 p-6 rounded-3xl border border-app-border/30 flex flex-col">
           ${TaskForm.render()}
-          <div id="interactive-session-bar" class="mt-6 flex flex-wrap items-center gap-2">
+          <div id="interactive-session-bar" class="mt-6 hidden flex flex-wrap items-center gap-2">
             <button id="start-interactive-btn" data-action-click="start_interactive_session" type="button"
               class="hidden px-3 py-1.5 rounded text-xs font-medium bg-app-accent-2 text-white hover:bg-app-accent-2/80 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
               title="Start an interactive Pi coding session in the pipeline repository">
@@ -1430,7 +1430,7 @@ export class PipelineDetailView extends View {
               Start new
             </button>
           </div>
-          <div id="pipeline-session-list" class="mt-3 flex flex-col gap-2"></div>
+          <div id="pipeline-session-list" class="mt-3 hidden flex flex-col gap-2"></div>
           <!-- Two tabs over two pre-rendered DOM fragments. The tab list only
                appears while an interactive session is attached to this
                pipeline; "Task editor" is then the always-present default. -->
@@ -2009,6 +2009,7 @@ export class PipelineDetailView extends View {
     const startBtn = this.container.querySelector('#start-interactive-btn') as HTMLElement | null;
     const resumeBtn = this.container.querySelector('#resume-interactive-btn') as HTMLElement | null;
     const startNewBtn = this.container.querySelector('#start-new-interactive-btn') as HTMLElement | null;
+    const sessionBar = this.container.querySelector('#interactive-session-bar') as HTMLElement | null;
     const selected = this.container.querySelector('#selected-task-view') as HTMLElement | null;
     const mount = this.container.querySelector('#interactive-coding-view-mount') as HTMLElement | null;
     const tablist = this.container.querySelector('#content-tablist') as HTMLElement | null;
@@ -2023,10 +2024,17 @@ export class PipelineDetailView extends View {
 
     const resumable = this.pipelineResumableSessions();
     const hasPaused = resumable.length > 0 && isRemote && !mine;
+    const showStart = isRemote && !mine && !hasPaused;
+    const showResume = hasPaused;
+    const showStartNew = hasPaused;
 
-    startBtn?.classList.toggle('hidden', !isRemote || mine || hasPaused);
-    resumeBtn?.classList.toggle('hidden', !hasPaused);
-    startNewBtn?.classList.toggle('hidden', !hasPaused);
+    startBtn?.classList.toggle('hidden', !showStart);
+    resumeBtn?.classList.toggle('hidden', !showResume);
+    startNewBtn?.classList.toggle('hidden', !showStartNew);
+    // Collapse the whole section when it has no controls or sessions to show so
+    // that it does not consume any vertical space (e.g. for local pipelines or
+    // while the active session for this pipeline is attached).
+    sessionBar?.classList.toggle('hidden', !(showStart || showResume || showStartNew));
     if (resumeBtn && resumable[0]) {
       resumeBtn.setAttribute('data-session-uid', resumable[0].uid);
       resumeBtn.textContent = '\u25b6 Resume Session';
@@ -2080,8 +2088,10 @@ export class PipelineDetailView extends View {
     if (!list) return;
     if (sessions.length === 0) {
       list.innerHTML = '';
+      list.classList.add('hidden');
       return;
     }
+    list.classList.remove('hidden');
     list.innerHTML = sessions
       .map((session) =>
         SessionListItemView.render(session, {

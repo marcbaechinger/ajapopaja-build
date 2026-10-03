@@ -1313,6 +1313,7 @@ describe('PipelineDetailView Interactive Session', () => {
         startSession: vi.fn().mockResolvedValue(undefined),
         stopSession: vi.fn().mockResolvedValue(undefined),
         pauseSession: vi.fn().mockResolvedValue(undefined),
+        getSessions: vi.fn().mockReturnValue([]),
       },
     };
 
@@ -1344,6 +1345,52 @@ describe('PipelineDetailView Interactive Session', () => {
 
     const startBtn = container.querySelector('#start-interactive-btn') as HTMLElement;
     expect(startBtn.classList.contains('hidden')).toBe(true);
+  });
+
+  it('collapses the interactive session bar and list when there are no session controls', async () => {
+    mockContext.pipelineClient.get.mockResolvedValue({ id: 'p1', name: 'Pipe 1' });
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await view.loadPipeline();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const bar = container.querySelector('#interactive-session-bar') as HTMLElement;
+    const sessionList = container.querySelector('#pipeline-session-list') as HTMLElement;
+    expect(bar).not.toBeNull();
+    expect(bar.classList.contains('hidden')).toBe(true);
+    expect(sessionList.classList.contains('hidden')).toBe(true);
+  });
+
+  it('keeps the interactive session bar visible for the start control but hides the empty session list', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await view.loadPipeline();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const bar = container.querySelector('#interactive-session-bar') as HTMLElement;
+    const sessionList = container.querySelector('#pipeline-session-list') as HTMLElement;
+    expect(bar.classList.contains('hidden')).toBe(false);
+    expect(sessionList.classList.contains('hidden')).toBe(true);
+  });
+
+  it('shows the session bar and list when a paused session can be resumed', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await view.loadPipeline();
+
+    mockContext.interactiveCodingService.getSessions.mockReturnValue([
+      { uid: 's1', pipeline_id: 'p1', status: 'paused', label: 'Paused session' },
+    ]);
+    (view as any).updateInteractiveSlot();
+
+    const bar = container.querySelector('#interactive-session-bar') as HTMLElement;
+    const sessionList = container.querySelector('#pipeline-session-list') as HTMLElement;
+    expect(bar.classList.contains('hidden')).toBe(false);
+    expect(sessionList.classList.contains('hidden')).toBe(false);
+    expect(sessionList.querySelector('[data-session-uid="s1"]')).not.toBeNull();
   });
 
   it('start_interactive_session calls the service for remote pipelines', async () => {
