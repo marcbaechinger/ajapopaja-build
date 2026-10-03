@@ -338,6 +338,13 @@ def test_build_command_appends_system_instruction():
     assert "complete-task" in instruction
     assert "SKILL.md" in instruction
 
+    # Skill location: the project-local staged skill is named explicitly so the
+    # agent reads it directly instead of searching the filesystem for SKILL.md.
+    assert ".pi/skills/ajapopaja/SKILL.md" in instruction
+    assert "~/.pi/agent/skills/" in instruction
+    assert "not a Pi skill location" in instruction
+    assert "searching the filesystem" in instruction
+
     # Pipeline UID, clearly highlighted and usable for get-task.
     assert "Pipeline UID" in instruction
     assert "pipe-uid-123" in instruction
