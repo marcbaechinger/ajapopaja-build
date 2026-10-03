@@ -93,6 +93,7 @@ function makeService() {
     isActive: vi.fn(() => true),
     sendMessage: vi.fn().mockResolvedValue(undefined),
     stopSession: vi.fn().mockResolvedValue(undefined),
+    pauseSession: vi.fn().mockResolvedValue(undefined),
     getHistory: vi.fn(() => []),
     getCurrentTaskId: vi.fn(() => 'p1'),
     getSessionStartTime: vi.fn(() => null),
@@ -189,26 +190,65 @@ describe('InteractiveCodingView', () => {
     service.isActive.mockReturnValue(false);
     view.render();
     expect(promptViewInstances[0].disabled).toBe(true);
-    expect(promptViewInstances[0].placeholder).toBe('Session stopped.');
+    expect(promptViewInstances[0].placeholder).toBe(
+      'Session paused — resume it from the session manager.'
+    );
   });
 
-  it('stopSession calls the service by default', async () => {
+  it('renders only the Pause control in the header', () => {
     view.render();
-    await view.stopSession();
-    expect(service.stopSession).toHaveBeenCalledWith('p1');
+    expect(root.querySelector('#interactive-pause-btn')).not.toBeNull();
+    expect(root.querySelector('#interactive-stop-btn')).toBeNull();
+    expect(root.querySelector('#interactive-switch-session-btn')).toBeNull();
   });
 
-  it('stopSession delegates to the onStop callback when provided', async () => {
-    const onStop = vi.fn();
+  it('clicking Pause calls service.pauseSession', async () => {
+    view.render();
+    (root.querySelector('#interactive-pause-btn') as HTMLButtonElement).click();
+    await Promise.resolve();
+    expect(service.pauseSession).toHaveBeenCalled();
+  });
+
+  it('pauseSession delegates to the onPause callback when provided', async () => {
+    const onPause = vi.fn();
     const custom = new InteractiveCodingView(
       service as unknown as InteractiveCodingService,
       root,
-      { pipelineId: 'p1', onStop }
+      { pipelineId: 'p1', onPause }
     );
     custom.render();
-    await custom.stopSession();
-    expect(onStop).toHaveBeenCalled();
-    expect(service.stopSession).not.toHaveBeenCalled();
+    await custom.pauseSession();
+    expect(onPause).toHaveBeenCalled();
+    expect(service.pauseSession).not.toHaveBeenCalled();
+  });
+
+  it('disables the Pause button while the session is not active', () => {
+    service.isActive.mockReturnValue(false);
+    view.render();
+    const pauseBtn = root.querySelector('#interactive-pause-btn') as HTMLButtonElement;
+    expect(pauseBtn.disabled).toBe(true);
+
+    service.isActive.mockReturnValue(true);
+    service._fire();
+    expect(pauseBtn.disabled).toBe(false);
+  });
+
+  it('reflects active / working / paused status and placeholder', () => {
+    view.render();
+    const status = root.querySelector('#interactive-status') as HTMLElement;
+    expect(status.textContent).toBe('Session active');
+    expect(promptViewInstances[0].placeholder).toContain('Describe the change');
+
+    service.isBusy.mockReturnValue(true);
+    service._fire();
+    expect(status.textContent).toBe('Agent working…');
+    expect(promptViewInstances[0].placeholder).toContain('working');
+
+    service.isBusy.mockReturnValue(false);
+    service.isActive.mockReturnValue(false);
+    service._fire();
+    expect(status.textContent).toBe('Paused');
+    expect(promptViewInstances[0].placeholder).toContain('Session paused');
   });
 
   it('destroy tears down the inner PiView and prompt view', () => {

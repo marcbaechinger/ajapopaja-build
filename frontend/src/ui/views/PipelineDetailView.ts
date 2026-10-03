@@ -544,17 +544,6 @@ export class PipelineDetailView extends View {
       this.syncInteractiveSession();
     });
 
-    this.context.actionRegistry.register('stop_interactive_session', async () => {
-      try {
-        await this.context.interactiveCodingService.stopSession(this.pipelineId);
-      } catch (error) {
-        console.error('Stop interactive session error:', error);
-        alert('Failed to stop interactive session');
-      }
-      this.interactiveMode = false;
-      this.syncInteractiveSession();
-    });
-
     this.context.actionRegistry.register('open_review_dialog', async (_e, el) => {
       const taskId = el.getAttribute('data-task-id');
       if (!taskId) return;
@@ -1989,13 +1978,6 @@ export class PipelineDetailView extends View {
             mount,
             {
               pipelineId: this.pipelineId,
-              onStop: () => {
-                this.interactiveMode = false;
-                this.context.interactiveCodingService.stopSession(this.pipelineId).catch((e: unknown) => {
-                  console.error('Failed to stop interactive session:', e);
-                });
-                this.syncInteractiveSession();
-              },
             }
           );
           this.interactiveCodingView.render();

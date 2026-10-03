@@ -14,6 +14,14 @@
   when a late `INTERACTIVE_STARTED` broadcast arrives.
 * **Session rename** – `PATCH /api/coderbot/sessions/{uid}` updates a session
   label and broadcasts a `SESSION_UPDATED` websocket message.
+* **Simpler interactive controls** – the interactive coding header no longer
+  offers a redundant **Switch session** button (the global Sessions button,
+  `Ctrl/Cmd+J` and the inline session list already cover switching) nor a
+  **Stop Session** button. Pause and Stop were functionally identical: both end
+  the Pi process and leave the durable session `PAUSED` and resumable. Only
+  **Pause** remains; it is disabled while the session is inactive. The genuinely
+  destructive **Discard** action (releases the retained workspace and Pi session
+  file) stays behind its confirmation in the session manager / inline rows.
 * **Sessions survive container restarts** – sessions are now persisted under a
   dedicated host path (`PI_SESSIONS_ROOT`, default `/data/ajapopaja/pi_sessions`)
   that is bind-mounted 1:1 into the container, instead of living in the

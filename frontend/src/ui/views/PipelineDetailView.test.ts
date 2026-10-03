@@ -83,7 +83,7 @@ vi.mock('../components/InteractiveCodingView.ts', () => ({
       render: vi.fn(),
       destroy: vi.fn(),
       sendMessage: vi.fn(),
-      stopSession: vi.fn(),
+      pauseSession: vi.fn(),
     };
   }),
 }));
@@ -1312,6 +1312,7 @@ describe('PipelineDetailView Interactive Session', () => {
         onSessionChange: vi.fn(() => () => {}),
         startSession: vi.fn().mockResolvedValue(undefined),
         stopSession: vi.fn().mockResolvedValue(undefined),
+        pauseSession: vi.fn().mockResolvedValue(undefined),
       },
     };
 
@@ -1368,17 +1369,6 @@ describe('PipelineDetailView Interactive Session', () => {
     await action(null, document.createElement('button'));
 
     expect(mockContext.interactiveCodingService.startSession).not.toHaveBeenCalled();
-  });
-
-  it('stop_interactive_session calls the service', async () => {
-    const view = new PipelineDetailView(mockContext, { id: 'p1' });
-    container.innerHTML = view.render() as string;
-    view.mount(container);
-
-    const action = getAction('stop_interactive_session');
-    await action(null, document.createElement('button'));
-
-    expect(mockContext.interactiveCodingService.stopSession).toHaveBeenCalledWith('p1');
   });
 
   it('shows the InteractiveCodingView XOR the TaskItem and switches on start/stop', async () => {

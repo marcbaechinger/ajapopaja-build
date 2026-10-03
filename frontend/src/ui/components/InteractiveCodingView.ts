@@ -21,12 +21,8 @@ import type { InteractiveCodingService } from '../../core/InteractiveCodingServi
 
 export interface InteractiveCodingViewOptions {
   pipelineId: string;
-  /** Invoked by the "Stop Session" control (defaults to service.stopSession). */
-  onStop?: () => void;
   /** Invoked by the "Pause" control (defaults to service.pauseSession). */
   onPause?: () => void;
-  /** Invoked by the "Switch session" link (defaults to opening the session manager). */
-  onSwitchSession?: () => void;
 }
 
 /**
@@ -34,16 +30,14 @@ export interface InteractiveCodingViewOptions {
  *
  * Wraps (composes, does not extend) the reusable {@link PiView} so the agent's
  * streamed activity log is rendered exactly like the batch CoderBot log, and
- * composes an {@link InteractivePromptView} for sending messages plus a Stop
- * Session control.
+ * composes an {@link InteractivePromptView} for sending messages plus a Pause
+ * control.
  */
 export class InteractiveCodingView {
   private service: InteractiveCodingService;
   private root: HTMLElement;
   private pipelineId: string;
-  private onStop?: () => void;
   private onPause?: () => void;
-  private onSwitchSession?: () => void;
   private piView: PiView | null = null;
   private promptView: InteractivePromptView | null = null;
   private unsubs: (() => void)[] = [];
@@ -56,9 +50,7 @@ export class InteractiveCodingView {
     this.service = service;
     this.root = root;
     this.pipelineId = options.pipelineId;
-    this.onStop = options.onStop;
     this.onPause = options.onPause;
-    this.onSwitchSession = options.onSwitchSession;
   }
 
   render(): void {
@@ -66,8 +58,8 @@ export class InteractiveCodingView {
 
     const mount = this.root.querySelector('#interactive-piview-mount') as HTMLElement | null;
     if (mount) {
-      // showFooter: false — the view owns the session controls (Stop Session),
-      // so the reused log's own footer Stop button would be a duplicate.
+      // showFooter: false — the view owns the session control (Pause), so the
+      // reused log's own footer Stop button would be a duplicate.
       this.piView = new PiView(this.service, mount, {
         showFooter: false,
         logHeightClass: 'h-[46vh]',
@@ -85,9 +77,7 @@ export class InteractiveCodingView {
       this.promptView.render();
     }
 
-    this.root.querySelector('#interactive-stop-btn')?.addEventListener('click', () => this.stopSession());
     this.root.querySelector('#interactive-pause-btn')?.addEventListener('click', () => this.pauseSession());
-    this.root.querySelector('#interactive-switch-session-btn')?.addEventListener('click', () => this.switchSession());
 
     // Re-render the composer state whenever the session or busy state changes.
     this.unsubs.push(this.service.onSessionChange(() => this.updateComposerState()));
@@ -122,23 +112,10 @@ export class InteractiveCodingView {
     await this.promptView?.submit();
   }
 
-  /** Stops the interactive session (or delegates to the host callback). */
-  async stopSession(): Promise<void> {
-    if (this.onStop) {
-      this.onStop();
-      return;
-    }
-    try {
-      await this.service.stopSession(this.pipelineId);
-    } catch (e) {
-      console.error('Failed to stop interactive session:', e);
-      alert('Failed to stop the interactive session.');
-    }
-  }
-
   /**
-   * Pauses the interactive session, keeping it resumable on the backend. Falls
-   * back to a full stop when the service does not implement pause.
+   * Pauses the interactive session, keeping it resumable on the backend. Or
+   * delegates to the host callback through
+   * {@link InteractiveCodingViewOptions.onPause}.
    */
   async pauseSession(): Promise<void> {
     if (this.onPause) {
@@ -146,28 +123,11 @@ export class InteractiveCodingView {
       return;
     }
     try {
-      const service = this.service as unknown as { pauseSession?: () => Promise<void> };
-      if (typeof service.pauseSession === 'function') {
-        await service.pauseSession();
-      } else {
-        await this.stopSession();
-      }
+      await this.service.pauseSession();
     } catch (e) {
       console.error('Failed to pause interactive session:', e);
       alert('Failed to pause the interactive session.');
     }
-  }
-
-  /**
-   * Opens the global session manager. Hosts can override this through
-   * {@link InteractiveCodingViewOptions.onSwitchSession}.
-   */
-  switchSession(): void {
-    if (this.onSwitchSession) {
-      this.onSwitchSession();
-      return;
-    }
-    window.dispatchEvent(new CustomEvent('toggle-session-manager'));
   }
 
   private updateComposerState() {
@@ -181,17 +141,26 @@ export class InteractiveCodingView {
         ? 'The agent is working…'
         : active
           ? 'Describe the change the agent should make…'
-          : 'Session stopped.'
+          : 'Session paused — resume it from the session manager.'
     );
 
     const status = this.root.querySelector('#interactive-status') as HTMLElement | null;
     if (status) {
-      status.textContent = busy ? 'Agent working…' : active ? 'Session active' : 'Session stopped';
+      status.textContent = busy ? 'Agent working…' : active ? 'Session active' : 'Paused';
       status.className = busy
         ? 'text-[10px] font-bold uppercase tracking-widest text-amber-400'
         : active
           ? 'text-[10px] font-bold uppercase tracking-widest text-green-400'
           : 'text-[10px] font-bold uppercase tracking-widest text-app-muted';
+    }
+
+    // The Pause control is only legal while the session is active.
+    const pauseBtn = this.root.querySelector('#interactive-pause-btn') as HTMLButtonElement | null;
+    if (pauseBtn) {
+      pauseBtn.disabled = !active;
+      pauseBtn.className = active
+        ? 'px-3 py-1.5 rounded text-xs font-medium bg-amber-600 text-white hover:bg-amber-700 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer'
+        : 'px-3 py-1.5 rounded text-xs font-medium bg-app-surface/60 text-app-muted border border-app-border opacity-60 transition-colors flex items-center gap-1.5 cursor-not-allowed';
     }
   }
 
@@ -204,18 +173,10 @@ export class InteractiveCodingView {
             <h3 class="text-sm font-bold text-app-text truncate">Interactive Coding Session</h3>
             <span id="interactive-status" class="text-[10px] font-bold uppercase tracking-widest text-app-muted">Session active</span>
           </div>
-          <button id="interactive-switch-session-btn" type="button"
-            class="px-2.5 py-1.5 rounded text-xs font-medium text-app-muted hover:text-app-accent-2 border border-app-border hover:border-app-accent-2/40 transition-colors flex items-center gap-1.5 cursor-pointer"
-            title="Switch to another session">
-            Switch session
-          </button>
           <button id="interactive-pause-btn" type="button"
-            class="px-3 py-1.5 rounded text-xs font-medium bg-amber-600 text-white hover:bg-amber-700 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer">
+            class="px-3 py-1.5 rounded text-xs font-medium bg-amber-600 text-white hover:bg-amber-700 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
+            title="Stop the agent now; the session stays resumable">
             ${Icon.render('clock', { size: 14 })} Pause
-          </button>
-          <button id="interactive-stop-btn" type="button"
-            class="px-3 py-1.5 rounded text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer">
-            ${Icon.render('close', { size: 14 })} Stop Session
           </button>
         </div>
         <div id="interactive-piview-mount"></div>
