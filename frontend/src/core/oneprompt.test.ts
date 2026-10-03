@@ -18,11 +18,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   inFlightPrompts,
   onePromptActions,
+  defaultVisibilityResolver,
   handleQuickPromptResult,
   handleQuickPromptStream,
   registerOnePromptAction,
   registerOnePromptHandlers,
   resetOnePromptState,
+  resolveAnchorElement,
   sendQuickPrompt,
   setOnePromptVisibilityResolver,
   startQuickPrompt,
@@ -388,6 +390,32 @@ describe('oneprompt core', () => {
         payload: resultPayload({ runId: request.runId }),
       });
       expect(target.querySelectorAll('[data-oneprompt-result]').length).toBe(1);
+    });
+  });
+
+  describe('session anchors', () => {
+    it('resolves visibility via [data-session-uid]', () => {
+      const row = document.createElement('div');
+      row.setAttribute('data-session-uid', 's1');
+      document.body.appendChild(row);
+
+      expect(defaultVisibilityResolver({ entity: 'session' }, { sessionUid: 's1' })).toBe(
+        true
+      );
+      expect(defaultVisibilityResolver({ entity: 'session' }, { sessionUid: 's2' })).toBe(
+        false
+      );
+      expect(defaultVisibilityResolver({ entity: 'session' }, {})).toBe(false);
+    });
+
+    it('resolves a session anchor element to the row target', () => {
+      const row = document.createElement('div');
+      row.setAttribute('data-session-uid', 's1');
+      row.setAttribute('data-oneprompt-target', '');
+      document.body.appendChild(row);
+
+      expect(resolveAnchorElement({ entity: 'session' }, { sessionUid: 's1' })).toBe(row);
+      expect(resolveAnchorElement({ entity: 'session' }, { sessionUid: 's2' })).toBeNull();
     });
   });
 

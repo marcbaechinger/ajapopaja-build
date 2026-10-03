@@ -51,6 +51,7 @@ from api.reviewbot.router import router as reviewbot_router
 from api.archbot.router import router as archbot_router
 from api.coderbot.manager import coderbot_manager
 from api.coderbot.router import router as coderbot_router
+from api.coderbot.session_title import register_session_title_hooks
 from api.routes.pull_request import router as pull_request_router
 from api.routes.pipeline import router as pipeline_router
 from api.routes.system import router as system_router
@@ -112,6 +113,7 @@ async def lifespan(app: FastAPI):
     register_dev_process_ws()
     register_notification_handlers()
     initialize_oneprompt()
+    register_session_title_hooks()
     yield
     logger.info("Shutting down...")
     await DevProcessManager.instance().stop_all()

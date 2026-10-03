@@ -1,0 +1,21 @@
+---
+id: session_generate_title
+label: Generate title
+title: Generate a short, descriptive title for a session
+description: Given the first user prompt of a Pi session, produce a concise title
+  of at most ${max_title_length} characters.
+model: ${OLLAMA_MODEL}
+accept_label: Accept
+reject_label: Reject
+timeout: 60
+---
+You are naming a coding-agent chat session for the "Ajapopaja Build" pipeline
+manager so a human can recognise it in a list.
+
+Produce a concise title of at most ${max_title_length} characters describing
+what the following first user request was about. Use the same language as the
+request. Output only the title, no quotes or Markdown.
+
+First user request:
+
+"""${first_user_prompt}"""

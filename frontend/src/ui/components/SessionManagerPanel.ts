@@ -16,10 +16,43 @@
 
 import type { AppContext } from '../../core/AppContext.ts';
 import type { PiSessionSummary } from '../../core/InteractiveCodingService.ts';
+import {
+  registerOnePromptAction,
+  sendQuickPrompt,
+  type OnePromptAction,
+  type OnePromptRenderContext,
+} from '../../core/oneprompt.ts';
 import { SessionListItemView, sessionDisplayLabel } from './SessionListItemView.ts';
 import { ConfirmationDialog } from './ConfirmationDialog.ts';
 import { escapeHtml } from './utils/html.ts';
 import { formatRelativeTime, sessionTimestamp } from './utils/relativeTime.ts';
+
+/** Prompt id of the bundled “generate a session title” one-shot action. */
+export const SESSION_GENERATE_TITLE_PROMPT_ID = 'session_generate_title';
+
+/** Applies an accepted AI-generated title back onto a session. */
+export type SessionTitleUpdater = (
+  uid: string,
+  title: string,
+  ctx: OnePromptRenderContext
+) => void | Promise<void>;
+
+let updateTitleHandler: SessionTitleUpdater | null = null;
+
+/**
+ * Injects the write-back implementation used by the `session_generate_title`
+ * action's ``accept`` hook. The panel stays transport-agnostic; the app
+ * context (or the panel itself) supplies a callback that calls
+ * `renameSession` (which PATCHes and reconciles the cache).
+ */
+export function setSessionTitleUpdater(updater: SessionTitleUpdater | null): void {
+  updateTitleHandler = updater;
+}
+
+/** Returns the currently injected write-back implementation (if any). */
+export function getSessionTitleUpdater(): SessionTitleUpdater | null {
+  return updateTitleHandler;
+}
 
 export type SessionFilter = 'all' | 'paused' | 'completed' | 'failed';
 
@@ -65,6 +98,12 @@ export class SessionManagerPanel {
     this.context = context;
     this.container = this.createContainer();
     document.body.appendChild(this.container);
+    // Register the one-shot action against this panel's session service so the
+    // Accept button can persist the generated title. The application context
+    // may re-register it with an equivalent updater; either wiring works.
+    registerSessionGenerateTitleAction((uid, title) =>
+      this.context.interactiveCodingService?.renameSession?.(uid, title)
+    );
     this.bindDelegatedEvents();
     this.subscribe();
     this.render();
@@ -321,6 +360,8 @@ export class SessionManagerPanel {
         this.setStatus('Discarding…');
         await service.discardSession(uid);
         this.setStatus('');
+      } else if (action === 'generate-title') {
+        this.generateTitle(uid);
       } else if (action === 'open') {
         const session = service.getSession?.(uid);
         const pipelineId = session?.pipeline_id;
@@ -334,6 +375,23 @@ export class SessionManagerPanel {
       this.setError(e instanceof Error ? e.message : String(e));
       this.renderBody();
     }
+  }
+
+  /**
+   * Ask the backend to generate a title for `uid` from the session's first
+   * user prompt. The result is rendered inline by the one-shot framework.
+   */
+  public generateTitle(uid: string): void {
+    if (!uid) return;
+    const wsClient = this.context.wsClient;
+    if (!wsClient || typeof wsClient.send !== 'function') {
+      this.setError('Session service unavailable.');
+      return;
+    }
+    sendQuickPrompt(wsClient, SESSION_GENERATE_TITLE_PROMPT_ID, {
+      sessionUid: uid,
+    });
+    this.setStatus('Generating title…');
   }
 
   private setStatus(message: string): void {
@@ -487,6 +545,7 @@ export class SessionManagerPanel {
               pipelineName: this.resolvePipelineName(session.pipeline_id),
               showDiscard: session.uid !== currentUid,
               showOpenPipeline: true,
+              showGenerateTitle: true,
             })
           )
           .join('');
@@ -516,3 +575,161 @@ export class SessionManagerPanel {
 export function sessionRelativeTime(session: PiSessionSummary): string {
   return formatRelativeTime(sessionTimestamp(session));
 }
+
+/** Default maximum title length when the backend context omits it. */
+export const SESSION_TITLE_DEFAULT_MAX_LENGTH = 80;
+
+function resolveMaxTitleLength(ctx: OnePromptRenderContext): number {
+  const raw =
+    ctx.context?.max_title_length ?? (ctx as unknown as { max_title_length?: unknown }).max_title_length;
+  const parsed = Number(raw);
+  if (Number.isFinite(parsed) && parsed > 0) return Math.floor(parsed);
+  return SESSION_TITLE_DEFAULT_MAX_LENGTH;
+}
+
+function resolveSessionUid(ctx: OnePromptRenderContext): string {
+  const raw = ctx.sessionUid ?? ctx.context?.sessionUid;
+  return raw == null ? '' : String(raw);
+}
+
+/**
+ * Renders the generated title returned for `session_generate_title` as an
+ * inline, editable input with **Accept** / **Reject** controls. The user may
+ * tweak the suggestion before accepting it.
+ */
+export function renderSessionTitleResult(
+  resultEl: HTMLElement,
+  ctx: OnePromptRenderContext
+): void {
+  const uid = resolveSessionUid(ctx);
+  const maxLength = resolveMaxTitleLength(ctx);
+  const title = (ctx.result ?? '').trim();
+  const acceptLabel =
+    typeof ctx.meta?.accept_label === 'string' ? ctx.meta.accept_label : 'Accept';
+  const rejectLabel =
+    typeof ctx.meta?.reject_label === 'string' ? ctx.meta.reject_label : 'Reject';
+
+  resultEl.innerHTML = `
+    <div class="session-title-result mt-2 flex flex-col gap-2 rounded-lg border border-app-accent-2/40 bg-app-accent-2/5 p-2.5"
+         data-session-title-result="${escapeHtml(uid)}">
+      <div class="text-[10px] font-bold uppercase tracking-wider text-app-accent-2">Suggested title</div>
+      <input type="text" data-session-title-input maxlength="${maxLength}"
+             value="${escapeHtml(title)}"
+             class="w-full bg-app-bg border border-app-border rounded px-2 py-1 text-xs text-app-text outline-none focus:ring-1 focus:ring-app-accent-2"
+             aria-label="Session title" />
+      <div class="flex justify-end gap-2">
+        <button type="button" data-oneprompt-action="reject"
+                class="px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider text-app-muted hover:text-app-text border border-app-border transition-colors cursor-pointer">
+          ${escapeHtml(rejectLabel)}
+        </button>
+        <button type="button" data-oneprompt-action="accept"
+                class="px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider bg-app-accent-2 text-white hover:brightness-110 transition-all cursor-pointer">
+          ${escapeHtml(acceptLabel)}
+        </button>
+      </div>
+    </div>
+  `;
+
+  const input = resultEl.querySelector<HTMLInputElement>('[data-session-title-input]');
+  if (input) {
+    input.focus();
+    input.select?.();
+  }
+
+  resultEl
+    .querySelector<HTMLButtonElement>('[data-oneprompt-action="accept"]')
+    ?.addEventListener('click', () => {
+      const value = (input?.value ?? title).trim().slice(0, maxLength);
+      if (!value) return;
+      void ctx.accept(value);
+    });
+  resultEl
+    .querySelector<HTMLButtonElement>('[data-oneprompt-action="reject"]')
+    ?.addEventListener('click', () => {
+      void ctx.reject();
+    });
+}
+
+/** Renders a failed `session_generate_title` request inline. */
+export function renderSessionTitleError(
+  resultEl: HTMLElement,
+  ctx: OnePromptRenderContext
+): void {
+  const message = ctx.error || `Could not generate a title (${ctx.status}).`;
+  resultEl.innerHTML = `
+    <div class="session-title-error mt-2 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-2.5 text-xs text-red-400"
+         role="alert" data-oneprompt-error="${escapeHtml(String(ctx.status))}">
+      <span>⚠ ${escapeHtml(message)}</span>
+    </div>
+  `;
+}
+
+/** Renders the live streamed preview while a title is being generated. */
+export function renderSessionTitleStream(
+  ctx: OnePromptRenderContext,
+  delta: string
+): void {
+  let preview = ctx.container.querySelector<HTMLElement>(
+    '[data-session-title-preview]'
+  );
+  if (!preview) {
+    ctx.container.innerHTML = `
+      <div class="session-title-result mt-2 flex flex-col gap-2 rounded-lg border border-app-accent-2/40 bg-app-accent-2/5 p-2.5">
+        <div class="text-[10px] font-bold uppercase tracking-wider text-app-accent-2">Generating title…</div>
+        <div data-session-title-preview class="text-xs text-app-text break-words"></div>
+      </div>
+    `;
+    preview = ctx.container.querySelector<HTMLElement>(
+      '[data-session-title-preview]'
+    );
+  }
+  if (preview) preview.textContent = `${preview.textContent ?? ''}${delta}`;
+}
+
+/**
+ * Builds the declarative `session_generate_title` one-shot action.
+ *
+ * @param updater Optional write-back implementation. When omitted the module
+ *   level handler set via {@link setSessionTitleUpdater} is used.
+ */
+export function createSessionGenerateTitleAction(
+  updater?: SessionTitleUpdater | null
+): OnePromptAction {
+  return {
+    id: SESSION_GENERATE_TITLE_PROMPT_ID,
+    label: 'Generate title',
+    title: 'Generate a title from the first message',
+    anchor: { entity: 'session' },
+    render: renderSessionTitleResult,
+    onStream: (delta, ctx) => renderSessionTitleStream(ctx, delta),
+    onError: (ctx) => renderSessionTitleError(ctx.container, ctx),
+    accept: async (ctx, result) => {
+      const uid = resolveSessionUid(ctx);
+      if (!uid) return;
+      const handler = updater ?? updateTitleHandler;
+      if (!handler) {
+        console.warn(
+          `[oneprompt] No session title updater registered for "${SESSION_GENERATE_TITLE_PROMPT_ID}".`
+        );
+        return;
+      }
+      await handler(uid, result, ctx);
+    },
+    reject: () => {},
+  };
+}
+
+/** Registers the `session_generate_title` action in the global registry. */
+export function registerSessionGenerateTitleAction(
+  updater?: SessionTitleUpdater | null
+): OnePromptAction {
+  return registerOnePromptAction(createSessionGenerateTitleAction(updater));
+}
+
+/**
+ * Register the action at module load (mirroring `SpecSection`) so a title
+ * result can always be routed even before a panel instance exists. The panel
+ * and the application context re-register it with a concrete write-back
+ * updater once available.
+ */
+registerSessionGenerateTitleAction();

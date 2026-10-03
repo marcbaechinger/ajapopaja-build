@@ -16,6 +16,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SessionManagerPanel } from './SessionManagerPanel.ts';
+import { handleQuickPromptResult, resetOnePromptState } from '../../core/oneprompt.ts';
 
 const confirmResult = vi.fn().mockResolvedValue(true);
 vi.mock('./ConfirmationDialog.ts', () => ({
@@ -56,12 +57,14 @@ function makeContext(sessions: any[] = []) {
     switchSession: vi.fn().mockResolvedValue(undefined),
     pauseSession: vi.fn().mockResolvedValue(undefined),
     discardSession: vi.fn().mockResolvedValue(undefined),
+    renameSession: vi.fn().mockResolvedValue(undefined),
     getResumeHint: vi.fn(() => null),
     dismissResumeHint: vi.fn(),
   };
   const context = {
     interactiveCodingService: service,
     dataManager: { getPipeline: vi.fn(() => ({ name: 'Pipeline A' })) },
+    wsClient: { send: vi.fn() },
   };
   return { context, service, emit: () => sessionsListener?.(sessions) };
 }
@@ -70,6 +73,7 @@ describe('SessionManagerPanel', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
     confirmResult.mockResolvedValue(true);
+    resetOnePromptState();
     vi.clearAllMocks();
   });
 
@@ -176,5 +180,100 @@ describe('SessionManagerPanel', () => {
     expect(panel.isVisible()).toBe(true);
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     expect(panel.isVisible()).toBe(false);
+  });
+
+  it('sends a session_generate_title quick_prompt from the title button', async () => {
+    const { context } = makeContext([makeSession('u1')]);
+    const panel = new SessionManagerPanel(context as any);
+    panel.open();
+
+    const button = panel['container'].querySelector(
+      '[data-session-action="generate-title"]'
+    ) as HTMLElement;
+    expect(button).not.toBeNull();
+    button.click();
+    await Promise.resolve();
+
+    const send = context.wsClient.send as ReturnType<typeof vi.fn>;
+    expect(send).toHaveBeenCalledTimes(1);
+    const [type, payload] = send.mock.calls[0] as [string, any];
+    expect(type).toBe('quick_prompt');
+    expect(payload.promptId).toBe('session_generate_title');
+    expect(payload.context).toEqual({ sessionUid: 'u1' });
+  });
+
+  it('renders an editable title and accepts it via renameSession', async () => {
+    const { context, service } = makeContext([makeSession('u1')]);
+    const panel = new SessionManagerPanel(context as any);
+    panel.open();
+
+    (
+      panel['container'].querySelector(
+        '[data-session-action="generate-title"]'
+      ) as HTMLElement
+    ).click();
+    await Promise.resolve();
+    const payload = (context.wsClient.send as ReturnType<typeof vi.fn>).mock.calls[0][1] as any;
+
+    handleQuickPromptResult({
+      type: 'quick_prompt_result',
+      payload: {
+        runId: payload.runId,
+        promptId: 'session_generate_title',
+        context: { sessionUid: 'u1', max_title_length: 80 },
+        result: 'Fix the auth test',
+        status: 'ok',
+        meta: {},
+      },
+    });
+
+    const input = panel['container'].querySelector(
+      '[data-session-title-input]'
+    ) as HTMLInputElement;
+    expect(input).not.toBeNull();
+    expect(input.maxLength).toBe(80);
+    expect(input.value).toBe('Fix the auth test');
+
+    input.value = 'Renamed title';
+    (
+      panel['container'].querySelector(
+        '[data-oneprompt-action="accept"]'
+      ) as HTMLElement
+    ).click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(service.renameSession).toHaveBeenCalledWith('u1', 'Renamed title');
+  });
+
+  it('drops a stale title result once the row is gone', async () => {
+    const { context } = makeContext([makeSession('u1')]);
+    const panel = new SessionManagerPanel(context as any);
+    panel.open();
+
+    (
+      panel['container'].querySelector(
+        '[data-session-action="generate-title"]'
+      ) as HTMLElement
+    ).click();
+    await Promise.resolve();
+    const payload = (context.wsClient.send as ReturnType<typeof vi.fn>).mock.calls[0][1] as any;
+
+    const body = panel['container'].querySelector('#session-manager-body') as HTMLElement;
+    body.innerHTML = '';
+
+    const handled = handleQuickPromptResult({
+      type: 'quick_prompt_result',
+      payload: {
+        runId: payload.runId,
+        promptId: 'session_generate_title',
+        context: { sessionUid: 'u1' },
+        result: 'stale',
+        status: 'ok',
+        meta: {},
+      },
+    });
+
+    expect(handled).toBe(false);
   });
 });

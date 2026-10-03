@@ -94,4 +94,28 @@ describe('SessionListItemView', () => {
     expect(switchBtn.disabled).toBe(true);
     expect(switchBtn.textContent).toContain('Switching');
   });
+
+  it('offers AI title generation on resumable and running rows', () => {
+    for (const status of ['running', 'paused', 'completed', 'failed'] as PiSessionSummary['status'][]) {
+      const el = mount(SessionListItemView.render(session({ status })));
+      const button = el.querySelector('[data-session-action="generate-title"]');
+      expect(button).not.toBeNull();
+      expect(button?.getAttribute('data-session-uid')).toBe('u1');
+      expect(el.querySelector('[data-oneprompt-target]')).not.toBeNull();
+    }
+  });
+
+  it('hides title generation for discarded sessions', () => {
+    const el = mount(SessionListItemView.render(session({ status: 'discarded' })));
+    expect(el.querySelector('[data-session-action="generate-title"]')).toBeNull();
+    expect(el.querySelector('[data-oneprompt-target]')).toBeNull();
+  });
+
+  it('honours showGenerateTitle: false', () => {
+    const el = mount(
+      SessionListItemView.render(session(), { showGenerateTitle: false })
+    );
+    expect(el.querySelector('[data-session-action="generate-title"]')).toBeNull();
+    expect(el.querySelector('[data-oneprompt-target]')).toBeNull();
+  });
 });

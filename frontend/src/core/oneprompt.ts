@@ -48,6 +48,7 @@ import type { WebSocketClient } from './WebSocketClient.ts';
 export interface PromptContext {
   taskId?: string;
   pipelineId?: string;
+  sessionUid?: string;
   [key: string]: unknown;
 }
 
@@ -264,6 +265,16 @@ export function defaultVisibilityResolver(
     if (document.querySelector(`[data-pipeline-id="${id}"]`)) return true;
     const hash = typeof window !== 'undefined' ? window.location?.hash || '' : '';
     return hash.includes(String(pipelineId));
+  }
+
+  if (anchor.entity === 'session') {
+    const sessionUid = context.sessionUid;
+    if (!sessionUid) return false;
+    return Boolean(
+      document.querySelector(
+        `[data-session-uid="${escapeAttribute(String(sessionUid))}"]`
+      )
+    );
   }
 
   return true;
@@ -497,6 +508,16 @@ export function resolveAnchorElement(
     if (anchor.entity === 'pipeline' && context.pipelineId) {
       const selector = `[data-pipeline-id="${escapeAttribute(String(context.pipelineId))}"]`;
       return document.querySelector<HTMLElement>(selector);
+    }
+    if (anchor.entity === 'session' && context.sessionUid) {
+      const id = escapeAttribute(String(context.sessionUid));
+      const target = document.querySelector<HTMLElement>(
+        `[data-session-uid="${id}"][data-oneprompt-target]`
+      );
+      if (target) return target;
+      const row = document.querySelector<HTMLElement>(`[data-session-uid="${id}"]`);
+      if (!row) return null;
+      return row.querySelector<HTMLElement>('[data-oneprompt-target]') ?? row;
     }
   } catch {
     return null;

@@ -151,6 +151,17 @@ try:
 except ValueError as e:  # pragma: no cover - defensive
     raise RuntimeError("PI_SESSION_MAX_PAUSED must be an integer") from e
 
+# Maximum length (in characters) of an AI-generated session title. The title is
+# short enough to be used as a UI label but long enough to be descriptive. It is
+# injected into the ``session_generate_title`` one-shot prompt and re-applied by
+# the response normaliser so the model and the backend agree on the limit.
+try:
+    SESSION_TITLE_MAX_LENGTH = max(
+        1, int(os.getenv("SESSION_TITLE_MAX_LENGTH", "80"))
+    )
+except ValueError as e:  # pragma: no cover - defensive
+    raise RuntimeError("SESSION_TITLE_MAX_LENGTH must be an integer") from e
+
 # Default model used by CoderBotManager when spawning Pi sessions.
 # If unset, no --model flag is passed to Pi (None).
 CODERBOT_DEFAULT_MODEL: Optional[str] = os.getenv("CODERBOT_DEFAULT_MODEL")

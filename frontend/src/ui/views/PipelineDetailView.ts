@@ -2081,6 +2081,7 @@ export class PipelineDetailView extends View {
           pipelineName: this.pipeline?.name ?? null,
           showDiscard: true,
           showOpenPipeline: false,
+          showGenerateTitle: false,
         })
       )
       .join('');

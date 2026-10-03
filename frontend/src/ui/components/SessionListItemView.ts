@@ -115,6 +115,12 @@ export interface SessionListItemOptions {
   showDiscard?: boolean;
   /** Show the “open pipeline” affordance. */
   showOpenPipeline?: boolean;
+  /**
+   * Show the “generate title with AI” affordance and mark the row as an
+   * one-shot result target. The inline per-pipeline list opts out so only the
+   * global session manager exposes title generation.
+   */
+  showGenerateTitle?: boolean;
 }
 
 /**
@@ -192,9 +198,21 @@ export class SessionListItemView {
       ? `<span class="${meta.color}" aria-hidden="true">${iconSvg(meta.icon)}</span>`
       : '';
 
+    // The title generator is offered for every session that still owns a stored
+    // conversation (i.e. everything except discarded rows), and can be turned
+    // off entirely for the compact inline variant.
+    const showGenerateTitle =
+      options.showGenerateTitle !== false && session.status !== 'discarded';
+    const generateTitleButton = showGenerateTitle
+      ? `<button type="button" data-session-action="generate-title" data-session-uid="${escapeHtml(uid)}"
+           class="shrink-0 w-5 h-5 inline-flex items-center justify-center rounded border border-app-border text-app-muted hover:text-app-accent-2 hover:border-app-accent-2/50 transition-colors cursor-pointer"
+           title="Generate a title from the first message" aria-label="Generate title">⌁</button>`
+      : '';
+    const onepromptTarget = showGenerateTitle ? ' data-oneprompt-target' : '';
+
     return `
       <div class="rounded-xl border border-app-border/50 bg-app-surface/40 px-3 py-2.5 flex flex-col gap-1.5 transition-all hover:border-app-accent-2/40 focus:outline-none focus:ring-2 focus:ring-app-accent-2"
-           data-session-row data-session-uid="${escapeHtml(uid)}" data-status="${escapeHtml(session.status ?? '')}"
+           data-session-row data-session-uid="${escapeHtml(uid)}" data-status="${escapeHtml(session.status ?? '')}"${onepromptTarget}
            tabindex="-1" role="button" aria-label="Session ${label}"
            aria-current="${isActive ? 'true' : 'false'}">
         <div class="flex items-center gap-2 min-w-0">
@@ -202,6 +220,7 @@ export class SessionListItemView {
           ${busyDot}
           <span class="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border ${meta.badge}" data-session-status>${escapeHtml(statusLabel)}</span>
           <span class="text-xs font-semibold text-app-text truncate" title="${label}">${label}</span>
+          ${generateTitleButton}
           <span class="ml-auto text-[10px] text-app-muted shrink-0" title="${escapeHtml(absolute)}" data-session-relative>${escapeHtml(relative)}</span>
         </div>
         <div class="flex items-center gap-2 min-w-0 text-[11px] text-app-muted">

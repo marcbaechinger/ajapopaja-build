@@ -36,7 +36,7 @@ import { DevProcessService } from './DevProcessService.ts';
 import { NotificationService } from './NotificationService.ts';
 import { SearchDialog } from '../ui/components/SearchDialog';
 import { AssistantPanel } from '../ui/components/AssistantPanel';
-import { SessionManagerPanel } from '../ui/components/SessionManagerPanel';
+import { SessionManagerPanel, registerSessionGenerateTitleAction } from '../ui/components/SessionManagerPanel';
 import { SessionManagerButton } from '../ui/components/SessionManagerButton';
 import { HealthCheckDialog } from '../ui/components/HealthCheckDialog';
 import { handleQuickPromptButtonClick } from '../ui/components/QuickPromptButton';
@@ -122,6 +122,10 @@ export class AppContext {
       const task = this.dataManager.getTask(taskId);
       const updated = await this.taskClient.updateDetails(taskId, task?.version ?? 1, { spec });
       this.dataManager.updateTask(updated);
+    });
+
+    registerSessionGenerateTitleAction(async (uid, title) => {
+      await this.interactiveCodingService.renameSession(uid, title);
     });
 
     this.actionRegistry.register('quick_prompt', (_e, el) => {
