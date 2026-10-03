@@ -58,6 +58,12 @@ OLLAMA_MODEL = os.getenv(
     "OLLAMA_MODEL", "gpt-oss:120b" if OLLAMA_API_KEY else "gpt-oss:20b"
 )
 
+# Dedicated model for the one-shot AI prompt framework. Falls back to the
+# global OLLAMA_MODEL so existing deployments are unaffected unless they opt
+# into a separate model. Host and API key stay shared (OLLAMA_HOST /
+# OLLAMA_API_KEY); only the model is split out.
+ONE_PROMPT_OLLAMA_MODEL = os.getenv("ONE_PROMPT_OLLAMA_MODEL", OLLAMA_MODEL)
+
 # Per-component model configuration. Each value defaults to the global
 # Ollama configuration so existing deployments are unaffected unless they
 # opt into a separate model/host/api-key per component.

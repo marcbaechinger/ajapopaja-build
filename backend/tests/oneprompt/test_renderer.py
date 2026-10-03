@@ -100,6 +100,18 @@ def test_render_bundled_template_end_to_end():
     assert "$" not in result
 
 
+def test_bundled_templates_render_model_from_one_prompt_config():
+    from api.oneprompt.registry import registry
+
+    config = SimpleNamespace(ONE_PROMPT_OLLAMA_MODEL="one-shot-template-model")
+
+    for prompt_id in ("task_elaborate_spec", "session_generate_title"):
+        template = registry.get(prompt_id)
+        assert template.model == "${ONE_PROMPT_OLLAMA_MODEL}"
+        rendered = render_template(template.model, {}, environment={}, config=config)
+        assert rendered == "one-shot-template-model"
+
+
 # ---------------------------------------------------------------------------
 # Context vs. environment resolution
 # ---------------------------------------------------------------------------

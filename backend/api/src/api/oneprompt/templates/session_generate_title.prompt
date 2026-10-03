@@ -4,7 +4,7 @@ label: Generate title
 title: Generate a short, descriptive title for a session
 description: Given the first user prompt of a Pi session, produce a concise title
   of at most ${max_title_length} characters.
-model: ${OLLAMA_MODEL}
+model: ${ONE_PROMPT_OLLAMA_MODEL}
 accept_label: Accept
 reject_label: Reject
 timeout: 60

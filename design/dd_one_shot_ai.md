@@ -72,7 +72,7 @@ label: Elaborate
 title: Expand the task specification from a dot-list into a full spec
 description: Given the pipeline context and the current spec, produce an expanded,
   well-structured task specification.
-model: ${OLLAMA_MODEL}
+model: ${ONE_PROMPT_OLLAMA_MODEL}
 accept_label: Accept
 reject_label: Reject
 ---
@@ -90,8 +90,10 @@ requirements while preserving the intent. Keep Markdown formatting. Do not
 invent scope beyond what the current spec implies.
 ```
 
-`${OLLAMA_MODEL}` etc. are resolved by the renderer from a supplied resolver
-that checks (in order) the context object, then environment configuration.
+`${ONE_PROMPT_OLLAMA_MODEL}` etc. are resolved by the renderer from a supplied
+resolver that checks (in order) the context object, then environment
+configuration. When `ONE_PROMPT_OLLAMA_MODEL` is unset it defaults to
+`OLLAMA_MODEL`.
 
 ---
 
@@ -166,7 +168,8 @@ back asynchronously on a separate message. `runId` ties them together.
 
 8. **AI call** — `client.chat(model=…, messages=[{role:"user", content:prompt}])`
    (or `generate` for pure completion). The model is resolved from the template
-   metadata (default `config.OLLAMA_MODEL`). Availability can reuse
+   metadata (default `config.ONE_PROMPT_OLLAMA_MODEL`, which itself defaults to
+   `config.OLLAMA_MODEL`). Availability can reuse
    `is_ollama_available()` from `api/ollama_utils.py` to produce a friendly
    error instead of an opaque failure.
 
@@ -336,7 +339,7 @@ New package `backend/api/src/api/oneprompt/`:
 | `context.py` | Data-provider hooks that enrich a context from MongoDB (e.g. load task + pipeline by id). |
 | `runner.py` | `OnePromptRunner`: orchestration (pre-hook → render → post-render hook → Ollama → post-response hook → send). Tracks in-flight runs by `runId`, handles streaming/cancellation/timeouts. |
 | `ws_handler.py` | `register_oneprompt_handlers()` wiring `quick_prompt`, `quick_prompt_stream_cmd`, `quick_prompt_cancel`, `quick_prompt_accept`, `quick_prompt_reject` into the `ConnectionManager`. |
-| `ollama_client.py` (optional) | Thin wrapper over `ollama.AsyncClient` reusing `config.OLLAMA_HOST` / `config.OLLAMA_API_KEY` / `OLLAMA_MODEL`, honouring `is_ollama_available()`. |
+| `ollama_client.py` (optional) | Thin wrapper over `ollama.AsyncClient` reusing `config.OLLAMA_HOST` / `config.OLLAMA_API_KEY` / `config.ONE_PROMPT_OLLAMA_MODEL`, honouring `is_ollama_available()`. |
 
 Wiring: register the handlers in `main.py` `lifespan()` (next to
 `register_assistant_handlers()`); initialise the registry (scan the template

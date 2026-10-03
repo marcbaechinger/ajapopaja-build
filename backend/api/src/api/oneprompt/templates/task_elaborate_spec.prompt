@@ -4,7 +4,7 @@ label: Elaborate
 title: Expand the task specification from a dot-list into a full spec
 description: Given the pipeline context and the current spec, produce an expanded,
   well-structured task specification.
-model: ${OLLAMA_MODEL}
+model: ${ONE_PROMPT_OLLAMA_MODEL}
 accept_label: Accept
 reject_label: Reject
 ---

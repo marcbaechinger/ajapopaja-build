@@ -93,6 +93,8 @@ DATABASE_NAME=ajapopaja_build_prod
 PORT=8081
 DEV_SERVER_PORT=1224
 OLLAMA_HOST=http://host.docker.internal:11434
+# OLLAMA_MODEL=gpt-oss:20b
+# ONE_PROMPT_OLLAMA_MODEL=gpt-oss:20b  # optional; defaults to OLLAMA_MODEL
 WORKSPACES_ROOT=/home/marc-baechinger/monolit/code
 PI_SESSIONS_ROOT=/data/ajapopaja/pi_sessions
 CODERBOT_DEFAULT_MODEL=deepseek-v4.1-flash:cloud
@@ -108,6 +110,7 @@ CODERBOT_DEFAULT_MODEL=deepseek-v4.1-flash:cloud
 | `DEV_SERVER_PORT` | No | Port published to the host on which a user-started pipeline dev server listens. Injected into serve commands as `$DEV_SERVER_PORT` (and `$PORT`). Default: `1224`. |
 | `OLLAMA_HOST` | **Yes** (for AI features) | URL of the Ollama server. Use `http://host.docker.internal:11434` to reach Ollama on the host. |
 | `OLLAMA_MODEL` | No | Default model for the built-in AI Assistant. Default: `gpt-oss:20b` (or `gpt-oss:120b` when `OLLAMA_API_KEY` is set). |
+| `ONE_PROMPT_OLLAMA_MODEL` | No | Model used by the one-shot AI prompt framework (Elaborate, session title generation). Falls back to `OLLAMA_MODEL` when unset. `OLLAMA_HOST`/`OLLAMA_API_KEY` remain shared. |
 | `OLLAMA_API_KEY` | No | Optional API key for cloud-hosted/proxied Ollama. When set, the app connects to `https://ollama.com`. |
 | `WORKSPACES_ROOT` | **Yes** | Absolute path (on the host) to the directory containing the git repositories the app manages. Must exist and be mounted into the container. |
 | `PI_SESSIONS_ROOT` | No | Absolute path where interactive and batch Pi sessions are persisted. Default: `/data/ajapopaja/pi_sessions`. The path is created on demand, but it must be mounted **identically** (`host:container`) into the container to survive restarts (see 3.3). |

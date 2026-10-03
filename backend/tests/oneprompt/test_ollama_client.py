@@ -85,9 +85,25 @@ def test_defaults_come_from_config():
 
     from core import config
 
-    assert client.model == config.OLLAMA_MODEL
+    assert client.model == config.ONE_PROMPT_OLLAMA_MODEL
     assert client.host == config.OLLAMA_HOST
     assert client.api_key == config.OLLAMA_API_KEY
+
+
+def test_default_model_is_the_one_prompt_model(monkeypatch):
+    from core import config
+
+    monkeypatch.setattr(config, "ONE_PROMPT_OLLAMA_MODEL", "one-shot-model")
+
+    assert OllamaClient().model == "one-shot-model"
+
+
+def test_explicit_model_still_overrides_the_one_prompt_default(monkeypatch):
+    from core import config
+
+    monkeypatch.setattr(config, "ONE_PROMPT_OLLAMA_MODEL", "one-shot-model")
+
+    assert OllamaClient(model="explicit").model == "explicit"
 
 
 def test_explicit_configuration_overrides_defaults():

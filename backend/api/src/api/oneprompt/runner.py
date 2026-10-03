@@ -816,7 +816,7 @@ class OnePromptRunner:
                 resolved = ""
             if resolved:
                 return resolved
-        return config.OLLAMA_MODEL
+        return config.ONE_PROMPT_OLLAMA_MODEL
 
     # ------------------------------------------------------------------
     # Event emission

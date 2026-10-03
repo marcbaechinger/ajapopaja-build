@@ -23,7 +23,7 @@ template body::
     label: Elaborate
     title: Expand the task specification
     description: Turn a dot-list into a full specification.
-    model: ${OLLAMA_MODEL}
+    model: ${ONE_PROMPT_OLLAMA_MODEL}
     accept_label: Accept
     reject_label: Reject
     ---

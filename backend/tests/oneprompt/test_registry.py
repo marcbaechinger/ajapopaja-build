@@ -116,7 +116,7 @@ def test_default_registry_discovers_bundled_template():
     template = registry.get("task_elaborate_spec")
 
     assert template.label == "Elaborate"
-    assert "${OLLAMA_MODEL}" == template.model
+    assert "${ONE_PROMPT_OLLAMA_MODEL}" == template.model
     assert template.accept_label == "Accept"
     assert template.reject_label == "Reject"
     assert "${task_spec}" in template.body

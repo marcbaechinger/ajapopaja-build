@@ -235,6 +235,18 @@ async def test_default_model_falls_back_to_template(tmp_path):
     assert fake.calls[0]["model"] == "my-custom-model"
 
 
+async def test_model_falls_back_to_one_prompt_config(tmp_path, monkeypatch):
+    from core import config
+
+    monkeypatch.setattr(config, "ONE_PROMPT_OLLAMA_MODEL", "one-shot-config-model")
+    fake = FakeOllama()
+    runner = OnePromptRunner(registry=_registry(tmp_path), ollama_client=fake)
+
+    await runner.run("greet", {"name": "Ada"})
+
+    assert fake.calls[0]["model"] == "one-shot-config-model"
+
+
 async def test_emit_rendered_event_is_optional(tmp_path):
     sent: list[dict[str, Any]] = []
     runner = OnePromptRunner(

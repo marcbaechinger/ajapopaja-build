@@ -108,7 +108,8 @@ class ContextResolver:
     1. the supplied ``context`` object (mapping or object attributes),
     2. the ``environment`` mapping (``os.environ`` by default),
     3. attributes of the project ``config`` module (defaults such as
-       ``OLLAMA_MODEL`` that may not be exported as environment variables).
+       ``ONE_PROMPT_OLLAMA_MODEL`` that may not be exported as environment
+       variables).
 
     The class implements the mapping protocol expected by
     :meth:`string.Template.substitute`, so it can be passed directly as the
@@ -266,7 +267,7 @@ def render_template(
         renderer: Optional renderer overriding :data:`DEFAULT_RENDERER`. Use
             this to swap in a different engine (e.g. Jinja2).
         environment: Optional environment mapping used as a fallback for
-            placeholders such as ``${OLLAMA_MODEL}`` (defaults to
+            placeholders such as ``${ONE_PROMPT_OLLAMA_MODEL}`` (defaults to
             ``os.environ``).
         config: Optional config object used as a final fallback (defaults to
             :mod:`core.config`).

@@ -17,10 +17,11 @@
 The runner never talks to :class:`ollama.AsyncClient` directly; it goes through
 :class:`OllamaClient`. The wrapper:
 
-* reuses the global Ollama configuration (:data:`core.config.OLLAMA_HOST`,
-  :data:`core.config.OLLAMA_API_KEY` and :data:`core.config.OLLAMA_MODEL`) so a
-  one-shot prompt is authenticated and addressed exactly like the rest of the
-  application (see :class:`api.assistant.session.AssistantSession`),
+* reuses the shared Ollama configuration (:data:`core.config.OLLAMA_HOST` and
+  :data:`core.config.OLLAMA_API_KEY`) while defaulting to the one-shot model
+  (:data:`core.config.ONE_PROMPT_OLLAMA_MODEL`) so a one-shot prompt is
+  authenticated and addressed exactly like the rest of the application (see
+  :class:`api.assistant.session.AssistantSession`),
 * performs the same ``Bearer`` header construction as the assistant/bots,
 * checks :func:`api.ollama_utils.is_ollama_available` and raises a friendly
   :class:`OllamaUnavailableError` (``status="unavailable"``) instead of letting
@@ -140,7 +141,8 @@ class OllamaClient:
 
     Args:
         model: Model to use by default. Falls back to
-            :data:`core.config.OLLAMA_MODEL`.
+            :data:`core.config.ONE_PROMPT_OLLAMA_MODEL` (which itself defaults
+            to :data:`core.config.OLLAMA_MODEL`).
         host: Ollama host. Falls back to :data:`core.config.OLLAMA_HOST`.
         api_key: Optional API key. Falls back to
             :data:`core.config.OLLAMA_API_KEY`.
@@ -163,7 +165,7 @@ class OllamaClient:
         check_availability: bool = True,
         unavailable_message: str = DEFAULT_UNAVAILABLE_MESSAGE,
     ) -> None:
-        self.model = model or config.OLLAMA_MODEL
+        self.model = model or config.ONE_PROMPT_OLLAMA_MODEL
         self.host = host or config.OLLAMA_HOST
         self.api_key = config.OLLAMA_API_KEY if api_key is None else api_key
         self.check_availability = check_availability
