@@ -96,7 +96,6 @@ describe('AssistantPanel', () => {
       ['/i', 'Show 5 most recent issues of pipeline PIPELINE_ID'],
       ['/gd', 'Drop the top commit (that has not been pushed to the remote) of pipeline PIPELINE_ID'],
       ['/review', 'Make a review of the last implemented task of pipeline PIPELINE_ID'],
-      ['/backlog', 'Show me the tasks in the backlog (state CREATED) of pipeline PIPELINE_ID'],
       ['/pulls', 'Show me the recent pull request of pipeline PIPELINE_ID'],
       ['/summary', 'Summarize what we discussed and suggest new tasks to address what we learned (for pipeline PIPELINE_ID)'],
       ['/test', 'Run the tests for pipeline PIPELINE_ID'],
@@ -136,9 +135,11 @@ describe('AssistantPanel', () => {
         const input = submitInput(command);
 
         expect(document.body.textContent).toContain('Slash Commands');
-        expect(document.body.textContent).toContain('/backlog');
         expect(document.body.textContent).toContain('/pulls');
         expect(document.body.textContent).toContain('/test');
+        // Interactive-only commands are not offered to the assistant.
+        expect(document.body.textContent).not.toContain('/backlog');
+        expect(document.body.textContent).not.toContain('/pipelines');
         expect(mockContext.assistantService.sendMessage).not.toHaveBeenCalled();
         expect(input.value).toBe('');
       }

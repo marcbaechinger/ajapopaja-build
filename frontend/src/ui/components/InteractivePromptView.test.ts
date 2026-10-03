@@ -122,6 +122,33 @@ describe('InteractivePromptView', () => {
     expect(inputEl().value).toBe('Show me the project structure of pipeline xyz');
   });
 
+  it('expands the interactive-only /pipelines template', () => {
+    mount();
+    type('/pi');
+    key('Enter');
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(inputEl().value).toBe('Show me the available pipelines');
+  });
+
+  it('expands the interactive-only /backlog template', () => {
+    mount({ getPipelineId: () => 'p1' });
+    type('/ba');
+    key('Enter');
+
+    expect(inputEl().value).toBe(
+      'Show me the tasks in the backlog (state CREATED) of pipeline p1'
+    );
+  });
+
+  it('does not offer interactive-only commands to another host', () => {
+    mount({ context: 'assistant' });
+    type('/');
+    const text = root.textContent ?? '';
+    expect(text).not.toContain('/backlog');
+    expect(text).not.toContain('/pipelines');
+  });
+
   it('executes an action command and clears the input', () => {
     mount();
     type('/clear');

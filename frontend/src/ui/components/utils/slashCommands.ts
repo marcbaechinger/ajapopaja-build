@@ -49,6 +49,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     command: '/backlog',
     description: 'Show the tasks in the backlog (state CREATED) of the pipeline',
     type: 'prompt',
+    contexts: ['interactive'],
     template: 'Show me the tasks in the backlog (state CREATED) of pipeline PIPELINE_ID',
   },
   {
@@ -104,6 +105,13 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     type: 'prompt',
     template:
       'Give me an overview of the project of pipeline PIPELINE_ID . Explain what the application is about and why it is useful for the user. Give a short introduction in the general architecture and design.',
+  },
+  {
+    command: '/pipelines',
+    description: 'Show the available pipelines',
+    type: 'prompt',
+    contexts: ['interactive'],
+    template: 'Show me the available pipelines',
   },
   {
     command: '/pr',

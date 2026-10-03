@@ -60,10 +60,20 @@ describe('slashCommands', () => {
     });
 
     it('orders prefix matches before substring matches', () => {
-      const commands = filterCommands('c', 'assistant').map((c) => c.command);
-      // '/clear' and '/close' start with the query; '/backlog' only contains it.
-      expect(commands.slice(0, 2)).toEqual(['/clear', '/close']);
-      expect(commands.indexOf('/backlog')).toBeGreaterThan(commands.indexOf('/close'));
+      const commands = filterCommands('c', 'interactive').map((c) => c.command);
+      // '/clear' starts with the query; '/backlog' only contains it.
+      expect(commands[0]).toBe('/clear');
+      expect(commands.indexOf('/backlog')).toBeGreaterThan(commands.indexOf('/clear'));
+    });
+
+    it('exposes the interactive-only commands to the interactive host only', () => {
+      const interactive = filterCommands('', 'interactive').map((c) => c.command);
+      const assistant = filterCommands('', 'assistant').map((c) => c.command);
+
+      expect(interactive).toContain('/backlog');
+      expect(interactive).toContain('/pipelines');
+      expect(assistant).not.toContain('/backlog');
+      expect(assistant).not.toContain('/pipelines');
     });
 
     it('narrows the matches by the typed query', () => {
@@ -87,6 +97,13 @@ describe('slashCommands', () => {
       expect(findCommand('/clear', 'interactive')?.type).toBe('action');
       expect(findCommand('/close', 'interactive')).toBeUndefined();
       expect(findCommand('/close', 'assistant')?.type).toBe('action');
+    });
+
+    it('scopes the interactive-only commands to the interactive host', () => {
+      expect(findCommand('/backlog', 'interactive')?.type).toBe('prompt');
+      expect(findCommand('/backlog', 'assistant')).toBeUndefined();
+      expect(findCommand('/pipelines', 'interactive')?.type).toBe('prompt');
+      expect(findCommand('/pipelines', 'assistant')).toBeUndefined();
     });
 
     it('does not match a prefix', () => {
