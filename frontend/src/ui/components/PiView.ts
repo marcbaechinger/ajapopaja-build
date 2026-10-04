@@ -1217,7 +1217,13 @@ export class PiView {
         el.appendChild(header);
         const body = document.createElement('pre');
         body.setAttribute('data-role', 'body');
-        body.className = 'whitespace-pre-wrap break-all italic opacity-70 mt-0.5 overflow-hidden';
+        // `piview-thinking-body` carries the theme-aware thinking text colour
+        // (soft light yellow in dark mode, muted dark grey in light mode) from
+        // `src/style.css`. Keep the colour out of this class list so there is a
+        // single source of truth; `italic`/`opacity-70` keep thinking secondary
+        // to the assistant's actual answer.
+        body.className =
+          'piview-thinking-body whitespace-pre-wrap break-all italic opacity-70 mt-0.5 overflow-hidden';
         body.textContent = block.text ?? '';
         if (!this.thinkingExpanded) body.classList.add('hidden');
         el.appendChild(body);

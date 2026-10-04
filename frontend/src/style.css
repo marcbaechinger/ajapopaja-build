@@ -639,3 +639,23 @@ mark.piview-search-current {
   --app-accent-2: var(--color-cyan-400);
 }
 
+/*
+ * Thinking text tone.
+ *
+ * Thinking is secondary to the assistant's visible answer, so it must stay
+ * comfortably readable without competing for attention. Dark mode uses a soft
+ * light yellow; light mode uses darkgrey. Because the log is an always-dark
+ * terminal surface, the light-mode grey stays light enough to read on black, so
+ * the text is legible in both themes. Ownership lives here (and nowhere else)
+ * so the colour is tunable from a single place, mirroring the other PiView text
+ * rules.
+ */
+.piview-thinking-body {
+  color: var(--color-yellow-200); /* light yellow */
+}
+
+[data-theme='light'] .piview-thinking-body {
+  /* darkgrey; readable on the black log */
+  color: var(--color-slate-400);
+}
+
