@@ -24,10 +24,13 @@ import './Keybinding.css';
  * Classes for the Markdown-rendered ("Format as markup") view of a block.
  * `prose-theme` supplies the base typography; the `prose-*` modifiers tighten
  * the vertical rhythm so consecutive elements do not stand apart with large
- * gaps in the dense, terminal-style PiView log.
+ * gaps in the dense, terminal-style PiView log. `font-sans` overrides the
+ * monospace font inherited from the terminal-style log container so the
+ * agent's rendered answer reads as prose; inline/block code keeps its
+ * monospace font via the typography plugin's `code`/`pre` rules.
  */
 const FORMATTED_MARKDOWN_CLASS =
-  'piview-formatted prose-theme prose-p:my-1 prose-headings:my-1 prose-ul:my-1 ' +
+  'piview-formatted prose-theme font-sans prose-p:my-1 prose-headings:my-1 prose-ul:my-1 ' +
   'prose-ol:my-1 prose-li:my-0 prose-pre:my-1 prose-blockquote:my-1 prose-table:my-1';
 
 /**

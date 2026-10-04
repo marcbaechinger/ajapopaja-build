@@ -1571,6 +1571,25 @@ describe('PiView keyboard tooltips', () => {
     expect(formatted.querySelector('em')?.textContent).toBe('italic');
   });
 
+  it('renders the formatted agent response in a non-monospace (sans-serif) font', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+    emitBlocks([{ id: 'font1', kind: 'text', text: 'Readable **prose**', complete: true }]);
+    view.flushAutoFormat();
+
+    const formatted = mount.querySelector('.piview-formatted') as HTMLElement;
+    expect(formatted).not.toBeNull();
+    // The terminal-style log container is `font-mono`; the rendered answer must
+    // override that with the app's sans-serif font for readability.
+    expect(formatted.classList.contains('font-sans')).toBe(true);
+    expect(mount.querySelector('#log-content-container')?.classList.contains('font-mono')).toBe(
+      true
+    );
+
+    view.destroy();
+  });
+
   it('toggles the block back to raw text when clicking the format button again', () => {
     const { service, emitBlocks } = createStubService();
     const view = new PiView(service, mount);
