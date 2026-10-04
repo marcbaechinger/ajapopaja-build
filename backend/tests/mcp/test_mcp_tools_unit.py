@@ -18,12 +18,15 @@ import pytest
 
 from ajapopaja_mcp.tools import (
     complete_task,
+    create_pull_request,
     get_next_task,
     get_task_details,
     get_task_status,
     search_tasks,
     update_task_design_doc,
 )
+from api.git_hosting.gitea import GiteaApiError
+from core.models.models import TaskStatus
 
 VALID_TASK_ID = "0123456789abcdef01234567"
 VALID_PIPELINE_ID = "fedcba9876543210fedcba98"
@@ -321,3 +324,312 @@ async def test_get_task_status_unit():
         mock_get_task.assert_awaited_once_with(task_id)
         assert result["id"] == task_id
         assert result["status"] == "inprogress"
+
+
+# ---------------------------------------------------------------------------
+# create_pull_request
+# ---------------------------------------------------------------------------
+def _mock_repo(*, head="feature/x", base="main", dirty=False, sha="a" * 40):
+    repo = MagicMock()
+    repo.active_branch.name = head
+    repo.is_dirty.return_value = dirty
+    repo.head.commit.hexsha = sha
+    return repo
+
+
+def _patch_create_pr_deps(repo, pipeline, pr_url="https://host/owner/repo/pulls/9"):
+    return (
+        patch("ajapopaja_mcp.tools.init_db", new_callable=AsyncMock),
+        patch(
+            "ajapopaja_mcp.tools.pipeline_queries.get_pipeline_by_id",
+            new_callable=AsyncMock,
+            return_value=pipeline,
+        ),
+        patch("ajapopaja_mcp.tools.git_utils.get_repo", return_value=repo),
+        patch(
+            "ajapopaja_mcp.tools.git_utils.current_default_branch", return_value="main"
+        ),
+        patch(
+            "ajapopaja_mcp.tools.create_pipeline_pull_request",
+            new_callable=AsyncMock,
+            return_value=pr_url,
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_create_pull_request_success():
+    pipeline = MagicMock()
+    pipeline.repo_uri = "https://host/owner/repo.git"
+    pipeline.workspace_abs_path = "/tmp/repo"
+    repo = _mock_repo()
+
+    patches = _patch_create_pr_deps(repo, pipeline)
+    with (
+        patches[0],
+        patches[1],
+        patches[2],
+        patches[3],
+        patches[4] as mock_create,
+    ):
+        result = await create_pull_request(
+            VALID_PIPELINE_ID, "Add feature", "Body text"
+        )
+
+    assert result["status"] == "created"
+    assert result["pr_url"] == "https://host/owner/repo/pulls/9"
+    assert result["branch"] == "feature/x"
+    assert result["base"] == "main"
+    assert result["commit_hash"] == "a" * 40
+    assert result["task_status"] is None
+    mock_create.assert_awaited_once()
+    # The feature branch is used as head; no new branch is created.
+    repo.create_head.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_create_pull_request_invalid_pipeline_id():
+    result = await create_pull_request("nope", "title")
+    assert "error" in result
+    assert "Invalid pipeline_id" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_create_pull_request_invalid_task_id():
+    result = await create_pull_request(VALID_PIPELINE_ID, "title", task_id="nope")
+    assert "error" in result
+    assert "Invalid task_id" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_create_pull_request_empty_title():
+    result = await create_pull_request(VALID_PIPELINE_ID, "   ")
+    assert "error" in result
+    assert "title cannot be empty" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_create_pull_request_local_pipeline_rejected():
+    pipeline = MagicMock()
+    pipeline.repo_uri = None
+
+    with (
+        patch("ajapopaja_mcp.tools.init_db", new_callable=AsyncMock),
+        patch(
+            "ajapopaja_mcp.tools.pipeline_queries.get_pipeline_by_id",
+            new_callable=AsyncMock,
+            return_value=pipeline,
+        ),
+        patch(
+            "ajapopaja_mcp.tools.create_pipeline_pull_request",
+            new_callable=AsyncMock,
+        ) as mock_create,
+    ):
+        result = await create_pull_request(VALID_PIPELINE_ID, "title")
+
+    assert "error" in result
+    assert "no remote repo_uri" in result["error"]
+    mock_create.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_create_pull_request_dirty_tree_rejected():
+    pipeline = MagicMock()
+    pipeline.repo_uri = "https://host/owner/repo.git"
+    pipeline.workspace_abs_path = "/tmp/repo"
+    repo = _mock_repo(dirty=True)
+
+    with (
+        patch("ajapopaja_mcp.tools.init_db", new_callable=AsyncMock),
+        patch(
+            "ajapopaja_mcp.tools.pipeline_queries.get_pipeline_by_id",
+            new_callable=AsyncMock,
+            return_value=pipeline,
+        ),
+        patch("ajapopaja_mcp.tools.git_utils.get_repo", return_value=repo),
+        patch(
+            "ajapopaja_mcp.tools.git_utils.current_default_branch", return_value="main"
+        ),
+        patch(
+            "ajapopaja_mcp.tools.create_pipeline_pull_request",
+            new_callable=AsyncMock,
+        ) as mock_create,
+    ):
+        result = await create_pull_request(VALID_PIPELINE_ID, "title")
+
+    assert "error" in result
+    assert "uncommitted" in result["error"]
+    mock_create.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_create_pull_request_on_default_branch_creates_branch():
+    pipeline = MagicMock()
+    pipeline.repo_uri = "https://host/owner/repo.git"
+    pipeline.workspace_abs_path = "/tmp/repo"
+    repo = _mock_repo(head="main", sha="abcdef1234567890")
+
+    with (
+        patch("ajapopaja_mcp.tools.init_db", new_callable=AsyncMock),
+        patch(
+            "ajapopaja_mcp.tools.pipeline_queries.get_pipeline_by_id",
+            new_callable=AsyncMock,
+            return_value=pipeline,
+        ),
+        patch("ajapopaja_mcp.tools.git_utils.get_repo", return_value=repo),
+        patch(
+            "ajapopaja_mcp.tools.git_utils.current_default_branch", return_value="main"
+        ),
+        patch("ajapopaja_mcp.tools.git_utils.create_branch_at_head") as mock_branch,
+        patch(
+            "ajapopaja_mcp.tools.create_pipeline_pull_request",
+            new_callable=AsyncMock,
+            return_value="https://host/owner/repo/pulls/1",
+        ) as mock_create,
+    ):
+        result = await create_pull_request(VALID_PIPELINE_ID, "title")
+
+    assert result["status"] == "created"
+    assert result["branch"] == "pi/abcdef1"
+    mock_branch.assert_called_once_with(repo, "pi/abcdef1")
+    # The tool must not check the new branch out.
+    repo.git.checkout.assert_not_called()
+    assert mock_create.await_args.kwargs["head"] == "pi/abcdef1"
+
+
+@pytest.mark.asyncio
+async def test_create_pull_request_on_default_branch_with_task():
+    pipeline = MagicMock()
+    pipeline.repo_uri = "https://host/owner/repo.git"
+    pipeline.workspace_abs_path = "/tmp/repo"
+    repo = _mock_repo(head="main")
+
+    with (
+        patch("ajapopaja_mcp.tools.init_db", new_callable=AsyncMock),
+        patch(
+            "ajapopaja_mcp.tools.pipeline_queries.get_pipeline_by_id",
+            new_callable=AsyncMock,
+            return_value=pipeline,
+        ),
+        patch("ajapopaja_mcp.tools.git_utils.get_repo", return_value=repo),
+        patch(
+            "ajapopaja_mcp.tools.git_utils.current_default_branch", return_value="main"
+        ),
+        patch("ajapopaja_mcp.tools.git_utils.create_branch_at_head") as mock_branch,
+        patch(
+            "ajapopaja_mcp.tools.task_queries.get_task_by_id",
+            new_callable=AsyncMock,
+        ) as mock_get_task,
+        patch(
+            "ajapopaja_mcp.tools.task_queries.transition_task",
+            new_callable=AsyncMock,
+        ) as mock_transition,
+        patch(
+            "ajapopaja_mcp.tools.create_pipeline_pull_request",
+            new_callable=AsyncMock,
+            return_value="https://host/owner/repo/pulls/1",
+        ),
+    ):
+        task = MagicMock()
+        task.id = VALID_TASK_ID
+        task.status = TaskStatus.INPROGRESS
+        task.save = AsyncMock()
+
+        async def fake_transition(task_id, to_status, actor, task):
+            task.status = to_status
+            return task
+
+        mock_get_task.return_value = task
+        mock_transition.side_effect = fake_transition
+
+        result = await create_pull_request(
+            VALID_PIPELINE_ID, "title", task_id=VALID_TASK_ID
+        )
+
+    assert result["task_status"] == "submitted"
+    assert task.commit_hash == "a" * 40
+    assert task.review_md == "https://host/owner/repo/pulls/1"
+    mock_branch.assert_called_once_with(repo, f"pi/{VALID_TASK_ID}")
+
+
+@pytest.mark.asyncio
+async def test_create_pull_request_task_bookkeeping_when_transition_illegal():
+    pipeline = MagicMock()
+    pipeline.repo_uri = "https://host/owner/repo.git"
+    pipeline.workspace_abs_path = "/tmp/repo"
+    repo = _mock_repo()
+
+    with (
+        patch("ajapopaja_mcp.tools.init_db", new_callable=AsyncMock),
+        patch(
+            "ajapopaja_mcp.tools.pipeline_queries.get_pipeline_by_id",
+            new_callable=AsyncMock,
+            return_value=pipeline,
+        ),
+        patch("ajapopaja_mcp.tools.git_utils.get_repo", return_value=repo),
+        patch(
+            "ajapopaja_mcp.tools.git_utils.current_default_branch", return_value="main"
+        ),
+        patch(
+            "ajapopaja_mcp.tools.task_queries.get_task_by_id",
+            new_callable=AsyncMock,
+        ) as mock_get_task,
+        patch(
+            "ajapopaja_mcp.tools.task_queries.transition_task",
+            new_callable=AsyncMock,
+            side_effect=ValueError("Illegal task transition"),
+        ),
+        patch(
+            "ajapopaja_mcp.tools.create_pipeline_pull_request",
+            new_callable=AsyncMock,
+            return_value="https://host/owner/repo/pulls/2",
+        ),
+    ):
+        task = MagicMock()
+        task.id = VALID_TASK_ID
+        task.status = TaskStatus.INPROGRESS
+        task.save = AsyncMock()
+        mock_get_task.return_value = task
+
+        result = await create_pull_request(
+            VALID_PIPELINE_ID, "title", task_id=VALID_TASK_ID
+        )
+
+    # PR is still created; the recorded hashes are persisted but the status
+    # is left unchanged because the transition is not legal.
+    assert result["status"] == "created"
+    assert result["task_status"] == "inprogress"
+    assert task.commit_hash == "a" * 40
+    assert task.review_md == "https://host/owner/repo/pulls/2"
+    task.save.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_create_pull_request_gitea_error_surfaced():
+    pipeline = MagicMock()
+    pipeline.repo_uri = "https://host/owner/repo.git"
+    pipeline.workspace_abs_path = "/tmp/repo"
+    repo = _mock_repo()
+
+    with (
+        patch("ajapopaja_mcp.tools.init_db", new_callable=AsyncMock),
+        patch(
+            "ajapopaja_mcp.tools.pipeline_queries.get_pipeline_by_id",
+            new_callable=AsyncMock,
+            return_value=pipeline,
+        ),
+        patch("ajapopaja_mcp.tools.git_utils.get_repo", return_value=repo),
+        patch(
+            "ajapopaja_mcp.tools.git_utils.current_default_branch", return_value="main"
+        ),
+        patch(
+            "ajapopaja_mcp.tools.create_pipeline_pull_request",
+            new_callable=AsyncMock,
+            side_effect=GiteaApiError("boom", status_code=422, detail="ref missing"),
+        ),
+    ):
+        result = await create_pull_request(VALID_PIPELINE_ID, "title")
+
+    assert "error" in result
+    assert result["status_code"] == 422
+    assert result["detail"] == "ref missing"

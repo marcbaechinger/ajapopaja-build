@@ -411,6 +411,24 @@ def test_ensure_feature_branch_checks_out_when_exists():
     repo.git.checkout.assert_called_once_with("feature/x")
 
 
+def test_create_branch_at_head_creates_without_checkout():
+    repo = MagicMock()
+    repo.branches = [MagicMock(name="main")]
+    git_utils.create_branch_at_head(repo, "pi/abc1234")
+    repo.create_head.assert_called_once_with("pi/abc1234", "HEAD")
+    repo.git.checkout.assert_not_called()
+
+
+def test_create_branch_at_head_existing_is_noop():
+    repo = MagicMock()
+    existing = MagicMock()
+    existing.name = "pi/abc1234"
+    repo.branches = [existing]
+    git_utils.create_branch_at_head(repo, "pi/abc1234")
+    repo.create_head.assert_not_called()
+    repo.git.checkout.assert_not_called()
+
+
 def test_current_default_branch_from_head():
     repo = MagicMock()
     repo.git.symbolic_ref.return_value = "refs/remotes/origin/main"

@@ -16,10 +16,15 @@ import logging
 import re
 from typing import Any, Dict, List, Optional
 
+import git
+
+from api.git_hosting.gitea import GiteaApiError
+from api.git_hosting.pull_requests import create_pipeline_pull_request
 from api.websocket_manager import manager
 from core.db import init_db
 from core.exceptions import EntityNotFoundError, VersionMismatchError
 from core.models.models import TaskStatus
+from core.queries import pipeline as pipeline_queries
 from core.queries import task as task_queries
 from core.utils import git_utils
 
@@ -221,6 +226,153 @@ async def complete_task(
         )
     except Exception as e:
         return f"An unexpected error occurred: {str(e)}"
+
+
+async def create_pull_request(
+    pipeline_id: str,
+    title: str,
+    body: str = "",
+    task_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Pushes the current branch of the pipeline's repo (if needed) and opens a
+    Gitea pull request against the default branch. Optionally links the PR to a
+    task and records it as SUBMITTED.
+
+    The working tree must be clean (commit your work first). When the current
+    branch is the default branch, a new ``pi/<task_id>`` (or
+    ``pi/<short-sha>``) branch is created at HEAD *without* checking it out, so
+    your working tree is left untouched. The Gitea token stays server-side.
+
+    Args:
+        pipeline_id: The 24-char hex pipeline ID.
+        title: PR title.
+        body: PR description (Markdown).
+        task_id: Optional task to link and mark submitted.
+    """
+    if not _is_valid_id(pipeline_id):
+        return {
+            "error": (
+                f"Invalid pipeline_id '{pipeline_id}'. Must be a 24-char hex string."
+            )
+        }
+
+    if task_id is not None and not _is_valid_id(task_id):
+        return {
+            "error": f"Invalid task_id '{task_id}'. Must be a 24-char hex string."
+        }
+
+    if not title or not title.strip():
+        return {"error": "title cannot be empty."}
+
+    await init_db()
+
+    try:
+        pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
+    except EntityNotFoundError as e:
+        return {"error": str(e)}
+
+    if not pipeline.repo_uri:
+        return {
+            "error": (
+                "Pipeline has no remote repo_uri configured; pull requests can "
+                "only be created for remote pipelines."
+            )
+        }
+
+    if not pipeline.workspace_abs_path:
+        return {"error": f"Workspace path not found for pipeline {pipeline_id}."}
+
+    try:
+        # Open the existing clone read-only. Deliberately avoid
+        # ``ensure_repo_cloned`` which may ``git reset --hard`` the live
+        # interactive checkout and destroy uncommitted work.
+        repo = git_utils.get_repo(str(pipeline.workspace_abs_path))
+    except (git.exc.InvalidGitRepositoryError, git.exc.NoSuchPathError) as e:
+        return {"error": f"Git repository not found for pipeline {pipeline_id}: {e}"}
+
+    try:
+        head = repo.active_branch.name
+    except TypeError:
+        return {
+            "error": (
+                "Repository is in detached HEAD state; check out a branch before "
+                "creating a pull request."
+            )
+        }
+
+    base = git_utils.current_default_branch(repo)
+
+    if repo.is_dirty(untracked_files=True):
+        return {
+            "error": (
+                "Working tree has uncommitted or untracked changes. Commit them "
+                "before creating a pull request."
+            )
+        }
+
+    linked_task = None
+    if task_id is not None:
+        try:
+            linked_task = await task_queries.get_task_by_id(task_id)
+        except EntityNotFoundError as e:
+            return {"error": str(e)}
+
+    if head == base:
+        branch = (
+            f"pi/{task_id}" if task_id else f"pi/{repo.head.commit.hexsha[:7]}"
+        )
+        git_utils.create_branch_at_head(repo, branch)
+        head = branch
+
+    commit_hash = repo.head.commit.hexsha
+
+    try:
+        pr_url = await create_pipeline_pull_request(
+            pipeline, repo, head=head, base=base, title=title, body=body
+        )
+    except GiteaApiError as e:
+        return {
+            "error": f"Failed to create Gitea pull request: {e}",
+            "status_code": e.status_code,
+            "detail": e.detail,
+        }
+    except Exception as e:
+        return {"error": f"An unexpected error occurred: {str(e)}"}
+
+    task_status: Optional[str] = None
+    if linked_task is not None:
+        linked_task.commit_hash = commit_hash
+        linked_task.review_md = pr_url
+        try:
+            # SUBMITTED is only legal from PULL_REQUEST_AVAILABLE. Keep the PR
+            # and the recorded hashes even when the transition is not allowed
+            # (e.g. the task is still INPROGRESS).
+            await task_queries.transition_task(
+                str(linked_task.id),
+                TaskStatus.SUBMITTED,
+                actor="mcp",
+                task=linked_task,
+            )
+        except ValueError:
+            await linked_task.save()
+        task_status = (
+            linked_task.status.value
+            if isinstance(linked_task.status, TaskStatus)
+            else str(linked_task.status)
+        )
+        await notify_api(task_id)
+
+    return {
+        "status": "created",
+        "pr_url": pr_url,
+        "branch": head,
+        "base": base,
+        "commit_hash": commit_hash,
+        "pipeline_id": pipeline_id,
+        "task_id": task_id,
+        "task_status": task_status,
+    }
 
 
 async def search_tasks(

@@ -359,6 +359,11 @@ class CoderBotManager:
             pipeline_id=str(pipeline.id),
             session_uid=uid,
             session_record=record,
+            env=(
+                {"MCP_AUTH_TOKEN": config.MCP_AUTH_TOKEN}
+                if config.MCP_AUTH_TOKEN
+                else None
+            ),
         )
         handle = PiSessionHandle(record=record, session=session)
         self._sessions[uid] = handle

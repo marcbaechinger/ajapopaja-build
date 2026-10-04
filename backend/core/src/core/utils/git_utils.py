@@ -201,6 +201,22 @@ def ensure_feature_branch(repo: git.Repo, branch_name: str) -> None:
         repo.git.checkout(branch_name)
 
 
+def create_branch_at_head(repo: git.Repo, branch_name: str) -> None:
+    """Create ``refs/heads/<branch_name>`` at HEAD without touching the worktree.
+
+    Unlike :func:`ensure_feature_branch` this never checks the branch out. It is
+    used by the interactive pull-request flow when the agent committed straight
+    onto the default branch: the changes are pushed from a new feature branch
+    while the agent's checked-out branch (and working tree) stay untouched.
+    Creating an existing branch is a no-op.
+    """
+    if branch_name in {b.name for b in repo.branches}:
+        logger.info("Branch %s already exists; leaving it as-is", branch_name)
+        return
+    logger.info("Creating branch %s at HEAD without checkout", branch_name)
+    repo.create_head(branch_name, "HEAD")
+
+
 def current_default_branch(repo: git.Repo) -> str:
     """Return the name of the remote default branch.
 

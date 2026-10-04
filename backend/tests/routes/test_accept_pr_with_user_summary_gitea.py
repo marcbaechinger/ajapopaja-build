@@ -137,7 +137,7 @@ async def test_accept_pr_with_user_summary_gitea(
             patch(
                 "api.routes.pull_request.git_utils.push_branch_with_auth"
             ) as mock_push,
-            patch("api.routes.pull_request.GiteaClient") as mock_client_cls,
+            patch("api.git_hosting.pull_requests.GiteaClient") as mock_client_cls,
         ):
             mock_client = mock_client_cls.return_value
             mock_client.create_pull_request = AsyncMock(

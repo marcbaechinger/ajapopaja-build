@@ -253,6 +253,33 @@ async def run_update_task_spec(
     await client.call_tool("update_task_spec", args)
 
 
+async def run_create_pull_request(
+    client: MCPHttpClient,
+    pipeline_id: str,
+    title: str,
+    body: str = "",
+    task_id: Optional[str] = None,
+):
+    """Push the current branch and open a Gitea pull request.
+
+    Args:
+        client: The MCP client used to call the tool.
+        pipeline_id: The 24-char hex pipeline ID.
+        title: Pull request title.
+        body: Pull request description (Markdown).
+        task_id: Optional task to link and mark submitted.
+    """
+    logger.info(f"--- Action: Create Pull Request (Pipeline: {pipeline_id}) ---")
+    args: Dict[str, Any] = {
+        "pipeline_id": pipeline_id,
+        "title": title,
+        "body": body,
+    }
+    if task_id:
+        args["task_id"] = task_id
+    await client.call_tool("create_pull_request", args)
+
+
 async def main():
     """Parse CLI arguments and dispatch the selected action to the MCP server."""
     parser = argparse.ArgumentParser(
@@ -321,6 +348,17 @@ async def main():
         "--version", type=int, required=True, help="Current task version for OCC"
     )
 
+    pr_parser = subparsers.add_parser(
+        "create-pull-request",
+        help="Push the current branch and open a Gitea pull request",
+    )
+    pr_parser.add_argument("pipeline_id", help="The 24-char hex pipeline ID")
+    pr_parser.add_argument("--title", required=True, help="Pull request title")
+    pr_parser.add_argument("--body", default="", help="Pull request description")
+    pr_parser.add_argument(
+        "--task", dest="task_id", help="Optional task ID to link and mark submitted"
+    )
+
     subparsers.add_parser("list", help="List all available tools on the MCP server")
 
     args = parser.parse_args()
@@ -355,6 +393,10 @@ async def main():
         )
     elif args.command == "update-task-spec":
         await run_update_task_spec(client, args.task_id, args.spec, args.version)
+    elif args.command == "create-pull-request":
+        await run_create_pull_request(
+            client, args.pipeline_id, args.title, args.body, args.task_id
+        )
 
     await client.close()
 

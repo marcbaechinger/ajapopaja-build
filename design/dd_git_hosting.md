@@ -249,6 +249,47 @@ the host over `https://` for the API call).
 
 ---
 
+## 5.3 Interactive pull requests via the MCP tool
+
+Besides the batch flow above, an **interactive** Pi session (the stateful chat
+attached to a pipeline's clone) can create a Gitea pull request itself through
+the existing MCP channel. The bundled `ajapopaja` skill exposes a
+`create_pull_request` tool and a matching `create-pull-request` CLI command:
+
+```bash
+python3 ./mcp_client.py --url http://localhost:${PORT:-8081} \
+    create-pull-request <pipeline_id> \
+    --title "Add feature X" --body "…" [--task <task_id>]
+```
+
+The MCP server runs in the same Python process as the backend, so the tool can
+call the database, `git_utils` and `GiteaClient` directly and resolve the same
+credentials as the batch flow (`pipeline.repo_token` → `GIT_PUSH_TOKEN`). **The
+Gitea token never enters the Pi process**; Pi only holds the optional MCP bearer
+token (`MCP_AUTH_TOKEN`).
+
+Behaviour:
+
+1. The pipeline must be remote (`repo_uri` set).
+2. The repository is opened **read-only** (no `ensure_repo_cloned`, so a live
+   interactive checkout is never reset).
+3. The working tree must be clean; the commit at HEAD is what gets reviewed.
+4. The head branch is the current branch, or — when the agent committed straight
+   onto the default branch — a new `pi/<task_id>` (or `pi/<short-sha>`) branch is
+   created at HEAD *without* checking it out.
+5. The branch is pushed with `push_branch_with_auth` and the PR is opened with
+   `GiteaClient.create_pull_request` (shared helper
+   `api/git_hosting/pull_requests.py::create_pipeline_pull_request`).
+6. When `--task` is supplied the commit hash and PR URL are recorded on the task
+   and it is moved to `SUBMITTED` when that transition is legal (from
+   `PULL_REQUEST_AVAILABLE`); otherwise the status is left unchanged while the
+   PR and the recorded hashes are still persisted.
+
+Only PR creation is automated here; merging/accepting still happens in the
+Gitea UI or through the batch `accept_pull_request` route.
+
+---
+
 ## 6. Decision summary
 
 | Concern | Choice |

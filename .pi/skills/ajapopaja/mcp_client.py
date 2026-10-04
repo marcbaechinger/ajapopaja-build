@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import sys
 from typing import Any, Dict, Optional
 
@@ -16,7 +17,7 @@ logger = logging.getLogger("mcp-tester")
 
 
 class MCPHttpClient:
-    def __init__(self, base_url: str):
+    def __init__(self, base_url: str, auth_token: Optional[str] = None):
         self.base_url = base_url.rstrip("/")
         # FastMCP uses the root of the mounted path
         self.endpoint = (
@@ -24,6 +25,7 @@ class MCPHttpClient:
             if not self.base_url.endswith("/mcp/")
             else self.base_url
         )
+        self.auth_token = auth_token
         self.session_id = None
         self.client = httpx.AsyncClient(timeout=30.0)
 
@@ -62,6 +64,9 @@ class MCPHttpClient:
             "Content-Type": "application/json",
             "Accept": "application/json, text/event-stream",
         }
+
+        if self.auth_token:
+            headers["Authorization"] = f"Bearer {self.auth_token}"
 
         if self.session_id:
             headers["mcp-session-id"] = self.session_id
@@ -219,6 +224,24 @@ async def run_update_task_spec(
     await client.call_tool("update_task_spec", args)
 
 
+async def run_create_pull_request(
+    client: MCPHttpClient,
+    pipeline_id: str,
+    title: str,
+    body: str = "",
+    task_id: Optional[str] = None,
+):
+    logger.info(f"--- Action: Create Pull Request (Pipeline: {pipeline_id}) ---")
+    args: Dict[str, Any] = {
+        "pipeline_id": pipeline_id,
+        "title": title,
+        "body": body,
+    }
+    if task_id:
+        args["task_id"] = task_id
+    await client.call_tool("create_pull_request", args)
+
+
 async def main():
     parser = argparse.ArgumentParser(
         description="CLI tool to test MCP server tools over stateless streamable HTTP.",
@@ -226,6 +249,14 @@ async def main():
     )
     parser.add_argument(
         "--url", default="http://localhost:8000", help="Base URL of the FastAPI server"
+    )
+    parser.add_argument(
+        "--auth-token",
+        default=os.getenv("MCP_AUTH_TOKEN"),
+        help=(
+            "Bearer token to send in the Authorization header of every RPC request. "
+            "Defaults to the MCP_AUTH_TOKEN environment variable."
+        ),
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Available actions")
@@ -278,6 +309,17 @@ async def main():
         "--version", type=int, required=True, help="Current task version for OCC"
     )
 
+    pr_parser = subparsers.add_parser(
+        "create-pull-request",
+        help="Push the current branch and open a Gitea pull request",
+    )
+    pr_parser.add_argument("pipeline_id", help="The 24-char hex pipeline ID")
+    pr_parser.add_argument("--title", required=True, help="Pull request title")
+    pr_parser.add_argument("--body", default="", help="Pull request description")
+    pr_parser.add_argument(
+        "--task", dest="task_id", help="Optional task ID to link and mark submitted"
+    )
+
     subparsers.add_parser("list", help="List all available tools on the MCP server")
 
     args = parser.parse_args()
@@ -286,7 +328,7 @@ async def main():
         parser.print_help()
         return
 
-    client = MCPHttpClient(args.url)
+    client = MCPHttpClient(args.url, auth_token=args.auth_token)
 
     await client.connect()
 
@@ -312,6 +354,10 @@ async def main():
         )
     elif args.command == "update-task-spec":
         await run_update_task_spec(client, args.task_id, args.spec, args.version)
+    elif args.command == "create-pull-request":
+        await run_create_pull_request(
+            client, args.pipeline_id, args.title, args.body, args.task_id
+        )
 
     await client.close()
 

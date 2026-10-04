@@ -22,6 +22,7 @@ the asynchronous session events by overriding :meth:`PiRpcProcess._handle_event`
 import asyncio
 import json
 import logging
+import os
 import uuid
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -60,6 +61,7 @@ class PiRpcProcess:
         session_name: Optional[str] = None,
         resume_session_file: Optional[str] = None,
         persist: Optional[bool] = None,
+        env: Optional[Dict[str, str]] = None,
     ):
         self.model = model
         self.cwd = cwd
@@ -76,6 +78,9 @@ class PiRpcProcess:
         # simply want "whatever the deployment is configured for" do not have to
         # read the config themselves.
         self.persist = persist
+        # Extra environment variables to merge over the backend environment when
+        # spawning Pi (e.g. ``MCP_AUTH_TOKEN`` for interactive sessions).
+        self.env: Optional[Dict[str, str]] = dict(env) if env else None
         # Populated by :meth:`capture_session_identity` from Pi's ``get_state``.
         self.session_id: Optional[str] = None
         self.session_file: Optional[str] = None
@@ -138,14 +143,22 @@ class PiRpcProcess:
             "Spawning Pi RPC process: %s (cwd=%s)", " ".join(cmd), effective_cwd
         )
 
-        self.process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-            cwd=effective_cwd,
-            limit=STDIO_BUFFER_LIMIT,
-        )
+        # Merge the caller-provided overrides over the backend environment so
+        # the child keeps PATH, HOME, etc. while receiving session-specific
+        # values such as MCP_AUTH_TOKEN.
+        spawn_env = {**os.environ, **self.env} if self.env else None
+
+        spawn_kwargs: Dict[str, Any] = {
+            "stdin": asyncio.subprocess.PIPE,
+            "stdout": asyncio.subprocess.PIPE,
+            "stderr": asyncio.subprocess.STDOUT,
+            "cwd": effective_cwd,
+            "limit": STDIO_BUFFER_LIMIT,
+        }
+        if spawn_env is not None:
+            spawn_kwargs["env"] = spawn_env
+
+        self.process = await asyncio.create_subprocess_exec(*cmd, **spawn_kwargs)
         self._read_task = asyncio.create_task(self._read_loop())
         return self.process
 

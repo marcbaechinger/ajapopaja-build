@@ -303,6 +303,24 @@ async def test_start_omits_model_and_accepts_cwd_override():
         args = mock_exec.await_args.args
         assert args == ("pi", "--mode", "rpc")
         assert mock_exec.await_args.kwargs["cwd"] == "/sandbox"
+        assert "env" not in mock_exec.await_args.kwargs
+
+
+@pytest.mark.asyncio
+async def test_start_merges_custom_env(monkeypatch):
+    monkeypatch.setenv("EXISTING_VAR", "inherited")
+    with patch(
+        "api.coderbot.pi_rpc_process.asyncio.create_subprocess_exec",
+        new_callable=AsyncMock,
+    ) as mock_exec:
+        mock_exec.return_value = FakeProcess()
+        session = PiRpcProcess(cwd="/work", env={"MCP_AUTH_TOKEN": "tok"})
+
+        await session.start()
+
+        env = mock_exec.await_args.kwargs["env"]
+        assert env["MCP_AUTH_TOKEN"] == "tok"
+        assert env["EXISTING_VAR"] == "inherited"
 
 
 @pytest.mark.asyncio

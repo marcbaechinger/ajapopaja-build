@@ -98,6 +98,11 @@ MCP_AUTHENTICATION_ENABLED = (
     os.getenv("MCP_AUTHENTICATION_ENABLED", "false").lower() == "true"
 )
 
+# Bearer token injected into interactive Pi sessions so the bundled
+# ``ajapopaja`` skill can authenticate against the MCP server when
+# ``MCP_AUTHENTICATION_ENABLED`` is on. Left empty by default (auth disabled).
+MCP_AUTH_TOKEN = os.getenv("MCP_AUTH_TOKEN", "")
+
 # Bot Logging
 BASEBOT_LOG_ENABLED = os.getenv("BASEBOT_LOG_ENABLED", "true").lower() == "true"
 

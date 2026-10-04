@@ -1216,6 +1216,7 @@ class InteractivePiSession(PiRpcProcess):
         session_record: Optional[PiSession] = None,
         resume_session_file: Optional[str] = None,
         persist: Optional[bool] = None,
+        env: Optional[Dict[str, str]] = None,
     ):
         self.session_uid = session_uid or (
             getattr(session_record, "uid", None) if session_record else None
@@ -1244,6 +1245,7 @@ class InteractivePiSession(PiRpcProcess):
             session_dir=self.session_dir,
             resume_session_file=resume_session_file,
             persist=persist,
+            env=env,
         )
         self.pipeline_id = pipeline_id
         self.bot_type = bot_type
@@ -1307,6 +1309,10 @@ class InteractivePiSession(PiRpcProcess):
             "and manage tasks for this pipeline: `get-task <pipeline_id>`, "
             "`get-task-details <task_id>`, `search-tasks`, "
             "`update-task-design-doc` (`update-design-doc`) and `complete-task`. "
+            "Once you have committed your work, it can also open a pull request "
+            "with `create-pull-request <pipeline_id> --title \"…\" [--body \"…\"] "
+            "[--task <task_id>]`: the server pushes your current branch and "
+            "creates the Gitea pull request. "
             "The skill is located in this repository at "
             "`.pi/skills/ajapopaja/SKILL.md`. Pi discovers project skills from "
             "the `.pi/skills/` directory and global skills from "

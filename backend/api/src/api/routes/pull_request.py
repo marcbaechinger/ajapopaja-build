@@ -27,7 +27,8 @@ from pydantic import BaseModel
 
 from api.auth import get_current_user
 from api.coderbot.manager import coderbot_manager
-from api.git_hosting.gitea import GiteaApiError, GiteaClient
+from api.git_hosting.gitea import GiteaApiError
+from api.git_hosting.pull_requests import create_pipeline_pull_request
 from core import config
 from core.models.models import (
     Pipeline,
@@ -344,22 +345,16 @@ async def _submit_as_gitea_pr(repo, pipeline, pr, commit_message: str) -> str:
     """
     base = git_utils.current_default_branch(repo)
     git_utils.ensure_feature_branch(repo, pr.branch_name)
-    git_utils.push_branch_with_auth(repo, pipeline, pr.branch_name)
-
-    base_url, owner, repo_name = git_utils.resolve_gitea_repo(pipeline.repo_uri)
-    token = pipeline.repo_token or config.GIT_PUSH_TOKEN
-    client = GiteaClient(base_url, token)
     try:
-        return await client.create_pull_request(
-            owner,
-            repo_name,
+        return await create_pipeline_pull_request(
+            pipeline,
+            repo,
             head=pr.branch_name,
             base=base,
             title=commit_message,
-            body=pr.summary,
+            body=pr.summary or "",
         )
     finally:
-        await client.aclose()
         # Restore workspace to default branch
         try:
             repo.git.checkout(base)

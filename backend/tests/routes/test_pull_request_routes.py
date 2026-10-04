@@ -242,11 +242,11 @@ async def test_submit_as_gitea_pr_flow():
         patch("api.routes.pull_request.git_utils.ensure_feature_branch") as mock_ensure,
         patch("api.routes.pull_request.git_utils.push_branch_with_auth") as mock_push,
         patch(
-            "api.routes.pull_request.git_utils.resolve_gitea_repo",
+            "api.git_hosting.pull_requests.git_utils.resolve_gitea_repo",
             return_value=("https://host", "owner", "repo"),
         ),
-        patch("api.routes.pull_request.config.GIT_PUSH_TOKEN", "globaltok"),
-        patch("api.routes.pull_request.GiteaClient") as mock_client_cls,
+        patch("api.git_hosting.pull_requests.config.GIT_PUSH_TOKEN", "globaltok"),
+        patch("api.git_hosting.pull_requests.GiteaClient") as mock_client_cls,
     ):
         mock_client = mock_client_cls.return_value
         mock_client.create_pull_request = AsyncMock(

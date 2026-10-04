@@ -1,6 +1,6 @@
 ---
 name: ajapopaja
-description: Search, manage, and complete tasks using the Ajapopaja Build MCP server. Use this skill to find next tasks, search tasks by keywords/status, view task details, update design documents, and mark tasks as complete.
+description: Search, manage, and complete tasks using the Ajapopaja Build MCP server. Use this skill to find next tasks, search tasks by keywords/status, view task details, update design documents, mark tasks as complete, and create a pull request for your committed work.
 ---
 
 # Ajapopaja Task Management
@@ -84,6 +84,38 @@ Commit the change, then mark the task as `implemented` with the commit hash and 
 ```bash
 python3 ./mcp_client.py --url http://localhost:${PORT:-8081} complete-task <task_id> --commit <hash> --info "summary" --version <v>
 ```
+
+## Create a Pull Request
+
+Use this when you are working interactively in a remote pipeline repository and
+want your committed work opened as a Gitea pull request.
+
+1. **Commit your work on a branch.** The tool refuses to run with a dirty
+   working tree, so stage and commit everything first. If you committed directly
+   onto the default branch, don't worry: the tool creates a `pi/<task_id>` (or
+   `pi/<short-sha>`) branch at HEAD for you, without switching your working tree.
+2. **Run `create-pull-request`.** The server pushes the branch (using the
+   pipeline's own git credentials — you never hold a Gitea token) and opens the
+   pull request against the default branch:
+
+   ```bash
+   python3 ./mcp_client.py --url http://localhost:${PORT:-8081} \
+       create-pull-request <pipeline_id> \
+       --title "Add feature X" \
+       --body "Markdown description"
+   ```
+
+3. **Optionally link a task.** Pass `--task <task_id>` to record the commit and
+   PR URL on the task and mark it `submitted` (when the task's current status
+   allows that transition):
+
+   ```bash
+   python3 ./mcp_client.py --url http://localhost:${PORT:-8081} \
+       create-pull-request <pipeline_id> \
+       --title "Add feature X" --body "…" --task <task_id>
+   ```
+
+The command prints the created PR URL, branch, base branch and commit hash.
 
 ## Auxiliary Actions
 
