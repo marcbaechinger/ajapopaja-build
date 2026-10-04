@@ -19,6 +19,7 @@ import { UserProfileBadge } from './UserProfileBadge.ts';
 import { TaskStatusCounter } from './TaskStatusCounter.ts';
 import { RepositoryStatusBadge } from './RepositoryStatusBadge.ts';
 import { HeaderDialogButtons } from './HeaderDialogButtons.ts';
+import { TaskForm } from './TaskForm.ts';
 import { ReviewNotificationBadge } from './ReviewNotificationBadge.ts';
 import { Icon } from './Icon.ts';
 
@@ -211,7 +212,9 @@ export class PipelineHeaderView {
           </div>
         </div>
 
-        <div class="flex items-center gap-4">
+        <div class="flex items-center gap-3">
+          ${TaskForm.render()}
+          <div class="w-px h-6 bg-app-border" aria-hidden="true"></div>
           ${HeaderDialogButtons.render(pipelineId)}
           ${UserProfileBadge.render(user)}
         </div>

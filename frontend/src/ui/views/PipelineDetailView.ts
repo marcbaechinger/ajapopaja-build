@@ -22,7 +22,6 @@ import { TaskItem } from '../components/TaskItem.ts';
 import { HistoryItemView } from '../components/HistoryItemView.ts';
 import { HistoryDialog } from '../components/HistoryDialog.ts';
 import { StatsDialog } from '../components/StatsDialog.ts';
-import { TaskForm } from '../components/TaskForm.ts';
 import { DesignDocDialog } from '../components/DesignDocDialog.ts';
 import { DesignDocDiffDialog } from '../components/DesignDocDiffDialog.ts';
 import { BacklogView } from '../components/BacklogView.ts';
@@ -701,7 +700,13 @@ export class PipelineDetailView extends View {
 
       try {
         const created = await this.context.taskClient.create(this.pipelineId, title);
+        // The header (and with it the form) may have been re-rendered by a
+        // WebSocket update while the request was in flight, so clear the input
+        // that is currently mounted rather than the (possibly detached) node we
+        // captured before the await.
         titleInput.value = '';
+        const liveInput = this.container?.querySelector<HTMLInputElement>('input[name="task_title"]');
+        if (liveInput) liveInput.value = '';
 
         // Make the newly created task the selected task so it is shown in the main
         // content area immediately. Add it to the local cache so the detail view can
@@ -1381,7 +1386,30 @@ export class PipelineDetailView extends View {
     if (!this.container) return;
     const headerContainer = this.container.querySelector('#pipeline-header-container');
     if (headerContainer) {
+      // The create-task input now lives in the header, which is re-rendered on
+      // every pipeline/task/bot event. Preserve whatever the user has typed (and
+      // the focus/caret) so a background WebSocket update never wipes it.
+      const prevInput = headerContainer.querySelector<HTMLInputElement>('input[name="task_title"]');
+      const value = prevInput?.value ?? '';
+      const hadFocus = !!prevInput && document.activeElement === prevInput;
+      const selectionStart = prevInput?.selectionStart ?? null;
+
       headerContainer.innerHTML = this.renderHeader();
+
+      const nextInput = headerContainer.querySelector<HTMLInputElement>('input[name="task_title"]');
+      if (nextInput && value) {
+        nextInput.value = value;
+        if (hadFocus) {
+          nextInput.focus();
+          if (selectionStart !== null) {
+            try {
+              nextInput.setSelectionRange(selectionStart, selectionStart);
+            } catch {
+              // setSelectionRange is not supported by every input type; ignore.
+            }
+          }
+        }
+      }
     }
   }
 
@@ -1423,7 +1451,6 @@ export class PipelineDetailView extends View {
     return `
       <div class="flex flex-col gap-8 min-w-0 lg:min-w-[350px]">
         <div class="bg-app-surface/30 p-6 rounded-3xl border border-app-border/30 flex flex-col">
-          ${TaskForm.render()}
           <div id="interactive-session-bar" class="mt-6 hidden flex flex-wrap items-center gap-2">
             <button id="start-interactive-btn" data-action-click="start_interactive_session" type="button"
               class="hidden px-3 py-1.5 rounded text-xs font-medium bg-app-accent-2 text-white hover:bg-app-accent-2/80 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
