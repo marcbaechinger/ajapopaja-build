@@ -87,13 +87,6 @@ export interface PiViewOptions {
    */
   logHeightClass?: string;
   /**
-   * When true, the log area grows to fill the remaining vertical space of its
-   * parent instead of using a fixed height. The parent must be a flex column
-   * (e.g. a full-height tab panel); the log then scrolls internally and tracks
-   * the window size. Takes precedence over {@link logHeightClass}. Default false.
-   */
-  fillHeight?: boolean;
-  /**
    * Optional action button rendered in the empty-state placeholder that shows
    * when the log has no content and no session is running.
    */
@@ -161,7 +154,6 @@ export class PiView {
   private isFollowMode: boolean;
   private showFooter: boolean;
   private logHeightClass: string;
-  private fillHeight: boolean;
   private deferInitialRender: boolean;
   private onOpenDialog?: () => void;
   private unsubs: (() => void)[] = [];
@@ -276,7 +268,6 @@ export class PiView {
     this.isFollowMode = options.followInitially ?? true;
     this.blocksCollapsed = options.blocksCollapsedInitially ?? false;
     this.logHeightClass = options.logHeightClass ?? 'h-[60vh]';
-    this.fillHeight = options.fillHeight ?? false;
     this.deferInitialRender = options.deferInitialRender ?? false;
     this.autoFormatText = options.autoFormatText ?? true;
     this.emptyStateAction = options.emptyStateAction;
@@ -354,12 +345,8 @@ export class PiView {
   private buildLogArea(): HTMLElement {
     const container = document.createElement('div');
     container.id = 'log-content-container';
-    // `fillHeight` swaps the fixed height for `flex-1 min-h-0`, letting the log
-    // consume the remaining space of a flex-column parent (e.g. a tab panel)
-    // and keep the scrollable output anchored to the bottom of the window.
-    const heightClass = this.fillHeight ? 'flex-1 min-h-0' : this.logHeightClass;
     container.className =
-      `relative bg-black text-green-400 px-4 pb-4 font-mono text-[11px] leading-tight overflow-y-auto ${heightClass} custom-scrollbar selection:bg-app-accent-1/30`;
+      `relative bg-black text-green-400 px-4 pb-4 font-mono text-[11px] leading-tight overflow-y-auto ${this.logHeightClass} custom-scrollbar selection:bg-app-accent-1/30`;
     const statusBar = document.createElement('div');
     statusBar.id = 'piview-status-bar';
     statusBar.className = 'sticky top-0 z-10 bg-black/95 border-b border-app-border/40 px-1 pb-1 mb-1 flex items-center gap-2';

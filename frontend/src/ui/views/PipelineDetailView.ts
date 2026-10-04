@@ -1421,8 +1421,8 @@ export class PipelineDetailView extends View {
 
   private renderPrepColumn(): string {
     return `
-      <div class="flex flex-col gap-8 min-w-0 lg:min-w-[350px] flex-1">
-        <div class="bg-app-surface/30 p-6 rounded-3xl border border-app-border/30 flex flex-col flex-1">
+      <div class="flex flex-col gap-8 min-w-0 lg:min-w-[350px]">
+        <div class="bg-app-surface/30 p-6 rounded-3xl border border-app-border/30 flex flex-col">
           ${TaskForm.render()}
           <div id="interactive-session-bar" class="mt-6 hidden flex flex-wrap items-center gap-2">
             <button id="start-interactive-btn" data-action-click="start_interactive_session" type="button"
@@ -1442,16 +1442,11 @@ export class PipelineDetailView extends View {
             </button>
           </div>
           <div id="pipeline-session-list" class="mt-3 hidden flex flex-col gap-2"></div>
-          <!-- Pull requests sit above the tabbed area so the tabs can grow into
-               all remaining vertical space down to the window edge. -->
-          <div id="col-prep" class="space-y-10 mt-6 shrink-0">
-            <p class="text-app-muted animate-pulse text-center py-10">Loading backlog...</p>
-          </div>
           <!-- Three tabs over three pre-rendered DOM fragments. The tab list is
                always visible; the Coding Agent tab is hidden while no session
                is attached to this pipeline. "Task editor" is the default. -->
           <div id="content-tablist" role="tablist" aria-label="Pipeline content"
-            class="mt-6 flex items-center gap-1 border-b border-app-border/40 shrink-0">
+            class="mt-6 flex items-center gap-1 border-b border-app-border/40">
             <button id="tab-task-editor" data-action-click="select_content_tab" data-content-tab="task-editor" type="button"
               role="tab" aria-selected="true" aria-controls="selected-task-view"
               class="px-3 py-2 text-xs font-bold uppercase tracking-widest border-b-2 -mb-px transition-colors cursor-pointer border-app-accent-1 text-app-accent-1">
@@ -1468,11 +1463,14 @@ export class PipelineDetailView extends View {
               File Browser
             </button>
           </div>
-          <div id="selected-task-view" role="tabpanel" aria-labelledby="tab-task-editor" class="mt-6 flex-1 min-h-0 overflow-y-auto">
+          <div id="selected-task-view" role="tabpanel" aria-labelledby="tab-task-editor" class="mt-6">
             <p class="text-app-muted/60 text-xs italic text-center border border-dashed border-app-border/40 rounded-xl py-6 px-3">Select a task from the backlog to open it here.</p>
           </div>
-          <div id="interactive-coding-view-mount" role="tabpanel" aria-labelledby="tab-coding-agent" class="mt-6 hidden flex-1 min-h-0 flex flex-col overflow-hidden"></div>
-          <div id="file-browser-view-mount" role="tabpanel" aria-labelledby="tab-file-browser" class="mt-6 hidden flex-1 min-h-0 flex flex-col overflow-y-auto"></div>
+          <div id="interactive-coding-view-mount" role="tabpanel" aria-labelledby="tab-coding-agent" class="mt-6 hidden"></div>
+          <div id="file-browser-view-mount" role="tabpanel" aria-labelledby="tab-file-browser" class="mt-6 hidden"></div>
+          <div id="col-prep" class="space-y-10 mt-6">
+            <p class="text-app-muted animate-pulse text-center py-10">Loading backlog...</p>
+          </div>
         </div>
       </div>
     `;
@@ -1497,7 +1495,7 @@ export class PipelineDetailView extends View {
 
           <!-- Main Content Area (Preparation / PullRequests only; history moved to sidebar) -->
           <main class="flex-[2] min-w-0 overflow-y-auto">
-            <div class="w-full p-4 min-h-full flex flex-col">
+            <div class="w-full p-4">
               ${this.renderPrepColumn()}
             </div>
           </main>
