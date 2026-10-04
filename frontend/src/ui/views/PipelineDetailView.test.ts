@@ -1259,6 +1259,7 @@ describe('PipelineDetailView Interactive Session', () => {
   let mockContext: any;
   let container: HTMLElement;
   let dataManagerHandlers: Record<string, Function> = {};
+  let sessionsListener: ((sessions: any[]) => void) | null = null;
 
   const getAction = (name: string) =>
     mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === name)![1];
@@ -1268,6 +1269,7 @@ describe('PipelineDetailView Interactive Session', () => {
     container = document.createElement('div');
     document.body.appendChild(container);
     dataManagerHandlers = {};
+    sessionsListener = null;
     LocalStorageManager.resetInstances();
     vi.clearAllMocks();
 
@@ -1314,6 +1316,12 @@ describe('PipelineDetailView Interactive Session', () => {
         stopSession: vi.fn().mockResolvedValue(undefined),
         pauseSession: vi.fn().mockResolvedValue(undefined),
         getSessions: vi.fn().mockReturnValue([]),
+        onSessionsChange: vi.fn((listener: (sessions: any[]) => void) => {
+          sessionsListener = listener;
+          return () => {
+            sessionsListener = null;
+          };
+        }),
       },
       fileBrowserClient: {
         listDirectory: vi.fn().mockResolvedValue({ path: '', parent: null, entries: [] }),
@@ -1577,5 +1585,108 @@ describe('PipelineDetailView Interactive Session', () => {
     expect(container.querySelector('#file-browser-view-mount')).toBe(fileMount);
     expect(fileMount.classList.contains('hidden')).toBe(false);
     expect(mockContext.fileBrowserClient.listDirectory).toHaveBeenCalledTimes(1);
+  });
+
+  it('live-updates the inline session list when the service notifies a completion', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await view.loadPipeline();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const sessionList = container.querySelector('#pipeline-session-list') as HTMLElement;
+    expect(sessionList.classList.contains('hidden')).toBe(true);
+
+    // A batch CoderBot session for this pipeline completes after mount.
+    mockContext.interactiveCodingService.getSessions.mockReturnValue([
+      {
+        uid: 'b1',
+        kind: 'coderbot',
+        pipeline_id: 'p1',
+        task_id: 't1',
+        status: 'completed',
+        label: 'Batch run',
+      },
+    ]);
+    expect(sessionsListener).not.toBeNull();
+    sessionsListener!([{ uid: 'b1' }]);
+
+    expect(sessionList.classList.contains('hidden')).toBe(false);
+    const row = sessionList.querySelector('[data-session-uid="b1"]') as HTMLElement;
+    expect(row).not.toBeNull();
+    expect(row.textContent).toContain('Discard');
+  });
+
+  it('ignores a session belonging to another pipeline when live-updating', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await view.loadPipeline();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const sessionList = container.querySelector('#pipeline-session-list') as HTMLElement;
+    mockContext.interactiveCodingService.getSessions.mockReturnValue([
+      { uid: 'other', kind: 'coderbot', pipeline_id: 'p2', status: 'completed' },
+    ]);
+    sessionsListener!([{ uid: 'other' }]);
+
+    expect(sessionList.querySelector('[data-session-uid="other"]')).toBeNull();
+    expect(sessionList.classList.contains('hidden')).toBe(true);
+  });
+
+  it('repaints only the list without disturbing the active tab or DOM fragments', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await view.loadPipeline();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const selected = container.querySelector('#selected-task-view') as HTMLElement;
+    const mount = container.querySelector('#interactive-coding-view-mount') as HTMLElement;
+    const contentTabBefore = (view as any).contentTab;
+    const selectedHiddenBefore = selected.classList.contains('hidden');
+    const mountHiddenBefore = mount.classList.contains('hidden');
+
+    mockContext.interactiveCodingService.getSessions.mockReturnValue([
+      { uid: 'b1', kind: 'coderbot', pipeline_id: 'p1', status: 'completed' },
+    ]);
+    sessionsListener!([{ uid: 'b1' }]);
+
+    expect((view as any).contentTab).toBe(contentTabBefore);
+    expect(selected.classList.contains('hidden')).toBe(selectedHiddenBefore);
+    expect(mount.classList.contains('hidden')).toBe(mountHiddenBefore);
+    // The DOM fragments keep their identity (no re-render).
+    expect(container.querySelector('#selected-task-view')).toBe(selected);
+    expect(container.querySelector('#interactive-coding-view-mount')).toBe(mount);
+  });
+
+  it('keeps the live session list hidden for local pipelines', async () => {
+    mockContext.pipelineClient.get.mockResolvedValue({ id: 'p1', name: 'Pipe 1' });
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await view.loadPipeline();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const sessionList = container.querySelector('#pipeline-session-list') as HTMLElement;
+    mockContext.interactiveCodingService.getSessions.mockReturnValue([
+      { uid: 'b1', kind: 'coderbot', pipeline_id: 'p1', status: 'completed' },
+    ]);
+    sessionsListener!([{ uid: 'b1' }]);
+
+    expect(sessionList.classList.contains('hidden')).toBe(true);
+  });
+
+  it('unmount removes the onSessionsChange subscription', async () => {
+    const unsub = vi.fn();
+    mockContext.interactiveCodingService.onSessionsChange.mockReturnValue(unsub);
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await view.loadPipeline();
+
+    view.unmount();
+
+    expect(unsub).toHaveBeenCalled();
   });
 });

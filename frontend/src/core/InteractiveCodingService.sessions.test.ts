@@ -200,6 +200,61 @@ describe('InteractiveCodingService session cache', () => {
     expect(listener).toHaveBeenCalled();
   });
 
+  it('CODERBOT_COMPLETED upserts a completed batch session and notifies', async () => {
+    const listener = vi.fn();
+    service.onSessionsChange(listener);
+
+    ws.dispatch('CODERBOT_COMPLETED', {
+      pipeline_id: 'p1',
+      task_id: 't1',
+      session_uid: 'batch-1',
+    });
+
+    const record = service.getSession('batch-1');
+    expect(record?.status).toBe('completed');
+    expect(record?.kind).toBe('coderbot');
+    expect(record?.pipeline_id).toBe('p1');
+    expect(record?.task_id).toBe('t1');
+    expect(listener).toHaveBeenCalled();
+
+    // Let the best-effort reconcile settle.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  it('CODERBOT_COMPLETED reconciles with pipelineId and without a kind filter', async () => {
+    ws.dispatch('CODERBOT_COMPLETED', {
+      pipeline_id: 'p1',
+      task_id: 't1',
+      session_uid: 'batch-1',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(client.listSessions).toHaveBeenCalledWith({ pipelineId: 'p1' });
+  });
+
+  it('CODERBOT_STARTED upserts a running batch session for cache completeness', () => {
+    ws.dispatch('CODERBOT_STARTED', {
+      pipeline_id: 'p1',
+      task_id: 't1',
+      session_uid: 'batch-2',
+    });
+    const record = service.getSession('batch-2');
+    expect(record?.status).toBe('running');
+    expect(record?.kind).toBe('coderbot');
+    expect(record?.pipeline_id).toBe('p1');
+  });
+
+  it('CODERBOT_COMPLETED without a session_uid is a no-op', () => {
+    const listener = vi.fn();
+    service.onSessionsChange(listener);
+    listener.mockClear();
+
+    ws.dispatch('CODERBOT_COMPLETED', { pipeline_id: 'p1', task_id: 't1' });
+
+    expect(listener).not.toHaveBeenCalled();
+    expect(service.getSessions()).toHaveLength(0);
+    expect(client.listSessions).not.toHaveBeenCalled();
+  });
+
   it('a late INTERACTIVE_STARTED for a resumed session does not clear replayed history', async () => {
     client.getSessionEvents.mockResolvedValue([
       {

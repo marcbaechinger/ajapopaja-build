@@ -1531,6 +1531,15 @@ export class PipelineDetailView extends View {
       this.context.interactiveCodingService?.onSessionChange?.(interactiveCb);
     if (interactiveUnsub) this.unsubs.push(interactiveUnsub);
 
+    // React to durable-session list changes (e.g. a batch CoderBot session
+    // completing after this view was opened) by repainting ONLY the inline
+    // session list, so tabs/editor/file-browser DOM stay untouched.
+    const sessionsUnsub =
+      this.context.interactiveCodingService?.onSessionsChange?.(() =>
+        this.refreshPipelineSessionList()
+      );
+    if (sessionsUnsub) this.unsubs.push(sessionsUnsub);
+
     // Reconnect a running CoderBot session to this view (e.g. after a reload).
     this.refreshEnginePiSlot();
     Promise.resolve(this.context.interactiveCodingService?.refreshSession?.()).then(() => {
@@ -2115,6 +2124,17 @@ export class PipelineDetailView extends View {
     setTabActive(fileTab, showFileBrowser);
 
     this.renderPipelineSessionList(isRemote ? resumable : []);
+  }
+
+  /**
+   * Re-render ONLY the inline per-pipeline session list. Used by the live
+   * `onSessionsChange` path so a cache update never disturbs the tabs, editors,
+   * file browser, backlog or execution-engine DOM.
+   */
+  private refreshPipelineSessionList(): void {
+    if (!this.container?.querySelector('#pipeline-session-list')) return;
+    const isRemote = !!this.pipeline?.repo_uri;
+    this.renderPipelineSessionList(isRemote ? this.pipelineResumableSessions() : []);
   }
 
   /** Resumable (paused/completed/failed) sessions belonging to this pipeline. */

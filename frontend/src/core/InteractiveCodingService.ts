@@ -147,6 +147,52 @@ export class InteractiveCodingService implements PiSessionService {
       if (!this.matches(msg.payload)) return;
       this.logReducer.handleEvent(msg.payload?.event);
     });
+
+    // Batch CoderBot lifecycle. These events carry `bot_type` different from
+    // `interactive`, so they must NOT go through `matches()`. They keep the
+    // durable-session cache (and therefore every consumer's session list) live
+    // when a batched run starts or finishes while a view is already open.
+    this.wsClient.on('CODERBOT_STARTED', (msg) => this.handleBatchStarted(msg.payload));
+    this.wsClient.on('CODERBOT_COMPLETED', (msg) => this.handleBatchCompleted(msg.payload));
+  }
+
+  /**
+   * Track a batch CoderBot run in the durable-session cache. Kept intentionally
+   * minimal: the inline pipeline list only shows resumable rows, so this is for
+   * cache completeness (the global Sessions panel / header badge).
+   */
+  private handleBatchStarted(payload: any) {
+    const uid = payload?.session_uid;
+    if (!uid) return;
+    this.upsertSession({
+      uid,
+      kind: 'coderbot',
+      status: 'running',
+      pipeline_id: payload?.pipeline_id ?? null,
+      task_id: payload?.task_id ?? null,
+      last_active_at: new Date().toISOString(),
+    } as PiSessionSummary);
+  }
+
+  /**
+   * A batch CoderBot run finished: the durable record is now `completed` (or
+   * `failed`, which the reconcile below will correct). Upsert optimistically so
+   * the row appears synchronously, then best-effort reconcile the full record
+   * from the server — scoped to the pipeline and WITHOUT the `kind` filter so
+   * batch records are returned.
+   */
+  private handleBatchCompleted(payload: any) {
+    const uid = payload?.session_uid;
+    if (!uid) return;
+    this.upsertSession({
+      uid,
+      kind: 'coderbot',
+      status: 'completed',
+      pipeline_id: payload?.pipeline_id ?? null,
+      task_id: payload?.task_id ?? null,
+      last_active_at: new Date().toISOString(),
+    } as PiSessionSummary);
+    void this.refreshSessions({ pipelineId: payload?.pipeline_id ?? undefined });
   }
 
   /**
