@@ -87,6 +87,13 @@ export interface PiViewOptions {
    */
   logHeightClass?: string;
   /**
+   * When true, the log area can be resized vertically by dragging its bottom
+   * edge, so an embedding host can let the user tune the height to fit. The
+   * initial {@link logHeightClass} still applies until the first resize; width
+   * is never resizable. Default false.
+   */
+  resizable?: boolean;
+  /**
    * Optional action button rendered in the empty-state placeholder that shows
    * when the log has no content and no session is running.
    */
@@ -154,6 +161,7 @@ export class PiView {
   private isFollowMode: boolean;
   private showFooter: boolean;
   private logHeightClass: string;
+  private resizable: boolean;
   private deferInitialRender: boolean;
   private onOpenDialog?: () => void;
   private unsubs: (() => void)[] = [];
@@ -268,6 +276,7 @@ export class PiView {
     this.isFollowMode = options.followInitially ?? true;
     this.blocksCollapsed = options.blocksCollapsedInitially ?? false;
     this.logHeightClass = options.logHeightClass ?? 'h-[60vh]';
+    this.resizable = options.resizable ?? false;
     this.deferInitialRender = options.deferInitialRender ?? false;
     this.autoFormatText = options.autoFormatText ?? true;
     this.emptyStateAction = options.emptyStateAction;
@@ -345,8 +354,13 @@ export class PiView {
   private buildLogArea(): HTMLElement {
     const container = document.createElement('div');
     container.id = 'log-content-container';
+    // `resize-y` needs overflow other than `visible`; the log already scrolls
+    // vertically, and `overflow-x-hidden` keeps the resize handle reliable in
+    // browsers that require both axes to be non-visible (the log wraps text, so
+    // no horizontal scrollbar is lost).
+    const resizeClass = this.resizable ? 'resize-y overflow-x-hidden' : '';
     container.className =
-      `relative bg-black text-green-400 px-4 pb-4 font-mono text-[11px] leading-tight overflow-y-auto ${this.logHeightClass} custom-scrollbar selection:bg-app-accent-1/30`;
+      `relative bg-black text-green-400 px-4 pb-4 font-mono text-[11px] leading-tight overflow-y-auto ${resizeClass} ${this.logHeightClass} custom-scrollbar selection:bg-app-accent-1/30`;
     const statusBar = document.createElement('div');
     statusBar.id = 'piview-status-bar';
     statusBar.className = 'sticky top-0 z-10 bg-black/95 border-b border-app-border/40 px-1 pb-1 mb-1 flex items-center gap-2';

@@ -65,7 +65,11 @@ export class InteractiveCodingView {
       // The header toggle expands it on demand.
       this.piView = new PiView(this.service, mount, {
         showFooter: false,
-        logHeightClass: 'h-[46vh]',
+        // Roughly 150% of the previous h-[46vh]: a taller log without making the
+        // whole tab area grow to its content. The user can drag the log's bottom
+        // edge to tune the height themselves.
+        logHeightClass: 'h-[69vh]',
+        resizable: true,
         blocksCollapsedInitially: true,
       });
       this.piView.render();

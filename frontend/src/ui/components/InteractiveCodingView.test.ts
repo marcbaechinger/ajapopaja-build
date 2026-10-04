@@ -172,6 +172,14 @@ describe('InteractiveCodingView', () => {
     expect(piViewInstances[0].root.id).toBe('interactive-piview-mount');
   });
 
+  it('gives the embedded PiView a larger, vertically resizable log', () => {
+    view.render();
+    // ~150% of the previous h-[46vh], without forcing the whole tab area to
+    // grow to its content, and let the user drag the height to fit.
+    expect(piViewInstances[0].options.logHeightClass).toBe('h-[69vh]');
+    expect(piViewInstances[0].options.resizable).toBe(true);
+  });
+
   it('mounts the InteractivePromptView into the composer slot', () => {
     view.render();
     expect(promptViewInstances).toHaveLength(1);

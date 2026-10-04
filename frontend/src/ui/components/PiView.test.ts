@@ -139,6 +139,31 @@ describe('PiView', () => {
     expect(compactMount.querySelector('#log-content-container')?.className).toContain('h-[38vh]');
   });
 
+  it('keeps the log a fixed height by default and supports vertical resize when enabled', () => {
+    const { service } = createStubService();
+
+    const defaultMount = document.createElement('div');
+    const defaultView = new PiView(service, defaultMount);
+    defaultView.render();
+    const defaultLog = defaultMount.querySelector('#log-content-container') as HTMLElement;
+    expect(defaultLog.className).not.toContain('resize-y');
+    defaultView.destroy();
+
+    const resizeMount = document.createElement('div');
+    const resizeView = new PiView(service, resizeMount, {
+      logHeightClass: 'h-[69vh]',
+      resizable: true,
+    });
+    resizeView.render();
+    const resizeLog = resizeMount.querySelector('#log-content-container') as HTMLElement;
+    // The fixed height still applies until the user drags the handle…
+    expect(resizeLog.className).toContain('h-[69vh]');
+    // …and `resize-y` restricts the drag to the height (never the width).
+    expect(resizeLog.className).toContain('resize-y');
+    expect(resizeLog.className).not.toContain('resize-x');
+    expect(resizeLog.className).not.toContain('resize ');
+  });
+
   it('separates adjacent log sections by about one line height', () => {
     const { service, emitBlocks } = createStubService();
     const view = new PiView(service, mount);
