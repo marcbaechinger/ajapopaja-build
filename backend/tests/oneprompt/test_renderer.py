@@ -81,31 +81,12 @@ def test_render_preserves_surrounding_body_text():
     assert result == 'Pipeline: p\n\nSpec:\n"""- a\n- b"""'
 
 
-def test_render_bundled_template_end_to_end():
-    registry_context = {
-        "pipeline_name": "Ajapopaja",
-        "pipeline_id": "p-1",
-        "task_title": "Add feature",
-        "task_spec": "- do a thing",
-    }
-    from api.oneprompt.registry import registry
-
-    template = registry.get("task_elaborate_spec")
-    result = render_template(template, registry_context)
-
-    assert "Pipeline: Ajapopaja (id p-1)" in result
-    assert "Task title: Add feature" in result
-    assert '"""- do a thing"""' in result
-    # Every placeholder was substituted: no literal token is left behind.
-    assert "$" not in result
-
-
 def test_bundled_templates_render_model_from_one_prompt_config():
     from api.oneprompt.registry import registry
 
     config = SimpleNamespace(ONE_PROMPT_OLLAMA_MODEL="one-shot-template-model")
 
-    for prompt_id in ("task_elaborate_spec", "session_generate_title"):
+    for prompt_id in ("session_generate_title",):
         template = registry.get(prompt_id)
         assert template.model == "${ONE_PROMPT_OLLAMA_MODEL}"
         rendered = render_template(template.model, {}, environment={}, config=config)

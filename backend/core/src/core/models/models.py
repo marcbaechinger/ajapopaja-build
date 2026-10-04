@@ -197,6 +197,7 @@ class Pipeline(Document):
     archbot_model: Optional[str] = None
     reviewbot_model: Optional[str] = None
     docbot_model: Optional[str] = None
+    specagent_model: Optional[str] = None
     coderbot_model: Optional[str] = None
     version: int = 1
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -297,6 +298,7 @@ class Pipeline(Document):
         "archbot_model",
         "reviewbot_model",
         "docbot_model",
+        "specagent_model",
         "coderbot_model",
     )
     @classmethod

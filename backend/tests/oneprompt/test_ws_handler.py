@@ -454,4 +454,4 @@ def test_initialize_oneprompt_loads_bundled_templates():
 
     templates = initialize_oneprompt(registry=registry)
 
-    assert "task_elaborate_spec" in templates
+    assert "session_generate_title" in templates

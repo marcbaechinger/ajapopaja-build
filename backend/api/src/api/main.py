@@ -50,6 +50,7 @@ from api.routes.editor_commands import router as editor_router
 from api.routes.file_browser import router as file_browser_router
 from api.reviewbot.router import router as reviewbot_router
 from api.archbot.router import router as archbot_router
+from api.specagent.router import router as specagent_router
 from api.coderbot.manager import coderbot_manager
 from api.coderbot.router import router as coderbot_router
 from api.coderbot.session_title import register_session_title_hooks
@@ -292,6 +293,7 @@ api_router.include_router(docbot_router)
 api_router.include_router(editor_router)
 api_router.include_router(reviewbot_router)
 api_router.include_router(archbot_router)
+api_router.include_router(specagent_router)
 api_router.include_router(coderbot_router)
 api_router.include_router(pull_request_router)
 api_router.include_router(dev_server_router)

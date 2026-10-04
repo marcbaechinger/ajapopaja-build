@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { PipelineDetailView } from './PipelineDetailView.ts';
 import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
 import { TaskStatus } from '../../core/domain.ts';
@@ -24,6 +24,7 @@ import { DiffDialog } from '../components/DiffDialog.ts';
 import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
 import { IteratePullRequestDialog } from '../components/IteratePullRequestDialog.ts';
 import { InteractiveCodingView } from '../components/InteractiveCodingView.ts';
+import { setTaskSpecProposalUpdater } from '../components/SpecSection.ts';
 
 vi.mock('../components/ConfirmationDialog.ts', () => ({
   ConfirmationDialog: vi.fn(function ConfirmationDialog() {
@@ -1723,5 +1724,179 @@ describe('PipelineDetailView Interactive Session', () => {
     view.unmount();
 
     expect(unsub).toHaveBeenCalled();
+  });
+});
+
+describe('PipelineDetailView SpecAgent', () => {
+  let mockContext: any;
+  let container: HTMLElement;
+  let dataManagerHandlers: Record<string, Function> = {};
+
+  const getAction = (name: string) =>
+    mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === name)![1];
+
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    dataManagerHandlers = {};
+
+    mockContext = {
+      actionRegistry: { register: vi.fn() },
+      wsClient: { on: vi.fn().mockReturnValue(() => {}) },
+      dataManager: {
+        on: vi.fn((event: string, handler: Function) => {
+          dataManagerHandlers[event] = handler;
+          return () => {};
+        }),
+        updateTask: vi.fn(),
+        updatePipeline: vi.fn(),
+      },
+      authService: {
+        getUser: vi.fn().mockReturnValue({ username: 'testuser' }),
+        getAccessToken: vi.fn().mockReturnValue('token'),
+      },
+      pipelineClient: {
+        get: vi.fn().mockResolvedValue({ id: 'p1', name: 'Pipe 1' }),
+        getGitStatus: vi.fn().mockResolvedValue({ staged: 0, unstaged: 0, untracked: 0 }),
+      },
+      taskClient: {
+        listByPipeline: vi.fn().mockResolvedValue([]),
+        listCompletedByPipeline: vi.fn().mockResolvedValue({ tasks: [], total_count: 0 }),
+        updateDetails: vi.fn().mockResolvedValue({ id: 't1' }),
+      },
+      specBotClient: {
+        trigger: vi.fn().mockResolvedValue(undefined),
+        getProposal: vi.fn().mockResolvedValue({
+          task_id: 't1',
+          pipeline_id: 'p1',
+          spec_md: '# Elaborated\n\nBody',
+          rationale: 'because',
+        }),
+        rejectProposal: vi.fn().mockResolvedValue(undefined),
+      },
+      pullRequestClient: { getPullRequestsByPipeline: vi.fn().mockResolvedValue([]) },
+      systemClient: { isOllamaAvailable: vi.fn().mockResolvedValue(true) },
+    };
+
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn(() => null),
+      setItem: vi.fn(),
+    });
+  });
+
+  afterEach(() => {
+    setTaskSpecProposalUpdater(null);
+  });
+
+  const renderTaskShell = () => {
+    container.innerHTML = `
+      <div data-task-id="t1">
+        <div class="spec-container">
+          <div class="spec-display">Spec</div>
+        </div>
+      </div>
+    `;
+  };
+
+  it('registers a trigger_specagent action that calls the client', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+
+    const action = getAction('trigger_specagent');
+    const el = document.createElement('button');
+    el.setAttribute('data-task-id', 't1');
+
+    await action(null, el);
+
+    expect(mockContext.specBotClient.trigger).toHaveBeenCalledWith('p1', 't1');
+    expect((view as any).specagentState).toEqual({ status: 'inProgress', taskId: 't1' });
+  });
+
+  it('renders the proposal inline on SPECAGENT_SPEC_READY', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+    renderTaskShell();
+
+    const handler = dataManagerHandlers['ws:SPECAGENT_SPEC_READY:p1'];
+    expect(handler).toBeDefined();
+    handler({ task_id: 't1', pipeline_id: 'p1' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mockContext.specBotClient.getProposal).toHaveBeenCalledWith('p1', 't1');
+    const specContainer = container.querySelector('[data-task-id="t1"] .spec-container')!;
+    expect(specContainer.querySelector('.spec-proposal-result')).toBeTruthy();
+    expect(specContainer.textContent).toContain('Suggested Specification');
+    expect(specContainer.querySelector('[data-spec-proposal-action="accept"]')).toBeTruthy();
+    expect(specContainer.querySelector('[data-spec-proposal-action="reject"]')).toBeTruthy();
+  });
+
+  it('ignores a SPECAGENT_SPEC_READY event for another pipeline', () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+    renderTaskShell();
+
+    dataManagerHandlers['ws:SPECAGENT_SPEC_READY:p1']({
+      task_id: 't1',
+      pipeline_id: 'other',
+    });
+
+    expect(mockContext.specBotClient.getProposal).not.toHaveBeenCalled();
+  });
+
+  it('toggles the in-progress state on SPECAGENT_STARTED/COMPLETED', () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+
+    dataManagerHandlers['ws:SPECAGENT_STARTED:p1']({ task_id: 't1' });
+    expect((view as any).specagentState).toEqual({ status: 'inProgress', taskId: 't1' });
+
+    dataManagerHandlers['ws:SPECAGENT_COMPLETED:p1']({ id: 't1' });
+    expect((view as any).specagentState).toEqual({ status: 'none', taskId: null });
+  });
+
+  it('accept writes the spec back through the registered updater', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+    renderTaskShell();
+
+    const updater = vi.fn().mockResolvedValue(undefined);
+    setTaskSpecProposalUpdater(updater);
+
+    dataManagerHandlers['ws:SPECAGENT_SPEC_READY:p1']({
+      task_id: 't1',
+      pipeline_id: 'p1',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const specContainer = container.querySelector('[data-task-id="t1"] .spec-container')!;
+    specContainer
+      .querySelector<HTMLButtonElement>('[data-spec-proposal-action="accept"]')!
+      .click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(updater).toHaveBeenCalledWith('t1', expect.stringContaining('# Elaborated'));
+    expect(specContainer.querySelector('.spec-proposal-result')).toBeFalsy();
+  });
+
+  it('reject clears the proposal and calls SpecBotClient.rejectProposal', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+    renderTaskShell();
+
+    dataManagerHandlers['ws:SPECAGENT_SPEC_READY:p1']({
+      task_id: 't1',
+      pipeline_id: 'p1',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const specContainer = container.querySelector('[data-task-id="t1"] .spec-container')!;
+    specContainer
+      .querySelector<HTMLButtonElement>('[data-spec-proposal-action="reject"]')!
+      .click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mockContext.specBotClient.rejectProposal).toHaveBeenCalledWith('p1', 't1');
+    expect(specContainer.querySelector('.spec-proposal-result')).toBeFalsy();
   });
 });

@@ -39,6 +39,11 @@ export interface ArchbotState {
   taskId: string | null;
 }
 
+export interface SpecAgentState {
+  status: 'none' | 'inProgress' | 'ready';
+  taskId: string | null;
+}
+
 export interface CoderbotState {
   status: 'none' | 'inProgress' | 'completed';
   taskId: string | null;
@@ -56,6 +61,7 @@ export interface PipelineHeaderViewProps {
   docbotState: DocbotState;
   reviewbotState: ReviewbotState;
   archbotState?: ArchbotState;
+  specagentState?: SpecAgentState;
   coderbotState?: CoderbotState;
   devProcessState?: DevProcessState;
   user: any;
@@ -66,7 +72,7 @@ export interface PipelineHeaderViewProps {
 
 export class PipelineHeaderView {
   static render(props: PipelineHeaderViewProps): string {
-    const { pipeline, pipelineId, docbotState, reviewbotState, archbotState, coderbotState, devProcessState, user, allTasks, gitStatus, pendingReviews } = props;
+    const { pipeline, pipelineId, docbotState, reviewbotState, archbotState, specagentState, coderbotState, devProcessState, user, allTasks, gitStatus, pendingReviews } = props;
 
     let docbotBannerHtml = '';
     if (docbotState.status === 'inProgress') {
@@ -124,6 +130,19 @@ export class PipelineHeaderView {
             <span class="relative inline-flex rounded-full h-2 w-2 bg-purple-500"></span>
           </span>
           <span class="font-bold tracking-wide uppercase">ArchBot Designing...</span>
+        </div>
+      `;
+    }
+
+    let specagentBannerHtml = '';
+    if (specagentState && specagentState.status === 'inProgress') {
+      specagentBannerHtml = `
+        <div class="inline-flex bg-teal-500/10 border border-teal-500/30 text-teal-400 rounded-full px-3 py-1 text-[10px] shadow-sm items-center gap-2">
+          <span class="relative flex h-2 w-2">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-teal-500"></span>
+          </span>
+          <span class="font-bold tracking-wide uppercase">SpecBot Elaborating...</span>
         </div>
       `;
     }
@@ -190,6 +209,7 @@ export class PipelineHeaderView {
                 ${docbotBannerHtml}
                 ${reviewbotBannerHtml}
                 ${archbotBannerHtml}
+                ${specagentBannerHtml}
                 ${coderbotBannerHtml}
                 ${devServerBannerHtml}
                 ${ReviewNotificationBadge.render(pendingReviews, allTasks)}

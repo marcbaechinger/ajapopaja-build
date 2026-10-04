@@ -274,25 +274,3 @@ async def provide_context(prompt_id: str, context: Any) -> dict:
 
 #: Alias used by callers/tests that want to restore the default state.
 reset_context_providers = register_context_providers
-
-
-def _install_default_providers() -> None:
-    """Register the bundled use case's provider on import.
-
-    The first use case (``task_elaborate_spec``) needs the task/pipeline
-    enrichment out of the box; later prompts can register their own providers
-    explicitly. Registration is skipped when a hook is already present so that
-    importing the module never clobbers an explicitly registered hook.
-    """
-
-    from api.oneprompt.hooks import has_hook
-
-    for prompt_id in DEFAULT_CONTEXT_PROMPTS:
-        if not has_hook(prompt_id):
-            register_hook(
-                prompt_id,
-                PromptHook(pre_render=load_task_and_pipeline),
-            )
-
-
-_install_default_providers()

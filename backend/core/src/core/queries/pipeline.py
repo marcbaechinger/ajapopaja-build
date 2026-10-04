@@ -125,6 +125,7 @@ async def update_pipeline(
     archbot_model: Any = _UNSET,
     reviewbot_model: Any = _UNSET,
     docbot_model: Any = _UNSET,
+    specagent_model: Any = _UNSET,
     coderbot_model: Any = _UNSET,
 ) -> Pipeline:
     pipeline = await get_pipeline_by_id(pipeline_id)
@@ -190,6 +191,8 @@ async def update_pipeline(
         pipeline.reviewbot_model = _normalize_model_override(reviewbot_model)
     if docbot_model is not _UNSET:
         pipeline.docbot_model = _normalize_model_override(docbot_model)
+    if specagent_model is not _UNSET:
+        pipeline.specagent_model = _normalize_model_override(specagent_model)
     if coderbot_model is not _UNSET:
         pipeline.coderbot_model = _normalize_model_override(coderbot_model)
 

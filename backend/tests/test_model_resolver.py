@@ -76,6 +76,18 @@ def test_coderbot_ignores_general_ollama_override(monkeypatch):
     assert resolve_model("coderbot", pipeline) == "config-coder"
 
 
+def test_specagent_pipeline_override_wins(monkeypatch):
+    monkeypatch.setattr(config, "SPECAGENT_MODEL", "config-spec")
+    pipeline = _pipeline(specagent_model="pipeline-spec")
+    assert resolve_model("specagent", pipeline) == "pipeline-spec"
+
+
+def test_specagent_uses_general_ollama_override(monkeypatch):
+    monkeypatch.setattr(config, "SPECAGENT_MODEL", "config-spec")
+    pipeline = _pipeline(ollama_model="general-model")
+    assert resolve_model("specagent", pipeline) == "general-model"
+
+
 def test_coderbot_can_resolve_to_none(monkeypatch):
     monkeypatch.setattr(config, "CODERBOT_MODEL", None)
     assert resolve_model("coderbot", _pipeline()) is None

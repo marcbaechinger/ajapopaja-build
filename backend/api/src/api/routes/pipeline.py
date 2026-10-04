@@ -61,6 +61,7 @@ class PipelineUpdateRequest(BaseModel):
     archbot_model: Optional[str] = None
     reviewbot_model: Optional[str] = None
     docbot_model: Optional[str] = None
+    specagent_model: Optional[str] = None
     coderbot_model: Optional[str] = None
 
 

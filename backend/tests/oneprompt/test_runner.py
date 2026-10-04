@@ -493,44 +493,6 @@ async def test_explicit_timeout_overrides_template(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Bundled template integration
-# ---------------------------------------------------------------------------
-
-
-async def test_task_elaborate_spec_integration(init_mock_db):
-    """The runner renders and executes the bundled template end-to-end."""
-
-    from api.oneprompt.context import register_context_providers
-    from core.models.models import Pipeline, Task
-
-    register_context_providers()
-    pipeline = Pipeline(name="Integration Pipeline")
-    await pipeline.insert()
-    task = Task(title="Add feature", spec="- do a thing", pipeline_id=str(pipeline.id))
-    await task.insert()
-
-    sent: list[dict[str, Any]] = []
-    fake = FakeOllama(response="Expanded spec markdown")
-    runner = OnePromptRunner(ollama_client=fake, sender=sent.append)
-
-    run = await runner.run(
-        "task_elaborate_spec",
-        {"taskId": str(task.id), "pipelineId": str(pipeline.id)},
-        run_id="run-int",
-    )
-
-    assert run.status == STATUS_OK
-    prompt = fake.calls[0]["messages"][0]["content"]
-    assert "Integration Pipeline" in prompt
-    assert "Add feature" in prompt
-    assert "- do a thing" in prompt
-    assert run.result == "Expanded spec markdown"
-    result = _messages(sent, EVENT_RESULT)[0]["payload"]
-    assert result["runId"] == "run-int"
-    assert result["promptId"] == "task_elaborate_spec"
-
-
-# ---------------------------------------------------------------------------
 # Hooks
 # ---------------------------------------------------------------------------
 

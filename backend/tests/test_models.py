@@ -202,6 +202,7 @@ MODEL_OVERRIDE_FIELDS = (
     "archbot_model",
     "reviewbot_model",
     "docbot_model",
+    "specagent_model",
     "coderbot_model",
 )
 

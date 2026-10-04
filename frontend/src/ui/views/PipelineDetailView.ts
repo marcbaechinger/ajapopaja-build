@@ -43,7 +43,9 @@ import { SessionListItemView } from '../components/SessionListItemView.ts';
 import type { PiSessionSummary } from '../../core/InteractiveCodingService.ts';
 import { DevServerDialog } from '../components/DevServerDialog.ts';
 import { PiView } from '../components/PiView.ts';
-import { PipelineHeaderView, type DocbotState, type ReviewbotState, type CoderbotState } from '../components/PipelineHeaderView.ts';
+import { PipelineHeaderView, type DocbotState, type ReviewbotState, type CoderbotState, type SpecAgentState } from '../components/PipelineHeaderView.ts';
+import { renderSpecProposalResult, getTaskSpecProposalUpdater } from '../components/SpecSection.ts';
+import type { SpecProposal } from '../../core/clients/SpecBotClient.ts';
 import EasyMDE from 'easymde';
 import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
 
@@ -106,6 +108,11 @@ export class PipelineDetailView extends View {
   };
 
   private archbotState: { status: 'none' | 'inProgress', taskId: string | null } = {
+    status: 'none',
+    taskId: null,
+  };
+
+  private specagentState: SpecAgentState = {
     status: 'none',
     taskId: null,
   };
@@ -271,6 +278,15 @@ export class PipelineDetailView extends View {
 
       'ARCHBOT_STARTED': (p) => { this.archbotState = { status: 'inProgress', taskId: p.task_id }; },
       'ARCHBOT_COMPLETED': () => { this.archbotState = { status: 'none', taskId: null }; },
+      'SPECAGENT_STARTED': (p) => { this.specagentState = { status: 'inProgress', taskId: p.task_id }; },
+      'SPECAGENT_COMPLETED': () => { this.specagentState = { status: 'none', taskId: null }; },
+      'SPECAGENT_SPEC_READY': (p) => {
+        if (p?.pipeline_id && p.pipeline_id !== this.pipelineId) return;
+        if (!p?.task_id) return;
+        // Ignore stale events for tasks that are no longer displayed.
+        if (!this.container?.querySelector(`[data-task-id="${p.task_id}"]`)) return;
+        void this.fetchSpecProposal(p.task_id);
+      },
       'CODERBOT_STARTED': (p) => { this.coderbotState = { status: 'inProgress', taskId: p.task_id }; },
       'CODERBOT_COMPLETED': (p) => { this.coderbotState = { status: 'completed', taskId: p.task_id }; },
       'INTERACTIVE_STARTED': (p) => {
@@ -396,6 +412,58 @@ export class PipelineDetailView extends View {
     }
   }
 
+  private async fetchSpecProposal(taskId: string) {
+    if (!taskId || !this.context.specBotClient) return;
+    try {
+      const proposal = await this.context.specBotClient.getProposal(this.pipelineId, taskId);
+      if (!proposal) return;
+      this.specagentState = { status: 'ready', taskId: proposal.task_id };
+      this.renderSpecProposal(proposal);
+      this.updateHeader();
+    } catch (error) {
+      console.error('Failed to fetch SpecAgent proposal:', error);
+    }
+  }
+
+  /**
+   * Renders an elaborated-spec proposal inline in the owning task's spec
+   * container. Accept writes the spec back through the registered updater;
+   * reject clears the pending proposal on the backend.
+   */
+  private renderSpecProposal(proposal: SpecProposal) {
+    const taskEl = this.container?.querySelector(`[data-task-id="${proposal.task_id}"]`);
+    const specContainer = taskEl?.querySelector('.spec-container') as HTMLElement | null;
+    if (!specContainer) return;
+
+    let resultEl = specContainer.querySelector('.spec-proposal-host') as HTMLElement | null;
+    if (!resultEl) {
+      resultEl = document.createElement('div');
+      resultEl.className = 'spec-proposal-host';
+      specContainer.appendChild(resultEl);
+    }
+
+    renderSpecProposalResult(resultEl, {
+      spec_md: proposal.spec_md,
+      onAccept: async (spec) => {
+        const updater = getTaskSpecProposalUpdater();
+        if (updater) await updater(proposal.task_id, spec);
+        resultEl!.innerHTML = '';
+        this.specagentState = { status: 'none', taskId: null };
+        this.updateHeader();
+      },
+      onReject: async () => {
+        try {
+          await this.context.specBotClient?.rejectProposal(this.pipelineId, proposal.task_id);
+        } catch (error) {
+          console.error('Failed to reject SpecAgent proposal:', error);
+        }
+        resultEl!.innerHTML = '';
+        this.specagentState = { status: 'none', taskId: null };
+        this.updateHeader();
+      },
+    });
+  }
+
   private openDocBotDialog() {
     const dialogContainer = this.container?.querySelector('#docbot-dialog-container') as HTMLElement;
     if (!dialogContainer || !this.docbotState.taskId || !this.docbotPreviewData) return;
@@ -468,6 +536,20 @@ export class PipelineDetailView extends View {
       } catch (error) {
         console.error('Trigger ArchBot error:', error);
         alert('Failed to trigger ArchitectureBot');
+      }
+    });
+
+    this.context.actionRegistry.register('trigger_specagent', async (_e, el) => {
+      const taskId = el.getAttribute('data-task-id');
+      if (!taskId) return;
+
+      try {
+        await this.context.specBotClient.trigger(this.pipelineId, taskId);
+        this.specagentState = { status: 'inProgress', taskId };
+        this.updateHeader();
+      } catch (error) {
+        console.error('Trigger SpecAgent error:', error);
+        alert('Failed to trigger the specification bot');
       }
     });
 
@@ -1445,6 +1527,7 @@ export class PipelineDetailView extends View {
       docbotState: this.docbotState,
       reviewbotState: this.reviewbotState,
       archbotState: this.archbotState,
+      specagentState: this.specagentState,
       coderbotState: this.coderbotState,
       devProcessState: this.devProcessState,
       user: this.context.authService.getUser(),

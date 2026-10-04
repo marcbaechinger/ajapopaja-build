@@ -182,6 +182,7 @@ export class Pipeline {
   archbot_model?: string | null;
   reviewbot_model?: string | null;
   docbot_model?: string | null;
+  specagent_model?: string | null;
   coderbot_model?: string | null;
   version: number = 1;
   created_at?: string;
@@ -212,6 +213,7 @@ export class Pipeline {
     if (json.archbot_model !== undefined) this.archbot_model = json.archbot_model;
     if (json.reviewbot_model !== undefined) this.reviewbot_model = json.reviewbot_model;
     if (json.docbot_model !== undefined) this.docbot_model = json.docbot_model;
+    if (json.specagent_model !== undefined) this.specagent_model = json.specagent_model;
     if (json.coderbot_model !== undefined) this.coderbot_model = json.coderbot_model;
     if (json.version !== undefined) this.version = Number(json.version);
     if (json.created_at !== undefined) this.created_at = String(json.created_at);

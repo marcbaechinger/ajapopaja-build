@@ -113,13 +113,13 @@ def test_reload_picks_up_new_templates(tmp_path):
 
 
 def test_default_registry_discovers_bundled_template():
-    template = registry.get("task_elaborate_spec")
+    template = registry.get("session_generate_title")
 
-    assert template.label == "Elaborate"
+    assert template.label == "Generate title"
     assert "${ONE_PROMPT_OLLAMA_MODEL}" == template.model
     assert template.accept_label == "Accept"
     assert template.reject_label == "Reject"
-    assert "${task_spec}" in template.body
+    assert "${first_user_prompt}" in template.body
 
 
 # ---------------------------------------------------------------------------

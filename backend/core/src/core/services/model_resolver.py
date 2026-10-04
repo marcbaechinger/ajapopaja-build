@@ -65,6 +65,7 @@ USE_CASES: dict[str, tuple[str, Callable[[], Optional[str]]]] = {
     "archbot": ("archbot_model", lambda: config.ARCHBOT_MODEL),
     "reviewbot": ("reviewbot_model", lambda: config.REVIEWBOT_MODEL),
     "docbot": ("docbot_model", lambda: config.DOCBOT_MODEL),
+    "specagent": ("specagent_model", lambda: config.SPECAGENT_MODEL),
     "coderbot": ("coderbot_model", lambda: config.CODERBOT_MODEL),
 }
 
@@ -73,7 +74,7 @@ USE_CASES: dict[str, tuple[str, Callable[[], Optional[str]]]] = {
 #: deliberately excluded: it selects a pi-agent model from ``models.json``
 #: rather than an Ollama tag.
 _GENERAL_OLLAMA_USE_CASES = frozenset(
-    {"one_prompt", "assistant", "archbot", "reviewbot", "docbot"}
+    {"one_prompt", "assistant", "archbot", "reviewbot", "docbot", "specagent"}
 )
 
 #: Sentinel distinguishing "no explicit default supplied" from ``None``.

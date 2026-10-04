@@ -41,6 +41,7 @@ type ModelField =
   | 'archbot_model'
   | 'reviewbot_model'
   | 'docbot_model'
+  | 'specagent_model'
   | 'coderbot_model';
 
 interface ModelFieldSpec {
@@ -86,6 +87,12 @@ const MODEL_FIELDS: ModelFieldSpec[] = [
     field: 'docbot_model',
     label: 'DocBot Model',
     hint: 'Used to create documentation.',
+    source: 'ollama',
+  },
+  {
+    field: 'specagent_model',
+    label: 'SpecAgent Model',
+    hint: 'Used to elaborate task specifications.',
     source: 'ollama',
   },
   {
@@ -295,6 +302,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
       archbot_model: this.pipeline.archbot_model ?? null,
       reviewbot_model: this.pipeline.reviewbot_model ?? null,
       docbot_model: this.pipeline.docbot_model ?? null,
+      specagent_model: this.pipeline.specagent_model ?? null,
       coderbot_model: this.pipeline.coderbot_model ?? null,
     };
   }
@@ -880,6 +888,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
           archbot_model?: string | null;
           reviewbot_model?: string | null;
           docbot_model?: string | null;
+          specagent_model?: string | null;
           coderbot_model?: string | null;
         } = {
           name: nameInput?.value.trim() || '',
@@ -932,6 +941,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
           archbot_model?: string | null;
           reviewbot_model?: string | null;
           docbot_model?: string | null;
+          specagent_model?: string | null;
           coderbot_model?: string | null;
         } = {
           test_commands: testCommands,

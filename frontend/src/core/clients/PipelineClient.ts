@@ -75,6 +75,7 @@ export class PipelineClient extends BaseClient {
     archbot_model?: string | null;
     reviewbot_model?: string | null;
     docbot_model?: string | null;
+    specagent_model?: string | null;
     coderbot_model?: string | null;
   }): Promise<Pipeline> {
     const response = await this.fetch(`${this.baseUrl}/pipelines/`, {
@@ -85,7 +86,7 @@ export class PipelineClient extends BaseClient {
     return new Pipeline(await response.json());
   }
 
-  async update(id: string, version: number, partial: { name?: string, status?: PipelineStatus, workspace_path?: string | null, repo_uri?: string | null, repo_username?: string | null, repo_token?: string | null, doc_root?: string, test_commands?: string[][] | null, lint_commands?: string[][] | null, serve_commands?: string[][] | null, build_commands?: string[][] | null, ollama_model?: string | null, one_prompt_model?: string | null, assistant_model?: string | null, archbot_model?: string | null, reviewbot_model?: string | null, docbot_model?: string | null, coderbot_model?: string | null }): Promise<Pipeline> {
+  async update(id: string, version: number, partial: { name?: string, status?: PipelineStatus, workspace_path?: string | null, repo_uri?: string | null, repo_username?: string | null, repo_token?: string | null, doc_root?: string, test_commands?: string[][] | null, lint_commands?: string[][] | null, serve_commands?: string[][] | null, build_commands?: string[][] | null, ollama_model?: string | null, one_prompt_model?: string | null, assistant_model?: string | null, archbot_model?: string | null, reviewbot_model?: string | null, docbot_model?: string | null, specagent_model?: string | null, coderbot_model?: string | null }): Promise<Pipeline> {
     try {
       const response = await this.fetch(`${this.baseUrl}/pipelines/${id}`, {
         method: 'PATCH',

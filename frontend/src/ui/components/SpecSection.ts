@@ -20,73 +20,86 @@ import DOMPurify from 'dompurify';
 import { Icon } from './Icon.ts';
 import { escapeHtml } from './utils/html.ts';
 import { renderMarkdown } from './utils/markdown.ts';
-import { renderQuickPromptButton } from './QuickPromptButton.ts';
-import {
-  registerOnePromptAction,
-  type OnePromptAction,
-  type OnePromptRenderContext,
-} from '../../core/oneprompt.ts';
 
-/** Prompt id of the bundled "Elaborate" one-shot action. */
-export const TASK_ELABORATE_SPEC_PROMPT_ID = 'task_elaborate_spec';
-
-/** Applies an accepted "Elaborate" suggestion back onto a task's spec. */
-export type TaskElaborateSpecUpdater = (
+/** Applies an accepted SpecAgent proposal back onto a task's spec. */
+export type TaskSpecProposalUpdater = (
   taskId: string,
-  spec: string,
-  ctx: OnePromptRenderContext
+  spec: string
 ) => void | Promise<void>;
 
-let updateSpecHandler: TaskElaborateSpecUpdater | null = null;
+let updateSpecProposalHandler: TaskSpecProposalUpdater | null = null;
 
 /**
- * Injects the write-back implementation used by the `task_elaborate_spec`
- * action's ``accept`` hook. The component stays API-agnostic; the application
- * context supplies a callback that performs ``PATCH /tasks/{id}``.
+ * Injects the write-back implementation used by the accepted SpecAgent
+ * proposal. The component stays API-agnostic; the application context supplies
+ * a callback that performs ``PATCH /tasks/{id}``.
  */
-export function setTaskElaborateSpecUpdater(
-  updater: TaskElaborateSpecUpdater | null
+export function setTaskSpecProposalUpdater(
+  updater: TaskSpecProposalUpdater | null
 ): void {
-  updateSpecHandler = updater;
+  updateSpecProposalHandler = updater;
 }
 
 /** Returns the currently injected write-back implementation (if any). */
-export function getTaskElaborateSpecUpdater(): TaskElaborateSpecUpdater | null {
-  return updateSpecHandler;
+export function getTaskSpecProposalUpdater(): TaskSpecProposalUpdater | null {
+  return updateSpecProposalHandler;
 }
 
 /**
- * Renders the suggested specification returned for `task_elaborate_spec` with
- * inline **Accept** / **Reject** controls.
+ * Describes a proposal as handed to the renderer. The SpecAgent proposal uses
+ * ``spec_md``; the aliases keep the renderer usable from both the bot flow and
+ * the historical one-shot flow.
  */
-export function renderElaborateSpecResult(
-  resultEl: HTMLElement,
-  ctx: OnePromptRenderContext
-): void {
-  const acceptLabel =
-    typeof ctx.meta?.accept_label === 'string' ? ctx.meta.accept_label : 'Accept';
-  const rejectLabel =
-    typeof ctx.meta?.reject_label === 'string' ? ctx.meta.reject_label : 'Reject';
+export interface SpecProposalRenderContext {
+  spec_md?: string;
+  spec?: string;
+  result?: string;
+  rationale?: string;
+  acceptLabel?: string;
+  rejectLabel?: string;
+  /** Preferred callback names. */
+  onAccept?: (spec: string) => void | Promise<void>;
+  onReject?: () => void | Promise<void>;
+  /** Backwards-compatible callback names. */
+  accept?: (spec?: string) => void | Promise<void>;
+  reject?: () => void | Promise<void>;
+}
 
-  const body = ctx.result
-    ? renderMarkdown(ctx.result)
+function proposalSpec(ctx: SpecProposalRenderContext): string {
+  return ctx.spec_md ?? ctx.spec ?? ctx.result ?? '';
+}
+
+/**
+ * Renders an elaborated-specification proposal with inline **Accept** /
+ * **Reject** controls.
+ */
+export function renderSpecProposalResult(
+  resultEl: HTMLElement,
+  ctx: SpecProposalRenderContext
+): void {
+  const acceptLabel = ctx.acceptLabel ?? 'Accept';
+  const rejectLabel = ctx.rejectLabel ?? 'Reject';
+  const spec = proposalSpec(ctx);
+
+  const body = spec
+    ? renderMarkdown(spec)
     : '<span class="italic text-app-muted">No suggestion returned.</span>';
 
   resultEl.innerHTML = `
-    <div class="elaborate-spec-result mt-3 flex flex-col gap-2 rounded-lg border border-app-accent-1/40 bg-app-accent-1/5 p-3">
+    <div class="spec-proposal-result mt-3 flex flex-col gap-2 rounded-lg border border-app-accent-1/40 bg-app-accent-1/5 p-3">
       <div class="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-app-accent-1">
         ${Icon.render('documentation', { size: 12 })}
         Suggested Specification
       </div>
-      <div class="elaborate-spec-content prose-theme prose-xs max-w-none text-app-text/80">
+      <div class="spec-proposal-content prose-theme prose-xs max-w-none text-app-text/80">
         ${body}
       </div>
       <div class="flex justify-end gap-2">
-        <button type="button" data-oneprompt-action="reject"
+        <button type="button" data-spec-proposal-action="reject"
                 class="px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider text-app-muted hover:text-app-text border border-app-border transition-colors cursor-pointer">
           ${escapeHtml(rejectLabel)}
         </button>
-        <button type="button" data-oneprompt-action="accept"
+        <button type="button" data-spec-proposal-action="accept"
                 class="px-4 py-1 rounded text-[10px] font-bold uppercase tracking-wider bg-app-accent-1 text-white hover:brightness-110 transition-all shadow-md cursor-pointer">
           ${escapeHtml(acceptLabel)}
         </button>
@@ -95,80 +108,35 @@ export function renderElaborateSpecResult(
   `;
 
   resultEl
-    .querySelector<HTMLButtonElement>('[data-oneprompt-action="accept"]')
+    .querySelector<HTMLButtonElement>('[data-spec-proposal-action="accept"]')
     ?.addEventListener('click', () => {
-      void ctx.accept();
+      void (ctx.onAccept ?? ctx.accept)?.(spec);
     });
   resultEl
-    .querySelector<HTMLButtonElement>('[data-oneprompt-action="reject"]')
+    .querySelector<HTMLButtonElement>('[data-spec-proposal-action="reject"]')
     ?.addEventListener('click', () => {
-      void ctx.reject();
+      void (ctx.onReject ?? ctx.reject)?.();
     });
 }
 
 /**
- * Renders a failed `task_elaborate_spec` request inline.
- *
- * Design section 9 requires the UI to surface the backend's friendly error
- * message (``unavailable``, ``not_found``, ``timeout``, ``cancelled``, ...)
- * instead of silently dropping the request.
+ * Renders a failed SpecAgent proposal inline.
  */
-export function renderElaborateSpecError(
+export function renderSpecProposalError(
   resultEl: HTMLElement,
-  ctx: OnePromptRenderContext
+  error: string | { error?: string | null; status?: string }
 ): void {
-  const message = ctx.error || `The AI request failed (${ctx.status}).`;
+  const message =
+    typeof error === 'string'
+      ? error
+      : error.error || `The spec request failed (${error.status ?? 'error'}).`;
 
   resultEl.innerHTML = `
-    <div class="elaborate-spec-error mt-3 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-400" role="alert" data-oneprompt-error="${escapeHtml(String(ctx.status))}">
+    <div class="spec-proposal-error mt-3 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-400" role="alert">
       ${Icon.render('documentation', { size: 12 })}
       <span>${escapeHtml(message)}</span>
     </div>
   `;
-}
-
-/**
- * Builds the declarative `task_elaborate_spec` one-shot action.
- *
- * @param updater Optional write-back implementation. When omitted the module
- *   level handler set via {@link setTaskElaborateSpecUpdater} is used.
- */
-export function createTaskElaborateSpecAction(
-  updater?: TaskElaborateSpecUpdater | null
-): OnePromptAction {
-  return {
-    id: TASK_ELABORATE_SPEC_PROMPT_ID,
-    label: 'Elaborate',
-    title: 'Expand the task specification with AI',
-    iconSvg: Icon.render('documentation', { size: 12 }),
-    buildContext: (taskId: string, pipelineId: string) => ({ taskId, pipelineId }),
-    anchor: { entity: 'task', field: 'spec' },
-    render: renderElaborateSpecResult,
-    onError: (ctx) => {
-      renderElaborateSpecError(ctx.container, ctx);
-    },
-    accept: async (ctx, result) => {
-      const taskId = String(ctx.taskId ?? ctx.context?.taskId ?? '');
-      if (!taskId) return;
-      const handler = updater ?? updateSpecHandler;
-      if (!handler) {
-        console.warn(
-          `[oneprompt] No task spec updater registered for "${TASK_ELABORATE_SPEC_PROMPT_ID}".`
-        );
-        return;
-      }
-      await handler(taskId, result, ctx);
-    },
-    reject: () => {},
-  };
-}
-
-/** Registers the `task_elaborate_spec` action in the global registry. */
-export function registerTaskElaborateSpecAction(
-  updater?: TaskElaborateSpecUpdater | null
-): OnePromptAction {
-  const action = createTaskElaborateSpecAction(updater);
-  return registerOnePromptAction(action);
 }
 
 /**
@@ -183,15 +151,16 @@ export function renderSpecSection(task: Task, isSpecExpanded: boolean): string {
 
   const elaborateButton = isCompleted
     ? ''
-    : renderQuickPromptButton({
-        id: TASK_ELABORATE_SPEC_PROMPT_ID,
-        label: 'Elaborate',
-        title: 'Expand the task specification with AI',
-        iconSvg: Icon.render('documentation', { size: 12 }),
-        mode: 'oneshot',
-        taskId,
-        pipelineId: task.pipeline_id,
-      });
+    : `
+      <button data-action-click="trigger_specagent"
+              data-task-id="${taskId}"
+              data-pipeline-id="${task.pipeline_id}"
+              class="px-3 py-1.5 rounded bg-app-bg border border-app-border text-[10px] font-bold uppercase tracking-wider text-app-accent-2 hover:bg-app-accent-2/10 transition-all cursor-pointer flex items-center gap-1.5 group"
+              title="Elaborate the task specification with an AI spec bot">
+        ${Icon.render('documentation', { size: 12 })}
+        Elaborate
+      </button>
+    `;
 
   return `
     <div class="spec-container w-full text-xs bg-app-surface p-3 rounded-lg border border-app-border transition-all"
@@ -215,14 +184,14 @@ export function renderSpecSection(task: Task, isSpecExpanded: boolean): string {
           ${isSpecExpanded ? 'Show Less' : 'Show More'}
         </button>
       ` : ''}
-      
+
       <div class="spec-edit hidden flex flex-col gap-3">
         <span class="font-bold text-app-muted mb-1">Editing Specification</span>
         <div class="flex items-center gap-2 mb-2">
           <input type="checkbox" id="edit-want-design-doc-${taskId}" class="w-4 h-4 rounded border-app-border bg-app-bg text-app-accent-1 focus:ring-app-accent-1" ${task.want_design_doc ? 'checked' : ''}>
           <label for="edit-want-design-doc-${taskId}" class="text-xs text-app-text cursor-pointer">Require Design Doc Approval</label>
         </div>
-        <textarea class="w-full bg-app-bg border border-app-border rounded p-2 text-[15px] leading-relaxed text-app-text outline-none focus:ring-1 focus:ring-app-accent-1 min-h-[300px]" 
+        <textarea class="w-full bg-app-bg border border-app-border rounded p-2 text-[15px] leading-relaxed text-app-text outline-none focus:ring-1 focus:ring-app-accent-1 min-h-[300px]"
                   rows="4"
                   placeholder="Provide a detailed specification for the agent...">${task.spec || ''}</textarea>
         <div class="flex gap-2 justify-end">
@@ -238,19 +207,8 @@ export function renderSpecSection(task: Task, isSpecExpanded: boolean): string {
   `;
 }
 
-/** Aliases kept for callers/tests that prefer a verbose name. */
-export const renderTaskElaborateSpecResult = renderElaborateSpecResult;
-export const renderElaborateSpecSuggestion = renderElaborateSpecResult;
-export const renderElaborateSpecFailure = renderElaborateSpecError;
-export const TASK_ELABORATE_SPEC_ACTION_ID = TASK_ELABORATE_SPEC_PROMPT_ID;
-
-/**
- * The bundled action object. Registering it on import makes
- * `onePromptActions.get('task_elaborate_spec')` available as soon as the
- * component is loaded; the application context may re-register it with a
- * concrete write-back handler via {@link registerTaskElaborateSpecAction}.
- */
-export const TASK_ELABORATE_SPEC_ACTION: OnePromptAction =
-  createTaskElaborateSpecAction();
-
-registerOnePromptAction(TASK_ELABORATE_SPEC_ACTION);
+/** Aliases kept for callers/tests that prefer the historical names. */
+export const renderElaborateSpecResult = renderSpecProposalResult;
+export const renderElaborateSpecError = renderSpecProposalError;
+export const setTaskElaborateSpecUpdater = setTaskSpecProposalUpdater;
+export const getTaskElaborateSpecUpdater = getTaskSpecProposalUpdater;

@@ -20,6 +20,7 @@ from api.archbot.manager import ArchBotManager
 from api.bot.session_config import BaseBotSessionConfig
 from api.docbot.manager import DocBotManager
 from api.reviewbot.manager import ReviewBotManager
+from api.specagent.manager import SpecAgentManager
 from core import config
 from core.models.models import Pipeline
 
@@ -151,3 +152,44 @@ async def test_docbot_manager_falls_back_to_config_when_no_override(
     await DocBotManager.process_completed_task(_task())
 
     assert mock_cls.call_args.kwargs["session_config"].model == "config-doc"
+
+
+@patch("api.specagent.manager.bot_manager.enqueue", new_callable=AsyncMock)
+@patch("api.specagent.manager.SpecAgentSession")
+@pytest.mark.asyncio
+async def test_specagent_manager_passes_per_component_config(
+    mock_cls, mock_enqueue, monkeypatch
+):
+    monkeypatch.setattr(config, "SPECAGENT_MODEL", "spec-model")
+    monkeypatch.setattr(config, "SPECAGENT_HOST", "spec-host")
+    monkeypatch.setattr(config, "SPECAGENT_API_KEY", "spec-key")
+    mock_cls.return_value = MagicMock()
+
+    await SpecAgentManager.process_task(_task())
+
+    mock_cls.assert_called_once()
+    kwargs = mock_cls.call_args.kwargs
+    assert isinstance(kwargs["session_config"], BaseBotSessionConfig)
+    assert kwargs["session_config"].model == "spec-model"
+    assert kwargs["session_config"].host == "spec-host"
+    assert kwargs["session_config"].api_key == "spec-key"
+    assert kwargs["task_id"] == "t1"
+
+
+@patch("api.specagent.manager.bot_manager.enqueue", new_callable=AsyncMock)
+@patch("api.specagent.manager.SpecAgentSession")
+@patch(
+    "api.specagent.manager.pipeline_queries.get_pipeline_by_id",
+    new_callable=AsyncMock,
+)
+@pytest.mark.asyncio
+async def test_specagent_manager_prefers_pipeline_model_override(
+    mock_get_pipeline, mock_cls, mock_enqueue, monkeypatch
+):
+    monkeypatch.setattr(config, "SPECAGENT_MODEL", "config-spec")
+    mock_get_pipeline.return_value = Pipeline(name="p", specagent_model="pipe-spec")
+    mock_cls.return_value = MagicMock()
+
+    await SpecAgentManager.process_task(_task())
+
+    assert mock_cls.call_args.kwargs["session_config"].model == "pipe-spec"

@@ -22,6 +22,7 @@ import { SystemClient } from './clients/SystemClient';
 import { DocBotClient } from './clients/DocBotClient';
 import { ReviewBotClient } from './clients/ReviewBotClient';
 import { ArchBotClient } from './clients/ArchBotClient';
+import { SpecBotClient } from './clients/SpecBotClient';
 import { CoderBotClient } from './clients/CoderBotClient';
 import { PullRequestClient } from './clients/PullRequestClient';
 import { EditorClient } from './clients/EditorClient';
@@ -41,7 +42,7 @@ import { SessionManagerPanel, registerSessionGenerateTitleAction } from '../ui/c
 import { SessionManagerButton } from '../ui/components/SessionManagerButton';
 import { HealthCheckDialog } from '../ui/components/HealthCheckDialog';
 import { handleQuickPromptButtonClick } from '../ui/components/QuickPromptButton';
-import { registerTaskElaborateSpecAction } from '../ui/components/SpecSection';
+import { setTaskSpecProposalUpdater } from '../ui/components/SpecSection';
 import { registerOnePromptHandlers } from './oneprompt';
 
 export interface AppState {
@@ -57,6 +58,7 @@ export class AppContext {
   public readonly docBotClient: DocBotClient;
   public readonly reviewBotClient: ReviewBotClient;
   public readonly archBotClient: ArchBotClient;
+  public readonly specBotClient: SpecBotClient;
   public readonly coderBotClient: CoderBotClient;
   public readonly pullRequestClient: PullRequestClient;
   public readonly editorClient: EditorClient;
@@ -82,6 +84,7 @@ export class AppContext {
     this.docBotClient = new DocBotClient(apiBaseUrl, this.authService);
     this.reviewBotClient = new ReviewBotClient(apiBaseUrl, this.authService);
     this.archBotClient = new ArchBotClient(apiBaseUrl, this.authService);
+    this.specBotClient = new SpecBotClient(apiBaseUrl, this.authService);
     this.coderBotClient = new CoderBotClient(this.authService);
     this.pullRequestClient = new PullRequestClient(this.authService);
     this.editorClient = new EditorClient(apiBaseUrl, this.authService);
@@ -115,13 +118,15 @@ export class AppContext {
   }
 
   /**
-   * Registers the one-shot AI prompt framework: the inbound result/stream
-   * handlers, the bundled `task_elaborate_spec` action and the generic
-   * `quick_prompt` button dispatcher.
+   * Registers the one-shot AI prompt framework (retained for session titles)
+   * and the SpecAgent trigger dispatcher.
    */
   private initOnePrompt() {
     registerOnePromptHandlers(this.wsClient);
-    registerTaskElaborateSpecAction(async (taskId, spec) => {
+
+    // Accepted SpecAgent proposals are written back onto the task spec through
+    // the regular task update endpoint.
+    setTaskSpecProposalUpdater(async (taskId, spec) => {
       const task = this.dataManager.getTask(taskId);
       const updated = await this.taskClient.updateDetails(taskId, task?.version ?? 1, { spec });
       this.dataManager.updateTask(updated);
@@ -133,6 +138,20 @@ export class AppContext {
 
     this.actionRegistry.register('quick_prompt', (_e, el) => {
       handleQuickPromptButtonClick(this.wsClient, el);
+    });
+
+    this.actionRegistry.register('trigger_specagent', async (_e, el) => {
+      const taskId = el.getAttribute('data-task-id');
+      const pipelineId =
+        el.getAttribute('data-pipeline-id') ||
+        el.closest('[data-pipeline-id]')?.getAttribute('data-pipeline-id');
+      if (!taskId || !pipelineId) return;
+      try {
+        await this.specBotClient.trigger(pipelineId, taskId);
+      } catch (error) {
+        console.error('Trigger SpecAgent error:', error);
+        alert('Failed to trigger the specification bot');
+      }
     });
   }
 
