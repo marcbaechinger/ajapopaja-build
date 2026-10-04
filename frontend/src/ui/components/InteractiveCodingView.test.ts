@@ -33,6 +33,7 @@ vi.mock('./PiView.ts', () => {
     thinkingExpanded = true;
     blocksCollapsed = false;
     errorVisible = true;
+    following = true;
     constructor(service: any, root: any, options: any) {
       this.service = service;
       this.root = root;
@@ -55,6 +56,9 @@ vi.mock('./PiView.ts', () => {
     toggleErrorVisibility() {
       this.errorVisible = !this.errorVisible;
     }
+    toggleFollow() {
+      this.following = !this.following;
+    }
     isThinkingExpanded() {
       return this.thinkingExpanded;
     }
@@ -63,6 +67,9 @@ vi.mock('./PiView.ts', () => {
     }
     isErrorVisible() {
       return this.errorVisible;
+    }
+    isFollowing() {
+      return this.following;
     }
   }
   return { PiView };
@@ -273,11 +280,36 @@ describe('InteractiveCodingView', () => {
     expect(promptViewInstances[0].placeholder).toContain('Session paused');
   });
 
-  it('renders the three display toggle buttons in the header', () => {
+  it('renders the four display toggle buttons in the header', () => {
     view.render();
+    expect(root.querySelector('#interactive-follow-toggle-btn')).not.toBeNull();
     expect(root.querySelector('#interactive-thinking-toggle-btn')).not.toBeNull();
     expect(root.querySelector('#interactive-collapse-blocks-btn')).not.toBeNull();
     expect(root.querySelector('#interactive-error-toggle-btn')).not.toBeNull();
+  });
+
+  it('renders the follow toggle as pressed by default', () => {
+    view.render();
+    const followBtn = root.querySelector('#interactive-follow-toggle-btn') as HTMLButtonElement;
+    expect(followBtn.getAttribute('aria-pressed')).toBe('true');
+    expect(followBtn.getAttribute('aria-label')).toBe('Disable follow mode');
+    expect(piViewInstances[0].following).toBe(true);
+  });
+
+  it('wires the header follow button to the PiView follow toggle', () => {
+    view.render();
+    const pi = piViewInstances[0];
+    const followBtn = root.querySelector('#interactive-follow-toggle-btn') as HTMLButtonElement;
+
+    followBtn.click();
+    expect(pi.following).toBe(false);
+    expect(followBtn.getAttribute('aria-pressed')).toBe('false');
+    expect(followBtn.getAttribute('aria-label')).toBe('Enable follow mode');
+
+    followBtn.click();
+    expect(pi.following).toBe(true);
+    expect(followBtn.getAttribute('aria-pressed')).toBe('true');
+    expect(followBtn.getAttribute('aria-label')).toBe('Disable follow mode');
   });
 
   it('collapses tool blocks by default in the embedded PiView', () => {

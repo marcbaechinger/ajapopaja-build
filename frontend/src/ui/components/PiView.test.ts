@@ -382,6 +382,22 @@ describe('PiView', () => {
     expect(scrollTopValue).toBe(0);
   });
 
+  it('exposes follow mode via isFollowing()/toggleFollow() for embedding hosts', () => {
+    const { service } = createStubService();
+    const view = new PiView(service, mount, { showFooter: false });
+    view.render();
+
+    // No footer button, but the public API still reflects and toggles the state.
+    expect(mount.querySelector('#follow-btn')).toBeNull();
+    expect(view.isFollowing()).toBe(true);
+
+    view.toggleFollow();
+    expect(view.isFollowing()).toBe(false);
+
+    view.toggleFollow();
+    expect(view.isFollowing()).toBe(true);
+  });
+
   it('stop button appears when isActive() true and stopSession called on click; spinner on failure', async () => {
     const failOnce = vi.fn()
       .mockRejectedValueOnce(new Error('down'))

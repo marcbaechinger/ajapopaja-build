@@ -80,6 +80,9 @@ export class InteractiveCodingView {
     // PiView's own footer is hidden (showFooter: false), so these buttons are
     // the only affordance for the display options.
     this.root
+      .querySelector('#interactive-follow-toggle-btn')
+      ?.addEventListener('click', () => this.handleDisplayToggle('follow'));
+    this.root
       .querySelector('#interactive-thinking-toggle-btn')
       ?.addEventListener('click', () => this.handleDisplayToggle('thinking'));
     this.root
@@ -191,12 +194,14 @@ export class InteractiveCodingView {
    * Applies a header display-toggle click to the reused PiView and refreshes
    * the associated header button state.
    */
-  private handleDisplayToggle(action: 'thinking' | 'collapse' | 'error'): void {
+  private handleDisplayToggle(action: 'thinking' | 'collapse' | 'error' | 'follow'): void {
     if (!this.piView) return;
     if (action === 'thinking') {
       this.piView.toggleThinking();
     } else if (action === 'collapse') {
       this.piView.toggleBlocksCollapse();
+    } else if (action === 'follow') {
+      this.piView.toggleFollow();
     } else {
       this.piView.toggleErrorVisibility();
     }
@@ -208,6 +213,18 @@ export class InteractiveCodingView {
    * state and accessible labels mirror the PiView's current display state.
    */
   private updateDisplayButtons(): void {
+    const follow = this.root.querySelector(
+      '#interactive-follow-toggle-btn'
+    ) as HTMLButtonElement | null;
+    if (follow) {
+      const following = this.piView?.isFollowing() ?? true;
+      follow.innerHTML = Icon.render(following ? 'refresh' : 'clock', { size: 14 });
+      follow.setAttribute('aria-pressed', String(following));
+      const label = following ? 'Disable follow mode' : 'Enable follow mode';
+      follow.title = label;
+      follow.setAttribute('aria-label', label);
+    }
+
     const thinking = this.root.querySelector(
       '#interactive-thinking-toggle-btn'
     ) as HTMLButtonElement | null;
@@ -256,6 +273,12 @@ export class InteractiveCodingView {
           </div>
           <div class="flex items-center gap-2 shrink-0">
             <div id="interactive-display-controls" class="flex items-center gap-1" role="group" aria-label="Log display options">
+              <button id="interactive-follow-toggle-btn" type="button"
+                class="p-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center justify-center cursor-pointer"
+                aria-pressed="true" title="Disable follow mode"
+                aria-label="Disable follow mode">
+                ${Icon.render('refresh', { size: 14 })}
+              </button>
               <button id="interactive-thinking-toggle-btn" type="button"
                 class="p-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center justify-center cursor-pointer"
                 aria-pressed="true" title="Collapse all thinking blocks"

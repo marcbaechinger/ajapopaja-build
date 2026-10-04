@@ -1638,7 +1638,18 @@ export class PiView {
     }
   }
 
-  private toggleFollow() {
+  /** Whether follow-mode auto-scroll is currently enabled (for embedding hosts). */
+  isFollowing(): boolean {
+    return this.isFollowMode;
+  }
+
+  /**
+   * Toggles follow-mode auto-scroll. While enabled, newly rendered blocks keep
+   * the log scrolled to the bottom. Exposed so an embedding host (e.g.
+   * {@link InteractiveCodingView}) can drive the shared log from its own
+   * header controls.
+   */
+  toggleFollow() {
     this.isFollowMode = !this.isFollowMode;
     const btn = this.root.querySelector('#follow-btn');
     if (btn) {
