@@ -135,6 +135,31 @@ describe('PiView', () => {
     expect(compactMount.querySelector('#log-content-container')?.className).toContain('h-[38vh]');
   });
 
+  it('separates adjacent log sections by about one line height', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    const blocksContainer = mount.querySelector('#log-blocks') as HTMLElement;
+    // Log body is `text-[11px] leading-tight` (~14px per line), so `space-y-3.5`
+    // (0.875rem = 14px) leaves roughly one blank line between sections.
+    expect(blocksContainer.classList.contains('space-y-3.5')).toBe(true);
+
+    emitBlocks([
+      { id: 'think', kind: 'thinking', text: 'hmm' },
+      { id: 'tool', kind: 'tool', header: '→ run', text: 'out' },
+      { id: 'text', kind: 'text', text: 'answer' },
+    ]);
+
+    // Inter-block spacing is owned by the container; no individual block may
+    // reintroduce a small external `my-*` that would override `space-y-*`.
+    mount.querySelectorAll('#log-blocks > [data-block-id]').forEach((el) => {
+      const cls = (el as HTMLElement).className;
+      expect(cls).not.toMatch(/\bmy-0\.5\b/);
+      expect(cls).not.toMatch(/\bmy-1\b/);
+    });
+  });
+
   it('reconciles a block list: new blocks appended, removed blocks detached', () => {
     const { service, emitBlocks } = createStubService();
     const view = new PiView(service, mount);

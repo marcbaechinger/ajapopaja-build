@@ -31,6 +31,20 @@ const FORMATTED_MARKDOWN_CLASS =
   'prose-ol:my-1 prose-li:my-0 prose-pre:my-1 prose-blockquote:my-1 prose-table:my-1';
 
 /**
+ * Vertical spacing between the top-level log blocks (thinking / tool use /
+ * response text / …). The log body is rendered at `text-[11px] leading-tight`
+ * (~14px line box), so `space-y-3.5` (0.875rem = 14px) separates adjacent
+ * sections by roughly one line height, making their boundaries legible in the
+ * dense terminal-style log.
+ *
+ * External vertical spacing is owned here rather than by the individual block
+ * classes: Tailwind's `space-y-*` rule is emitted inside a zero-specificity
+ * `:where(...)`, so a `my-*` utility on a block would override it. Blocks must
+ * therefore not set their own top/bottom margins for inter-block spacing.
+ */
+const LOG_BLOCK_SPACING_CLASS = 'space-y-3.5';
+
+/**
  * Minimal interface describing the Pi-session capabilities a standalone Pi
  * activity-log view needs. `CoderBotService` satisfies this structurally, but
  * `PiView` never depends on the concrete type so it can be reused for any
@@ -343,7 +357,7 @@ export class PiView {
     container.appendChild(toast);
     const blocks = document.createElement('div');
     blocks.id = 'log-blocks';
-    blocks.className = 'space-y-1';
+    blocks.className = LOG_BLOCK_SPACING_CLASS;
     container.appendChild(blocks);
 
     // Empty-state placeholder shown when there are no logs and no active session.
@@ -1131,7 +1145,7 @@ export class PiView {
       case 'tool': {
         const wrapper = document.createElement('div');
         wrapper.className =
-          'piview-collapsible piview-toolverify border border-app-border/60 rounded p-2 my-1 bg-app-surface/40';
+          'piview-collapsible piview-toolverify border border-app-border/60 rounded p-2 bg-app-surface/40';
         const { header, label } = this.buildCollapsibleHeader(!this.blocksCollapsed);
         label.className = 'text-app-accent-2 font-semibold whitespace-pre-wrap break-all';
         label.textContent = block.header ?? '';
@@ -1148,7 +1162,7 @@ export class PiView {
       case 'bash': {
         const pre = document.createElement('pre');
         pre.className =
-          'whitespace-pre-wrap break-all bg-black/40 border-l-2 border-app-accent-2/40 pl-2 my-0.5';
+          'whitespace-pre-wrap break-all bg-black/40 border-l-2 border-app-accent-2/40 pl-2';
         pre.textContent = block.text ?? '';
         el = pre;
         break;
@@ -1195,7 +1209,7 @@ export class PiView {
         const wrapper = document.createElement('div');
         const isError = block.error;
         wrapper.className =
-          'piview-collapsible piview-toolverify border rounded p-2 my-1 ' +
+          'piview-collapsible piview-toolverify border rounded p-2 ' +
           (isError
             ? 'border-red-500/60 bg-red-950/30'
             : 'border-green-500/60 bg-green-950/30');
@@ -1217,7 +1231,7 @@ export class PiView {
       case 'divider': {
         el = document.createElement('div');
         el.className =
-          'text-app-text/40 border-t border-app-border/40 pt-1 my-1 whitespace-pre-wrap break-all';
+          'text-app-text/40 border-t border-app-border/40 pt-1 whitespace-pre-wrap break-all';
         el.textContent = block.text ?? '';
         break;
       }
