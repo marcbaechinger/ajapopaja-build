@@ -177,21 +177,6 @@ export class PipelineDetailView extends View {
     }
   }
 
-  private updateColumnHeaderCount(columnId: string) {
-    if (!this.container) return;
-    const list = this.container.querySelector(`#${columnId}`);
-    if (!list) return;
-
-    const count = list.querySelectorAll('[data-view-id]').length;
-    const section = list.closest('section');
-    if (section) {
-      const countEl = section.querySelector('h3 span:last-child');
-      if (countEl) {
-        countEl.textContent = `(${count})`;
-      }
-    }
-  }
-
   private ensureEmptyMessage(columnId: string) {
     const list = this.container?.querySelector(`#${columnId}`);
     if (!list) return;
@@ -2007,7 +1992,6 @@ export class PipelineDetailView extends View {
     } else {
       list.prepend(taskEl);
     }
-    this.updateColumnHeaderCount(columnId);
   }
 
   private removeTaskFromDOM(taskId: string) {
@@ -2016,7 +2000,6 @@ export class PipelineDetailView extends View {
       const columnId = el.parentElement?.id;
       el.remove();
       if (columnId) {
-        this.updateColumnHeaderCount(columnId);
         this.ensureEmptyMessage(columnId);
       }
     }
@@ -2039,7 +2022,6 @@ export class PipelineDetailView extends View {
       const el = list?.querySelector(`[data-view-id="${taskId}"]`) as HTMLElement | null;
       if (el) {
         el.remove();
-        this.updateColumnHeaderCount(columnId);
         this.ensureEmptyMessage(columnId);
       }
     }
