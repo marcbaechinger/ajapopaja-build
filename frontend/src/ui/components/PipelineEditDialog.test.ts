@@ -856,11 +856,30 @@ describe('PipelineEditDialog', () => {
       document.querySelector('#pipeline-edit-cancel')?.dispatchEvent(new MouseEvent('click'));
     };
 
+    it('should render the dev server control only inside the Serve tab', async () => {
+      mockProps.pipeline!.serve_commands = [['sh', '-c', 'make serve']];
+      enableDevServer();
+      const dialog = new PipelineEditDialog(mockProps);
+      const showPromise = dialog.show();
+
+      // The control only lives inside the Serve tab, not on the default tab.
+      expect(document.querySelector('#pipeline-dev-toggle')).toBeNull();
+      switchToCmdTab('serve');
+
+      await vi.waitFor(() => {
+        expect(document.querySelector('#pipeline-dev-toggle')).not.toBeNull();
+      });
+
+      clickCancel();
+      await showPromise;
+    });
+
     it('should render a start button when serve commands are stored', async () => {
       mockProps.pipeline!.serve_commands = [['sh', '-c', 'make serve']];
       enableDevServer();
       const dialog = new PipelineEditDialog(mockProps);
       const showPromise = dialog.show();
+      switchToCmdTab('serve');
 
       await vi.waitFor(() => {
         const btn = document.querySelector('#pipeline-dev-toggle') as HTMLButtonElement;
@@ -886,6 +905,7 @@ describe('PipelineEditDialog', () => {
 
       const dialog = new PipelineEditDialog(mockProps);
       const showPromise = dialog.show();
+      switchToCmdTab('serve');
 
       const workspaceInput = document.querySelector('input[name="workspace_path"]') as HTMLInputElement;
       workspaceInput.value = '/tmp/typed';
@@ -905,6 +925,7 @@ describe('PipelineEditDialog', () => {
     it('should not render the control when no serve commands are stored', async () => {
       const dialog = new PipelineEditDialog(mockProps);
       const showPromise = dialog.show();
+      switchToCmdTab('serve');
 
       expect(document.querySelector('#pipeline-dev-toggle')).toBeNull();
 
@@ -920,6 +941,7 @@ describe('PipelineEditDialog', () => {
       });
       const dialog = new PipelineEditDialog(props);
       const showPromise = dialog.show();
+      switchToCmdTab('serve');
 
       expect(document.querySelector('#pipeline-dev-toggle')).toBeNull();
 
@@ -932,6 +954,7 @@ describe('PipelineEditDialog', () => {
       const client = enableDevServer({ running: true });
       const dialog = new PipelineEditDialog(mockProps);
       const showPromise = dialog.show();
+      switchToCmdTab('serve');
 
       await vi.waitFor(() => {
         const btn = document.querySelector('#pipeline-dev-toggle') as HTMLButtonElement;
@@ -950,6 +973,7 @@ describe('PipelineEditDialog', () => {
       const client = enableDevServer();
       const dialog = new PipelineEditDialog(mockProps);
       const showPromise = dialog.show();
+      switchToCmdTab('serve');
 
       await vi.waitFor(() => {
         expect(document.querySelector('#pipeline-dev-toggle')).not.toBeNull();
@@ -972,6 +996,7 @@ describe('PipelineEditDialog', () => {
       const client = enableDevServer({ running: true });
       const dialog = new PipelineEditDialog(mockProps);
       const showPromise = dialog.show();
+      switchToCmdTab('serve');
 
       await vi.waitFor(() => {
         const btn = document.querySelector('#pipeline-dev-toggle') as HTMLButtonElement;
@@ -995,6 +1020,7 @@ describe('PipelineEditDialog', () => {
       client.startDevServer.mockRejectedValue(new Error('No serve commands configured'));
       const dialog = new PipelineEditDialog(mockProps);
       const showPromise = dialog.show();
+      switchToCmdTab('serve');
 
       await vi.waitFor(() => {
         expect(document.querySelector('#pipeline-dev-toggle')).not.toBeNull();
@@ -1022,6 +1048,7 @@ describe('PipelineEditDialog', () => {
       try {
         const dialog = new PipelineEditDialog(mockProps);
         const showPromise = dialog.show();
+        switchToCmdTab('serve');
 
         await vi.waitFor(() => {
           expect(fetchMock).toHaveBeenCalled();

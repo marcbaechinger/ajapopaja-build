@@ -219,6 +219,8 @@ export class PipelineEditDialog extends BaseDialog<void> {
     if (!area) return;
     area.innerHTML = this.renderCommandsTabArea();
     this.attachCommandsTabListeners();
+    // The Serve tab hosts the dev-server control, so (re)bind its listener too.
+    this.attachDevServerListeners();
   }
 
   /**
@@ -440,13 +442,21 @@ export class PipelineEditDialog extends BaseDialog<void> {
   }
 
   private renderServeCommands(): string {
-    return this.renderCommandTextarea(
+    const commands = this.renderCommandTextarea(
       'serve_commands',
       'Serve Commands',
       this.pipeline.serve_commands || [],
       'One command per line, e.g.&#10;cd backend &amp;&amp; uv run uvicorn api.main:app --reload&#10;cd frontend &amp;&amp; npm run dev',
       'Commands launched as a long-running background dev server. One per line. Leave empty to disable the dev server. The port is available as $DEV_SERVER_PORT (also exported as $PORT).'
     );
+    // The dev-server start/stop control lives inside the Serve tab, right below
+    // the commands that configure it. The stable wrapper lets a status refresh
+    // update just the control without wiping the user's textarea input.
+    const devServerControl = this.renderDevServerControl();
+    return `
+      ${commands}
+      ${devServerControl ? `<div id="dev-server-area">${devServerControl}</div>` : ''}
+    `;
   }
 
   private renderBuildCommands(): string {
@@ -648,7 +658,6 @@ export class PipelineEditDialog extends BaseDialog<void> {
   protected renderBody(): string {
     if (!this.props) return '';
     const create = !this.isEditMode();
-    const devServerControl = this.renderDevServerControl();
     return `
       <div class="flex flex-col gap-4 p-4">
         <div id="repo-tab-area" class="flex flex-col gap-4">
@@ -657,7 +666,6 @@ export class PipelineEditDialog extends BaseDialog<void> {
         <div id="commands-tab-area" class="flex flex-col gap-3">
           ${this.renderCommandsTabArea()}
         </div>
-        ${devServerControl ? `<div id="dev-server-area">${devServerControl}</div>` : ''}
         <div id="pipeline-edit-error" class="hidden text-xs text-red-400 font-bold"></div>
         ${create ? '' : `
         <div class="flex col-span-2">
