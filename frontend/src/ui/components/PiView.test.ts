@@ -1657,6 +1657,46 @@ describe('PiView keyboard tooltips', () => {
     );
   });
 
+  it('applies the prose measure per element, widens code and unlimits tables', () => {
+    // jsdom has no layout engine and the stylesheet is not applied, so guard the
+    // declared measure values and selectors directly. The measure must sit on
+    // the prose elements (not the container) so code blocks and tables can be
+    // wider than the prose column.
+    expect(styleCss).toMatch(/--piview-max-width:\s*87ch/);
+    expect(styleCss).toMatch(/--piview-pre-max-width:\s*130ch/);
+    expect(styleCss).toMatch(
+      /\.piview-formatted :where\([^)]*\)\s*\{[^}]*max-width:\s*var\(--piview-max-width\)/
+    );
+    // Fenced code blocks get their own (2x the old 65ch) measure and scroll
+    // horizontally inside their own box...
+    expect(styleCss).toMatch(
+      /\.piview-formatted pre\s*\{[^}]*max-width:\s*var\(--piview-pre-max-width\)[^}]*overflow-x:\s*auto/
+    );
+    // ...and tables are width-unconstrained but still scroll internally, so a
+    // wide table never pushes the whole log sideways.
+    expect(styleCss).toMatch(
+      /\.piview-formatted table\s*\{[^}]*max-width:\s*none[^}]*overflow-x:\s*auto/
+    );
+    // The container itself must carry no `max-width` declaration, or every
+    // descendant (including code and tables) would be clamped to the prose
+    // column again. (Match a declaration, not the `--piview-max-width` custom
+    // property, which is a different thing entirely.)
+    expect(styleCss).not.toMatch(/\.piview-formatted\s*\{[^}]*\n\s*max-width:/);
+
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+    emitBlocks([{ id: 'w1', kind: 'text', text: 'Readable **prose**', complete: true }]);
+    view.flushAutoFormat();
+    const formatted = mount.querySelector('.piview-formatted') as HTMLElement;
+    expect(formatted).not.toBeNull();
+    // The obsolete container measure class must be gone so `prose-theme`'s
+    // `max-w-none` keeps the container unconstrained.
+    expect(formatted.classList.contains('max-w-prose')).toBe(false);
+
+    view.destroy();
+  });
+
   it('owns the vertical rhythm in CSS instead of inert prose-* utilities', () => {
     const { service, emitBlocks } = createStubService();
     const view = new PiView(service, mount);

@@ -25,10 +25,12 @@ import './Keybinding.css';
  * `prose-theme` supplies the base typography; `font-sans` overrides the
  * monospace font inherited from the terminal-style log container so the
  * agent's rendered answer reads as prose; inline/block code keeps its
- * monospace font via the typography plugin's `code`/`pre` rules. `max-w-prose`
- * marks the container as a readable measure; because `prose-theme` pins
- * `max-width: none`, the effective limit is set by the `.piview-formatted` rule
- * in `src/style.css` (tunable via the `--piview-max-width` custom property).
+ * monospace font via the typography plugin's `code`/`pre` rules. The readable
+ * measure for rendered prose (and the wider code-block / unconstrained table
+ * exceptions) is owned solely by the `.piview-formatted` rules in
+ * `src/style.css` (tunable via `--piview-max-width` / `--piview-pre-max-width`).
+ * Do not reintroduce a container `max-w-*` here: a `max-width` on this element
+ * would clamp code blocks and tables too.
  *
  * The block-level vertical rhythm (the spacing between paragraphs, list items,
  * headings, `pre` blocks and rules) is owned *solely* by the `.piview-formatted`
@@ -37,7 +39,7 @@ import './Keybinding.css';
  * inert against the unlayered `style.css` rules and would only create a second,
  * silently disagreeing source of truth.
  */
-const FORMATTED_MARKDOWN_CLASS = 'piview-formatted prose-theme font-sans max-w-prose';
+const FORMATTED_MARKDOWN_CLASS = 'piview-formatted prose-theme font-sans';
 
 /**
  * Vertical spacing between the top-level log blocks (thinking / tool use /

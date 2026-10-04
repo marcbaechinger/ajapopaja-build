@@ -500,11 +500,18 @@ mark.piview-search-current {
    * A readable measure for rendered Markdown. The surrounding log can grow very
    * wide (notably in the two-column pipeline layout), and prose lines that span
    * the full width are hard to track. The limit is `ch`-based so it tracks the
-   * rendered font size. `prose-theme` pins `max-width: none`, so this unlayered
-   * declaration - emitted after the applied utilities - is what actually
-   * enforces the measure; the `max-w-prose` class on the element documents it.
+   * rendered font size. It is applied to the individual prose elements below
+   * (not to this container) so that fenced code blocks and tables can opt out;
+   * a `max-width` here would clamp every descendant. Roughly a third wider than
+   * the previous 65ch measure.
    */
-  --piview-max-width: 65ch;
+  --piview-max-width: 87ch;
+  /*
+   * Fenced code blocks are allowed twice the old prose measure (2 x 65ch) so
+   * wide snippets stay on one line as far as the log allows instead of being
+   * clamped to the prose column.
+   */
+  --piview-pre-max-width: 130ch;
   /*
    * The PiView log is a dense, terminal-style surface (`text-[11px]
    * leading-tight`), so the typography plugin's long-form defaults
@@ -514,7 +521,30 @@ mark.piview-search-current {
    * paragraphs, list items and code blocks alike.
    */
   @apply prose-theme text-[12px] leading-snug;
+}
+
+/*
+ * Measure rules. The prose measure is applied per element rather than to the
+ * `.piview-formatted` container so that code blocks and tables can be wider;
+ * a container `max-width` would clamp every descendant to the prose column.
+ */
+.piview-formatted :where(p, ul, ol, dl, blockquote, figure, h1, h2, h3, h4, h5, h6, hr) {
   max-width: var(--piview-max-width);
+}
+
+/* Fenced code blocks may use double the previous prose measure and scroll
+ * horizontally inside their own box rather than widening the whole log. */
+.piview-formatted pre {
+  max-width: var(--piview-pre-max-width);
+  overflow-x: auto;
+}
+
+/* Tables are not width-limited by the prose measure: they use the full log
+ * width and scroll horizontally inside their own box only when their content
+ * is wider than the log itself, so a wide table never pushes the log sideways. */
+.piview-formatted table {
+  max-width: none;
+  overflow-x: auto;
 }
 
 /*
