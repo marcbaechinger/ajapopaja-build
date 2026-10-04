@@ -159,6 +159,36 @@ describe('PipelineDetailView Layout', () => {
     expect(historyArea!.innerHTML).toContain('mock-history');
   });
 
+  it('places the pull request list above the tabs and lets the tab content fill the window height', () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+
+    const colPrep = container.querySelector('#col-prep') as HTMLElement;
+    const tablist = container.querySelector('#content-tablist') as HTMLElement;
+    expect(colPrep).not.toBeNull();
+    expect(tablist).not.toBeNull();
+    // Document order: sessions -> pull requests -> tabs.
+    expect(
+      colPrep.compareDocumentPosition(tablist) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+
+    // The main content wrapper is at least the viewport height so the tab area
+    // can expand down to the window edge.
+    const mainWrapper = container.querySelector('main > div') as HTMLElement;
+    expect(mainWrapper.className).toContain('min-h-full');
+    expect(mainWrapper.className).toContain('flex-col');
+
+    // The interactive coding mount fills the remaining vertical space.
+    const mount = container.querySelector('#interactive-coding-view-mount') as HTMLElement;
+    expect(mount.classList.contains('flex-1')).toBe(true);
+    expect(mount.classList.contains('min-h-0')).toBe(true);
+
+    // The task editor panel expands too.
+    const selected = container.querySelector('#selected-task-view') as HTMLElement;
+    expect(selected.classList.contains('flex-1')).toBe(true);
+    expect(selected.classList.contains('min-h-0')).toBe(true);
+  });
+
   it('should keep PROPOSED/CREATED tasks only in the sidebar BacklogView, not the main prep column', async () => {
     mockContext.taskClient.listByPipeline.mockResolvedValue([
       { id: 'p1', title: 'Proposed Task', status: TaskStatus.PROPOSED, design_doc: '# d', deleted: false, version: 1, order: 0, type: 'manual', want_design_doc: true },

@@ -172,6 +172,19 @@ describe('InteractiveCodingView', () => {
     expect(piViewInstances[0].root.id).toBe('interactive-piview-mount');
   });
 
+  it('lets the embedded PiView fill the available vertical space', () => {
+    view.render();
+    // The log grows to fill the tab panel instead of using a fixed height.
+    expect(piViewInstances[0].options.fillHeight).toBe(true);
+    const mount = root.querySelector('#interactive-piview-mount') as HTMLElement;
+    expect(mount.classList.contains('flex-1')).toBe(true);
+    expect(mount.classList.contains('min-h-0')).toBe(true);
+    // The view shell fills its host mount (the tab panel).
+    const shell = root.firstElementChild as HTMLElement;
+    expect(shell.classList.contains('flex-1')).toBe(true);
+    expect(shell.classList.contains('min-h-0')).toBe(true);
+  });
+
   it('mounts the InteractivePromptView into the composer slot', () => {
     view.render();
     expect(promptViewInstances).toHaveLength(1);

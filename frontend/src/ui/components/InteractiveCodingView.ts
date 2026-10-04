@@ -65,7 +65,10 @@ export class InteractiveCodingView {
       // The header toggle expands it on demand.
       this.piView = new PiView(this.service, mount, {
         showFooter: false,
-        logHeightClass: 'h-[46vh]',
+        // Grow the scrollable output to fill the tab panel instead of pinning it
+        // to a fixed viewport height, so the session log uses all the vertical
+        // space down to the window edge.
+        fillHeight: true,
         blocksCollapsedInitially: true,
       });
       this.piView.render();
@@ -264,7 +267,7 @@ export class InteractiveCodingView {
 
   private template(): string {
     return `
-      <div class="flex flex-col bg-app-surface/30 rounded-3xl border border-app-border/30 overflow-hidden">
+      <div class="flex flex-1 min-h-0 flex-col bg-app-surface/30 rounded-3xl border border-app-border/30 overflow-hidden">
         <div class="flex items-center justify-between gap-3 px-4 py-3 border-b border-app-border/40">
           <div class="flex items-center gap-2 min-w-0">
             <span class="text-app-accent-2" aria-hidden="true">${Icon.render('lightning', { size: 16 })}</span>
@@ -305,7 +308,7 @@ export class InteractiveCodingView {
             </button>
           </div>
         </div>
-        <div id="interactive-piview-mount"></div>
+        <div id="interactive-piview-mount" class="flex flex-1 min-h-0 flex-col"></div>
         <div class="p-3 border-t border-app-border/40 bg-app-surface/50">
           <div id="interactive-prompt-mount"></div>
         </div>

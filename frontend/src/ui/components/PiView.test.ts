@@ -139,6 +139,20 @@ describe('PiView', () => {
     expect(compactMount.querySelector('#log-content-container')?.className).toContain('h-[38vh]');
   });
 
+  it('fills the parent height when fillHeight is enabled', () => {
+    const { service } = createStubService();
+
+    const fillMount = document.createElement('div');
+    const view = new PiView(service, fillMount, { fillHeight: true });
+    view.render();
+
+    const log = fillMount.querySelector('#log-content-container') as HTMLElement;
+    expect(log.className).toContain('flex-1');
+    expect(log.className).toContain('min-h-0');
+    // The fixed viewport height must be dropped so the log tracks its parent.
+    expect(log.className).not.toContain('h-[60vh]');
+  });
+
   it('separates adjacent log sections by about one line height', () => {
     const { service, emitBlocks } = createStubService();
     const view = new PiView(service, mount);
