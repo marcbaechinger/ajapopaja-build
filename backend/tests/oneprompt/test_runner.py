@@ -247,6 +247,30 @@ async def test_model_falls_back_to_one_prompt_config(tmp_path, monkeypatch):
     assert fake.calls[0]["model"] == "one-shot-config-model"
 
 
+async def test_context_model_takes_precedence_over_template(tmp_path):
+    fake = FakeOllama()
+    runner = OnePromptRunner(
+        registry=_registry(tmp_path, model="template-model"),
+        ollama_client=fake,
+    )
+
+    await runner.run("greet", {"name": "Ada", "model": "pipeline-model"})
+
+    assert fake.calls[0]["model"] == "pipeline-model"
+
+
+async def test_blank_context_model_falls_back_to_template(tmp_path):
+    fake = FakeOllama()
+    runner = OnePromptRunner(
+        registry=_registry(tmp_path, model="template-model"),
+        ollama_client=fake,
+    )
+
+    await runner.run("greet", {"name": "Ada", "model": "   "})
+
+    assert fake.calls[0]["model"] == "template-model"
+
+
 async def test_emit_rendered_event_is_optional(tmp_path):
     sent: list[dict[str, Any]] = []
     runner = OnePromptRunner(

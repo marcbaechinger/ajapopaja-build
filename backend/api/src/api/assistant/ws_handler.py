@@ -41,6 +41,7 @@ async def handle_assistant_message(message: WSMessage, websocket: WebSocket):
         lambda data: websocket.send_text(
             WSMessage(type="assistant_response", payload=data).model_dump_json()
         ),
+        pipeline_id=message.payload.get("pipelineId"),
     )
 
     text = message.payload.get("text")

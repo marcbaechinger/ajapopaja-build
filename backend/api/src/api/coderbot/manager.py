@@ -29,6 +29,8 @@ from core.models.models import (
     PullRequest,
     Task,
 )
+from core.queries import pipeline as pipeline_queries
+from core.services.model_resolver import resolve_model
 from core.utils import git_utils
 
 from . import pi_session_store
@@ -174,6 +176,25 @@ class CoderBotManager:
         """Updates the default model injected into session constructors."""
         self._default_model = model
 
+    async def _resolve_coderbot_model(
+        self, pipeline_id: Optional[str]
+    ) -> Optional[str]:
+        """Resolve the CoderBot model from the pipeline or the manager default.
+
+        The pipeline's ``coderbot_model`` override wins; otherwise the
+        process-wide default (``set_default_model`` / ``config.CODERBOT_MODEL``)
+        is used. A missing pipeline degrades to the default.
+        """
+        pipeline = None
+        if pipeline_id:
+            try:
+                pipeline = await pipeline_queries.get_pipeline_by_id(
+                    str(pipeline_id)
+                )
+            except Exception:
+                pipeline = None
+        return resolve_model("coderbot", pipeline, default=self._default_model)
+
     def _ensure_worker_running(self):
         """Start the queue-processing worker if it is not already running."""
         if self._worker_task is None or self._worker_task.done():
@@ -186,13 +207,14 @@ class CoderBotManager:
         its human readable ``label`` so the session manager can show a
         meaningful name instead of ``(untitled)`` for every batch run.
         """
+        model = await self._resolve_coderbot_model(task.pipeline_id)
         record = PiSession(
             uid=str(uuid_module.uuid4()),
             kind=PiSessionKind.CODERBOT,
             status=PiSessionStatus.STARTING,
             pipeline_id=str(task.pipeline_id),
             task_id=str(task.id),
-            model=self._default_model,
+            model=model,
             skill_names=list(config.CODERBOT_SKILLS),
             bot_type="coderbot",
             label=_session_label(getattr(task, "title", None)),
@@ -203,7 +225,7 @@ class CoderBotManager:
         session = CoderBotSession(
             pipeline_id=str(task.pipeline_id),
             task_id=str(task.id),
-            model=self._default_model,
+            model=model,
             session_uid=record.uid,
             session_record=record,
         )
@@ -224,13 +246,14 @@ class CoderBotManager:
         label = _session_label(getattr(task, "title", None))
         if not label:
             label = _session_label(pr.subject)
+        model = await self._resolve_coderbot_model(pr.pipeline_id)
         record = PiSession(
             uid=str(uuid_module.uuid4()),
             kind=PiSessionKind.CODERBOT,
             status=PiSessionStatus.STARTING,
             pipeline_id=pr.pipeline_id,
             task_id=pr.task_id,
-            model=self._default_model,
+            model=model,
             skill_names=list(config.CODERBOT_SKILLS),
             bot_type="coderbot",
             pull_request_ids=[str(pr.id)],
@@ -242,7 +265,7 @@ class CoderBotManager:
         session = CoderBotSession(
             pipeline_id=pr.pipeline_id,
             task_id=pr.task_id,
-            model=self._default_model,
+            model=model,
             pr=pr,
             comments=comments,
             session_uid=record.uid,

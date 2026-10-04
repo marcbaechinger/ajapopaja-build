@@ -755,3 +755,90 @@ async def test_resume_without_pausing_raises_when_busy(init_mock_db):
     manager._running_uid = "other"
     with pytest.raises(PiSessionBusyError):
         await manager.resume_session("uid", pause_current=False)
+
+
+@pytest.mark.asyncio
+async def test_manager_process_task_prefers_pipeline_coderbot_model(init_mock_db):
+    """A pipeline's ``coderbot_model`` override is used for batch sessions."""
+    from core.models.models import Pipeline
+
+    manager = CoderBotManager()
+    manager.set_default_model("default-model:cloud")
+    pipeline = Pipeline(name="P", coderbot_model="pipe-model:cloud")
+    await pipeline.insert()
+
+    task = MagicMock()
+    task.pipeline_id = str(pipeline.id)
+    task.id = "t1"
+
+    with (
+        patch(
+            "api.coderbot.manager.pipeline_queries.get_pipeline_by_id",
+            new_callable=AsyncMock,
+            return_value=pipeline,
+        ),
+        patch("api.coderbot.manager.CoderBotSession") as mock_session_cls,
+    ):
+        await manager.process_task(task)
+        kwargs = mock_session_cls.call_args.kwargs
+
+    assert kwargs["model"] == "pipe-model:cloud"
+    assert kwargs["session_record"].model == "pipe-model:cloud"
+
+
+@pytest.mark.asyncio
+async def test_manager_process_task_falls_back_to_default_model(init_mock_db):
+    """Without a pipeline override the manager default is used."""
+    from core.models.models import Pipeline
+
+    manager = CoderBotManager()
+    manager.set_default_model("default-model:cloud")
+    pipeline = Pipeline(name="P")
+    await pipeline.insert()
+
+    task = MagicMock()
+    task.pipeline_id = str(pipeline.id)
+    task.id = "t1"
+
+    with (
+        patch(
+            "api.coderbot.manager.pipeline_queries.get_pipeline_by_id",
+            new_callable=AsyncMock,
+            return_value=pipeline,
+        ),
+        patch("api.coderbot.manager.CoderBotSession") as mock_session_cls,
+    ):
+        await manager.process_task(task)
+        kwargs = mock_session_cls.call_args.kwargs
+
+    assert kwargs["model"] == "default-model:cloud"
+
+
+@pytest.mark.asyncio
+async def test_manager_process_pr_iteration_prefers_pipeline_model(init_mock_db):
+    """PR iteration sessions also honour the pipeline's coderbot_model."""
+    from core.models.models import Pipeline
+
+    manager = CoderBotManager()
+    manager.set_default_model("default-model:cloud")
+    pipeline = Pipeline(name="P", coderbot_model="pr-pipe-model:cloud")
+    await pipeline.insert()
+
+    pr = MagicMock()
+    pr.id = "pr1"
+    pr.pipeline_id = str(pipeline.id)
+    pr.task_id = ""
+    pr.subject = "Iterate"
+
+    with (
+        patch(
+            "api.coderbot.manager.pipeline_queries.get_pipeline_by_id",
+            new_callable=AsyncMock,
+            return_value=pipeline,
+        ),
+        patch("api.coderbot.manager.CoderBotSession") as mock_session_cls,
+    ):
+        await manager.process_pr_iteration(pr, "fix it")
+        kwargs = mock_session_cls.call_args.kwargs
+
+    assert kwargs["model"] == "pr-pipe-model:cloud"

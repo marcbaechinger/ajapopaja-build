@@ -176,6 +176,13 @@ export class Pipeline {
   lint_commands?: string[][] | null;
   serve_commands?: string[][] | null;
   build_commands?: string[][] | null;
+  ollama_model?: string | null;
+  one_prompt_model?: string | null;
+  assistant_model?: string | null;
+  archbot_model?: string | null;
+  reviewbot_model?: string | null;
+  docbot_model?: string | null;
+  coderbot_model?: string | null;
   version: number = 1;
   created_at?: string;
   updated_at?: string;
@@ -199,6 +206,13 @@ export class Pipeline {
     if (json.lint_commands !== undefined) this.lint_commands = Array.isArray(json.lint_commands) ? json.lint_commands : null;
     if (json.serve_commands !== undefined) this.serve_commands = Array.isArray(json.serve_commands) ? json.serve_commands : null;
     if (json.build_commands !== undefined) this.build_commands = Array.isArray(json.build_commands) ? json.build_commands : null;
+    if (json.ollama_model !== undefined) this.ollama_model = json.ollama_model;
+    if (json.one_prompt_model !== undefined) this.one_prompt_model = json.one_prompt_model;
+    if (json.assistant_model !== undefined) this.assistant_model = json.assistant_model;
+    if (json.archbot_model !== undefined) this.archbot_model = json.archbot_model;
+    if (json.reviewbot_model !== undefined) this.reviewbot_model = json.reviewbot_model;
+    if (json.docbot_model !== undefined) this.docbot_model = json.docbot_model;
+    if (json.coderbot_model !== undefined) this.coderbot_model = json.coderbot_model;
     if (json.version !== undefined) this.version = Number(json.version);
     if (json.created_at !== undefined) this.created_at = String(json.created_at);
     if (json.updated_at !== undefined) this.updated_at = String(json.updated_at);

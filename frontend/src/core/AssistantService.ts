@@ -47,9 +47,10 @@ export class AssistantService {
     });
   }
 
-  public sendMessage(text: string) {
+  public sendMessage(text: string, pipelineId?: string | null) {
     this.wsClient.send('assistant_message', {
       text,
+      pipelineId: pipelineId || undefined,
       token: this.authService.getAccessToken()
     });
   }

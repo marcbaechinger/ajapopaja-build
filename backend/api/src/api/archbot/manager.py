@@ -19,6 +19,8 @@ from api.bot.manager import bot_manager
 from api.bot.session_config import BaseBotSessionConfig
 from core import config as config_mod
 from core.models.models import Task
+from core.queries import pipeline as pipeline_queries
+from core.services.model_resolver import resolve_model
 
 from .session import ArchBotSession
 
@@ -37,8 +39,16 @@ class ArchBotManager:
                 an existing design document.
         """
         logger.info(f"ArchBotManager: Enqueueing ArchBot for task {task.id}")
+        pipeline = None
+        try:
+            pipeline = await pipeline_queries.get_pipeline_by_id(
+                str(task.pipeline_id)
+            )
+        except Exception:
+            # A missing pipeline must not block the bot; fall back to config.
+            pipeline = None
         config = BaseBotSessionConfig(
-            model=config_mod.ARCHBOT_MODEL,
+            model=resolve_model("archbot", pipeline),
             host=config_mod.ARCHBOT_HOST,
             api_key=config_mod.ARCHBOT_API_KEY,
         )

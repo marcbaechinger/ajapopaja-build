@@ -21,6 +21,7 @@ from api.bot.session_config import BaseBotSessionConfig
 from api.docbot.manager import DocBotManager
 from api.reviewbot.manager import ReviewBotManager
 from core import config
+from core.models.models import Pipeline
 
 
 def _task():
@@ -92,3 +93,61 @@ async def test_docbot_manager_passes_per_component_config(
     assert kwargs["session_config"].model == "doc-model"
     assert kwargs["session_config"].host == "doc-host"
     assert kwargs["session_config"].api_key == "doc-key"
+
+
+@patch("api.archbot.manager.bot_manager.enqueue", new_callable=AsyncMock)
+@patch("api.archbot.manager.ArchBotSession")
+@patch(
+    "api.archbot.manager.pipeline_queries.get_pipeline_by_id",
+    new_callable=AsyncMock,
+)
+@pytest.mark.asyncio
+async def test_archbot_manager_prefers_pipeline_model_override(
+    mock_get_pipeline, mock_cls, mock_enqueue, monkeypatch
+):
+    monkeypatch.setattr(config, "ARCHBOT_MODEL", "config-arch")
+    mock_get_pipeline.return_value = Pipeline(name="p", archbot_model="pipe-arch")
+    mock_cls.return_value = MagicMock()
+
+    await ArchBotManager.process_task(_task())
+
+    assert mock_get_pipeline.await_args.args[0] == "p1"
+    assert mock_cls.call_args.kwargs["session_config"].model == "pipe-arch"
+
+
+@patch("api.reviewbot.manager.bot_manager.enqueue", new_callable=AsyncMock)
+@patch("api.reviewbot.manager.ReviewBotSession")
+@patch(
+    "api.reviewbot.manager.pipeline_queries.get_pipeline_by_id",
+    new_callable=AsyncMock,
+)
+@pytest.mark.asyncio
+async def test_reviewbot_manager_uses_general_ollama_override(
+    mock_get_pipeline, mock_cls, mock_enqueue, monkeypatch
+):
+    monkeypatch.setattr(config, "REVIEWBOT_MODEL", "config-review")
+    mock_get_pipeline.return_value = Pipeline(name="p", ollama_model="general-x")
+    mock_cls.return_value = MagicMock()
+
+    await ReviewBotManager.process_completed_task(_task())
+
+    assert mock_cls.call_args.kwargs["session_config"].model == "general-x"
+
+
+@patch("api.docbot.manager.bot_manager.enqueue", new_callable=AsyncMock)
+@patch("api.docbot.manager.DocBotSession")
+@patch(
+    "api.docbot.manager.pipeline_queries.get_pipeline_by_id",
+    new_callable=AsyncMock,
+)
+@pytest.mark.asyncio
+async def test_docbot_manager_falls_back_to_config_when_no_override(
+    mock_get_pipeline, mock_cls, mock_enqueue, monkeypatch
+):
+    monkeypatch.setattr(config, "DOCBOT_MODEL", "config-doc")
+    mock_get_pipeline.return_value = Pipeline(name="p")
+    mock_cls.return_value = MagicMock()
+
+    await DocBotManager.process_completed_task(_task())
+
+    assert mock_cls.call_args.kwargs["session_config"].model == "config-doc"

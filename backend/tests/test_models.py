@@ -193,3 +193,46 @@ def test_pipeline_repo_uri_none_or_empty():
 def test_pipeline_repo_uri_invalid():
     with pytest.raises(ValidationError):
         Pipeline(name="Test", repo_uri="not a url")
+
+
+MODEL_OVERRIDE_FIELDS = (
+    "ollama_model",
+    "one_prompt_model",
+    "assistant_model",
+    "archbot_model",
+    "reviewbot_model",
+    "docbot_model",
+    "coderbot_model",
+)
+
+
+def test_pipeline_model_overrides_default_to_none(init_mock_db):
+    pipeline = Pipeline(name="Test")
+    for field in MODEL_OVERRIDE_FIELDS:
+        assert getattr(pipeline, field) is None
+
+
+def test_pipeline_model_overrides_normalize_blank_to_none(init_mock_db):
+    pipeline = Pipeline(name="Test", archbot_model="   ", one_prompt_model="")
+    assert pipeline.archbot_model is None
+    assert pipeline.one_prompt_model is None
+
+
+def test_pipeline_model_overrides_trim_values(init_mock_db):
+    pipeline = Pipeline(name="Test", assistant_model="  llama3  ")
+    assert pipeline.assistant_model == "llama3"
+
+
+def test_pipeline_model_overrides_round_trip(init_mock_db):
+    pipeline = Pipeline(
+        name="Test",
+        assistant_model="assistant-x",
+        coderbot_model="coder-x",
+    )
+    data = pipeline.model_dump(mode="json")
+    assert data["assistant_model"] == "assistant-x"
+    assert data["coderbot_model"] == "coder-x"
+
+    restored = Pipeline(**data)
+    assert restored.assistant_model == "assistant-x"
+    assert restored.coderbot_model == "coder-x"

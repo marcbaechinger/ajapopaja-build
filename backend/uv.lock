@@ -420,6 +420,7 @@ version = "0.3.0"
 source = { editable = "core" }
 dependencies = [
     { name = "beanie" },
+    { name = "ollama" },
     { name = "passlib", extra = ["bcrypt"] },
     { name = "pydantic" },
     { name = "pymongo" },
@@ -428,6 +429,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "beanie", specifier = "==2.1.0" },
+    { name = "ollama", specifier = ">=0.6.1" },
     { name = "passlib", extras = ["bcrypt"], specifier = ">=1.7.4" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pymongo", specifier = ">=4.9.0" },

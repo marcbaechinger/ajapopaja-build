@@ -153,10 +153,14 @@ describe('AssistantPanel', () => {
     });
 
     it('sends a normal message that is not a slash command', () => {
+      window.location.hash = '#/pipeline/abc123';
       const input = submitInput('Hello assistant');
 
       expect(input.value).toBe('');
-      expect(mockContext.assistantService.sendMessage).toHaveBeenCalledWith('Hello assistant');
+      expect(mockContext.assistantService.sendMessage).toHaveBeenCalledWith(
+        'Hello assistant',
+        'abc123'
+      );
     });
   });
 });

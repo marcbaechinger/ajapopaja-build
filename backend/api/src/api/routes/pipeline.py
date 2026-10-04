@@ -14,7 +14,7 @@
 
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Body, Depends
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from api.auth import get_current_user
@@ -29,9 +29,47 @@ from core.models.models import (
 )
 from core.queries import pipeline as pipeline_queries
 from core.queries import task as task_queries
+from core.services.model_resolver import list_coderbot_models, list_ollama_models
 from core.utils import git_utils
 
 router = APIRouter(prefix="/pipelines", tags=["pipelines"])
+
+
+class PipelineUpdateRequest(BaseModel):
+    """PATCH body for a pipeline, including the per-use-case model overrides.
+
+    A Pydantic request model (rather than individual ``Body`` params) is used so
+    an explicitly ``null`` model override can be distinguished from an omitted
+    one and therefore clear the stored override.
+    """
+
+    version: int
+    name: Optional[str] = None
+    status: Optional[PipelineStatus] = None
+    workspace_path: Optional[str] = None
+    repo_uri: Optional[str] = None
+    repo_username: Optional[str] = None
+    repo_token: Optional[str] = None
+    doc_root: Optional[str] = None
+    test_commands: Optional[List[List[str]]] = None
+    lint_commands: Optional[List[List[str]]] = None
+    serve_commands: Optional[List[List[str]]] = None
+    build_commands: Optional[List[List[str]]] = None
+    ollama_model: Optional[str] = None
+    one_prompt_model: Optional[str] = None
+    assistant_model: Optional[str] = None
+    archbot_model: Optional[str] = None
+    reviewbot_model: Optional[str] = None
+    docbot_model: Optional[str] = None
+    coderbot_model: Optional[str] = None
+
+
+class ModelOptionsResponse(BaseModel):
+    """Select-list data for the pipeline model configuration dialog."""
+
+    ollama: List[str] = Field(default_factory=list)
+    coderbot: List[str] = Field(default_factory=list)
+    error: Optional[str] = None
 
 
 @router.get("/", response_model=List[Pipeline])
@@ -65,34 +103,16 @@ async def get_pipeline(
 @router.patch("/{pipeline_id}", response_model=Pipeline)
 async def update_pipeline(
     pipeline_id: str,
-    version: int = Body(..., embed=True),
-    name: Optional[str] = Body(None, embed=True),
-    status: Optional[PipelineStatus] = Body(None, embed=True),
-    workspace_path: Optional[str] = Body(None, embed=True),
-    repo_uri: Optional[str] = Body(None, embed=True),
-    repo_username: Optional[str] = Body(None, embed=True),
-    repo_token: Optional[str] = Body(None, embed=True),
-    doc_root: Optional[str] = Body(None, embed=True),
-    test_commands: Optional[List[List[str]]] = Body(None, embed=True),
-    lint_commands: Optional[List[List[str]]] = Body(None, embed=True),
-    serve_commands: Optional[List[List[str]]] = Body(None, embed=True),
-    build_commands: Optional[List[List[str]]] = Body(None, embed=True),
+    request: PipelineUpdateRequest,
     current_user: User = Depends(get_current_user),
 ):
+    # Only forward fields the client actually sent so a partial PATCH does not
+    # clear unrelated values (while an explicit ``null`` still clears a model
+    # override).
+    provided = request.model_dump(exclude_unset=True)
+    version = provided.pop("version")
     updated_pipeline = await pipeline_queries.update_pipeline(
-        pipeline_id,
-        version,
-        name=name,
-        status=status,
-        workspace_path=workspace_path,
-        repo_uri=repo_uri,
-        repo_username=repo_username,
-        repo_token=repo_token,
-        doc_root=doc_root,
-        test_commands=test_commands,
-        lint_commands=lint_commands,
-        serve_commands=serve_commands,
-        build_commands=build_commands,
+        pipeline_id, version, **provided
     )
 
     await manager.broadcast(
@@ -101,6 +121,34 @@ async def update_pipeline(
         )
     )
     return updated_pipeline
+
+
+@router.get("/{pipeline_id}/model-options", response_model=ModelOptionsResponse)
+async def get_model_options(
+    pipeline_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Return the select-list model options for the pipeline edit dialog.
+
+    ``ollama`` lists the tags reported by the configured Ollama server and
+    ``coderbot`` the pi-agent model ids from ``models.json``. Both catalog
+    helpers degrade to an empty list instead of raising so the dialog still
+    renders.
+    """
+    try:
+        ollama_models = await list_ollama_models()
+    except Exception as exc:  # pragma: no cover - the helper never raises
+        return ModelOptionsResponse(error=f"Failed to list Ollama models: {exc}")
+
+    try:
+        coderbot_models = list_coderbot_models()
+    except Exception as exc:  # pragma: no cover - the helper never raises
+        return ModelOptionsResponse(
+            ollama=ollama_models,
+            error=f"Failed to list CoderBot models: {exc}",
+        )
+
+    return ModelOptionsResponse(ollama=ollama_models, coderbot=coderbot_models)
 
 
 @router.delete("/{pipeline_id}")

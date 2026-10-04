@@ -38,6 +38,7 @@ from api.oneprompt.hooks import (
     hooks,
     registered_hooks,
 )
+from core import config
 from core.models.models import Pipeline, Task
 
 
@@ -123,6 +124,26 @@ async def test_none_spec_becomes_empty_string(init_mock_db):
     enriched = await load_task_and_pipeline({"task_id": str(task.id)})
 
     assert enriched["task_spec"] == ""
+
+
+async def test_resolved_model_is_injected_into_context(init_mock_db, monkeypatch):
+    monkeypatch.setattr(config, "ONE_PROMPT_OLLAMA_MODEL", "config-one")
+    task, pipeline = await _seed_task()
+    pipeline.one_prompt_model = "pipeline-one"
+    await pipeline.save()
+
+    enriched = await load_task_and_pipeline({"task_id": str(task.id)})
+
+    assert enriched["model"] == "pipeline-one"
+
+
+async def test_model_falls_back_to_one_prompt_config(init_mock_db, monkeypatch):
+    monkeypatch.setattr(config, "ONE_PROMPT_OLLAMA_MODEL", "config-one")
+    task, _pipeline = await _seed_task()
+
+    enriched = await load_task_and_pipeline({"task_id": str(task.id)})
+
+    assert enriched["model"] == "config-one"
 
 
 async def test_provider_aliases_point_at_the_same_function():

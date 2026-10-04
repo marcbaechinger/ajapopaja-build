@@ -247,7 +247,7 @@ export class AssistantPanel {
       }
 
       this.addMessage('user', text);
-      this.context.assistantService.sendMessage(text);
+      this.context.assistantService.sendMessage(text, this.getPipelineIdFromUrl());
       input.value = '';
       input.rows = 1;
       input.focus();

@@ -40,6 +40,7 @@ from typing import Any, Optional
 from core.exceptions import EntityNotFoundError
 from core.queries.pipeline import get_pipeline_by_id
 from core.queries.task import get_task_by_id
+from core.services.model_resolver import resolve_model
 
 from api.oneprompt.hooks import (
     PromptHook,
@@ -171,6 +172,10 @@ async def load_task_and_pipeline(context: Any) -> dict:
             "task_title": task.title,
             "task_spec": task.spec or "",
             "task_description": task.description or "",
+            # The resolved one-shot model (pipeline override or global config).
+            # The runner prefers this over the template/env fallback so a
+            # per-pipeline override takes effect.
+            "model": resolve_model("one_prompt", pipeline),
         }
     )
     return enriched

@@ -12,10 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from core.exceptions import EntityNotFoundError, ValidationError, VersionMismatchError
-from core.models.models import Pipeline, PipelineStatus, Task, _validate_command_lists
+from core.models.models import (
+    Pipeline,
+    PipelineStatus,
+    Task,
+    _normalize_model_override,
+    _validate_command_lists,
+)
+
+#: Sentinel marking a model override that was not supplied in a partial update.
+_UNSET: Any = object()
 
 
 async def get_all_pipelines(include_deleted: bool = False) -> List[Pipeline]:
@@ -110,6 +119,13 @@ async def update_pipeline(
     lint_commands: Optional[List[List[str]]] = None,
     serve_commands: Optional[List[List[str]]] = None,
     build_commands: Optional[List[List[str]]] = None,
+    ollama_model: Any = _UNSET,
+    one_prompt_model: Any = _UNSET,
+    assistant_model: Any = _UNSET,
+    archbot_model: Any = _UNSET,
+    reviewbot_model: Any = _UNSET,
+    docbot_model: Any = _UNSET,
+    coderbot_model: Any = _UNSET,
 ) -> Pipeline:
     pipeline = await get_pipeline_by_id(pipeline_id)
 
@@ -159,6 +175,23 @@ async def update_pipeline(
         pipeline.build_commands = _validate_command_lists(
             build_commands, "build_commands", "build", ValidationError
         )
+
+    # Model overrides use a sentinel so an explicit ``null`` clears the override
+    # while an omitted field (partial PATCH) leaves the stored value untouched.
+    if ollama_model is not _UNSET:
+        pipeline.ollama_model = _normalize_model_override(ollama_model)
+    if one_prompt_model is not _UNSET:
+        pipeline.one_prompt_model = _normalize_model_override(one_prompt_model)
+    if assistant_model is not _UNSET:
+        pipeline.assistant_model = _normalize_model_override(assistant_model)
+    if archbot_model is not _UNSET:
+        pipeline.archbot_model = _normalize_model_override(archbot_model)
+    if reviewbot_model is not _UNSET:
+        pipeline.reviewbot_model = _normalize_model_override(reviewbot_model)
+    if docbot_model is not _UNSET:
+        pipeline.docbot_model = _normalize_model_override(docbot_model)
+    if coderbot_model is not _UNSET:
+        pipeline.coderbot_model = _normalize_model_override(coderbot_model)
 
     pipeline.version += 1
     await pipeline.save()

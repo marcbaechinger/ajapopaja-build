@@ -13,10 +13,12 @@
 # limitations under the License.
 
 import time
-from typing import Awaitable, Callable, Dict
+from typing import Awaitable, Callable, Dict, Optional
 
 from api.assistant.session import AssistantSession
 from core.models.models import UserChat
+from core.queries.pipeline import get_pipeline_by_id
+from core.services.model_resolver import resolve_model
 
 
 class AssistantManager:
@@ -25,22 +27,43 @@ class AssistantManager:
         self.last_access: Dict[str, float] = {}
         self.session_ttl = 30 * 60  # 30 minutes
 
+    async def _resolve_assistant_model(
+        self, pipeline_id: Optional[str]
+    ) -> Optional[str]:
+        """Resolve the assistant model for the active pipeline (or config)."""
+        pipeline = None
+        if pipeline_id:
+            try:
+                pipeline = await get_pipeline_by_id(str(pipeline_id))
+            except Exception:
+                pipeline = None
+        return resolve_model("assistant", pipeline)
+
     async def get_or_create_session(
-        self, user_id: str, on_update: Callable[[Dict], Awaitable[None]]
+        self,
+        user_id: str,
+        on_update: Callable[[Dict], Awaitable[None]],
+        pipeline_id: Optional[str] = None,
     ) -> AssistantSession:
         self._cleanup_sessions()
 
         if user_id in self.sessions:
+            session = self.sessions[user_id]
             # Update callback because WebSocket might be different
-            self.sessions[user_id].on_update = on_update
+            session.on_update = on_update
             self.last_access[user_id] = time.time()
-            return self.sessions[user_id]
+            # Assistant sessions are long-lived; refresh the model whenever the
+            # active pipeline is supplied so a pipeline override takes effect.
+            if pipeline_id:
+                session.model = await self._resolve_assistant_model(pipeline_id)
+            return session
 
         # Load history from DB
         chat = await UserChat.find_one(UserChat.user_id == user_id)
         history = chat.history if chat else []
 
-        session = AssistantSession(user_id, history, on_update)
+        model = await self._resolve_assistant_model(pipeline_id)
+        session = AssistantSession(user_id, history, on_update, model=model)
         self.sessions[user_id] = session
         self.last_access[user_id] = time.time()
         return session

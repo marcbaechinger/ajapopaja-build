@@ -18,6 +18,7 @@ import { BaseDialog } from './dialog_common.ts';
 import { Pipeline, PipelineStatus } from '../../core/domain.ts';
 import type { AppContext } from '../../core/AppContext.ts';
 import { Icon } from './Icon.ts';
+import { escapeHtml } from './utils/html.ts';
 
 export type PipelineDialogMode = 'create' | 'edit';
 
@@ -31,6 +32,69 @@ export interface PipelineEditDialogProps {
 type RepoTab = 'local' | 'remote';
 
 type CommandsTab = 'build' | 'lint' | 'test' | 'serve';
+
+/** A per-use-case model override rendered in the Models section. */
+type ModelField =
+  | 'ollama_model'
+  | 'one_prompt_model'
+  | 'assistant_model'
+  | 'archbot_model'
+  | 'reviewbot_model'
+  | 'docbot_model'
+  | 'coderbot_model';
+
+interface ModelFieldSpec {
+  field: ModelField;
+  label: string;
+  hint: string;
+  /** Which catalog supplies the options. */
+  source: 'ollama' | 'coderbot';
+}
+
+const MODEL_FIELDS: ModelFieldSpec[] = [
+  {
+    field: 'ollama_model',
+    label: 'General Ollama Model',
+    hint: 'Fallback for every Ollama use case below.',
+    source: 'ollama',
+  },
+  {
+    field: 'one_prompt_model',
+    label: 'One-Shot Prompt Model',
+    hint: 'Used by the one-shot AI prompt framework.',
+    source: 'ollama',
+  },
+  {
+    field: 'assistant_model',
+    label: 'Assistant Model',
+    hint: 'Used by the AI assistant chat.',
+    source: 'ollama',
+  },
+  {
+    field: 'archbot_model',
+    label: 'ArchBot Model',
+    hint: 'Used to draft design documents.',
+    source: 'ollama',
+  },
+  {
+    field: 'reviewbot_model',
+    label: 'ReviewBot Model',
+    hint: 'Used to review implemented tasks.',
+    source: 'ollama',
+  },
+  {
+    field: 'docbot_model',
+    label: 'DocBot Model',
+    hint: 'Used to create documentation.',
+    source: 'ollama',
+  },
+  {
+    field: 'coderbot_model',
+    label: 'CoderBot Model',
+    hint: 'Pi-agent model id configured in models.json.',
+    source: 'coderbot',
+  },
+];
 
 const READONLY_CLASS = ' opacity-60 cursor-not-allowed';
 
@@ -74,6 +138,14 @@ export class PipelineEditDialog extends BaseDialog<void> {
   private devServerLoading = false;
   private devServerError: string | null = null;
 
+  // Model catalog state. The options are fetched asynchronously after render
+  // so the dialog opens instantly even when Ollama is slow/unavailable.
+  private modelOptions: { ollama: string[]; coderbot: string[] } = {
+    ollama: [],
+    coderbot: [],
+  };
+  private modelOptionsLoaded = false;
+
   constructor(props: PipelineEditDialogProps) {
     // We need to set props BEFORE super() if renderBody uses them,
     // but JS doesn't allow this.props before super().
@@ -98,6 +170,8 @@ export class PipelineEditDialog extends BaseDialog<void> {
     this.reRender();
     // Show the current dev-server state without blocking the dialog render.
     void this.loadDevServerStatus();
+    // Populate the model selects asynchronously (same rationale).
+    void this.loadModelOptions();
   }
 
   private isEditMode(): boolean {
@@ -177,7 +251,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
   }
 
   /**
-   * Copies the value currently rendered in the active command tab back onto the
+   * Copies the values currently rendered in the active command tab back onto the
    * in-memory pipeline so switching between command tabs does not discard the
    * commands the user has typed.
    */
@@ -194,6 +268,35 @@ export class PipelineEditDialog extends BaseDialog<void> {
         this.pipeline[field] = parseTestCommands(el.value);
       }
     }
+  }
+
+  /**
+   * Copies the current model select values back onto the in-memory pipeline.
+   * An empty selection means "use the global default" and is stored as `null`.
+   */
+  private captureModelInputs() {
+    for (const spec of MODEL_FIELDS) {
+      const el = this.dialog.querySelector(`select[name="${spec.field}"]`) as HTMLSelectElement | null;
+      if (el) {
+        this.pipeline[spec.field] = el.value ? el.value : null;
+      }
+    }
+  }
+
+  /**
+   * Builds the model override part of a create/update payload. Empty selects are
+   * sent as `null` so the backend clears the override.
+   */
+  private modelPayload(): Record<ModelField, string | null> {
+    return {
+      ollama_model: this.pipeline.ollama_model ?? null,
+      one_prompt_model: this.pipeline.one_prompt_model ?? null,
+      assistant_model: this.pipeline.assistant_model ?? null,
+      archbot_model: this.pipeline.archbot_model ?? null,
+      reviewbot_model: this.pipeline.reviewbot_model ?? null,
+      docbot_model: this.pipeline.docbot_model ?? null,
+      coderbot_model: this.pipeline.coderbot_model ?? null,
+    };
   }
 
   private tabClass(tab: RepoTab): string {
@@ -394,6 +497,91 @@ export class PipelineEditDialog extends BaseDialog<void> {
     `;
   }
 
+  /**
+   * Renders a single model override select. A leading "Use global default"
+   * option (value "") clears the override. A stored value that is not present
+   * in the catalog is still rendered so an existing override is never silently
+   * dropped.
+   */
+  private renderModelSelect(spec: ModelFieldSpec): string {
+    const current = (this.pipeline[spec.field] as string | null | undefined) || '';
+    const options = spec.source === 'coderbot' ? this.modelOptions.coderbot : this.modelOptions.ollama;
+    const values = [...options];
+    if (current && !values.includes(current)) {
+      values.unshift(current);
+    }
+    const optionHtml = values
+      .map((value) => {
+        const selected = value === current ? ' selected' : '';
+        return `<option value="${escapeHtml(value)}"${selected}>${escapeHtml(value)}</option>`;
+      })
+      .join('');
+    const globalSelected = current ? '' : ' selected';
+    return `
+      <div>
+        <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">${escapeHtml(spec.label)}</label>
+        <select name="${spec.field}" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1 cursor-pointer">
+          <option value=""${globalSelected}>Use global default</option>
+          ${optionHtml}
+        </select>
+        <p class="text-[10px] text-app-muted">${escapeHtml(spec.hint)}</p>
+      </div>
+    `;
+  }
+
+  /** Renders the Models section with one select per use case. */
+  private renderModelsArea(): string {
+    return `
+      <div class="flex flex-col gap-3 p-3 rounded border border-app-border bg-app-bg">
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-app-muted">Models</span>
+          ${this.modelOptions.ollama.length === 0 && !this.modelOptionsLoaded
+            ? '<span class="text-[10px] text-app-muted">Loading…</span>'
+            : ''}
+        </div>
+        <div class="grid grid-cols-1 gap-3">
+          ${MODEL_FIELDS.map((spec) => this.renderModelSelect(spec)).join('')}
+        </div>
+        <p class="text-[10px] text-app-muted">Leave a select on “Use global default” to fall back to the server configuration for that use case.</p>
+      </div>
+    `;
+  }
+
+  /** Replaces only the Models section so an options refresh keeps other fields. */
+  private reRenderModelsArea() {
+    const area = this.dialog.querySelector('#models-area');
+    if (!area) return;
+    area.innerHTML = this.renderModelsArea();
+  }
+
+  /**
+   * Fetches the available Ollama tags and CoderBot models. Failures are silent:
+   * the selects simply keep only the "Use global default" option.
+   */
+  private async loadModelOptions(): Promise<void> {
+    const pipelineId = this.pipelineId;
+    if (!pipelineId) {
+      // Create mode has no pipeline id yet; keep the global-default options.
+      this.modelOptionsLoaded = true;
+      this.reRenderModelsArea();
+      return;
+    }
+    try {
+      const options = await this.props.context.pipelineClient.getModelOptions(pipelineId);
+      // Preserve any selection the user already made before re-rendering.
+      this.captureModelInputs();
+      this.modelOptions = {
+        ollama: Array.isArray(options?.ollama) ? options.ollama : [],
+        coderbot: Array.isArray(options?.coderbot) ? options.coderbot : [],
+      };
+    } catch (error) {
+      console.error('Failed to load model options:', error);
+    } finally {
+      this.modelOptionsLoaded = true;
+      this.reRenderModelsArea();
+    }
+  }
+
   /** True when the pipeline has serve commands persisted on the server. */
   private hasServeCommands(): boolean {
     return Array.isArray(this.pipeline.serve_commands) && this.pipeline.serve_commands.length > 0;
@@ -455,6 +643,9 @@ export class PipelineEditDialog extends BaseDialog<void> {
         </div>
         <div id="commands-tab-area" class="flex flex-col gap-3">
           ${this.renderCommandsTabArea()}
+        </div>
+        <div id="models-area">
+          ${this.renderModelsArea()}
         </div>
         ${devServerControl ? `<div id="dev-server-area">${devServerControl}</div>` : ''}
         <div id="pipeline-edit-error" class="hidden text-xs text-red-400 font-bold"></div>
@@ -625,6 +816,9 @@ export class PipelineEditDialog extends BaseDialog<void> {
     const create = !this.isEditMode();
     const saveBtn = this.dialog.querySelector('#pipeline-edit-save') as HTMLButtonElement;
 
+    // Make sure the latest model selections are reflected in the pipeline.
+    this.captureModelInputs();
+
     const nameInput = this.dialog.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
     const statusSelect = this.dialog.querySelector('select[name="pipeline_status"]') as HTMLSelectElement;
     const workspaceInput = this.dialog.querySelector('input[name="workspace_path"]') as HTMLInputElement;
@@ -675,6 +869,13 @@ export class PipelineEditDialog extends BaseDialog<void> {
           lint_commands?: string[][] | null;
           build_commands?: string[][] | null;
           serve_commands?: string[][] | null;
+          ollama_model?: string | null;
+          one_prompt_model?: string | null;
+          assistant_model?: string | null;
+          archbot_model?: string | null;
+          reviewbot_model?: string | null;
+          docbot_model?: string | null;
+          coderbot_model?: string | null;
         } = {
           name: nameInput?.value.trim() || '',
           doc_root: docRootInput?.value.trim() || 'design',
@@ -682,6 +883,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
           lint_commands: lintCommands.length > 0 ? lintCommands : null,
           build_commands: buildCommands.length > 0 ? buildCommands : null,
           serve_commands: serveCommands.length > 0 ? serveCommands : null,
+          ...this.modelPayload(),
         };
 
         if (this.activeTab === 'remote') {
@@ -719,11 +921,19 @@ export class PipelineEditDialog extends BaseDialog<void> {
           lint_commands?: string[][] | null;
           build_commands?: string[][] | null;
           serve_commands?: string[][] | null;
+          ollama_model?: string | null;
+          one_prompt_model?: string | null;
+          assistant_model?: string | null;
+          archbot_model?: string | null;
+          reviewbot_model?: string | null;
+          docbot_model?: string | null;
+          coderbot_model?: string | null;
         } = {
           test_commands: testCommands,
           lint_commands: lintCommands,
           build_commands: buildCommands,
           serve_commands: serveCommands,
+          ...this.modelPayload(),
         };
 
         if (remote) {

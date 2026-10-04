@@ -72,6 +72,18 @@ def _validate_command_lists(
     return validated
 
 
+def _normalize_model_override(value: Optional[str]) -> Optional[str]:
+    """Return a trimmed model name or ``None`` for a blank value.
+
+    Shared by the :class:`Pipeline` field validator and the update query so a
+    "cleared" override is always persisted uniformly as ``None``.
+    """
+    if isinstance(value, str):
+        stripped = value.strip()
+        return stripped or None
+    return value
+
+
 class TaskStatus(str, Enum):
     CREATED = "created"
     SCHEDULED = "scheduled"
@@ -173,6 +185,19 @@ class Pipeline(Document):
     # [["sh", "-c", "cd frontend && npm run build"]]). These build the repo.
     # ``None``/empty means "not configured".
     build_commands: Optional[List[List[str]]] = None
+    # Per-use-case model overrides. ``None``/empty means "no override" and the
+    # global configuration from ``core.config`` is used instead. All fields are
+    # optional so existing documents remain valid without a migration.
+    # ``ollama_model`` is a general fallback applied to every Ollama use case;
+    # the others are use-case specific. ``coderbot_model`` selects a pi-agent
+    # model id from ``docker/pi-agent/models.json`` (not an Ollama tag).
+    ollama_model: Optional[str] = None
+    one_prompt_model: Optional[str] = None
+    assistant_model: Optional[str] = None
+    archbot_model: Optional[str] = None
+    reviewbot_model: Optional[str] = None
+    docbot_model: Optional[str] = None
+    coderbot_model: Optional[str] = None
     version: int = 1
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -264,6 +289,24 @@ class Pipeline(Document):
         - Otherwise each entry must be a non-empty list of non-empty strings.
         """
         return _validate_command_lists(v, "build_commands", "build")
+
+    @field_validator(
+        "ollama_model",
+        "one_prompt_model",
+        "assistant_model",
+        "archbot_model",
+        "reviewbot_model",
+        "docbot_model",
+        "coderbot_model",
+    )
+    @classmethod
+    def validate_model_overrides(cls, v):
+        """Normalize blank/whitespace model overrides to ``None``.
+
+        A blank select is stored uniformly as ``None`` so it never shadows the
+        global configuration.
+        """
+        return _normalize_model_override(v)
 
     @field_validator("repo_uri")
     @classmethod

@@ -46,6 +46,7 @@ describe('PipelineEditDialog', () => {
         pipelineClient: {
           update: vi.fn().mockResolvedValue({}),
           create: vi.fn().mockResolvedValue({}),
+          getModelOptions: vi.fn().mockResolvedValue({ ollama: [], coderbot: [] }),
         },
       } as any,
     };
@@ -59,6 +60,7 @@ describe('PipelineEditDialog', () => {
       pipelineClient: {
         create: vi.fn().mockResolvedValue({}),
         update: vi.fn().mockResolvedValue({}),
+        getModelOptions: vi.fn().mockResolvedValue({ ollama: [], coderbot: [] }),
       },
     } as any,
   });
@@ -1031,6 +1033,120 @@ describe('PipelineEditDialog', () => {
       } finally {
         vi.unstubAllGlobals();
       }
+    });
+  });
+
+  describe('models section', () => {
+    const clickCancel = () => {
+      document.querySelector('#pipeline-edit-cancel')?.dispatchEvent(new MouseEvent('click'));
+    };
+
+    it('should render a select for every use case with a global-default option', async () => {
+      const dialog = new PipelineEditDialog(mockProps);
+      const showPromise = dialog.show();
+
+      for (const field of [
+        'ollama_model',
+        'one_prompt_model',
+        'assistant_model',
+        'archbot_model',
+        'reviewbot_model',
+        'docbot_model',
+        'coderbot_model',
+      ]) {
+        const select = document.querySelector(`select[name="${field}"]`) as HTMLSelectElement;
+        expect(select).not.toBeNull();
+        expect(select.options[0].value).toBe('');
+        expect(select.options[0].textContent).toContain('Use global default');
+      }
+
+      clickCancel();
+      await showPromise;
+    });
+
+    it('should fetch and populate the model selects', async () => {
+      (mockProps.context.pipelineClient as any).getModelOptions = vi.fn().mockResolvedValue({
+        ollama: ['llama3', 'gpt-oss:20b'],
+        coderbot: ['qwen3.6:27b'],
+      });
+      const dialog = new PipelineEditDialog(mockProps);
+      const showPromise = dialog.show();
+
+      await vi.waitFor(() => {
+        const ollamaSelect = document.querySelector('select[name="archbot_model"]') as HTMLSelectElement;
+        expect(Array.from(ollamaSelect.options).map((o) => o.value)).toContain('llama3');
+      });
+      expect((mockProps.context.pipelineClient as any).getModelOptions).toHaveBeenCalledWith('pipeline-1');
+
+      const coderbotSelect = document.querySelector('select[name="coderbot_model"]') as HTMLSelectElement;
+      expect(Array.from(coderbotSelect.options).map((o) => o.value)).toContain('qwen3.6:27b');
+      // Ollama tags must not leak into the CoderBot list.
+      expect(Array.from(coderbotSelect.options).map((o) => o.value)).not.toContain('llama3');
+
+      clickCancel();
+      await showPromise;
+    });
+
+    it('should send null for a model left on the global default', async () => {
+      const dialog = new PipelineEditDialog(mockProps);
+      const showPromise = dialog.show();
+
+      const saveBtn = document.querySelector('#pipeline-edit-save') as HTMLButtonElement;
+      saveBtn.click();
+      await showPromise;
+
+      const updateCall = (mockProps.context.pipelineClient.update as any).mock.calls[0];
+      expect(updateCall[2].archbot_model).toBeNull();
+      expect(updateCall[2].coderbot_model).toBeNull();
+    });
+
+    it('should send a selected model override in the update payload', async () => {
+      (mockProps.context.pipelineClient as any).getModelOptions = vi.fn().mockResolvedValue({
+        ollama: ['llama3'],
+        coderbot: ['qwen3.6:27b'],
+      });
+      const dialog = new PipelineEditDialog(mockProps);
+      const showPromise = dialog.show();
+
+      await vi.waitFor(() => {
+        const select = document.querySelector('select[name="archbot_model"]') as HTMLSelectElement;
+        expect(Array.from(select.options).map((o) => o.value)).toContain('llama3');
+      });
+      (document.querySelector('select[name="archbot_model"]') as HTMLSelectElement).value = 'llama3';
+      (document.querySelector('select[name="coderbot_model"]') as HTMLSelectElement).value = 'qwen3.6:27b';
+
+      const saveBtn = document.querySelector('#pipeline-edit-save') as HTMLButtonElement;
+      saveBtn.click();
+      await showPromise;
+
+      const updateCall = (mockProps.context.pipelineClient.update as any).mock.calls[0];
+      expect(updateCall[2].archbot_model).toBe('llama3');
+      expect(updateCall[2].coderbot_model).toBe('qwen3.6:27b');
+    });
+
+    it('should keep a stored override that is missing from the catalog', async () => {
+      mockProps.pipeline!.archbot_model = 'legacy-model:cloud';
+      const dialog = new PipelineEditDialog(mockProps);
+      const showPromise = dialog.show();
+
+      const select = document.querySelector('select[name="archbot_model"]') as HTMLSelectElement;
+      expect(select.value).toBe('legacy-model:cloud');
+      expect(Array.from(select.options).map((o) => o.value)).toContain('legacy-model:cloud');
+
+      clickCancel();
+      await showPromise;
+    });
+
+    it('should render usable selects when the catalog is empty', async () => {
+      const dialog = new PipelineEditDialog(mockProps);
+      const showPromise = dialog.show();
+
+      const select = document.querySelector('select[name="archbot_model"]') as HTMLSelectElement;
+      expect(select.options.length).toBeGreaterThanOrEqual(1);
+      expect(select.options[0].value).toBe('');
+
+      clickCancel();
+      await showPromise;
     });
   });
 });

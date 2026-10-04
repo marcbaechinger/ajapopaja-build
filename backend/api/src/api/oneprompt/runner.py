@@ -806,7 +806,17 @@ class OnePromptRunner:
         return "".join(chunks)
 
     def _resolve_model(self, template: Any, context: Mapping[str, Any]) -> str:
-        """Resolve the model from the template metadata (default config)."""
+        """Resolve the model for a run.
+
+        Precedence: a context-provided model (the pipeline override or global
+        one-shot config injected by the pre-render context provider) wins,
+        followed by the template's ``model`` front-matter and finally
+        :data:`core.config.ONE_PROMPT_OLLAMA_MODEL`.
+        """
+
+        context_model = context.get("model") if isinstance(context, Mapping) else None
+        if isinstance(context_model, str) and context_model.strip():
+            return context_model.strip()
 
         raw = getattr(template, "model", None) or ""
         if raw:

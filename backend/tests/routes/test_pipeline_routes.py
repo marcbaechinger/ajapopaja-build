@@ -771,3 +771,141 @@ async def test_get_pipeline_git_status_endpoint_unauthenticated(
     app.dependency_overrides.clear()
     response = await async_client.get("/api/pipelines/p1/git-status")
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.asyncio
+async def test_update_pipeline_persists_model_overrides(async_client, init_mock_db):
+    """PATCH forwards the new model override fields (including explicit null)."""
+    from core.models.models import Pipeline
+
+    updated = Pipeline(name="p", version=2, archbot_model="arch-x")
+    with patch(
+        "api.routes.pipeline.pipeline_queries.update_pipeline",
+        new_callable=AsyncMock,
+        return_value=updated,
+    ) as mock_update:
+        with patch("api.routes.pipeline.manager.broadcast", new_callable=AsyncMock):
+            response = await async_client.patch(
+                "/api/pipelines/p1",
+                json={
+                    "version": 1,
+                    "archbot_model": "arch-x",
+                    "assistant_model": None,
+                },
+            )
+
+    assert response.status_code == status.HTTP_200_OK
+    kwargs = mock_update.await_args.kwargs
+    assert kwargs["archbot_model"] == "arch-x"
+    # An explicitly null field must still be forwarded so the override is cleared.
+    assert "assistant_model" in kwargs
+    assert kwargs["assistant_model"] is None
+
+
+@pytest.mark.asyncio
+async def test_update_pipeline_omits_unsent_model_overrides(async_client, init_mock_db):
+    """A partial PATCH must not clear model overrides that were not sent."""
+    from core.models.models import Pipeline
+
+    updated = Pipeline(name="p", version=2)
+    with patch(
+        "api.routes.pipeline.pipeline_queries.update_pipeline",
+        new_callable=AsyncMock,
+        return_value=updated,
+    ) as mock_update:
+        with patch("api.routes.pipeline.manager.broadcast", new_callable=AsyncMock):
+            response = await async_client.patch(
+                "/api/pipelines/p1", json={"version": 1, "name": "renamed"}
+            )
+
+    assert response.status_code == status.HTTP_200_OK
+    kwargs = mock_update.await_args.kwargs
+    assert kwargs["name"] == "renamed"
+    assert "archbot_model" not in kwargs
+    assert "ollama_model" not in kwargs
+
+
+@pytest.mark.asyncio
+async def test_update_pipeline_normalizes_blank_model_override(init_mock_db):
+    """update_pipeline normalizes a blank override to None."""
+    from core.models.models import Pipeline
+    from core.queries import pipeline as pipeline_queries
+
+    stored = Pipeline(name="Local", version=1)
+
+    with (
+        patch(
+            "core.queries.pipeline.get_pipeline_by_id",
+            new_callable=AsyncMock,
+            return_value=stored,
+        ),
+        patch.object(Pipeline, "save", new_callable=AsyncMock),
+    ):
+        await pipeline_queries.update_pipeline("p1", stored.version, archbot_model="  ")
+        assert stored.archbot_model is None
+
+        await pipeline_queries.update_pipeline(
+            "p1", stored.version, archbot_model="arch-x"
+        )
+        assert stored.archbot_model == "arch-x"
+
+        # Explicit None clears the override.
+        await pipeline_queries.update_pipeline("p1", stored.version, archbot_model=None)
+        assert stored.archbot_model is None
+
+
+@pytest.mark.asyncio
+async def test_get_model_options_returns_both_lists(async_client, init_mock_db):
+    """GET /model-options returns the Ollama and CoderBot catalogs."""
+    with (
+        patch(
+            "api.routes.pipeline.list_ollama_models",
+            new_callable=AsyncMock,
+            return_value=["llama3", "gpt-oss:20b"],
+        ),
+        patch(
+            "api.routes.pipeline.list_coderbot_models",
+            return_value=["qwen3.6:27b"],
+        ),
+    ):
+        response = await async_client.get("/api/pipelines/p1/model-options")
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == {
+        "ollama": ["llama3", "gpt-oss:20b"],
+        "coderbot": ["qwen3.6:27b"],
+        "error": None,
+    }
+
+
+@pytest.mark.asyncio
+async def test_get_model_options_degrades_when_ollama_unavailable(
+    async_client, init_mock_db
+):
+    """An unavailable Ollama catalog yields an empty list without erroring."""
+    with (
+        patch(
+            "api.routes.pipeline.list_ollama_models",
+            new_callable=AsyncMock,
+            return_value=[],
+        ),
+        patch(
+            "api.routes.pipeline.list_coderbot_models",
+            return_value=["qwen3.6:27b"],
+        ),
+    ):
+        response = await async_client.get("/api/pipelines/p1/model-options")
+
+    assert response.status_code == status.HTTP_200_OK
+    body = response.json()
+    assert body["ollama"] == []
+    assert body["coderbot"] == ["qwen3.6:27b"]
+    assert body["error"] is None
+
+
+@pytest.mark.asyncio
+async def test_get_model_options_unauthenticated(async_client, init_mock_db):
+    """The model-options route requires authentication."""
+    app.dependency_overrides.clear()
+    response = await async_client.get("/api/pipelines/p1/model-options")
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED

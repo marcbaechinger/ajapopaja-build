@@ -18,6 +18,8 @@ from api.bot.manager import bot_manager
 from api.bot.session_config import BaseBotSessionConfig
 from core import config as config_mod
 from core.models.models import Task
+from core.queries import pipeline as pipeline_queries
+from core.services.model_resolver import resolve_model
 
 from . import tools  # noqa: F401
 from .session import DocBotSession
@@ -32,8 +34,15 @@ class DocBotManager:
         Triggers an autonomous DocBot session by adding it to the bot manager queue.
         """
         logger.info(f"Queueing DocBot session for task {task.id}")
+        pipeline = None
+        try:
+            pipeline = await pipeline_queries.get_pipeline_by_id(
+                str(task.pipeline_id)
+            )
+        except Exception:
+            pipeline = None
         config = BaseBotSessionConfig(
-            model=config_mod.DOCBOT_MODEL,
+            model=resolve_model("docbot", pipeline),
             host=config_mod.DOCBOT_HOST,
             api_key=config_mod.DOCBOT_API_KEY,
         )

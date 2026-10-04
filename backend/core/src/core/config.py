@@ -177,6 +177,14 @@ except ValueError as e:  # pragma: no cover - defensive
 # If unset, no --model flag is passed to Pi (None).
 CODERBOT_DEFAULT_MODEL: Optional[str] = os.getenv("CODERBOT_DEFAULT_MODEL")
 
+# Path to the pi-agent ``models.json`` that lists the CoderBot model options.
+# In the Docker image it is baked in at ``/root/.pi/agent/models.json``; for
+# local development the catalog helper falls back to the repo-relative
+# ``docker/pi-agent/models.json`` when this path does not exist.
+PI_AGENT_MODELS_PATH = Path(
+    os.getenv("PI_AGENT_MODELS_PATH", "/root/.pi/agent/models.json")
+)
+
 # Read-only directory (baked into the Docker image) that holds the bundled Pi
 # skills. Models stay global (a single /root/.pi/agent/models.json); skills are
 # staged per session type from this library so interactive and CoderBot sessions
