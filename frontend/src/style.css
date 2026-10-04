@@ -497,6 +497,15 @@ mark.piview-search-current {
   --piview-gap-pre: 0.4em;
   --piview-gap-hr: 0.65em;
   /*
+   * A readable measure for rendered Markdown. The surrounding log can grow very
+   * wide (notably in the two-column pipeline layout), and prose lines that span
+   * the full width are hard to track. The limit is `ch`-based so it tracks the
+   * rendered font size. `prose-theme` pins `max-width: none`, so this unlayered
+   * declaration - emitted after the applied utilities - is what actually
+   * enforces the measure; the `max-w-prose` class on the element documents it.
+   */
+  --piview-max-width: 65ch;
+  /*
    * The PiView log is a dense, terminal-style surface (`text-[11px]
    * leading-tight`), so the typography plugin's long-form defaults
    * (`line-height: 1.75`, generous block margins) make rendered Markdown look
@@ -505,6 +514,7 @@ mark.piview-search-current {
    * paragraphs, list items and code blocks alike.
    */
   @apply prose-theme text-[12px] leading-snug;
+  max-width: var(--piview-max-width);
 }
 
 /*
