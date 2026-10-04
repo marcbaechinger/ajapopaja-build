@@ -114,6 +114,21 @@ Retrieves current status and verification results for a task.
     *   `task_id` (string): The 24-char hex ID of the task.
 *   **Returns:** Dictionary containing `id`, `status`, `version`, and `verification` results.
 
+### 3.7 `create_task`
+Creates a new task in a pipeline through the same core query layer as the REST API. Creation broadcasts a `TASK_CREATED` WebSocket message from the server process, so the pipeline UI updates live without a manual refresh.
+
+*   **Arguments:**
+    *   `pipeline_id` (string, required): The 24-char hex ID of the target pipeline.
+    *   `title` (string, required): The task title.
+    *   `spec` (optional string): Markdown specification.
+    *   `design_doc` (optional string): Markdown design document.
+    *   `description` (optional string): Short task description.
+    *   `want_design_doc` (optional boolean): Whether an approved design document is required before implementation (default: `false`).
+    *   `status` (optional string): Target initial status; must be a valid task status (default: `created`). New tasks typically start as `created` or `scheduled`.
+    *   `order` (optional integer): Priority/position; lower values sort first.
+*   **Returns:** A dictionary with the created task's details (`id`, `pipeline_id`, `title`, `status`, `version`, `spec`, `design_doc`, `want_design_doc`, `order`, `created_at`, `updated_at`), or a dictionary containing an `error` key for invalid input.
+*   **Errors:** Invalid `pipeline_id`, an empty `title`, or an unknown `status` produce a clear error result.
+
 ## 4. Task State Machine
 
 Agents should respect the following task status transitions:

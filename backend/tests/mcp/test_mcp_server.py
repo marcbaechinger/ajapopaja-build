@@ -16,6 +16,7 @@ import pytest
 
 from ajapopaja_mcp.tools import (
     complete_task,
+    create_task,
     get_next_task,
     get_task_details,
     get_task_status,
@@ -311,6 +312,60 @@ async def test_mcp_get_task_details():
     assert "history" in result
     assert "created_at" in result
     assert "updated_at" in result
+
+
+@pytest.mark.asyncio
+async def test_mcp_create_task_success():
+    pipeline = Pipeline(name="MCP Pipeline")
+    await pipeline.insert()
+    pid = str(pipeline.id)
+
+    result = await create_task(
+        pid,
+        "New Task",
+        spec="Spec text",
+        design_doc="# Design",
+        description="Description",
+        want_design_doc=False,
+        status="scheduled",
+        order=5,
+    )
+
+    assert result["pipeline_id"] == pid
+    assert result["title"] == "New Task"
+    assert result["status"] == TaskStatus.SCHEDULED
+    assert result["version"] == 1
+
+    stored = await Task.get(result["id"])
+    assert stored is not None
+    assert stored.pipeline_id == pid
+    assert stored.title == "New Task"
+    assert stored.status == TaskStatus.SCHEDULED
+    assert stored.version == 1
+    assert stored.spec == "Spec text"
+    assert stored.design_doc == "# Design"
+    assert stored.order == 5
+    assert stored.want_design_doc is False
+    assert stored.scheduled_at is not None
+
+
+@pytest.mark.asyncio
+async def test_mcp_create_task_defaults_and_want_design_doc():
+    pipeline = Pipeline(name="MCP Pipeline")
+    await pipeline.insert()
+    pid = str(pipeline.id)
+
+    result = await create_task(pid, "Design Task", want_design_doc=True)
+
+    assert result["status"] == TaskStatus.CREATED
+    assert result["version"] == 1
+    assert result["want_design_doc"] is True
+
+    stored = await Task.get(result["id"])
+    assert stored is not None
+    assert stored.status == TaskStatus.CREATED
+    assert stored.want_design_doc is True
+    assert stored.scheduled_at is None
 
 
 @pytest.mark.asyncio

@@ -156,6 +156,36 @@ async def run_get_task_details(client: MCPHttpClient, task_id: str):
     await client.call_tool("get_task_details", {"task_id": task_id})
 
 
+async def run_create_task(
+    client: MCPHttpClient,
+    pipeline_id: str,
+    title: str,
+    spec: Optional[str] = None,
+    design_doc: Optional[str] = None,
+    description: Optional[str] = None,
+    want_design_doc: bool = False,
+    status: str = "created",
+    order: Optional[int] = None,
+):
+    logger.info(f"--- Action: Create Task (Pipeline: {pipeline_id}) ---")
+    args: Dict[str, Any] = {
+        "pipeline_id": pipeline_id,
+        "title": title,
+        "status": status,
+    }
+    if spec is not None:
+        args["spec"] = spec
+    if design_doc is not None:
+        args["design_doc"] = design_doc
+    if description is not None:
+        args["description"] = description
+    if want_design_doc:
+        args["want_design_doc"] = want_design_doc
+    if order is not None:
+        args["order"] = order
+    await client.call_tool("create_task", args)
+
+
 async def run_search_tasks(
     client: MCPHttpClient,
     keywords: Optional[str],
@@ -279,6 +309,33 @@ async def main():
     search_parser.add_argument("--page", type=int, default=0, help="Page number")
     search_parser.add_argument("--limit", type=int, default=10, help="Results limit")
 
+    create_task_parser = subparsers.add_parser(
+        "create-task", help="Create a new task in a pipeline"
+    )
+    create_task_parser.add_argument(
+        "pipeline_id", help="The 24-char hex pipeline ID"
+    )
+    create_task_parser.add_argument("--title", required=True, help="Task title")
+    create_task_parser.add_argument(
+        "--spec", help="Markdown-formatted specification"
+    )
+    create_task_parser.add_argument(
+        "--design-doc", dest="design_doc", help="Markdown-formatted design document"
+    )
+    create_task_parser.add_argument("--description", help="Task description")
+    create_task_parser.add_argument(
+        "--want-design-doc",
+        dest="want_design_doc",
+        action="store_true",
+        help="Require an approved design document before implementation",
+    )
+    create_task_parser.add_argument(
+        "--status", default="created", help="Initial task status (created | scheduled)"
+    )
+    create_task_parser.add_argument(
+        "--order", type=int, help="Priority/position (lower sorts first)"
+    )
+
     complete_parser = subparsers.add_parser(
         "complete-task", help="Mark a task as completed"
     )
@@ -343,6 +400,18 @@ async def main():
     elif args.command == "search-tasks":
         await run_search_tasks(
             client, args.keywords, args.statuses, args.pipeline, args.page, args.limit
+        )
+    elif args.command == "create-task":
+        await run_create_task(
+            client,
+            args.pipeline_id,
+            args.title,
+            args.spec,
+            args.design_doc,
+            args.description,
+            args.want_design_doc,
+            args.status,
+            args.order,
         )
     elif args.command == "complete-task":
         await run_complete_task(

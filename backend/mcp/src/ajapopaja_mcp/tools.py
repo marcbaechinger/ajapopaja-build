@@ -20,10 +20,10 @@ import git
 
 from api.git_hosting.gitea import GiteaApiError
 from api.git_hosting.pull_requests import create_pipeline_pull_request
-from api.websocket_manager import manager
+from api.websocket_manager import WSMessage, manager
 from core.db import init_db
 from core.exceptions import EntityNotFoundError, VersionMismatchError
-from core.models.models import TaskStatus
+from core.models.models import Task, TaskStatus
 from core.queries import pipeline as pipeline_queries
 from core.queries import task as task_queries
 from core.utils import git_utils
@@ -40,6 +40,118 @@ async def notify_api(task_id: str):
         await manager.notify_task_update(task_id)
     except Exception as e:
         logging.error(f"Failed to notify API for task {task_id}: {e}")
+
+
+async def notify_task_created(task: Task):
+    """Broadcasts a ``TASK_CREATED`` message from the server process.
+
+    Mirrors the REST ``create_task`` handler so the pipeline UI updates live
+    when a task is created through the MCP server. Delivery is best-effort:
+    a failure to broadcast never fails the tool.
+    """
+    try:
+        await manager.broadcast(
+            WSMessage(type="TASK_CREATED", payload=task.model_dump(mode="json"))
+        )
+    except Exception as e:
+        logging.error(f"Failed to broadcast TASK_CREATED for task {task.id}: {e}")
+
+
+async def create_task(
+    pipeline_id: str,
+    title: str,
+    spec: Optional[str] = None,
+    design_doc: Optional[str] = None,
+    description: Optional[str] = None,
+    want_design_doc: bool = False,
+    status: str = "created",
+    order: Optional[int] = None,
+) -> Dict[str, Any]:
+    """
+    Creates a new task in a pipeline.
+
+    The task is created through the same core query layer as the REST API
+    (``core.queries.task.create_task``) and a ``TASK_CREATED`` WebSocket message
+    is broadcast from the server process so the pipeline UI updates live.
+
+    Args:
+        pipeline_id: The 24-char hex ID of the target pipeline.
+        title: The task title.
+        spec: Optional Markdown specification.
+        design_doc: Optional Markdown design document.
+        description: Optional task description.
+        want_design_doc: Whether the task requires an approved design document
+            before implementation (default: False).
+        status: Target initial status. Must be a valid task status (default:
+            'created'). New tasks typically start as 'created' or 'scheduled'.
+        order: Optional priority/position (lower sorts first).
+
+    Returns:
+        A dictionary with the created task's details, or an ``error`` entry.
+    """
+    if not _is_valid_id(pipeline_id):
+        return {
+            "error": (
+                f"Invalid pipeline_id '{pipeline_id}'. Must be a 24-char hex string."
+            )
+        }
+
+    if not title or not title.strip():
+        return {"error": "title cannot be empty."}
+
+    try:
+        task_status = TaskStatus(status)
+    except ValueError:
+        valid_statuses = [s.value for s in TaskStatus]
+        return {
+            "error": (
+                f"Invalid status '{status}'. Valid statuses are: "
+                f"{', '.join(valid_statuses)}"
+            )
+        }
+
+    await init_db()
+
+    task_kwargs: Dict[str, Any] = {
+        "pipeline_id": pipeline_id,
+        "title": title,
+        "spec": spec,
+        "design_doc": design_doc,
+        "description": description,
+        "want_design_doc": want_design_doc,
+        "status": task_status,
+    }
+    if order is not None:
+        task_kwargs["order"] = order
+
+    task = Task(**task_kwargs)
+
+    try:
+        new_task = await task_queries.create_task(pipeline_id, task, actor="mcp")
+    except Exception as e:
+        return {"error": f"An unexpected error occurred: {str(e)}"}
+
+    await notify_task_created(new_task)
+
+    return {
+        "id": str(new_task.id),
+        "pipeline_id": new_task.pipeline_id,
+        "title": new_task.title,
+        "description": new_task.description or "",
+        "status": new_task.status,
+        "type": new_task.type,
+        "spec": new_task.spec or "",
+        "design_doc": new_task.design_doc or "",
+        "want_design_doc": new_task.want_design_doc,
+        "order": new_task.order,
+        "version": new_task.version,
+        "created_at": (
+            new_task.created_at.isoformat() if new_task.created_at else None
+        ),
+        "updated_at": (
+            new_task.updated_at.isoformat() if new_task.updated_at else None
+        ),
+    }
 
 
 async def get_next_task(pipeline_id: str) -> Dict[str, Any]:
@@ -258,9 +370,7 @@ async def create_pull_request(
         }
 
     if task_id is not None and not _is_valid_id(task_id):
-        return {
-            "error": f"Invalid task_id '{task_id}'. Must be a 24-char hex string."
-        }
+        return {"error": f"Invalid task_id '{task_id}'. Must be a 24-char hex string."}
 
     if not title or not title.strip():
         return {"error": "title cannot be empty."}
@@ -319,9 +429,7 @@ async def create_pull_request(
             return {"error": str(e)}
 
     if head == base:
-        branch = (
-            f"pi/{task_id}" if task_id else f"pi/{repo.head.commit.hexsha[:7]}"
-        )
+        branch = f"pi/{task_id}" if task_id else f"pi/{repo.head.commit.hexsha[:7]}"
         git_utils.create_branch_at_head(repo, branch)
         head = branch
 

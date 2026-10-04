@@ -21,6 +21,7 @@ mcp = FastMCP("Ajapopaja Build MCP")
 
 # Register tools
 mcp.tool()(tools.get_next_task)
+mcp.tool()(tools.create_task)
 mcp.tool()(tools.update_task_design_doc)
 mcp.tool()(tools.update_task_spec)
 mcp.tool()(tools.complete_task)

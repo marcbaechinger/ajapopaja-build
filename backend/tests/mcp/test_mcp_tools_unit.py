@@ -19,6 +19,7 @@ import pytest
 from ajapopaja_mcp.tools import (
     complete_task,
     create_pull_request,
+    create_task,
     get_next_task,
     get_task_details,
     get_task_status,
@@ -324,6 +325,143 @@ async def test_get_task_status_unit():
         mock_get_task.assert_awaited_once_with(task_id)
         assert result["id"] == task_id
         assert result["status"] == "inprogress"
+
+
+# ---------------------------------------------------------------------------
+# create_task
+# ---------------------------------------------------------------------------
+@pytest.mark.asyncio
+async def test_create_task_unit():
+    mock_task = MagicMock()
+    mock_task.id = VALID_TASK_ID
+    mock_task.pipeline_id = VALID_PIPELINE_ID
+    mock_task.title = "New Task"
+    mock_task.description = "A description"
+    mock_task.status = TaskStatus.SCHEDULED
+    mock_task.type = "manual"
+    mock_task.spec = "Some spec"
+    mock_task.design_doc = "# Design"
+    mock_task.want_design_doc = True
+    mock_task.order = 5
+    mock_task.version = 1
+    mock_task.created_at.isoformat.return_value = "2024-01-01T00:00:00Z"
+    mock_task.updated_at.isoformat.return_value = "2024-01-01T00:00:00Z"
+
+    with (
+        patch("ajapopaja_mcp.tools.init_db", new_callable=AsyncMock) as mock_init_db,
+        patch("ajapopaja_mcp.tools.Task") as mock_task_cls,
+        patch(
+            "ajapopaja_mcp.tools.task_queries.create_task", new_callable=AsyncMock
+        ) as mock_create,
+        patch(
+            "ajapopaja_mcp.tools.manager.broadcast", new_callable=AsyncMock
+        ) as mock_broadcast,
+    ):
+        mock_task_cls.return_value = mock_task
+        mock_create.return_value = mock_task
+
+        result = await create_task(
+            VALID_PIPELINE_ID,
+            "New Task",
+            spec="Some spec",
+            design_doc="# Design",
+            description="A description",
+            want_design_doc=True,
+            status="scheduled",
+            order=5,
+        )
+
+        mock_init_db.assert_awaited_once()
+
+        # The Task is built from the caller-supplied fields.
+        built = mock_task_cls.call_args.kwargs
+        assert built["pipeline_id"] == VALID_PIPELINE_ID
+        assert built["title"] == "New Task"
+        assert built["spec"] == "Some spec"
+        assert built["design_doc"] == "# Design"
+        assert built["description"] == "A description"
+        assert built["status"] == TaskStatus.SCHEDULED
+        assert built["want_design_doc"] is True
+        assert built["order"] == 5
+
+        mock_create.assert_awaited_once()
+        call_args, call_kwargs = mock_create.await_args
+        assert call_args[0] == VALID_PIPELINE_ID
+        assert call_args[1] is mock_task
+        assert call_kwargs["actor"] == "mcp"
+
+        # A TASK_CREATED broadcast must be emitted for the live UI update.
+        mock_broadcast.assert_awaited_once()
+        message = mock_broadcast.await_args.args[0]
+        assert message.type == "TASK_CREATED"
+
+        assert result["id"] == VALID_TASK_ID
+        assert result["pipeline_id"] == VALID_PIPELINE_ID
+        assert result["title"] == "New Task"
+        assert result["status"] == TaskStatus.SCHEDULED
+        assert result["version"] == 1
+        assert result["created_at"] == "2024-01-01T00:00:00Z"
+
+
+@pytest.mark.asyncio
+async def test_create_task_invalid_pipeline_id():
+    result = await create_task("invalid-id", "New Task")
+    assert "error" in result
+    assert "Invalid pipeline_id" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_create_task_empty_title():
+    result = await create_task(VALID_PIPELINE_ID, "   ")
+    assert "error" in result
+    assert "title cannot be empty" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_create_task_invalid_status():
+    result = await create_task(VALID_PIPELINE_ID, "New Task", status="bogus")
+    assert "error" in result
+    assert "Invalid status" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_create_task_broadcast_failure_is_best_effort():
+    mock_task = MagicMock()
+    mock_task.id = VALID_TASK_ID
+    mock_task.pipeline_id = VALID_PIPELINE_ID
+    mock_task.title = "New Task"
+    mock_task.description = None
+    mock_task.status = TaskStatus.CREATED
+    mock_task.type = "manual"
+    mock_task.spec = None
+    mock_task.design_doc = None
+    mock_task.want_design_doc = False
+    mock_task.order = 100
+    mock_task.version = 1
+    mock_task.created_at.isoformat.return_value = "2024-01-01T00:00:00Z"
+    mock_task.updated_at.isoformat.return_value = "2024-01-01T00:00:00Z"
+
+    with (
+        patch("ajapopaja_mcp.tools.init_db", new_callable=AsyncMock),
+        patch("ajapopaja_mcp.tools.Task") as mock_task_cls,
+        patch(
+            "ajapopaja_mcp.tools.task_queries.create_task", new_callable=AsyncMock
+        ) as mock_create,
+        patch(
+            "ajapopaja_mcp.tools.manager.broadcast",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("no socket"),
+        ),
+    ):
+        mock_task_cls.return_value = mock_task
+        mock_create.return_value = mock_task
+
+        result = await create_task(VALID_PIPELINE_ID, "New Task")
+
+    # The task is still created even though the broadcast failed.
+    assert "error" not in result
+    assert result["id"] == VALID_TASK_ID
+    assert result["status"] == TaskStatus.CREATED
 
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 ---
 name: ajapopaja
-description: Search, manage, and complete tasks using the Ajapopaja Build MCP server. Use this skill to find next tasks, search tasks by keywords/status, view task details, update design documents, mark tasks as complete, and create a pull request for your committed work.
+description: Search, manage, and complete tasks using the Ajapopaja Build MCP server. Use this skill to create tasks, find next tasks, search tasks by keywords/status, view task details, update design documents, mark tasks as complete, and create a pull request for your committed work.
 ---
 
 # Ajapopaja Task Management
@@ -39,6 +39,36 @@ python3 ./mcp_client.py --url http://localhost:${PORT:-8081} <command> ...
 ```
 
 If the server has authentication disabled (the default), the token is optional and can be omitted.
+
+## Create a Task
+
+Create a task directly in a pipeline through the MCP server. The task appears in
+the pipeline view **live** (the server broadcasts a `TASK_CREATED` WebSocket
+message), so no manual refresh is needed.
+
+```bash
+python3 ./mcp_client.py --url http://localhost:${PORT:-8081} \
+    create-task <pipeline_id> \
+    --title "Add dark mode" \
+    --spec "Markdown specification…" \
+    --design-doc "# Design\n…" \
+    --description "Short description" \
+    --want-design-doc \
+    --status scheduled \
+    --order 10
+```
+
+Only `pipeline_id` and `--title` are required. Optional flags:
+
+- `--spec` – Markdown specification.
+- `--design-doc` – Markdown design document.
+- `--description` – Short task description.
+- `--want-design-doc` – Require an approved design document before implementation.
+- `--status` – Initial status, default `created` (valid values include `created` and `scheduled`).
+- `--order` – Priority/position; lower values sort first.
+
+Tasks created with the default `created` status land in the backlog; use
+`--status scheduled` to make them immediately available to `get-task`.
 
 ## Main Workflow
 
