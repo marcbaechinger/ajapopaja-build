@@ -53,9 +53,17 @@ marked.use({
       }
       if (body) body = `<tbody>${body}</tbody>`;
 
+      // The wrapper is `inline-block` so it shrinks to the width of its content
+      // (the table) instead of defaulting to `display: block`, which would make
+      // it fill the parent. The table previously carried `w-full`, forcing both
+      // the table and this `overflow-x-auto` wrapper to span the full parent and
+      // leaving a wide empty gap to the right of narrow tables. Dropping
+      // `w-full` lets the inline-block wrapper hug the table's natural width; it
+      // still caps at the parent width, at which point `overflow-x-auto` shows a
+      // horizontal scrollbar for tables wider than their container.
       return `
-        <div class="overflow-x-auto my-4 border border-app-border rounded-lg">
-          <table class="w-full text-sm text-left bg-app-bg" style="margin-top: 0; margin-bottom: 0">
+        <div class="inline-block overflow-x-auto my-4 border border-app-border rounded-lg">
+          <table class="text-sm text-left bg-app-bg" style="margin-top: 0; margin-bottom: 0">
             <thead class="bg-app-surface text-app-muted uppercase text-[10px] tracking-widest font-bold">
               ${header}
             </thead>
