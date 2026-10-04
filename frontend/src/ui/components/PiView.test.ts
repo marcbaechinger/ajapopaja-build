@@ -2084,5 +2084,29 @@ describe('PiView automatic Markdown rendering', () => {
 
     view.destroy();
   });
+
+  it('keeps the dark terminal palette inside the log scope in light mode', () => {
+    const { service } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    // The always-dark log subtree is anchored with its own class so the
+    // light-theme override in style.css can scope the terminal palette to it
+    // and leave the surrounding page (and the footer) on the active light theme.
+    const logContainer = mount.querySelector('#log-content-container') as HTMLElement;
+    expect(logContainer.classList.contains('piview-log')).toBe(true);
+
+    // The light-theme override must re-anchor the semantic theme tokens to their
+    // dark values; otherwise dark-on-light tokens become unreadable against the
+    // black terminal (e.g. rendered Markdown, status text, dividers).
+    expect(styleCss).toMatch(
+      /\[data-theme='light'\]\s*\.piview-log\s*\{[^}]*--app-text:\s*var\(--color-slate-100\)/
+    );
+    expect(styleCss).toMatch(
+      /\[data-theme='light'\]\s*\.piview-log\s*\{[^}]*--app-border:\s*var\(--color-slate-800\)/
+    );
+
+    view.destroy();
+  });
 });
 

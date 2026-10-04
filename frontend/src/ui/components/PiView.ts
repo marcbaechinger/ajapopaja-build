@@ -360,7 +360,7 @@ export class PiView {
     // no horizontal scrollbar is lost).
     const resizeClass = this.resizable ? 'resize-y overflow-x-hidden' : '';
     container.className =
-      `relative bg-black text-green-400 px-4 pb-4 font-mono text-[11px] leading-tight overflow-y-auto ${resizeClass} ${this.logHeightClass} custom-scrollbar selection:bg-app-accent-1/30`;
+      `piview-log relative bg-black text-green-400 px-4 pb-4 font-mono text-[11px] leading-tight overflow-y-auto ${resizeClass} ${this.logHeightClass} custom-scrollbar selection:bg-app-accent-1/30`;
     const statusBar = document.createElement('div');
     statusBar.id = 'piview-status-bar';
     statusBar.className = 'sticky top-0 z-10 bg-black/95 border-b border-app-border/40 px-1 pb-1 mb-1 flex items-center gap-2';

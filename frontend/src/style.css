@@ -575,3 +575,27 @@ mark.piview-search-current {
   @apply bg-black/20;
 }
 
+/*
+ * PiView is an always-dark, terminal-style surface: its log container hard-codes
+ * `bg-black` and green foregrounds, while its block chrome (status text,
+ * thinking headers, dividers, rendered Markdown, …) is built from the semantic
+ * `--app-*` theme tokens. In light mode those tokens resolve to dark-on-light
+ * colours, which become unreadable against the black terminal (dark text on a
+ * black background).
+ *
+ * Re-anchor the terminal palette to its dark values for the log subtree only,
+ * so the surrounding page - and the PiView footer, which lives outside the log
+ * container - keeps the active light theme. Scoping by the container class keeps
+ * this correct when more than one PiView is mounted at once (e.g. the embedded
+ * sidebar log and an opened dialog).
+ */
+[data-theme='light'] .piview-log {
+  --app-bg: var(--color-slate-950);
+  --app-surface: var(--color-slate-900);
+  --app-text: var(--color-slate-100);
+  --app-muted: var(--color-slate-400);
+  --app-border: var(--color-slate-800);
+  --app-accent-1: var(--color-sky-400);
+  --app-accent-2: var(--color-cyan-400);
+}
+
