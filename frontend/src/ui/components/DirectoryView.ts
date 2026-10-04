@@ -34,11 +34,12 @@ export class DirectoryView {
 
     return `
       <div class="flex flex-col h-full min-h-0">
-        <div class="grid grid-cols-[minmax(0,1fr)_5rem_10rem_6rem] gap-2 px-3 py-2 border-b border-app-border/40 text-[10px] font-bold uppercase tracking-widest text-app-muted/70">
+        <div class="grid grid-cols-[minmax(0,1fr)_5rem_10rem_6rem_2rem] gap-2 px-3 py-2 border-b border-app-border/40 text-[10px] font-bold uppercase tracking-widest text-app-muted/70">
           <span>Name</span>
           <span class="text-right">Size</span>
           <span>Modified</span>
           <span>Status</span>
+          <span aria-hidden="true"></span>
         </div>
         <div class="flex-1 min-h-0 overflow-y-auto py-1" data-role="file-browser-scroll">${body}</div>
       </div>
@@ -53,25 +54,32 @@ export class DirectoryView {
       : '<span class="text-app-muted/40 text-[10px]">—</span>';
 
     return `
-      <button type="button"
-        data-action-click="${action}"
-        data-path="${escapeHtml(entry.path)}"
-        data-view-id="${escapeHtml(entry.path)}"
-        class="grid grid-cols-[minmax(0,1fr)_5rem_10rem_6rem] gap-2 items-center w-full text-left px-3 py-1.5 hover:bg-app-surface/60 rounded transition-colors cursor-pointer">
-        <span class="flex items-center gap-2 min-w-0">
-          <span class="shrink-0 ${entry.isDir ? 'text-app-accent-2' : 'text-app-muted'}" aria-hidden="true">
-            ${Icon.render(entry.isDir ? 'folder' : 'file', { size: 14 })}
+      <div class="grid grid-cols-[minmax(0,1fr)_5rem_10rem_6rem_2rem] gap-2 items-center px-3 py-1.5 hover:bg-app-surface/60 rounded transition-colors">
+        <button type="button"
+          data-action-click="${action}"
+          data-path="${escapeHtml(entry.path)}"
+          data-view-id="${escapeHtml(entry.path)}"
+          class="col-span-4 grid grid-cols-[minmax(0,1fr)_5rem_10rem_6rem] gap-2 items-center w-full text-left cursor-pointer">
+          <span class="flex items-center gap-2 min-w-0">
+            <span class="shrink-0 ${entry.isDir ? 'text-app-accent-2' : 'text-app-muted'}" aria-hidden="true">
+              ${Icon.render(entry.isDir ? 'folder' : 'file', { size: 14 })}
+            </span>
+            <span class="truncate text-xs font-medium text-app-text">${escapeHtml(entry.name)}</span>
           </span>
-          <span class="truncate text-xs font-medium text-app-text">${escapeHtml(entry.name)}</span>
-        </span>
-        <span class="text-right text-[11px] text-app-muted tabular-nums">${
-          entry.isDir ? '—' : escapeHtml(formatFileSize(entry.size))
-        }</span>
-        <span class="text-[11px] text-app-muted truncate">${escapeHtml(
-          formatTimestamp(entry.modifiedAt)
-        )}</span>
-        <span>${statusCell}</span>
-      </button>
+          <span class="text-right text-[11px] text-app-muted tabular-nums">${
+            entry.isDir ? '—' : escapeHtml(formatFileSize(entry.size))
+          }</span>
+          <span class="text-[11px] text-app-muted truncate">${escapeHtml(
+            formatTimestamp(entry.modifiedAt)
+          )}</span>
+          <span>${statusCell}</span>
+        </button>
+        <button type="button"
+          data-action-click="copy_file_path"
+          data-path="${escapeHtml(entry.path)}"
+          class="justify-self-end shrink-0 p-1 rounded text-app-muted hover:text-app-text hover:bg-app-surface/60 transition-colors cursor-pointer"
+          title="Copy path" aria-label="Copy path">${Icon.render('copy', { size: 14 })}</button>
+      </div>
     `;
   }
 

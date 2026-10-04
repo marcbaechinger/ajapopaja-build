@@ -270,6 +270,45 @@ describe('FileBrowseView', () => {
     expect(writeText).toHaveBeenCalledWith('backend/core/foo_bar.py');
   });
 
+  it('renders a copy-path button for every directory entry', async () => {
+    view.render();
+    await flush();
+
+    const copyButtons = Array.from(
+      root.querySelectorAll('[data-action-click="copy_file_path"]')
+    ) as HTMLButtonElement[];
+    expect(copyButtons.length).toBe(2);
+    const paths = copyButtons.map((button) => button.getAttribute('data-path'));
+    expect(paths).toContain('src');
+    expect(paths).toContain('README.md');
+    copyButtons.forEach((button) => {
+      expect(button.getAttribute('title')).toBe('Copy path');
+      expect(button.getAttribute('aria-label')).toBe('Copy path');
+    });
+  });
+
+  it('copies a directory path without navigating into it', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+
+    view.render();
+    await flush();
+    client.listDirectory.mockClear();
+
+    const copyButton = root.querySelector(
+      '[data-action-click="copy_file_path"][data-path="src"]'
+    ) as HTMLButtonElement;
+    expect(copyButton).not.toBeNull();
+
+    await registry.get('copy_file_path')(new Event('click'), copyButton);
+
+    expect(writeText).toHaveBeenCalledWith('src');
+    expect(client.listDirectory).not.toHaveBeenCalled();
+  });
+
   it('refreshes the current directory and re-reads the selected file', async () => {
     view.render();
     await flush();
