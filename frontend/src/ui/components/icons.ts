@@ -39,6 +39,7 @@ export const iconMap: Record<string, string> = {
   logout: 'logout-icon',
   settings: 'settings-icon',
   arrowRight: 'arrow-right-icon',
+  arrowUp: 'arrow-up-icon',
   refresh: 'refresh-icon',
   chevronDown: 'chevron-down-icon',
   'git-pull-request': 'git-pull-request-icon',

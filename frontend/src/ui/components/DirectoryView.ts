@@ -40,7 +40,7 @@ export class DirectoryView {
           <span>Modified</span>
           <span>Status</span>
         </div>
-        <div class="flex-1 min-h-0 overflow-y-auto py-1">${body}</div>
+        <div class="flex-1 min-h-0 overflow-y-auto py-1" data-role="file-browser-scroll">${body}</div>
       </div>
     `;
   }

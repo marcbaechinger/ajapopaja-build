@@ -286,4 +286,42 @@ describe('FileBrowseView', () => {
     expect(client.listDirectory).toHaveBeenCalledWith('p1', '');
     expect(client.readFile).toHaveBeenCalledWith('p1', 'README.md');
   });
+
+  it('renders the same breadcrumb at the bottom as at the top', async () => {
+    view.render();
+    await flush();
+
+    const top = root.querySelector('#file-browser-breadcrumb') as HTMLElement;
+    const bottom = root.querySelector('#file-browser-breadcrumb-bottom') as HTMLElement;
+    expect(bottom).not.toBeNull();
+    expect(bottom.textContent).toContain('repo');
+    expect(bottom.innerHTML).toBe(top.innerHTML);
+  });
+
+  it('shows a to-top control at the bottom that scrolls the content to the top', async () => {
+    view.render();
+    await flush();
+
+    const toTop = root.querySelector(
+      '[data-action-click="file_browser_to_top"]'
+    ) as HTMLButtonElement | null;
+    expect(toTop).not.toBeNull();
+    // The refresh action stays in the header only.
+    expect(root.querySelectorAll('[data-action-click="file_browser_refresh"]').length).toBe(1);
+    expect(root.querySelector('#file-browser-breadcrumb-bottom')!.parentElement).toBe(
+      toTop!.parentElement!.parentElement
+    );
+
+    const scroller = root.querySelector(
+      '[data-role="file-browser-scroll"]'
+    ) as HTMLElement;
+    scroller.scrollTop = 100;
+    const main = root.querySelector('#file-browser-main') as HTMLElement;
+    main.scrollTop = 100;
+
+    registry.get('file_browser_to_top')(new Event('click'), toTop!);
+
+    expect(scroller.scrollTop).toBe(0);
+    expect(main.scrollTop).toBe(0);
+  });
 });

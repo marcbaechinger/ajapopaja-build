@@ -241,7 +241,7 @@ export class FileView {
     return `
       <div class="flex flex-col h-full min-h-0">
         ${this.renderHeader(file)}
-        <div class="flex-1 min-h-0 overflow-auto bg-app-bg/60 rounded-b-xl">
+        <div class="flex-1 min-h-0 overflow-auto bg-app-bg/60 rounded-b-xl" data-role="file-browser-scroll">
           ${this.renderBody(file)}
         </div>
       </div>

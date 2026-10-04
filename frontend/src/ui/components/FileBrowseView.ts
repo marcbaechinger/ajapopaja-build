@@ -151,6 +151,18 @@ export class FileBrowseView {
           </div>
         </div>
         <main id="file-browser-main" class="flex-1 min-w-0 flex flex-col overflow-hidden"></main>
+        <div class="flex items-center gap-2 px-3 py-2 border-t border-app-border/40">
+          <nav id="file-browser-breadcrumb-bottom" aria-label="Current path"
+            class="flex items-center gap-1 min-w-0 flex-1 flex-wrap"></nav>
+          <div class="flex items-center gap-1 shrink-0">
+            <button id="file-browser-to-top-btn" type="button"
+              data-action-click="file_browser_to_top"
+              class="p-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center justify-center cursor-pointer"
+              title="To top" aria-label="To top">
+              ${Icon.render('arrowUp', { size: 14 })}
+            </button>
+          </div>
+        </div>
       </div>
     `;
   }
@@ -180,12 +192,13 @@ export class FileBrowseView {
       if (this.destroyed) return;
       void this.refresh();
     });
+    register('file_browser_to_top', () => {
+      if (this.destroyed) return;
+      this.scrollToTop();
+    });
   }
 
   private renderBreadcrumb(): void {
-    const el = this.root.querySelector('#file-browser-breadcrumb');
-    if (!el) return;
-
     const segments = this.currentDir ? this.currentDir.split('/') : [];
     const crumbs: string[] = [];
 
@@ -215,7 +228,11 @@ export class FileBrowseView {
       );
     });
 
-    el.innerHTML = crumbs.join('');
+    const html = crumbs.join('');
+    for (const selector of ['#file-browser-breadcrumb', '#file-browser-breadcrumb-bottom']) {
+      const el = this.root.querySelector(selector);
+      if (el) el.innerHTML = html;
+    }
   }
 
   private renderMain(): void {
@@ -252,6 +269,18 @@ export class FileBrowseView {
     }
 
     el.innerHTML = '';
+  }
+
+  /** Scroll the visible file/directory content back to the top. */
+  private scrollToTop(): void {
+    const main = this.root.querySelector('#file-browser-main') as HTMLElement | null;
+    if (!main) return;
+    main.scrollTop = 0;
+    // The actual scroll container lives inside the rendered directory/file
+    // fragment, so reset every potentially scrolled descendant as well.
+    main.querySelectorAll<HTMLElement>('*').forEach((el) => {
+      if (el.scrollTop !== 0) el.scrollTop = 0;
+    });
   }
 
   // --- state --------------------------------------------------------------
