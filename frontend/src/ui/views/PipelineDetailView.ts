@@ -952,8 +952,12 @@ export class PipelineDetailView extends View {
           this.allLoadedTasks[existingIndex] = created;
         }
         this.pendingSpecEditTaskId = created.id ?? null;
+        // Selecting a task must be visible to the user, so make sure the Task
+        // editor tab is the active one in the main content area.
+        this.contentTab = 'task-editor';
         this.refreshBacklog();
         this.refreshSelectedTask();
+        this.updateContentTabs();
       } catch (error) {
         alert('Failed to create task');
       }
@@ -964,8 +968,13 @@ export class PipelineDetailView extends View {
       if (!taskId) return;
       this.pendingSpecEditTaskId = null;
       this.selectedTask = this.allLoadedTasks.find(t => t.id === taskId) || null;
+      // Selecting a task must surface it in the main content area: switch the
+      // active tab back to the Task editor so the selection is visible even
+      // when the Coding Agent or File Browser tab was active.
+      this.contentTab = 'task-editor';
       this.refreshBacklog();
       this.refreshSelectedTask();
+      this.updateContentTabs();
     });
 
     this.context.actionRegistry.register('prev_history_page', () => {

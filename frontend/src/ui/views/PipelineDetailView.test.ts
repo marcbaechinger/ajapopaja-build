@@ -1628,6 +1628,38 @@ describe('PipelineDetailView Interactive Session', () => {
     expect(mockContext.fileBrowserClient.listDirectory).toHaveBeenCalledTimes(1);
   });
 
+  it('switches back to the Task editor tab when a task is selected', async () => {
+    mockContext.taskClient.listByPipeline.mockResolvedValue([
+      { id: 't1', title: 'Task 1', status: TaskStatus.CREATED, deleted: false, version: 1, order: 0, type: 'manual', want_design_doc: false },
+    ]);
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await view.refreshTasks();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const taskTab = container.querySelector('#tab-task-editor') as HTMLElement;
+    const fileTab = container.querySelector('#tab-file-browser') as HTMLElement;
+    const selected = container.querySelector('#selected-task-view') as HTMLElement;
+    const fileMount = container.querySelector('#file-browser-view-mount') as HTMLElement;
+
+    // Switch to the File Browser first so the Task editor is no longer active.
+    getAction('select_content_tab')(null, fileTab);
+    expect((view as any).contentTab).toBe('file-browser');
+    expect(selected.classList.contains('hidden')).toBe(true);
+
+    // Selecting a task must reveal it by activating the Task editor tab.
+    const el = document.createElement('div');
+    el.setAttribute('data-view-id', 't1');
+    getAction('select_task')(new Event('click'), el);
+
+    expect((view as any).contentTab).toBe('task-editor');
+    expect(taskTab.getAttribute('aria-selected')).toBe('true');
+    expect(selected.classList.contains('hidden')).toBe(false);
+    expect(fileMount.classList.contains('hidden')).toBe(true);
+    expect(selected.innerHTML).toContain('Task 1');
+  });
+
   it('live-updates the inline session list when the service notifies a completion', async () => {
     const view = new PipelineDetailView(mockContext, { id: 'p1' });
     container.innerHTML = view.render() as string;
