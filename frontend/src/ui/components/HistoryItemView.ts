@@ -48,7 +48,7 @@ export class HistoryItemView {
               ${task.commit_hash.substring(0, 7)}
             </button>
           ` : ''}
-          <span class="font-medium text-app-text text-sm truncate">${task.title}</span>
+          <span class="font-medium text-app-text text-sm truncate cursor-pointer">${task.title}</span>
           ${implementationTime ? `
             <span class="text-[10px] text-app-muted flex items-center gap-1 shrink-0" title="Implementation Duration">
               ${Icon.render('clock', { size: 12 })}

@@ -50,6 +50,11 @@ describe('HistoryItemView', () => {
     expect(html).toContain('Implemented Task');
   });
 
+  it('should show a hand cursor over the title', () => {
+    const html = HistoryItemView.render(baseTask as any);
+    expect(html).toMatch(/<span class="[^"]*cursor-pointer[^"]*">Implemented Task<\/span>/);
+  });
+
   it('should render commit hash with open_diff_view action', () => {
     const html = HistoryItemView.render(baseTask as any);
     expect(html).toContain('abcdef1');
