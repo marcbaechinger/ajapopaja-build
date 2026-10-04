@@ -258,7 +258,7 @@ describe('PipelineEditDialog', () => {
     expect(updateCall[2].test_commands).toEqual([]);
   });
 
-  const switchToCmdTab = (tab: 'test' | 'lint' | 'build' | 'serve') => {
+  const switchToCmdTab = (tab: 'test' | 'lint' | 'build' | 'serve' | 'models') => {
     const btn = document.querySelector(`[data-cmd-tab="${tab}"]`) as HTMLButtonElement;
     btn.click();
   };
@@ -1041,9 +1041,27 @@ describe('PipelineEditDialog', () => {
       document.querySelector('#pipeline-edit-cancel')?.dispatchEvent(new MouseEvent('click'));
     };
 
+    it('should render a Models tab next to the command tabs', async () => {
+      const dialog = new PipelineEditDialog(mockProps);
+      const showPromise = dialog.show();
+
+      const modelsTab = document.querySelector('[data-cmd-tab="models"]') as HTMLButtonElement;
+      expect(modelsTab).not.toBeNull();
+      expect(modelsTab.textContent).toContain('Models');
+
+      // The model selects only live inside the Models tab.
+      expect(document.querySelector('select[name="archbot_model"]')).toBeNull();
+      switchToCmdTab('models');
+      expect(document.querySelector('select[name="archbot_model"]')).not.toBeNull();
+
+      clickCancel();
+      await showPromise;
+    });
+
     it('should render a select for every use case with a global-default option', async () => {
       const dialog = new PipelineEditDialog(mockProps);
       const showPromise = dialog.show();
+      switchToCmdTab('models');
 
       for (const field of [
         'ollama_model',
@@ -1071,6 +1089,7 @@ describe('PipelineEditDialog', () => {
       });
       const dialog = new PipelineEditDialog(mockProps);
       const showPromise = dialog.show();
+      switchToCmdTab('models');
 
       await vi.waitFor(() => {
         const ollamaSelect = document.querySelector('select[name="archbot_model"]') as HTMLSelectElement;
@@ -1107,6 +1126,7 @@ describe('PipelineEditDialog', () => {
       });
       const dialog = new PipelineEditDialog(mockProps);
       const showPromise = dialog.show();
+      switchToCmdTab('models');
 
       await vi.waitFor(() => {
         const select = document.querySelector('select[name="archbot_model"]') as HTMLSelectElement;
@@ -1128,6 +1148,7 @@ describe('PipelineEditDialog', () => {
       mockProps.pipeline!.archbot_model = 'legacy-model:cloud';
       const dialog = new PipelineEditDialog(mockProps);
       const showPromise = dialog.show();
+      switchToCmdTab('models');
 
       const select = document.querySelector('select[name="archbot_model"]') as HTMLSelectElement;
       expect(select.value).toBe('legacy-model:cloud');
@@ -1140,6 +1161,7 @@ describe('PipelineEditDialog', () => {
     it('should render usable selects when the catalog is empty', async () => {
       const dialog = new PipelineEditDialog(mockProps);
       const showPromise = dialog.show();
+      switchToCmdTab('models');
 
       const select = document.querySelector('select[name="archbot_model"]') as HTMLSelectElement;
       expect(select.options.length).toBeGreaterThanOrEqual(1);

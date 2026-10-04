@@ -31,7 +31,7 @@ export interface PipelineEditDialogProps {
 
 type RepoTab = 'local' | 'remote';
 
-type CommandsTab = 'build' | 'lint' | 'test' | 'serve';
+type CommandsTab = 'build' | 'lint' | 'test' | 'serve' | 'models';
 
 /** A per-use-case model override rendered in the Models section. */
 type ModelField =
@@ -451,24 +451,34 @@ export class PipelineEditDialog extends BaseDialog<void> {
     );
   }
 
+  /** Returns the markup for the currently selected command tab. */
+  private renderActiveCommandTab(): string {
+    switch (this.activeCmdTab) {
+      case 'build':
+        return this.renderBuildCommands();
+      case 'lint':
+        return this.renderLintCommands();
+      case 'test':
+        return this.renderTestCommands();
+      case 'serve':
+        return this.renderServeCommands();
+      case 'models':
+        // The wrapper keeps a stable hook for the async model-options refresh.
+        return `<div id="models-area" class="flex flex-col gap-3">${this.renderModelsArea()}</div>`;
+    }
+  }
+
   private renderCommandsTabArea(): string {
-    const activeContent =
-      this.activeCmdTab === 'test'
-        ? this.renderTestCommands()
-        : this.activeCmdTab === 'lint'
-          ? this.renderLintCommands()
-          : this.activeCmdTab === 'build'
-            ? this.renderBuildCommands()
-            : this.renderServeCommands();
     return `
       <div class="flex gap-1 border-b border-app-border">
         <button type="button" data-cmd-tab="build" class="${this.cmdTabClass('build')}">Build</button>
         <button type="button" data-cmd-tab="lint" class="${this.cmdTabClass('lint')}">Lint</button>
         <button type="button" data-cmd-tab="test" class="${this.cmdTabClass('test')}">Test</button>
         <button type="button" data-cmd-tab="serve" class="${this.cmdTabClass('serve')}">Serve</button>
+        <button type="button" data-cmd-tab="models" class="${this.cmdTabClass('models')}">Models</button>
       </div>
       <div id="commands-tab-content">
-        ${activeContent}
+        ${this.renderActiveCommandTab()}
       </div>
     `;
   }
@@ -529,21 +539,16 @@ export class PipelineEditDialog extends BaseDialog<void> {
     `;
   }
 
-  /** Renders the Models section with one select per use case. */
+  /** Renders the Models tab content with one select per use case. */
   private renderModelsArea(): string {
     return `
-      <div class="flex flex-col gap-3 p-3 rounded border border-app-border bg-app-bg">
-        <div class="flex items-center justify-between gap-2">
-          <span class="text-[10px] font-bold uppercase tracking-wider text-app-muted">Models</span>
-          ${this.modelOptions.ollama.length === 0 && !this.modelOptionsLoaded
-            ? '<span class="text-[10px] text-app-muted">Loading…</span>'
-            : ''}
-        </div>
-        <div class="grid grid-cols-1 gap-3">
-          ${MODEL_FIELDS.map((spec) => this.renderModelSelect(spec)).join('')}
-        </div>
-        <p class="text-[10px] text-app-muted">Leave a select on “Use global default” to fall back to the server configuration for that use case.</p>
+      ${this.modelOptions.ollama.length === 0 && !this.modelOptionsLoaded
+        ? '<span class="text-[10px] text-app-muted">Loading…</span>'
+        : ''}
+      <div class="grid grid-cols-1 gap-3">
+        ${MODEL_FIELDS.map((spec) => this.renderModelSelect(spec)).join('')}
       </div>
+      <p class="text-[10px] text-app-muted">Leave a select on “Use global default” to fall back to the server configuration for that use case.</p>
     `;
   }
 
@@ -644,9 +649,6 @@ export class PipelineEditDialog extends BaseDialog<void> {
         <div id="commands-tab-area" class="flex flex-col gap-3">
           ${this.renderCommandsTabArea()}
         </div>
-        <div id="models-area">
-          ${this.renderModelsArea()}
-        </div>
         ${devServerControl ? `<div id="dev-server-area">${devServerControl}</div>` : ''}
         <div id="pipeline-edit-error" class="hidden text-xs text-red-400 font-bold"></div>
         ${create ? '' : `
@@ -694,7 +696,10 @@ export class PipelineEditDialog extends BaseDialog<void> {
       btn.addEventListener('click', () => {
         const tab = btn.dataset.cmdTab as CommandsTab;
         if (tab && tab !== this.activeCmdTab) {
+          // Capture both the command textareas and the model selects so a tab
+          // switch never discards the values the user has edited.
           this.captureCommandInputs();
+          this.captureModelInputs();
           this.activeCmdTab = tab;
           this.reRenderCommandsTabArea();
         }
