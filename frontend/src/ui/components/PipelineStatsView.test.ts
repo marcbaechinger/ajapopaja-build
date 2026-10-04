@@ -370,6 +370,21 @@ describe('PipelineStatsView', () => {
       expect(row).not.toBeNull();
       expect(row![1]).toBe('1');
     });
+
+    it('orders daily rows with the most recent day first', () => {
+      const older = '2026-04-10';
+      const newer = '2026-04-12';
+      const html = PipelineStatsView.render([], [
+        { date: older, created: 1, implemented: 1, work_ms: 0 },
+        { date: newer, created: 2, implemented: 2, work_ms: 0 },
+      ]);
+
+      const newerIndex = html.indexOf(`>${newer}<`);
+      const olderIndex = html.indexOf(`>${older}<`);
+      expect(newerIndex).toBeGreaterThan(-1);
+      expect(olderIndex).toBeGreaterThan(-1);
+      expect(newerIndex).toBeLessThan(olderIndex);
+    });
   });
 
   describe('renderCompact', () => {

@@ -191,7 +191,14 @@ export class PipelineStatsView {
 
     const doneByDay = this.getDailyDoneCounts(tasks);
 
-    const dailyRows = Array.isArray(dailyStats) ? dailyStats.map(day => {
+    // Daily productivity should surface the most recent day at the top. The
+    // backend returns the entries oldest-first, so sort a copy newest-first
+    // without mutating the caller's array.
+    const sortedDailyStats = Array.isArray(dailyStats)
+      ? [...dailyStats].sort((a, b) => String(b.date).localeCompare(String(a.date)))
+      : [];
+
+    const dailyRows = sortedDailyStats.map(day => {
       // Prefer the highest of the backend-reported done count and the count
       // derived from task history. This keeps SUBMITTED tasks visible even when
       // the backend only reported IMPLEMENTED transitions.
@@ -206,7 +213,7 @@ export class PipelineStatsView {
         <td class="py-3 text-right text-app-accent-1 font-semibold">${this.formatDuration(day.work_ms)}</td>
       </tr>
     `;
-    }).join('') : '';
+    }).join('');
 
     return `
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
