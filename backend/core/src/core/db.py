@@ -41,7 +41,11 @@ async def init_db(force: bool = False):
     database_name = os.getenv("DATABASE_NAME", "ajapopaja_build")
 
     if force or _client is None:
-        _client = AsyncMongoClient(mongodb_uri)
+        # ``tz_aware=True`` makes PyMongo return aware ``datetime`` objects on
+        # read. Without it, Beanie/Pydantic serialize datetimes without an
+        # offset, which JavaScript parses as *local* time and shifts every
+        # relative/absolute timestamp by the browser's UTC offset.
+        _client = AsyncMongoClient(mongodb_uri, tz_aware=True)
 
     await init_beanie(
         database=_client[database_name],

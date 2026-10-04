@@ -99,6 +99,18 @@ describe('SessionListItemView', () => {
     expect(el.querySelector('[data-session-relative]')?.textContent).toBeTruthy();
   });
 
+  it('renders the correct delta for an offset-less timestamp', () => {
+    const now = Date.parse('2026-01-10T12:00:00Z');
+    const el = mount(
+      SessionListItemView.render(
+        session({ last_active_at: '2026-01-10T11:58:00' }),
+        { now }
+      )
+    );
+    // Two minutes old — must not be shifted by the browser's UTC offset.
+    expect(el.querySelector('[data-session-relative]')?.textContent).toBe('2m ago');
+  });
+
   it('exposes a disable state while switching', () => {
     const el = mount(
       SessionListItemView.render(session(), { switchingUid: 'u1' })

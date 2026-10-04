@@ -18,6 +18,7 @@ import { describe, it, expect } from 'vitest';
 import {
   formatRelativeTime,
   formatAbsoluteTime,
+  parseTimestamp,
   sessionTimestamp,
 } from './relativeTime.ts';
 
@@ -51,6 +52,38 @@ describe('relativeTime utils', () => {
       expect(formatRelativeTime(undefined, NOW)).toBe('—');
       expect(formatRelativeTime('not-a-date', NOW)).toBe('—');
     });
+
+    it('treats timezone-less date-time strings as UTC', () => {
+      // Python/BSON can emit aware-UTC datetimes without an offset. JS would
+      // otherwise parse these as local time and shift the delta by the
+      // browser's UTC offset (the reported "2h ago" bug).
+      expect(formatRelativeTime('2026-01-10T11:58:00', NOW)).toBe('2m ago');
+      expect(formatRelativeTime('2026-01-10 11:58:00', NOW)).toBe('2m ago');
+    });
+
+    it('leaves already-zoned date-time strings unchanged', () => {
+      expect(formatRelativeTime('2026-01-10T11:58:00Z', NOW)).toBe('2m ago');
+      expect(formatRelativeTime('2026-01-10T11:58:00+00:00', NOW)).toBe('2m ago');
+    });
+
+    it('does not append Z to date-only strings', () => {
+      expect(parseTimestamp('2026-01-10')).toBe(Date.parse('2026-01-10'));
+    });
+  });
+
+  describe('parseTimestamp', () => {
+    it('normalizes offset-less strings but preserves explicit zones', () => {
+      expect(parseTimestamp('2026-01-10T12:00:00')).toBe(
+        Date.parse('2026-01-10T12:00:00Z')
+      );
+      expect(parseTimestamp('2026-01-10T12:00:00.500')).toBe(
+        Date.parse('2026-01-10T12:00:00.500Z')
+      );
+      expect(parseTimestamp('2026-01-10T12:00:00+02:00')).toBe(
+        Date.parse('2026-01-10T12:00:00+02:00')
+      );
+      expect(parseTimestamp('2026-01-10')).toBe(Date.parse('2026-01-10'));
+    });
   });
 
   describe('formatAbsoluteTime', () => {
@@ -63,6 +96,13 @@ describe('relativeTime utils', () => {
       const formatted = formatAbsoluteTime('2026-10-03T14:02:00Z');
       expect(formatted).not.toBe('—');
       expect(formatted).toMatch(/Oct/);
+    });
+
+    it('agrees with the UTC interpretation of offset-less input', () => {
+      // The tooltip and the relative label must derive from the same instant.
+      expect(formatAbsoluteTime('2026-10-03T14:02:00')).toBe(
+        formatAbsoluteTime(new Date('2026-10-03T14:02:00Z').toISOString())
+      );
     });
   });
 

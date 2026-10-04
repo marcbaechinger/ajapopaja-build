@@ -86,3 +86,25 @@ async def test_pi_session_persists(init_mock_db):
     assert saved is not None
     assert saved.kind == PiSessionKind.INTERACTIVE
     assert saved.pipeline_id == "p1"
+
+
+@pytest.mark.asyncio
+async def test_pi_session_serialization_is_timezone_aware(init_mock_db):
+    """Datetimes read back from Mongo must carry an offset.
+
+    Otherwise ``model_dump(mode="json")`` emits an offset-less string such as
+    ``"2026-10-04T12:27:00"`` which JavaScript parses as *local* time, shifting
+    every relative/absolute timestamp by the browser's UTC offset.
+    """
+    record = PiSession(uid="u1", kind=PiSessionKind.INTERACTIVE, pipeline_id="p1")
+    await record.insert()
+
+    saved = await PiSession.find_one(PiSession.uid == "u1")
+    assert saved is not None
+    data = saved.model_dump(mode="json")
+
+    for field in ("created_at", "updated_at"):
+        value = data[field]
+        assert value.endswith("+00:00") or value.endswith("Z"), (
+            f"{field}={value!r} is not timezone-aware; JS would parse it as local time"
+        )

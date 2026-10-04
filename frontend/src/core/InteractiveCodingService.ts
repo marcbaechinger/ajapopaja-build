@@ -21,7 +21,7 @@ import type { PiSessionSummary } from './clients/CoderBotClient.ts';
 import { PiLogReducer } from './PiLogReducer.ts';
 import type { RenderBlock } from './PiLogReducer.ts';
 import { LocalStorageManager } from './LocalStorageManager.ts';
-import { sessionTimestamp } from '../ui/components/utils/relativeTime.ts';
+import { parseTimestamp, sessionTimestamp } from '../ui/components/utils/relativeTime.ts';
 import type { PiSessionService } from '../ui/components/PiView.ts';
 
 export type { PiSessionSummary };
@@ -63,7 +63,7 @@ function statusWeight(status: string | null | undefined): number {
 
 function timeValue(session: PiSessionSummary): number {
   const iso = sessionTimestamp(session);
-  const ms = iso ? new Date(iso).getTime() : 0;
+  const ms = iso ? parseTimestamp(iso) : 0;
   return Number.isNaN(ms) ? 0 : ms;
 }
 
@@ -695,7 +695,7 @@ export class InteractiveCodingService implements PiSessionService {
 
   private parseStartTime(iso?: string | null): number | null {
     if (!iso) return null;
-    const ms = new Date(iso).getTime();
+    const ms = parseTimestamp(iso);
     return Number.isNaN(ms) ? null : ms;
   }
 

@@ -28,6 +28,23 @@ const DAY = 24 * HOUR;
 const WEEK = 7 * DAY;
 
 /**
+ * Parse an ISO timestamp, treating a timezone-less date-time string as UTC.
+ *
+ * Python/BSON can serialize aware-UTC datetimes without an offset
+ * (`2026-10-04T12:27:00`). ECMAScript parses such a string as *local* time,
+ * shifting every derived timestamp by the browser's UTC offset and making a
+ * just-created session render as `2h ago` in a UTC+2 timezone. Append `Z` only
+ * when the string has a time component but no explicit zone/offset, so
+ * date-only strings (`2026-10-04`, already UTC per spec) are left untouched.
+ */
+export function parseTimestamp(iso: string): number {
+  const hasTime = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(iso);
+  const hasZone = /([zZ]|[+-]\d{2}:?\d{2})$/.test(iso);
+  const normalized = hasTime && !hasZone ? `${iso}Z` : iso;
+  return new Date(normalized).getTime();
+}
+
+/**
  * Render a compact relative timestamp such as `just now`, `30s ago`, `2m ago`,
  * `1h ago`, `3d ago` or `Oct 3`. Returns `—` for missing or invalid input.
  *
@@ -38,7 +55,7 @@ export function formatRelativeTime(
   now: number = Date.now()
 ): string {
   if (!iso) return '—';
-  const then = new Date(iso).getTime();
+  const then = parseTimestamp(iso);
   if (Number.isNaN(then)) return '—';
 
   const diffSeconds = Math.floor((now - then) / 1000);
@@ -67,7 +84,7 @@ export function formatRelativeTime(
  */
 export function formatAbsoluteTime(iso: string | null | undefined): string {
   if (!iso) return '—';
-  const date = new Date(iso);
+  const date = new Date(parseTimestamp(iso));
   if (Number.isNaN(date.getTime())) return '—';
 
   try {

@@ -66,7 +66,7 @@ def isolate_pi_sessions_root(monkeypatch, tmp_path):
 async def init_mock_db():
     mongodb_uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
     test_db_name = f"test_db_{uuid.uuid4().hex}"
-    client = AsyncMongoClient(mongodb_uri)
+    client = AsyncMongoClient(mongodb_uri, tz_aware=True)
     db = client[test_db_name]
     await init_beanie(
         database=db,

@@ -121,6 +121,11 @@ export interface SessionListItemOptions {
    * global session manager exposes title generation.
    */
   showGenerateTitle?: boolean;
+  /**
+   * Fixed “now” (epoch ms) used when formatting the relative timestamp. Kept
+   * injectable so the rendered row is deterministically testable.
+   */
+  now?: number;
 }
 
 /**
@@ -144,7 +149,7 @@ export class SessionListItemView {
     const label = escapeHtml(sessionDisplayLabel(session));
     const pipelineName = escapeHtml(options.pipelineName || session.pipeline_id || 'Unknown pipeline');
     const timestamp = sessionTimestamp(session);
-    const relative = formatRelativeTime(timestamp);
+    const relative = formatRelativeTime(timestamp, options.now);
     const absolute = formatAbsoluteTime(timestamp);
     const turns = session.resume_count ?? 0;
     const turnLabel = turns === 1 ? '1 turn' : `${turns} turns`;
