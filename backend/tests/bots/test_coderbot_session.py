@@ -24,6 +24,9 @@ from api.websocket_manager import WSMessage
 from core import config
 from core.models.models import (
     Pipeline,
+    PiSession,
+    PiSessionKind,
+    PiSessionStatus,
     PullRequest,
     PullRequestStatus,
     Task,
@@ -222,6 +225,69 @@ async def test_coderbot_run_spawns_pi(init_mock_db):
 
             # Verify EOF was signaled
             assert fake_proc.stdin.eof is True
+    finally:
+        config.CODERBOT_RUN_TESTS = original_run_tests
+
+
+@pytest.mark.asyncio
+async def test_coderbot_run_seeds_session_label_from_task_title(init_mock_db):
+    """A batch session without a label gets the task title when it runs."""
+    pipeline = Pipeline(
+        name="Test Pipeline", workspace_path="test", workspace_abs_path="/tmp"
+    )
+    await pipeline.insert()
+
+    task = Task(
+        title="Seed the session label",
+        pipeline_id=str(pipeline.id),
+        design_doc="Design",
+        spec="Spec",
+    )
+    await task.insert()
+
+    record = PiSession(
+        uid="u-label",
+        kind=PiSessionKind.CODERBOT,
+        status=PiSessionStatus.STARTING,
+        pipeline_id=str(pipeline.id),
+        task_id=str(task.id),
+        bot_type="coderbot",
+    )
+    await record.insert()
+
+    original_run_tests = config.CODERBOT_RUN_TESTS
+    config.CODERBOT_RUN_TESTS = False
+    try:
+        with (
+            patch("api.coderbot.session.SandboxGitHelper") as mock_helper_cls,
+            patch("api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock),
+            patch("api.coderbot.session.asyncio.create_subprocess_exec") as mock_exec,
+            patch("builtins.open", MagicMock()),
+            patch("pathlib.Path.mkdir"),
+        ):
+            mock_helper = MagicMock()
+            mock_helper.branch_name = "test-branch"
+            mock_helper.get_patch.return_value = "test-patch"
+            mock_repo = MagicMock()
+            mock_repo.git.diff.return_value = "test-patch"
+            mock_helper.get_repo.return_value = mock_repo
+            mock_helper_cls.return_value = mock_helper
+
+            session = CoderBotSession(
+                pipeline_id=str(pipeline.id),
+                task_id=str(task.id),
+                session_uid=record.uid,
+                session_record=record,
+            )
+
+            fake_proc = FakePiProcess(events=[{"type": "agent_end", "messages": []}])
+            mock_exec.return_value = fake_proc
+
+            await session.run()
+
+            reloaded = await PiSession.find_one(PiSession.uid == record.uid)
+            assert reloaded is not None
+            assert reloaded.label == "Seed the session label"
     finally:
         config.CODERBOT_RUN_TESTS = original_run_tests
 

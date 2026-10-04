@@ -1004,6 +1004,17 @@ class CoderBotSession(PiRpcProcess):
             self._log_event({"type": "error", "message": error_msg})
             return
 
+        # Seed the durable session label from the task title when it is still
+        # unset (e.g. records created before this behaviour existed or sessions
+        # constructed directly). A user-set label is never overwritten.
+        if (
+            self.session_record is not None
+            and not self.session_record.label
+            and isinstance(task.title, str)
+            and task.title.strip()
+        ):
+            self.session_record.label = task.title
+
         # Move the task to INPROGRESS when CoderBot starts executing it.
         if task.status == TaskStatus.SCHEDULED or task.status == TaskStatus.CREATED:
             updated_task = await task_queries.transition_task(

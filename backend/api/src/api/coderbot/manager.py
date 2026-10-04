@@ -37,6 +37,19 @@ from .session import CoderBotSession, InteractivePiSession
 logger = logging.getLogger(__name__)
 
 
+def _session_label(value: object) -> Optional[str]:
+    """Return a non-empty string session label for ``value`` or ``None``.
+
+    Durable records reject non-string labels, so non-string task titles (e.g.
+    ``MagicMock`` attributes in tests) must not be passed through verbatim.
+    """
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if cleaned:
+            return cleaned
+    return None
+
+
 class InteractiveSessionError(Exception):
     """Base error for interactive session lifecycle operations.
 
@@ -167,7 +180,12 @@ class CoderBotManager:
             self._worker_task = asyncio.create_task(self._process_queue())
 
     async def process_task(self, task: Task):
-        """Enqueues a new CoderBotSession for the given task."""
+        """Enqueues a new CoderBotSession for the given task.
+
+        The durable :class:`PiSession` record is seeded with the task title as
+        its human readable ``label`` so the session manager can show a
+        meaningful name instead of ``(untitled)`` for every batch run.
+        """
         record = PiSession(
             uid=str(uuid_module.uuid4()),
             kind=PiSessionKind.CODERBOT,
@@ -177,6 +195,7 @@ class CoderBotManager:
             model=self._default_model,
             skill_names=list(config.CODERBOT_SKILLS),
             bot_type="coderbot",
+            label=_session_label(getattr(task, "title", None)),
         )
         await record.insert()
         pi_session_store.write_meta(record)
@@ -201,6 +220,10 @@ class CoderBotManager:
         The session re-runs CoderBot on a fresh branch with the current PR patch
         applied as unstaged changes and writes the updated result back onto the
         same PR document."""
+        task = await Task.get(pr.task_id) if pr.task_id else None
+        label = _session_label(getattr(task, "title", None))
+        if not label:
+            label = _session_label(pr.subject)
         record = PiSession(
             uid=str(uuid_module.uuid4()),
             kind=PiSessionKind.CODERBOT,
@@ -211,6 +234,7 @@ class CoderBotManager:
             skill_names=list(config.CODERBOT_SKILLS),
             bot_type="coderbot",
             pull_request_ids=[str(pr.id)],
+            label=label,
         )
         await record.insert()
         pi_session_store.write_meta(record)

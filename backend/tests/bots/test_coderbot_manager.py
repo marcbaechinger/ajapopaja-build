@@ -31,6 +31,7 @@ from core.models.models import (
     PiSession,
     PiSessionKind,
     PiSessionStatus,
+    Task,
 )
 
 
@@ -164,6 +165,48 @@ async def test_manager_process_task_passes_none_model_by_default(
         assert kwargs["model"] is None
         assert kwargs["session_uid"]
         assert kwargs["session_record"] is not None
+
+
+@pytest.mark.asyncio
+async def test_manager_process_task_seeds_label_with_task_title(init_mock_db):
+    """A batch CoderBot session is seeded with the task title as its label."""
+    manager = CoderBotManager()
+
+    task = MagicMock()
+    task.pipeline_id = "p1"
+    task.id = "t1"
+    task.title = "Implement the widget"
+
+    with patch("api.coderbot.manager.CoderBotSession") as mock_session_cls:
+        await manager.process_task(task)
+        record = mock_session_cls.call_args.kwargs["session_record"]
+
+    assert record.label == "Implement the widget"
+
+    stored = await PiSession.find_one(PiSession.uid == record.uid)
+    assert stored is not None
+    assert stored.label == "Implement the widget"
+
+
+@pytest.mark.asyncio
+async def test_manager_process_pr_iteration_seeds_label_with_task_title(init_mock_db):
+    """A PR-iteration CoderBot session is also seeded with the task title."""
+    manager = CoderBotManager()
+
+    task = Task(title="Iterate the widget", pipeline_id="p1")
+    await task.insert()
+
+    pr = MagicMock()
+    pr.id = "pr1"
+    pr.pipeline_id = "p1"
+    pr.task_id = str(task.id)
+    pr.subject = "Stale subject"
+
+    with patch("api.coderbot.manager.CoderBotSession") as mock_session_cls:
+        await manager.process_pr_iteration(pr, "please fix the review")
+        record = mock_session_cls.call_args.kwargs["session_record"]
+
+    assert record.label == "Iterate the widget"
 
 
 @pytest.mark.asyncio
