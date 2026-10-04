@@ -29,7 +29,7 @@ export class PullRequestSection {
     if (openPrs.length === 0) return '';
 
     return `
-      <section class="mb-10 bg-app-accent-2/5 border border-app-accent-2/20 rounded-3xl p-6 shadow-sm">
+      <section class="mb-2 mt-2 bg-app-accent-2/5 border border-app-accent-2/20 rounded-3xl p-6 shadow-sm">
         <div class="flex items-center justify-between mb-6 px-1">
           <div class="flex items-center gap-3">
              <div class="p-2 bg-app-accent-2/20 rounded-xl text-app-accent-2">
