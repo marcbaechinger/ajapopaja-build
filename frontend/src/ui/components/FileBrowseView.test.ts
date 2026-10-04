@@ -142,6 +142,54 @@ describe('FileBrowseView', () => {
     expect(client.listDirectory).toHaveBeenLastCalledWith('p1', 'a');
   });
 
+  it('renders the current root directory as a breadcrumb link back to the listing', async () => {
+    view.render();
+    await flush();
+
+    registry.get('file_browser_open_file')(new Event('click'), elementWithPath('README.md'));
+    await flush();
+    expect(root.querySelector('#file-browser-main')!.textContent).toContain('# hi');
+
+    const rootCrumb = root.querySelector(
+      '#file-browser-breadcrumb button[data-action-click="file_browser_breadcrumb"][data-path=""]'
+    ) as HTMLButtonElement | null;
+    expect(rootCrumb).not.toBeNull();
+
+    registry.get('file_browser_breadcrumb')(new Event('click'), rootCrumb!);
+    await flush();
+
+    expect(client.listDirectory).toHaveBeenLastCalledWith('p1', '');
+    expect(root.querySelector('#file-browser-main')!.textContent).toContain('README.md');
+  });
+
+  it('renders the current nested directory as a link that leaves an open file', async () => {
+    client.listDirectory.mockImplementation((_pipeline: string, path: string) =>
+      Promise.resolve(listing(path, [['App.ts', false]]))
+    );
+    view.render();
+    await flush();
+
+    registry.get('file_browser_navigate')(new Event('click'), elementWithPath('src'));
+    await flush();
+    client.readFile.mockResolvedValue(
+      new FileContent({ name: 'App.ts', path: 'src/App.ts', size: 5, content: 'app\n' })
+    );
+    registry.get('file_browser_open_file')(new Event('click'), elementWithPath('src/App.ts'));
+    await flush();
+    expect(root.querySelector('#file-browser-main')!.textContent).toContain('app');
+
+    const currentCrumb = root.querySelector(
+      '#file-browser-breadcrumb button[data-action-click="file_browser_breadcrumb"][data-path="src"]'
+    ) as HTMLButtonElement | null;
+    expect(currentCrumb).not.toBeNull();
+
+    registry.get('file_browser_breadcrumb')(new Event('click'), currentCrumb!);
+    await flush();
+
+    expect(client.listDirectory).toHaveBeenLastCalledWith('p1', 'src');
+    expect(root.querySelector('#file-browser-main')!.textContent).toContain('App.ts');
+  });
+
   it('restores the last visited directory on render', async () => {
     window.localStorage.setItem('file-browser:lastPath:p1', JSON.stringify('src'));
     LocalStorageManager.resetInstances();

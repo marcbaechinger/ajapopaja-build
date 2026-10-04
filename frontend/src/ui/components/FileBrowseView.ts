@@ -188,31 +188,28 @@ export class FileBrowseView {
 
     const separator = `<span class="text-app-muted/40 select-none" aria-hidden="true">/</span>`;
     const rootPath = '';
-    if (segments.length === 0) {
-      crumbs.push(`<span class="text-xs font-semibold text-app-text truncate">repo</span>`);
-    } else {
-      crumbs.push(
-        `<button type="button" data-action-click="file_browser_breadcrumb" data-path="${rootPath}"
-          class="text-xs text-app-muted hover:text-app-accent-1 transition-colors truncate cursor-pointer">repo</button>`
-      );
-    }
+    const isRootCurrent = segments.length === 0;
+    // The current directory is always rendered as a link so that a displayed
+    // file can never lock the user in: clicking the current crumb reloads its
+    // directory listing.
+    crumbs.push(
+      `<button type="button" data-action-click="file_browser_breadcrumb" data-path="${rootPath}"
+        class="text-xs ${isRootCurrent ? 'font-semibold text-app-text' : 'text-app-muted'} hover:text-app-accent-1 transition-colors truncate cursor-pointer"${
+          isRootCurrent ? ' aria-current="page"' : ''
+        }>repo</button>`
+    );
 
     let cumulative = '';
     segments.forEach((segment, index) => {
       cumulative = cumulative ? `${cumulative}/${segment}` : segment;
       const isLast = index === segments.length - 1;
-      if (isLast) {
-        crumbs.push(separator);
-        crumbs.push(
-          `<span class="text-xs font-semibold text-app-text truncate">${escapeHtml(segment)}</span>`
-        );
-      } else {
-        crumbs.push(separator);
-        crumbs.push(
-          `<button type="button" data-action-click="file_browser_breadcrumb" data-path="${escapeHtml(cumulative)}"
-            class="text-xs text-app-muted hover:text-app-accent-1 transition-colors truncate cursor-pointer">${escapeHtml(segment)}</button>`
-        );
-      }
+      crumbs.push(separator);
+      crumbs.push(
+        `<button type="button" data-action-click="file_browser_breadcrumb" data-path="${escapeHtml(cumulative)}"
+          class="text-xs ${isLast ? 'font-semibold text-app-text' : 'text-app-muted'} hover:text-app-accent-1 transition-colors truncate cursor-pointer"${
+            isLast ? ' aria-current="page"' : ''
+          }>${escapeHtml(segment)}</button>`
+      );
     });
 
     el.innerHTML = crumbs.join('');
