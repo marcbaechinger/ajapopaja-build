@@ -21,7 +21,6 @@ import type {
 } from '../../core/domain.ts';
 import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
 import type { FileBrowserClient } from '../../core/clients/FileBrowserClient.ts';
-import { DirectoryListingItemView } from './DirectoryListingItemView.ts';
 import { DirectoryView } from './DirectoryView.ts';
 import { FileView } from './FileView.ts';
 import { Icon } from './Icon.ts';
@@ -36,10 +35,10 @@ export interface FileBrowseViewOptions {
 /**
  * Coordinator for the read-only pipeline file browser.
  *
- * Owns a stable shell (breadcrumb, collapsible sidebar, main panel) and
- * re-renders only the fragments that changed. All HTTP goes through
- * {@link FileBrowserClient}. A monotonically increasing request id discards
- * stale responses so fast clicking can never render an outdated directory.
+ * Owns a stable shell (breadcrumb, main panel) and re-renders only the
+ * fragments that changed. All HTTP goes through {@link FileBrowserClient}. A
+ * monotonically increasing request id discards stale responses so fast
+ * clicking can never render an outdated directory.
  */
 export class FileBrowseView {
   private root: HTMLElement;
@@ -51,7 +50,6 @@ export class FileBrowseView {
   private currentDir: string = '';
   private listing: DirectoryListing | null = null;
   private selectedFile: FileContent | null = null;
-  private sidebarCollapsed: boolean = false;
   private loading: boolean = false;
   private error: string | null = null;
   private requestId: number = 0;
@@ -68,7 +66,6 @@ export class FileBrowseView {
     this.root.innerHTML = this.shell();
     this.registerActions();
     this.restoreState();
-    this.applySidebarState();
     this.renderBreadcrumb();
     void this.loadDirectory(this.currentDir);
   }
@@ -88,7 +85,6 @@ export class FileBrowseView {
     this.selectedFile = null;
     this.storage.put(`lastPath:${this.pipelineId}`, path);
     this.renderBreadcrumb();
-    this.renderSidebar();
     this.renderMain();
 
     try {
@@ -96,14 +92,12 @@ export class FileBrowseView {
       if (this.isStale(requestId)) return;
       this.listing = listing;
       this.loading = false;
-      this.renderSidebar();
       this.renderMain();
     } catch (e) {
       if (this.isStale(requestId)) return;
       this.loading = false;
       this.listing = null;
       this.error = this.errorMessage(e, 'Failed to open the directory.');
-      this.renderSidebar();
       this.renderMain();
     }
   }
@@ -113,7 +107,6 @@ export class FileBrowseView {
     this.loading = true;
     this.error = null;
     this.selectedFile = null;
-    this.renderSidebar();
     this.renderMain();
 
     try {
@@ -121,13 +114,11 @@ export class FileBrowseView {
       if (this.isStale(requestId)) return;
       this.selectedFile = file;
       this.loading = false;
-      this.renderSidebar();
       this.renderMain();
     } catch (e) {
       if (this.isStale(requestId)) return;
       this.loading = false;
       this.error = this.errorMessage(e, 'Failed to open the file.');
-      this.renderSidebar();
       this.renderMain();
     }
   }
@@ -157,19 +148,9 @@ export class FileBrowseView {
               title="Refresh" aria-label="Refresh">
               ${Icon.render('refresh', { size: 14 })}
             </button>
-            <button id="file-browser-sidebar-btn" type="button"
-              data-action-click="file_browser_toggle_sidebar"
-              class="p-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center justify-center cursor-pointer"
-              aria-pressed="false" title="Toggle sidebar" aria-label="Toggle sidebar">
-              ${Icon.render('chevronRight', { size: 14 })}
-            </button>
           </div>
         </div>
-        <div class="flex flex-1 min-h-0">
-          <aside id="file-browser-sidebar"
-            class="w-64 flex-none border-r border-app-border/40 overflow-y-auto p-1"></aside>
-          <main id="file-browser-main" class="flex-1 min-w-0 flex flex-col overflow-hidden"></main>
-        </div>
+        <main id="file-browser-main" class="flex-1 min-w-0 flex flex-col overflow-hidden"></main>
       </div>
     `;
   }
@@ -191,10 +172,6 @@ export class FileBrowseView {
     register('file_browser_breadcrumb', (_event, element) => {
       if (this.destroyed) return;
       void this.loadDirectory(element.getAttribute('data-path') ?? '');
-    });
-    register('file_browser_toggle_sidebar', () => {
-      if (this.destroyed) return;
-      this.toggleSidebar();
     });
     register('file_browser_refresh', () => {
       if (this.destroyed) return;
@@ -241,36 +218,6 @@ export class FileBrowseView {
     el.innerHTML = crumbs.join('');
   }
 
-  private renderSidebar(): void {
-    const el = this.root.querySelector('#file-browser-sidebar');
-    if (!el) return;
-
-    if (this.loading && !this.listing) {
-      el.innerHTML = this.sidebarMessage('Loading…', 'animate-pulse');
-      return;
-    }
-    if (!this.listing) {
-      el.innerHTML = this.error
-        ? this.sidebarMessage('Unable to load')
-        : '';
-      return;
-    }
-
-    const activePath = this.selectedFile?.path ?? null;
-    const rows = this.listing.entries
-      .map((entry) =>
-        DirectoryListingItemView.render(entry, {
-          active: entry.path === activePath,
-          collapsed: this.sidebarCollapsed,
-        })
-      )
-      .join('');
-
-    el.innerHTML =
-      rows ||
-      `<p class="text-app-muted/50 text-[11px] italic text-center py-4 px-2">Empty</p>`;
-  }
-
   private renderMain(): void {
     const el = this.root.querySelector('#file-browser-main');
     if (!el) return;
@@ -307,41 +254,11 @@ export class FileBrowseView {
     el.innerHTML = '';
   }
 
-  // --- sidebar / state ----------------------------------------------------
+  // --- state --------------------------------------------------------------
 
   private restoreState(): void {
     const lastPath = this.storage.get<string>(`lastPath:${this.pipelineId}`, '');
     this.currentDir = typeof lastPath === 'string' ? lastPath : '';
-    const collapsed = this.storage.get<boolean>(
-      `sidebar_collapsed:${this.pipelineId}`,
-      false
-    );
-    this.sidebarCollapsed = collapsed === true;
-  }
-
-  private toggleSidebar(): void {
-    this.sidebarCollapsed = !this.sidebarCollapsed;
-    this.storage.put(`sidebar_collapsed:${this.pipelineId}`, this.sidebarCollapsed);
-    this.applySidebarState();
-    this.renderSidebar();
-  }
-
-  private applySidebarState(): void {
-    const sidebar = this.root.querySelector('#file-browser-sidebar');
-    sidebar?.classList.toggle('hidden', this.sidebarCollapsed);
-
-    const button = this.root.querySelector('#file-browser-sidebar-btn');
-    if (button) {
-      button.setAttribute('aria-pressed', String(this.sidebarCollapsed));
-      button.innerHTML = Icon.render(
-        this.sidebarCollapsed ? 'chevronRight' : 'folderOpen',
-        { size: 14 }
-      );
-    }
-  }
-
-  private sidebarMessage(text: string, extraClass: string = ''): string {
-    return `<p class="text-app-muted/50 text-[11px] italic text-center py-4 px-2 ${extraClass}">${text}</p>`;
   }
 
   private isStale(requestId: number): boolean {

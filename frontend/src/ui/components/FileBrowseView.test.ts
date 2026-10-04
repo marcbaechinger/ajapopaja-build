@@ -87,15 +87,15 @@ describe('FileBrowseView', () => {
     view.destroy();
   });
 
-  it('lists the repository root and renders the sidebar and main panel', async () => {
+  it('lists the repository root and renders the directory listing in the main panel', async () => {
     view.render();
     await flush();
 
     expect(client.listDirectory).toHaveBeenCalledWith('p1', '');
-    const sidebar = root.querySelector('#file-browser-sidebar') as HTMLElement;
-    expect(sidebar.textContent).toContain('src');
-    expect(sidebar.textContent).toContain('README.md');
-    expect(root.querySelector('#file-browser-main')!.textContent).toContain('README.md');
+    expect(root.querySelector('#file-browser-sidebar')).toBeNull();
+    const main = root.querySelector('#file-browser-main') as HTMLElement;
+    expect(main.textContent).toContain('src');
+    expect(main.textContent).toContain('README.md');
     expect(root.querySelector('#file-browser-breadcrumb')!.textContent).toContain('repo');
   });
 
@@ -115,7 +115,7 @@ describe('FileBrowseView', () => {
     expect(root.querySelector('#file-browser-main')!.textContent).toContain('App.ts');
   });
 
-  it('opens a file and renders its content, marking the sidebar row active', async () => {
+  it('opens a file and renders its content', async () => {
     view.render();
     await flush();
 
@@ -125,8 +125,6 @@ describe('FileBrowseView', () => {
     expect(client.readFile).toHaveBeenCalledWith('p1', 'README.md');
     const main = root.querySelector('#file-browser-main') as HTMLElement;
     expect(main.textContent).toContain('# hi');
-    const activeRow = root.querySelector('[data-path="README.md"]');
-    expect(activeRow?.getAttribute('aria-current')).toBe('true');
   });
 
   it('navigates via a breadcrumb segment', async () => {
@@ -142,20 +140,6 @@ describe('FileBrowseView', () => {
     await flush();
 
     expect(client.listDirectory).toHaveBeenLastCalledWith('p1', 'a');
-  });
-
-  it('toggles and persists the sidebar collapse state', async () => {
-    view.render();
-    await flush();
-
-    registry.get('file_browser_toggle_sidebar')(new Event('click'), document.createElement('button'));
-
-    const sidebar = root.querySelector('#file-browser-sidebar') as HTMLElement;
-    expect(sidebar.classList.contains('hidden')).toBe(true);
-    expect(window.localStorage.getItem('file-browser:sidebar_collapsed:p1')).toBe('true');
-
-    registry.get('file_browser_toggle_sidebar')(new Event('click'), document.createElement('button'));
-    expect(sidebar.classList.contains('hidden')).toBe(false);
   });
 
   it('restores the last visited directory on render', async () => {
