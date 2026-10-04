@@ -76,6 +76,7 @@ class FakePiProcess:
     def __init__(self, events=None):
         self._queue = asyncio.Queue()
         self._events = list(events or [])
+        self._events_sent = False
         self.stdin = _FakeStdin(self)
         self.stdout = _FakeStdout(self)
         self.returncode = None
@@ -97,10 +98,16 @@ class FakePiProcess:
                 + "\n"
             ).encode("utf-8")
         )
-        for event in self._events:
-            self._queue.put_nowait((json.dumps(event) + "\n").encode("utf-8"))
-        # Signal EOF so the background read loop terminates.
-        self._queue.put_nowait(b"")
+        # Only the actual run (the ``prompt`` command) emits the scripted events
+        # and closes stdout. Session-identity capture sends ``get_state`` first;
+        # closing the stream there would make the following ``prompt`` wait for
+        # the full command timeout without ever being acknowledged.
+        if command.get("type") == "prompt" and not self._events_sent:
+            self._events_sent = True
+            for event in self._events:
+                self._queue.put_nowait((json.dumps(event) + "\n").encode("utf-8"))
+            # Signal EOF so the background read loop terminates.
+            self._queue.put_nowait(b"")
 
     async def next_line(self):
         return await self._queue.get()
@@ -270,6 +277,9 @@ async def test_coderbot_run_seeds_session_label_from_task_title(init_mock_db):
             mock_helper.get_patch.return_value = "test-patch"
             mock_repo = MagicMock()
             mock_repo.git.diff.return_value = "test-patch"
+            # A real hash so the completed session record can be serialized
+            # (``base_commit`` is typed ``Optional[str]``).
+            mock_repo.head.commit.hexsha = "a" * 40
             mock_helper.get_repo.return_value = mock_repo
             mock_helper_cls.return_value = mock_helper
 
