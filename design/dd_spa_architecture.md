@@ -102,6 +102,7 @@ building lives in the pure value object `PipelineRoute`
 | --- | --- |
 | `#/pipeline/<id>` | Pipeline detail, default tab |
 | `#/pipeline/<id>/tab/task` | Task editor tab |
+| `#/pipeline/<id>/tab/task/<uid>` | Task editor tab, task `<uid>` selected |
 | `#/pipeline/<id>/tab/agent` | Coding Agent tab (only while a session is attached) |
 | `#/pipeline/<id>/tab/fb` | File Browser tab, path from the persisted `lastPath` |
 | `#/pipeline/<id>/tab/fb/` | File Browser tab, repository root (explicit) |
@@ -113,6 +114,12 @@ segment, never absolute. It is opaque to the router; `FileBrowseView.navigateTo`
 resolves file vs. directory with a single `FileBrowserClient.getMeta()` call.
 User-initiated navigation pushes a history entry; route-driven and initial loads
 are silent so no push/`hashchange` loop can form.
+
+The optional trailing task uid (a single opaque segment, meaningful only for the
+task editor tab) is the routable projection of the selected task. Selecting a
+task writes `…/tab/task/<uid>`, so a selection can be shared, bookmarked, and
+restored on reload; applying the route is a no-op when the uid already matches
+the current selection, so unrelated `hashchange` events never re-render.
 
 - **Navigator**: `frontend/src/core/Navigator.ts`
 - **Login View**: `frontend/src/ui/views/LoginView.ts`

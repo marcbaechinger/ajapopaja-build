@@ -26,6 +26,7 @@
  *
  *   #/pipeline/<id>                       -> task editor (default)
  *   #/pipeline/<id>/tab/task              -> task editor
+ *   #/pipeline/<id>/tab/task/<uid>        -> task editor, task <uid> selected
  *   #/pipeline/<id>/tab/agent             -> coding agent
  *   #/pipeline/<id>/tab/fb                -> file browser, persisted last path
  *   #/pipeline/<id>/tab/fb/               -> file browser, repository root
@@ -34,7 +35,9 @@
  *
  * The trailing file-browser path is a repo-relative POSIX path, encoded per
  * segment. It is opaque to the router: whether the last segment names a file
- * or a directory is resolved at apply time with a single `getMeta()` call.
+ * or a directory is resolved at apply time with a single `getMeta()` call. The
+ * trailing task uid is a single opaque segment, meaningful only for the task
+ * editor tab.
  */
 
 export type ContentTab = 'task-editor' | 'coding-agent' | 'file-browser';
@@ -59,6 +62,11 @@ export interface PipelineRouteState {
    * (fall back to the persisted last path), `''` means the repository root.
    */
   fbPath: string | null;
+  /**
+   * Selected task uid from `tab/task/`; `null` when absent. Only meaningful for
+   * the task editor tab (opaque, single segment).
+   */
+  taskId: string | null;
 }
 
 function decodeSegment(segment: string): string {
@@ -76,7 +84,7 @@ export class PipelineRoute {
    * (optional) file-browser path. Never throws.
    */
   static parse(rest: string | undefined | null): PipelineRouteState {
-    const state: PipelineRouteState = { tab: 'task-editor', fbPath: null };
+    const state: PipelineRouteState = { tab: 'task-editor', fbPath: null, taskId: null };
     if (!rest) return state;
 
     const hadTrailingSlash = /\/+$/.test(rest);
@@ -87,12 +95,18 @@ export class PipelineRoute {
     const tab = slug ? TAB_SLUG_TO_TAB[slug] : undefined;
     if (tab) state.tab = tab;
 
-    if (parts.length > 2) {
-      state.fbPath = parts.slice(2).map(decodeSegment).join('/');
-    } else if (hadTrailingSlash && parts[1] === 'fb') {
-      // `tab/fb/` is the canonical encoding of the explicit repository root,
-      // distinct from `tab/fb` ("no explicit path").
-      state.fbPath = '';
+    // Gate the trailing segment by slug so each tab owns its own suffix: the
+    // file browser gets a multi-segment path, the task editor a single uid.
+    if (slug === 'fb') {
+      if (parts.length > 2) {
+        state.fbPath = parts.slice(2).map(decodeSegment).join('/');
+      } else if (hadTrailingSlash) {
+        // `tab/fb/` is the canonical encoding of the explicit repository root,
+        // distinct from `tab/fb` ("no explicit path").
+        state.fbPath = '';
+      }
+    } else if (slug === 'task' && parts.length > 2) {
+      state.taskId = decodeSegment(parts[2]);
     }
 
     return state;
@@ -101,9 +115,15 @@ export class PipelineRoute {
   /**
    * Builds a canonical, shortest hash for the given pipeline sub-state.
    * `null`/omitted `fbPath` emits `#/pipeline/<id>/tab/<slug>` (no trailing
-   * slash); `''` emits the explicit-root form `#/pipeline/<id>/tab/fb/`.
+   * slash); `''` emits the explicit-root form `#/pipeline/<id>/tab/fb/`. The
+   * optional `taskId` is appended only for the task editor tab.
    */
-  static build(pipelineId: string, tab: ContentTab, fbPath?: string | null): string {
+  static build(
+    pipelineId: string,
+    tab: ContentTab,
+    fbPath?: string | null,
+    taskId?: string | null
+  ): string {
     const slug = TAB_TO_SLUG[tab] ?? TAB_TO_SLUG['task-editor'];
     let hash = `#/pipeline/${pipelineId}/tab/${slug}`;
     if (tab === 'file-browser' && fbPath !== null && fbPath !== undefined) {
@@ -117,6 +137,8 @@ export class PipelineRoute {
           .join('/');
         hash += `/${encoded}`;
       }
+    } else if (tab === 'task-editor' && taskId) {
+      hash += `/${encodeURIComponent(taskId)}`;
     }
     return hash;
   }

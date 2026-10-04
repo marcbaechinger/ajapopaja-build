@@ -85,6 +85,9 @@ export class PipelineDetailView extends View {
   // Explicit file-browser path from the route, consumed once when the File
   // Browser is lazily mounted. `null` = use the persisted last path.
   private pendingFbPath: string | null = null;
+  // Deep-linked task uid, consumed once by `refreshTasks()` (the task list is
+  // not loaded yet when the route is first applied). `null` = no explicit task.
+  private pendingTaskId: string | null = null;
   private interactiveSession: { pipelineId: string; active: boolean } | null = null;
   private sessionListClickHandler: ((e: Event) => void) | null = null;
 
@@ -147,6 +150,7 @@ export class PipelineDetailView extends View {
     const route = PipelineRoute.parse(params.rest);
     this.contentTab = route.tab;
     this.pendingFbPath = route.fbPath;
+    this.pendingTaskId = route.taskId;
     this.sidebarCollapsed =
       this.storage.get<boolean>(`sidebar_collapsed:${this.pipelineId}`, false) === true;
     this.loadPendingReviews();
@@ -1540,6 +1544,15 @@ export class PipelineDetailView extends View {
         completedCountEl.textContent = `(${completedTasks.length})`;
       }
 
+      // Consume a deep-linked task uid exactly once, now that the task list is
+      // loaded, so the selected task is shown on first paint. A uid that does
+      // not resolve simply leaves the empty hint in place.
+      if (this.pendingTaskId) {
+        this.selectedTask =
+          this.allLoadedTasks.find(t => t.id === this.pendingTaskId) ?? null;
+        this.pendingTaskId = null;
+      }
+
       this.refreshBacklog();
       this.refreshSelectedTask();
       this.refreshExecutionEngine();
@@ -2345,7 +2358,7 @@ export class PipelineDetailView extends View {
   }
 
   private applyRoute(params: Record<string, string>): void {
-    const { tab, fbPath } = PipelineRoute.parse(params.rest);
+    const { tab, fbPath, taskId } = PipelineRoute.parse(params.rest);
     // The Coding Agent tab is only selectable while a session is attached;
     // fall back to the task editor so the URL never advertises a dead tab.
     const target: ContentTab =
@@ -2363,6 +2376,26 @@ export class PipelineDetailView extends View {
     }
 
     this.setContentTab(target, { hash: 'none' });
+    // The uid is meaningful only for the task editor; apply it in place so a
+    // Back/Forward or externally crafted hash never re-enters the router and
+    // only re-renders when the selected task actually changes.
+    if (target === 'task-editor') this.applyTaskSelection(taskId);
+  }
+
+  /**
+   * Route -> selection. Resolves the uid against the loaded tasks and selects
+   * it, but is a no-op when the id already matches the current selection (and
+   * when both are absent), so unrelated hash changes never discard edits.
+   */
+  private applyTaskSelection(taskId: string | null): void {
+    const current = this.selectedTask?.id ?? null;
+    if (current === (taskId ?? null)) return;
+    this.pendingSpecEditTaskId = null;
+    this.selectedTask = taskId
+      ? this.allLoadedTasks.find(t => t.id === taskId) ?? null
+      : null;
+    this.refreshBacklog();
+    this.refreshSelectedTask();
   }
 
   /**
@@ -2386,10 +2419,11 @@ export class PipelineDetailView extends View {
    */
   private writeRoute(
     mode: 'push' | 'replace' | 'none',
-    fbPath: string | null = this.currentFbPath()
+    fbPath: string | null = this.currentFbPath(),
+    taskId: string | null = this.currentTaskId()
   ): void {
     if (mode === 'none') return;
-    const hash = PipelineRoute.build(this.pipelineId, this.contentTab, fbPath);
+    const hash = PipelineRoute.build(this.pipelineId, this.contentTab, fbPath, taskId);
     if (window.location.hash === hash) return;
     if (mode === 'push') {
       window.location.hash = hash;
@@ -2408,6 +2442,15 @@ export class PipelineDetailView extends View {
   }
 
   /**
+   * Route-side projection of the selection: the uid is only meaningful while
+   * the Task editor tab is active, mirroring `currentFbPath()`.
+   */
+  private currentTaskId(): string | null {
+    if (this.contentTab !== 'task-editor') return null;
+    return this.selectedTask?.id ?? null;
+  }
+
+  /**
    * Canonicalises the hash once, after the first mount: a missing tab segment
    * is filled in and an unavailable Coding Agent tab is rewritten to the task
    * editor. `replaceState` keeps Back pointing at the previous page.
@@ -2416,7 +2459,10 @@ export class PipelineDetailView extends View {
     const canonical = PipelineRoute.build(
       this.pipelineId,
       this.contentTab,
-      this.currentFbPath()
+      this.currentFbPath(),
+      // Tasks are not loaded yet, so fall back to the deep-linked uid to avoid
+      // stripping it before `refreshTasks()` can consume it.
+      this.currentTaskId() ?? this.pendingTaskId
     );
     if (window.location.hash === canonical) return;
     try {

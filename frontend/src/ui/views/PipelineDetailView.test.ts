@@ -1864,6 +1864,110 @@ describe('PipelineDetailView Interactive Session', () => {
 
     expect(window.location.hash).toBe('#/pipeline/p1/tab/fb/');
   });
+
+  it('deep-links a task uid into the Task editor', async () => {
+    window.location.hash = '';
+    mockContext.taskClient.listByPipeline.mockResolvedValue([
+      { id: 'n1', title: 'Deep Linked', status: TaskStatus.CREATED, deleted: false, version: 1, order: 0, type: 'manual', want_design_doc: false },
+    ]);
+    const view = new PipelineDetailView(mockContext, { id: 'p1', rest: 'tab/task/n1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await flush();
+    await flush();
+
+    expect((view as any).contentTab).toBe('task-editor');
+    const selected = container.querySelector('#selected-task-view') as HTMLElement;
+    expect(selected.innerHTML).toContain('Deep Linked');
+    // The deep link survives canonicalisation before the tasks load.
+    expect(window.location.hash).toBe('#/pipeline/p1/tab/task/n1');
+  });
+
+  it('writes the task uid to the hash when a task is selected', async () => {
+    window.location.hash = '';
+    mockContext.taskClient.listByPipeline.mockResolvedValue([
+      { id: 't1', title: 'Task 1', status: TaskStatus.CREATED, deleted: false, version: 1, order: 0, type: 'manual', want_design_doc: false },
+    ]);
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await flush();
+
+    const el = document.createElement('div');
+    el.setAttribute('data-view-id', 't1');
+    getAction('select_task')(new Event('click'), el);
+
+    expect(window.location.hash).toBe('#/pipeline/p1/tab/task/t1');
+  });
+
+  it('does not re-render the selected task when the route uid is unchanged', async () => {
+    mockContext.taskClient.listByPipeline.mockResolvedValue([
+      { id: 't1', title: 'Task 1', status: TaskStatus.CREATED, deleted: false, version: 1, order: 0, type: 'manual', want_design_doc: false },
+    ]);
+    const view = new PipelineDetailView(mockContext, { id: 'p1', rest: 'tab/task/t1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await flush();
+    await flush();
+
+    const selected = container.querySelector('#selected-task-view') as HTMLElement;
+    expect(selected.innerHTML).toContain('Task 1');
+
+    // Re-applying the identical route must not replace the DOM node.
+    expect(view.update({ id: 'p1', rest: 'tab/task/t1' })).toBe(true);
+    expect(container.querySelector('#selected-task-view')).toBe(selected);
+  });
+
+  it('clears the selection back to the hint when the route drops the uid', async () => {
+    mockContext.taskClient.listByPipeline.mockResolvedValue([
+      { id: 't1', title: 'Task 1', status: TaskStatus.CREATED, deleted: false, version: 1, order: 0, type: 'manual', want_design_doc: false },
+    ]);
+    const view = new PipelineDetailView(mockContext, { id: 'p1', rest: 'tab/task/t1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await flush();
+    await flush();
+
+    expect(view.update({ id: 'p1', rest: 'tab/task' })).toBe(true);
+    const selected = container.querySelector('#selected-task-view') as HTMLElement;
+    expect(selected.innerHTML).toContain('Select a task from the backlog');
+  });
+
+  it('preserves the selected uid in the hash when switching tabs away and back', async () => {
+    window.location.hash = '';
+    mockContext.taskClient.listByPipeline.mockResolvedValue([
+      { id: 't1', title: 'Task 1', status: TaskStatus.CREATED, deleted: false, version: 1, order: 0, type: 'manual', want_design_doc: false },
+    ]);
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await flush();
+
+    const el = document.createElement('div');
+    el.setAttribute('data-view-id', 't1');
+    getAction('select_task')(new Event('click'), el);
+    expect(window.location.hash).toBe('#/pipeline/p1/tab/task/t1');
+
+    const fileTab = container.querySelector('#tab-file-browser') as HTMLElement;
+    getAction('select_content_tab')(null, fileTab);
+    expect(window.location.hash).toBe('#/pipeline/p1/tab/fb');
+
+    const taskTab = container.querySelector('#tab-task-editor') as HTMLElement;
+    getAction('select_content_tab')(null, taskTab);
+    expect(window.location.hash).toBe('#/pipeline/p1/tab/task/t1');
+  });
+
+  it('leaves the empty hint when a deep-linked uid resolves to no task', async () => {
+    mockContext.taskClient.listByPipeline.mockResolvedValue([]);
+    const view = new PipelineDetailView(mockContext, { id: 'p1', rest: 'tab/task/missing' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await flush();
+    await flush();
+
+    const selected = container.querySelector('#selected-task-view') as HTMLElement;
+    expect(selected.innerHTML).toContain('Select a task from the backlog');
+  });
 });
 
 describe('PipelineDetailView SpecAgent', () => {
