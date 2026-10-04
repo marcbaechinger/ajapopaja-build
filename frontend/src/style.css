@@ -358,6 +358,116 @@ del {
   @apply !bg-red-100 !text-red-800;
 }
 
+/* Syntax highlighting (highlight.js) for the file browser code block */
+:root {
+  --syntax-comment: #8b949e;
+  --syntax-keyword: #ff7b72;
+  --syntax-string: #a5d6ff;
+  --syntax-number: #79c0ff;
+  --syntax-built-in: #ffa657;
+  --syntax-title: #d2a8ff;
+  --syntax-tag: #7ee787;
+  --syntax-meta: #8b949e;
+  --syntax-addition: #7ee787;
+  --syntax-deletion: #ffa198;
+}
+
+[data-theme='light'] {
+  --syntax-comment: #6e7781;
+  --syntax-keyword: #cf222e;
+  --syntax-string: #0a3069;
+  --syntax-number: #0550ae;
+  --syntax-built-in: #953800;
+  --syntax-title: #8250df;
+  --syntax-tag: #116329;
+  --syntax-meta: #57606a;
+  --syntax-addition: #116329;
+  --syntax-deletion: #82071e;
+}
+
+.hljs {
+  color: var(--app-text);
+  background: transparent;
+}
+
+.hljs-comment,
+.hljs-quote {
+  color: var(--syntax-comment);
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-doctag {
+  color: var(--syntax-keyword);
+}
+
+.hljs-string,
+.hljs-regexp,
+.hljs-attribute,
+.hljs-attr,
+.hljs-meta .hljs-string {
+  color: var(--syntax-string);
+}
+
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet {
+  color: var(--syntax-number);
+}
+
+.hljs-built_in,
+.hljs-type,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-title.class_,
+.hljs-class .hljs-title {
+  color: var(--syntax-built-in);
+}
+
+.hljs-title,
+.hljs-section {
+  color: var(--syntax-title);
+  font-weight: 600;
+}
+
+.hljs-tag,
+.hljs-name {
+  color: var(--syntax-tag);
+}
+
+.hljs-variable,
+.hljs-template-variable {
+  color: var(--syntax-built-in);
+}
+
+.hljs-meta,
+.hljs-meta .hljs-keyword {
+  color: var(--syntax-meta);
+}
+
+.hljs-link {
+  color: var(--syntax-number);
+  text-decoration: underline;
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: 700;
+}
+
+.hljs-addition {
+  color: var(--syntax-addition);
+}
+
+.hljs-deletion {
+  color: var(--syntax-deletion);
+}
+
 /* In-log search highlight */
 mark.piview-search-match {
   background: rgba(251, 191, 36, 0.35);

@@ -14,6 +14,32 @@
  * limitations under the License.
  */
 
+import hljs from 'highlight.js/lib/core';
+import bash from 'highlight.js/lib/languages/bash';
+import c from 'highlight.js/lib/languages/c';
+import cpp from 'highlight.js/lib/languages/cpp';
+import csharp from 'highlight.js/lib/languages/csharp';
+import css from 'highlight.js/lib/languages/css';
+import dockerfile from 'highlight.js/lib/languages/dockerfile';
+import go from 'highlight.js/lib/languages/go';
+import ini from 'highlight.js/lib/languages/ini';
+import java from 'highlight.js/lib/languages/java';
+import javascript from 'highlight.js/lib/languages/javascript';
+import json from 'highlight.js/lib/languages/json';
+import kotlin from 'highlight.js/lib/languages/kotlin';
+import makefile from 'highlight.js/lib/languages/makefile';
+import markdown from 'highlight.js/lib/languages/markdown';
+import php from 'highlight.js/lib/languages/php';
+import plaintext from 'highlight.js/lib/languages/plaintext';
+import python from 'highlight.js/lib/languages/python';
+import ruby from 'highlight.js/lib/languages/ruby';
+import rust from 'highlight.js/lib/languages/rust';
+import sql from 'highlight.js/lib/languages/sql';
+import swift from 'highlight.js/lib/languages/swift';
+import typescript from 'highlight.js/lib/languages/typescript';
+import xml from 'highlight.js/lib/languages/xml';
+import yaml from 'highlight.js/lib/languages/yaml';
+
 import type { FileContent } from '../../core/domain.ts';
 import { Icon } from './Icon.ts';
 import {
@@ -24,8 +50,161 @@ import {
 } from './utils/fileBrowser.ts';
 
 /**
+ * highlight.js core plus only the languages the file browser is likely to
+ * show. Registering a curated set keeps the bundle small instead of pulling in
+ * the full (~1 MB) highlight.js language bundle.
+ */
+const LANGUAGES = {
+  bash,
+  c,
+  cpp,
+  csharp,
+  css,
+  dockerfile,
+  go,
+  ini,
+  java,
+  javascript,
+  json,
+  kotlin,
+  makefile,
+  markdown,
+  php,
+  plaintext,
+  python,
+  ruby,
+  rust,
+  sql,
+  swift,
+  typescript,
+  xml,
+  yaml,
+};
+
+for (const [name, language] of Object.entries(LANGUAGES)) {
+  hljs.registerLanguage(name, language);
+}
+
+/** Map a lowercase file extension to a registered highlight.js language. */
+const EXTENSION_LANGUAGE: Record<string, string> = {
+  // JavaScript / TypeScript
+  js: 'javascript',
+  mjs: 'javascript',
+  cjs: 'javascript',
+  jsx: 'javascript',
+  ts: 'typescript',
+  tsx: 'typescript',
+  mts: 'typescript',
+  cts: 'typescript',
+  // Python
+  py: 'python',
+  pyi: 'python',
+  pyw: 'python',
+  // JVM / Apple
+  java: 'java',
+  kt: 'kotlin',
+  kts: 'kotlin',
+  swift: 'swift',
+  // C family
+  c: 'c',
+  h: 'c',
+  cc: 'cpp',
+  cpp: 'cpp',
+  cxx: 'cpp',
+  hpp: 'cpp',
+  hh: 'cpp',
+  hxx: 'cpp',
+  cs: 'csharp',
+  // Other languages
+  go: 'go',
+  rs: 'rust',
+  rb: 'ruby',
+  rake: 'ruby',
+  php: 'php',
+  // Shell
+  sh: 'bash',
+  bash: 'bash',
+  zsh: 'bash',
+  // Data / config
+  json: 'json',
+  jsonc: 'json',
+  json5: 'json',
+  yaml: 'yaml',
+  yml: 'yaml',
+  ini: 'ini',
+  cfg: 'ini',
+  conf: 'ini',
+  toml: 'ini',
+  // Markup
+  html: 'xml',
+  htm: 'xml',
+  xhtml: 'xml',
+  xml: 'xml',
+  svg: 'xml',
+  vue: 'xml',
+  css: 'css',
+  // Docs
+  md: 'markdown',
+  markdown: 'markdown',
+  mdx: 'markdown',
+  // Build
+  dockerfile: 'dockerfile',
+  mk: 'makefile',
+  make: 'makefile',
+};
+
+/** Map a lowercase base filename to a registered highlight.js language. */
+const FILENAME_LANGUAGE: Record<string, string> = {
+  dockerfile: 'dockerfile',
+  makefile: 'makefile',
+  gnumakefile: 'makefile',
+  '.env': 'ini',
+  '.gitignore': 'plaintext',
+  '.dockerignore': 'plaintext',
+};
+
+/** Skip highlighting very large payloads to keep the main thread responsive. */
+const MAX_HIGHLIGHT_LENGTH = 100_000;
+/** Auto-detection is far more expensive, so only run it on smaller files. */
+const MAX_AUTO_HIGHLIGHT_LENGTH = 20_000;
+
+/** Resolve the highlight.js language for a file from its name/extension. */
+function detectLanguage(file: FileContent): string | null {
+  const path = (file.name || file.path || '').toLowerCase();
+  const base = path.split('/').pop() ?? path;
+  const byName = FILENAME_LANGUAGE[base];
+  if (byName) return byName;
+  const dot = base.lastIndexOf('.');
+  if (dot > 0) {
+    const extension = base.slice(dot + 1);
+    return EXTENSION_LANGUAGE[extension] ?? null;
+  }
+  return null;
+}
+
+/**
+ * Highlight `content` for the given file, returning trusted HTML. highlight.js
+ * escapes all source text, so its output is safe to inject into the DOM.
+ * Falls back to escaped plain text when highlighting is unavailable or the
+ * file is too large.
+ */
+function highlightContent(content: string, language: string | null): string {
+  try {
+    if (language && hljs.getLanguage(language)) {
+      if (content.length > MAX_HIGHLIGHT_LENGTH) return escapeHtml(content);
+      return hljs.highlight(content, { language, ignoreIllegals: true }).value;
+    }
+    if (content.length > MAX_AUTO_HIGHLIGHT_LENGTH) return escapeHtml(content);
+    return hljs.highlightAuto(content).value;
+  } catch {
+    return escapeHtml(content);
+  }
+}
+
+/**
  * Main-panel view for a single file: metadata header plus a read-only code
  * block. Binary and truncated files render a clear message instead of content.
+ * Text content is syntax-highlighted with a lightweight highlight.js subset.
  */
 export class FileView {
   static render(file: FileContent): string {
@@ -81,9 +260,10 @@ export class FileView {
       : '';
 
     const content = file.content ?? '';
+    const highlighted = highlightContent(content, detectLanguage(file));
     return `
       ${truncated}
-      <pre class="p-3 text-[11px] leading-relaxed text-app-text whitespace-pre overflow-x-auto"><code>${escapeHtml(content)}</code></pre>
+      <pre class="p-3 text-[11px] leading-relaxed text-app-text whitespace-pre overflow-x-auto"><code class="hljs">${highlighted}</code></pre>
     `;
   }
 }
