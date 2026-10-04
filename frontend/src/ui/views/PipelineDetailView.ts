@@ -1450,7 +1450,7 @@ export class PipelineDetailView extends View {
   private renderPrepColumn(): string {
     return `
       <div class="flex flex-col gap-8 min-w-0 lg:min-w-[350px]">
-        <div class="bg-app-surface/30 p-6 rounded-3xl border border-app-border/30 flex flex-col">
+        <div class="p-2 flex flex-col">
           <div id="interactive-session-bar" class="mt-6 hidden flex flex-wrap items-center gap-2">
             <button id="start-interactive-btn" data-action-click="start_interactive_session" type="button"
               class="hidden px-3 py-1.5 rounded text-xs font-medium bg-app-accent-2 text-white hover:bg-app-accent-2/80 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
