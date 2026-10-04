@@ -317,7 +317,7 @@ export class PipelineDetailView extends View {
   private async fetchPullRequests() {
     try {
       this.pullRequests = await this.context.pullRequestClient.getPullRequestsByPipeline(this.pipelineId);
-      this.refreshTasks(); // PRs are rendered in the preparation column
+      this.refreshTasks(); // PRs are rendered above the content tabs
     } catch (error) {
       console.error('Failed to fetch pull requests:', error);
     }
@@ -1315,10 +1315,10 @@ export class PipelineDetailView extends View {
 
   async refreshTasks() {
     if (!this.container) return;
-    const prepContainer = this.container.querySelector('#col-prep');
+    const pullRequestSection = this.container.querySelector('#pull-request-section');
     const completedCountEl = this.container.querySelector('#completed-count');
 
-    if (!prepContainer) return;
+    if (!pullRequestSection) return;
 
     try {
       this.allLoadedTasks = await this.context.taskClient.listByPipeline(this.pipelineId, true);
@@ -1341,15 +1341,10 @@ export class PipelineDetailView extends View {
 
       const completedTasks = allTasks.filter(t => !t.deleted && ([TaskStatus.IMPLEMENTED, TaskStatus.SUBMITTED, TaskStatus.DISCARDED] as any[]).includes(t.status));
 
-      // 1. Render Preparation Column (the main area keeps the PullRequest section only).
-      //    It is wrapped in a dedicated #pull-request-section container so a
-      //    PULL_REQUEST_CREATED event can update this section in place without
-      //    re-rendering any other part of the UI.
-      prepContainer.innerHTML = `
-        <div id="pull-request-section">
-          ${PullRequestSection.render(this.pullRequests)}
-        </div>
-      `;
+      // Render the pull-request list in place. It lives between the session
+      // list and the content tabs; PullRequestSection.render returns an empty
+      // string when nothing is awaiting review, so it takes no space.
+      pullRequestSection.innerHTML = PullRequestSection.render(this.pullRequests);
 
       // Completed count (retained only if the element exists).
       if (completedCountEl) {
@@ -1360,7 +1355,6 @@ export class PipelineDetailView extends View {
       this.refreshSelectedTask();
       this.refreshExecutionEngine();
     } catch (error) {
-      prepContainer.innerHTML = '<p class="text-red-400">Error loading tasks.</p>';
       console.error('Error refreshing tasks:', error);
     }
   }
@@ -1469,6 +1463,13 @@ export class PipelineDetailView extends View {
             </button>
           </div>
           <div id="pipeline-session-list" class="mt-3 hidden flex flex-col gap-2"></div>
+          <!-- Pull requests awaiting review sit between the session list and
+               the content tabs. #pull-request-section is updated in place by
+               fetchPullRequests/refreshPullRequests; when nothing is awaiting
+               review it stays empty and consumes no vertical space. -->
+          <div id="col-prep">
+            <div id="pull-request-section">${PullRequestSection.render(this.pullRequests)}</div>
+          </div>
           <!-- Three tabs over three pre-rendered DOM fragments. The tab list is
                always visible; the Coding Agent tab is hidden while no session
                is attached to this pipeline. "Task editor" is the default. -->
@@ -1495,9 +1496,6 @@ export class PipelineDetailView extends View {
           </div>
           <div id="interactive-coding-view-mount" role="tabpanel" aria-labelledby="tab-coding-agent" class="mt-6 hidden"></div>
           <div id="file-browser-view-mount" role="tabpanel" aria-labelledby="tab-file-browser" class="mt-6 hidden"></div>
-          <div id="col-prep" class="space-y-10 mt-6">
-            <p class="text-app-muted animate-pulse text-center py-10">Loading backlog...</p>
-          </div>
         </div>
       </div>
     `;
