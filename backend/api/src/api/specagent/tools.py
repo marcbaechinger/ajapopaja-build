@@ -79,22 +79,35 @@ async def save_elaborated_spec(
         spec_md: The complete elaborated specification in Markdown format.
         rationale: Brief note on the gaps closed and artifacts found.
     """
-    logger.info(f"save_elaborated_spec: Saving proposal for task {task_id}")
+    logger.info(
+        f"[SpecAgent] (B1) save_elaborated_spec called: pipeline={pipeline_id} "
+        f"task={task_id} session={'yes' if session else 'no'} "
+        f"spec_chars={len(spec_md) if isinstance(spec_md, str) else 'n/a'}"
+    )
 
     if not isinstance(spec_md, str):
+        logger.warning(
+            f"[SpecAgent] (B1) reject: spec_md is {type(spec_md).__name__}, not str"
+        )
         return f"Error: spec_md must be a string, got {type(spec_md).__name__}."
 
     if not spec_md.strip():
+        logger.warning("[SpecAgent] (B1) reject: spec_md is empty")
         return "Error: spec_md cannot be empty or only whitespace."
 
     # Validate Markdown content.
     if not MarkdownValidator.has_top_level_heading(spec_md):
+        logger.warning("[SpecAgent] (B1) reject: spec_md has no top-level heading")
         return "Error: spec_md must contain at least one top-level heading (# Heading)."
 
     # Sanitize content (strip raw HTML tags) before storing.
     sanitized_md = MarkdownValidator.sanitize(spec_md)
 
     try:
+        logger.info(
+            f"[SpecAgent] (B2) storing proposal for task={task_id} "
+            f"({len(sanitized_md)} chars)"
+        )
         await set_proposal(
             task_id,
             SpecProposal(
@@ -104,26 +117,32 @@ async def save_elaborated_spec(
                 rationale=rationale or "",
             ),
         )
+        logger.info(f"[SpecAgent] (B2) proposal stored for task={task_id}")
 
         if session and hasattr(session, "session_result"):
             session.session_result = {
                 "status": "spec_proposal_ready",
                 "task_id": task_id,
             }
+            logger.info(f"[SpecAgent] (B2) session_result set for task={task_id}")
 
         # Notify the UI that a fresh proposal is available. The spec itself is
         # fetched through the proposal endpoint so the payload stays small.
+        logger.info(
+            f"[SpecAgent] (B3) broadcasting SPECAGENT_SPEC_READY pipeline={pipeline_id} "
+            f"task={task_id} to {len(manager.active_connections)} connection(s)"
+        )
         await manager.broadcast(
             WSMessage(
                 type="SPECAGENT_SPEC_READY",
                 payload={"pipeline_id": pipeline_id, "task_id": task_id},
             )
         )
-        logger.info(f"save_elaborated_spec: Proposal stored for {task_id}")
+        logger.info(f"[SpecAgent] (B3) SPECAGENT_SPEC_READY broadcast complete for {task_id}")
 
         return f"Successfully saved elaborated specification proposal for {task_id}."
     except Exception as e:
-        logger.error(f"save_elaborated_spec: Failed for {task_id}: {e}")
+        logger.error(f"[SpecAgent] (B1) save_elaborated_spec FAILED for {task_id}: {e}")
         return f"Error saving elaborated specification: {str(e)}"
 
 

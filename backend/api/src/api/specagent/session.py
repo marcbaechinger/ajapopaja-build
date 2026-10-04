@@ -124,6 +124,10 @@ class SpecAgentSession(BaseBotSession):
         return tool_name == "save_elaborated_spec"
 
     async def on_event(self, event_name: str, payload: Optional[Dict[str, Any]] = None):
+        logger.info(
+            f"[SpecAgent] (B0) on_event '{event_name}' pipeline={self.pipeline_id} "
+            f"task={self.task_id}"
+        )
         if event_name == "bot_started":
             await manager.broadcast(
                 WSMessage(
@@ -135,6 +139,9 @@ class SpecAgentSession(BaseBotSession):
             # Broadcast the fresh task so the UI clears the in-progress banner
             # consistently with ArchBot. The spec itself is unchanged at this
             # point (persistence happens only on accept).
+            logger.info(
+                f"[SpecAgent] (B0) bot_completed session_result={self.session_result}"
+            )
             task = await task_queries.get_task_by_id(self.task_id)
             if task:
                 await manager.broadcast(

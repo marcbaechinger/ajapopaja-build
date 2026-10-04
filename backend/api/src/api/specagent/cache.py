@@ -68,7 +68,9 @@ def _save_cache(cache: Dict[str, dict]):
 
 
 async def set_proposal(task_id: str, proposal: SpecProposal):
-    logger.info(f"SET SPEC PROPOSAL for task {task_id}")
+    logger.info(
+        f"[SpecAgent] (B2) set_proposal task={task_id} file={os.path.abspath(CACHE_FILE)}"
+    )
     cache = _load_cache()
     cache[task_id] = proposal.model_dump()
     _save_cache(cache)
@@ -77,8 +79,11 @@ async def set_proposal(task_id: str, proposal: SpecProposal):
 async def get_proposal(task_id: str) -> Optional[SpecProposal]:
     cache = _load_cache()
     data = cache.get(task_id)
+    logger.info(
+        f"[SpecAgent] (B4) get_proposal task={task_id} file={os.path.abspath(CACHE_FILE)} "
+        f"found={data is not None} cache_keys={list(cache.keys())}"
+    )
     if data:
-        logger.info(f"GET SPEC PROPOSAL for task {task_id}: FOUND")
         return SpecProposal(**data)
     return None
 

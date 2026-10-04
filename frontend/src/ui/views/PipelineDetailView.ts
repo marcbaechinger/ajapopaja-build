@@ -278,15 +278,37 @@ export class PipelineDetailView extends View {
 
       'ARCHBOT_STARTED': (p) => { this.archbotState = { status: 'inProgress', taskId: p.task_id }; },
       'ARCHBOT_COMPLETED': () => { this.archbotState = { status: 'none', taskId: null }; },
-      'SPECAGENT_STARTED': (p) => { this.specagentState = { status: 'inProgress', taskId: p.task_id }; },
-      'SPECAGENT_COMPLETED': () => { this.specagentState = { status: 'none', taskId: null }; },
+      'SPECAGENT_STARTED': (p) => {
+        console.log('[SpecAgent] (4) PipelineDetailView SPECAGENT_STARTED', p);
+        this.specagentState = { status: 'inProgress', taskId: p.task_id };
+      },
+      'SPECAGENT_COMPLETED': (p) => {
+        console.log('[SpecAgent] (4) PipelineDetailView SPECAGENT_COMPLETED', p);
+        this.specagentState = { status: 'none', taskId: null };
+      },
       'SPECAGENT_SPEC_READY': (p) => {
-        if (p?.pipeline_id && p.pipeline_id !== this.pipelineId) return;
-        if (!p?.task_id) return;
+        console.log(
+          '[SpecAgent] (4) PipelineDetailView SPECAGENT_SPEC_READY',
+          p,
+          'view pipelineId=',
+          this.pipelineId
+        );
+        if (p?.pipeline_id && p.pipeline_id !== this.pipelineId) {
+          console.warn('[SpecAgent] (4) drop SPEC_READY: pipeline mismatch');
+          return;
+        }
+        if (!p?.task_id) {
+          console.warn('[SpecAgent] (4) drop SPEC_READY: missing task_id');
+          return;
+        }
         // Ignore stale events for tasks that are no longer displayed. Match the
         // TaskItem card root (`data-view-id`), not a nested `data-task-id` node
         // (the title container), so the spec container can be found below it.
-        if (!this.container?.querySelector(`[data-view-id="${p.task_id}"]`)) return;
+        const card = this.container?.querySelector(`[data-view-id="${p.task_id}"]`);
+        console.log(
+          `[SpecAgent] (4) task card [data-view-id="${p.task_id}"] present? ${!!card}`
+        );
+        if (!card) return;
         void this.fetchSpecProposal(p.task_id);
       },
       'CODERBOT_STARTED': (p) => { this.coderbotState = { status: 'inProgress', taskId: p.task_id }; },
@@ -415,15 +437,28 @@ export class PipelineDetailView extends View {
   }
 
   private async fetchSpecProposal(taskId: string) {
-    if (!taskId || !this.context.specBotClient) return;
+    if (!taskId || !this.context.specBotClient) {
+      console.warn('[SpecAgent] (5) fetchSpecProposal skipped', {
+        taskId,
+        hasClient: !!this.context.specBotClient,
+      });
+      return;
+    }
+    console.log(
+      `[SpecAgent] (5) fetchSpecProposal GET /pipelines/${this.pipelineId}/specagent/proposal/${taskId}`
+    );
     try {
       const proposal = await this.context.specBotClient.getProposal(this.pipelineId, taskId);
-      if (!proposal) return;
+      console.log('[SpecAgent] (5) fetchSpecProposal response', proposal);
+      if (!proposal) {
+        console.warn('[SpecAgent] (5) drop: proposal response was falsy');
+        return;
+      }
       this.specagentState = { status: 'ready', taskId: proposal.task_id };
       this.renderSpecProposal(proposal);
       this.updateHeader();
     } catch (error) {
-      console.error('Failed to fetch SpecAgent proposal:', error);
+      console.error('[SpecAgent] (5) fetchSpecProposal failed', error);
     }
   }
 
@@ -437,9 +472,20 @@ export class PipelineDetailView extends View {
     // by `focusSpecAfterTitleSave`). Looking up `[data-task-id]` would match the
     // nested title container instead, whose `.spec-container` is a sibling - not
     // a descendant - so the proposal would never be injected.
-    const taskEl = this.container?.querySelector(`[data-view-id="${proposal.task_id}"]`);
+    const selector = `[data-view-id="${proposal.task_id}"]`;
+    const taskEl = this.container?.querySelector(selector);
     const specContainer = taskEl?.querySelector('.spec-container') as HTMLElement | null;
-    if (!specContainer) return;
+    console.log(
+      `[SpecAgent] (6) renderSpecProposal task card (${selector}) found? ${!!taskEl}, ` +
+        `.spec-container found? ${!!specContainer}`
+    );
+    if (!specContainer) {
+      console.warn(
+        '[SpecAgent] (6) DROPPING proposal: no .spec-container inside the task card',
+        proposal
+      );
+      return;
+    }
 
     let resultEl = specContainer.querySelector('.spec-proposal-host') as HTMLElement | null;
     if (!resultEl) {
@@ -547,14 +593,19 @@ export class PipelineDetailView extends View {
 
     this.context.actionRegistry.register('trigger_specagent', async (_e, el) => {
       const taskId = el.getAttribute('data-task-id');
+      console.log('[SpecAgent] (0) action trigger_specagent (PipelineDetailView handler)', {
+        taskId,
+        pipelineId: this.pipelineId,
+      });
       if (!taskId) return;
 
       try {
         await this.context.specBotClient.trigger(this.pipelineId, taskId);
+        console.log('[SpecAgent] (0) trigger request sent', { taskId });
         this.specagentState = { status: 'inProgress', taskId };
         this.updateHeader();
       } catch (error) {
-        console.error('Trigger SpecAgent error:', error);
+        console.error('[SpecAgent] (0) trigger failed', error);
         alert('Failed to trigger the specification bot');
       }
     });

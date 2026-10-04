@@ -145,11 +145,16 @@ export class AppContext {
       const pipelineId =
         el.getAttribute('data-pipeline-id') ||
         el.closest('[data-pipeline-id]')?.getAttribute('data-pipeline-id');
+      console.log('[SpecAgent] (0) action trigger_specagent (AppContext handler)', {
+        taskId,
+        pipelineId,
+      });
       if (!taskId || !pipelineId) return;
       try {
         await this.specBotClient.trigger(pipelineId, taskId);
+        console.log('[SpecAgent] (0) trigger request sent (AppContext handler)', { taskId });
       } catch (error) {
-        console.error('Trigger SpecAgent error:', error);
+        console.error('[SpecAgent] (0) trigger failed (AppContext handler)', error);
         alert('Failed to trigger the specification bot');
       }
     });

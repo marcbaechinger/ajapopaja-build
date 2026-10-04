@@ -172,6 +172,10 @@ export class DataManager {
 
     processEvents.forEach(type => {
       this.wsClient.on(type, msg => {
+        const isSpecAgent = type.startsWith('SPECAGENT');
+        if (isSpecAgent) {
+          console.log(`[SpecAgent] (2) DataManager received ${type}`, msg.payload);
+        }
         if (msg.payload?.pipeline_id) {
           this.notify(`pipeline:status:${msg.payload.pipeline_id}`, { type, payload: msg.payload });
         }
@@ -179,7 +183,14 @@ export class DataManager {
           this.notify(`task:status:${msg.payload.task_id}`, { type, payload: msg.payload });
         }
         // Also notify the specific event type as a query
-        this.notify(`ws:${type}:${msg.payload?.pipeline_id || 'global'}`, msg.payload);
+        const query = `ws:${type}:${msg.payload?.pipeline_id || 'global'}`;
+        if (isSpecAgent) {
+          const listenerCount = this.listeners.get(query)?.size ?? 0;
+          console.log(
+            `[SpecAgent] (3) DataManager notifying "${query}" (listeners: ${listenerCount})`
+          );
+        }
+        this.notify(query, msg.payload);
       });
     });
 

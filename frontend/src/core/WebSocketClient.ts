@@ -118,6 +118,17 @@ export class WebSocketClient {
   }
 
   private notifyHandlers(message: WSMessage) {
+    // Temporary SpecAgent tracing: shows the raw event arriving from the server
+    // and how many frontend handlers are registered for it. If this never logs,
+    // the backend never broadcast (or the socket is not connected).
+    if (message.type.startsWith('SPECAGENT')) {
+      const handlerCount = this.handlers.get(message.type)?.size ?? 0;
+      console.log(
+        `[SpecAgent] (1) WebSocketClient received ${message.type} ` +
+          `(registered handlers: ${handlerCount})`,
+        message.payload
+      );
+    }
     // Notify specific type handlers
     this.handlers.get(message.type)?.forEach(handler => handler(message));
     // Notify catch-all handlers if any (using '*' as type)

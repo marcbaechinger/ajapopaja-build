@@ -72,9 +72,12 @@ async def trigger_specagent(pipeline_id: str, task_id: str):
 @router.get("/proposal/{task_id}")
 async def get_spec_proposal(pipeline_id: str, task_id: str):
     """Returns the outstanding elaborated-spec proposal for a task, if any."""
+    logger.info(f"[SpecAgent] (B4) GET proposal pipeline={pipeline_id} task={task_id}")
     proposal = await get_proposal(task_id)
     if not proposal:
+        logger.warning(f"[SpecAgent] (B4) proposal NOT FOUND for task={task_id}")
         raise HTTPException(status_code=404, detail="Proposal not found for this task.")
+    logger.info(f"[SpecAgent] (B4) returning proposal for task={task_id}")
     return proposal
 
 
