@@ -128,6 +128,23 @@ describe('FileBrowseView', () => {
     expect(main.textContent).toContain('README.md');
   });
 
+  it('lets the shell grow with the resizable panel instead of fixing its height', async () => {
+    view.destroy();
+    view = new FileBrowseView(root, {
+      pipelineId: 'p1',
+      client,
+      actionRegistry: registry as any,
+      resizable: true,
+    });
+    view.render();
+    await flush();
+
+    const shell = root.firstElementChild as HTMLElement;
+    // A fixed height would clamp the resizable panel; a min height lets it grow.
+    expect(shell.classList.contains('h-[70vh]')).toBe(false);
+    expect(shell.classList.contains('min-h-[70vh]')).toBe(true);
+  });
+
   it('navigates into a directory and updates the breadcrumb', async () => {
     client.listDirectory.mockImplementation((_pipeline: string, path: string) =>
       Promise.resolve(listing(path, [['App.ts', false]]))

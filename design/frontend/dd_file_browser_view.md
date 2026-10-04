@@ -49,9 +49,8 @@ The option mirrors the established resizable-log pattern in `PiView`:
   native `resize` behaviour, so no JavaScript is needed to persist the new
   size.
 
-The outer shell keeps its fixed `h-[70vh]`; expanding the main panel beyond
-that height lets the shell grow, which the browser may restrict based on the
-parent. This is the same accepted behaviour as `PiView`.
+The outer shell uses `min-h-[70vh]` instead of a fixed `h-[70vh]`, so it grows
+with the main panel instead of clamping the resizable panel to a fixed height.
 
 ## 4. Implementation notes
 - `PipelineDetailView.mountFileBrowseView()` constructs the view with
