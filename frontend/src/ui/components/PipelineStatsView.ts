@@ -87,6 +87,38 @@ export class PipelineStatsView {
     };
   }
 
+  /**
+   * Count, per ISO date (YYYY-MM-DD), how many tasks reached a "done" state
+   * (IMPLEMENTED or SUBMITTED) on that date.
+   *
+   * Daily stats from the backend historically only counted IMPLEMENTED
+   * transitions, so tasks which finished as SUBMITTED (e.g. via an external
+   * pull request) showed a 'Done' number of zero. Deriving the count from the
+   * task history as well makes the Daily Productivity column correct no matter
+   * which of the two terminal states the pipeline recorded.
+   */
+  static getDailyDoneCounts(tasks: Task[]): Record<string, number> {
+    const counts: Record<string, number> = {};
+    if (!Array.isArray(tasks)) return counts;
+
+    for (const task of tasks) {
+      for (const event of task.history || []) {
+        if (
+          event.to_status !== TaskStatus.IMPLEMENTED &&
+          event.to_status !== TaskStatus.SUBMITTED
+        ) {
+          continue;
+        }
+        // The ISO string's date component matches how the backend derives the
+        // day key (datetime.date()), independent of any timezone offset.
+        const day = String(event.timestamp).slice(0, 10);
+        counts[day] = (counts[day] || 0) + 1;
+      }
+    }
+
+    return counts;
+  }
+
   static formatDuration(ms: number): string {
     if (ms <= 0) return '0s';
     if (ms < 1000) return `< 1s`;
@@ -157,14 +189,24 @@ export class PipelineStatsView {
       `;
     }).join('');
 
-    const dailyRows = Array.isArray(dailyStats) ? dailyStats.map(day => `
+    const doneByDay = this.getDailyDoneCounts(tasks);
+
+    const dailyRows = Array.isArray(dailyStats) ? dailyStats.map(day => {
+      // Prefer the highest of the backend-reported done count and the count
+      // derived from task history. This keeps SUBMITTED tasks visible even when
+      // the backend only reported IMPLEMENTED transitions.
+      const backendDone = Number(day.done) ||
+        (Number(day.implemented) || 0) + (Number(day.submitted) || 0);
+      const done = Math.max(doneByDay[day.date] || 0, backendDone);
+      return `
       <tr class="border-b border-app-border/50 text-sm">
         <td class="py-3 font-medium text-app-text">${day.date}</td>
         <td class="py-3 text-center text-app-muted">${day.created}</td>
-        <td class="py-3 text-center text-app-muted">${day.implemented}</td>
+        <td class="py-3 text-center text-app-muted">${done}</td>
         <td class="py-3 text-right text-app-accent-1 font-semibold">${this.formatDuration(day.work_ms)}</td>
       </tr>
-    `).join('') : '';
+    `;
+    }).join('') : '';
 
     return `
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">

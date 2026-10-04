@@ -318,6 +318,60 @@ describe('PipelineStatsView', () => {
     });
   });
 
+  describe('daily done counting', () => {
+    const day = '2026-04-12';
+
+    const doneTask = (status: TaskStatus): Task => ({
+      id: status,
+      title: status,
+      status,
+      deleted: false,
+      history: [{
+        to_status: status,
+        timestamp: `${day}T10:00:00Z`,
+        by: 'mcp'
+      }]
+    } as unknown as Task);
+
+    it('counts both IMPLEMENTED and SUBMITTED tasks as done per day', () => {
+      const tasks = [
+        doneTask(TaskStatus.IMPLEMENTED),
+        doneTask(TaskStatus.SUBMITTED),
+      ];
+      // Backend only reported the IMPLEMENTED task (the historical bug).
+      const html = PipelineStatsView.render(tasks, [
+        { date: day, created: 2, implemented: 1, work_ms: 0 }
+      ]);
+
+      const row = html.match(
+        new RegExp(`<td class="py-3 font-medium text-app-text">${day}</td>\\s*<td[^>]*>2</td>\\s*<td[^>]*>(\\d+)</td>`)
+      );
+      expect(row).not.toBeNull();
+      expect(row![1]).toBe('2');
+    });
+
+    it('derives the daily done count from task history', () => {
+      const counts = PipelineStatsView.getDailyDoneCounts([
+        doneTask(TaskStatus.IMPLEMENTED),
+        doneTask(TaskStatus.SUBMITTED),
+      ]);
+
+      expect(counts[day]).toBe(2);
+    });
+
+    it('honours an explicit submitted count from the backend', () => {
+      const html = PipelineStatsView.render([], [
+        { date: day, created: 1, implemented: 0, submitted: 1, work_ms: 0 }
+      ]);
+
+      const row = html.match(
+        new RegExp(`<td class="py-3 font-medium text-app-text">${day}</td>\\s*<td[^>]*>1</td>\\s*<td[^>]*>(\\d+)</td>`)
+      );
+      expect(row).not.toBeNull();
+      expect(row![1]).toBe('1');
+    });
+  });
+
   describe('renderCompact', () => {
     it('renders the four compact metric chips with correct values', () => {
       const task: Task = {

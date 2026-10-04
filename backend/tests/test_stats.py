@@ -95,3 +95,46 @@ async def test_get_daily_stats(init_mock_db):
     assert now_stats["created"] == 1
     assert now_stats["implemented"] == 1
     assert now_stats["work_ms"] == 2 * 3600 * 1000
+
+
+@pytest.mark.asyncio
+async def test_get_daily_stats_counts_submitted_as_done(init_mock_db):
+    """A task that finished as SUBMITTED (external pull request) must be
+    counted as done just like an IMPLEMENTED task."""
+    pipeline_id = "test_pipeline"
+    now = datetime(2026, 4, 17, 10, 0, 0)
+
+    task = Task(
+        title="Submitted Task",
+        pipeline_id=pipeline_id,
+        status=TaskStatus.SUBMITTED,
+        history=[
+            StateTransition(
+                to_status=TaskStatus.CREATED, timestamp=now - timedelta(hours=2), by="user"
+            ),
+            StateTransition(
+                from_status=TaskStatus.CREATED,
+                to_status=TaskStatus.INPROGRESS,
+                timestamp=now - timedelta(hours=1),
+                by="mcp",
+            ),
+            StateTransition(
+                from_status=TaskStatus.INPROGRESS,
+                to_status=TaskStatus.PULL_REQUEST_AVAILABLE,
+                timestamp=now - timedelta(minutes=30),
+                by="mcp",
+            ),
+            StateTransition(
+                from_status=TaskStatus.PULL_REQUEST_AVAILABLE,
+                to_status=TaskStatus.SUBMITTED,
+                timestamp=now,
+                by="user",
+            ),
+        ],
+    )
+    await task.insert()
+
+    stats = await get_daily_stats(pipeline_id)
+    now_stats = next(s for s in stats if s["date"] == "2026-04-17")
+
+    assert now_stats["implemented"] == 1

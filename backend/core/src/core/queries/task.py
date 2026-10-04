@@ -563,8 +563,10 @@ async def get_daily_stats(pipeline_id: str) -> List[Dict[str, Any]]:
                 daily_stats[day]["created"] += 1
                 counted_created = True
 
-            # Tasks Implemented
-            if event.to_status == TaskStatus.IMPLEMENTED:
+            # Tasks Done: a task is considered done when it reaches either
+            # IMPLEMENTED (work finished locally) or SUBMITTED (work finished
+            # and submitted for external review, e.g. via a pull request).
+            if event.to_status in [TaskStatus.IMPLEMENTED, TaskStatus.SUBMITTED]:
                 daily_stats[day]["implemented"] += 1
 
             # Work Time: from INPROGRESS to any other status
