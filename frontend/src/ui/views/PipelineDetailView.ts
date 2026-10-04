@@ -20,7 +20,6 @@ import { AppContext } from '../../core/AppContext.ts';
 import { Pipeline, TaskStatus, Task, type GitStatusDetails } from '../../core/domain.ts';
 import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
 import { TaskItem } from '../components/TaskItem.ts';
-import { HistoryItemView } from '../components/HistoryItemView.ts';
 import { HistoryDialog } from '../components/HistoryDialog.ts';
 import { StatsDialog } from '../components/StatsDialog.ts';
 import { DesignDocDialog } from '../components/DesignDocDialog.ts';
@@ -138,12 +137,6 @@ export class PipelineDetailView extends View {
   private pullRequests: any[] = [];
 
 
-  private columnMetadata: Record<string, { title: string, emptyMessage: string }> = {
-    'inprogress': { title: 'In Progress', emptyMessage: 'No active work.' },
-    'failed': { title: 'Failed', emptyMessage: '' },
-    'scheduled': { title: 'Queue', emptyMessage: 'Nothing scheduled.' },
-  };
-
   constructor(context: AppContext, params: Record<string, string>) {
     super();
     this.context = context;
@@ -160,42 +153,6 @@ export class PipelineDetailView extends View {
     this.registerActions();
     this.setupDataManagerSubscriptions();
     this.setupKeyboardShortcuts();
-  }
-
-  private getTaskColumnId(task: Task): string {
-    switch (task.status) {
-      case TaskStatus.PROPOSED: return 'proposed-list';
-      case TaskStatus.CREATED: return 'backlog-list';
-      case TaskStatus.INPROGRESS: return 'inprogress-list';
-      case TaskStatus.FAILED: return 'failed-list';
-      case TaskStatus.SCHEDULED: return 'scheduled-list';
-      case TaskStatus.IMPLEMENTED:
-      case TaskStatus.SUBMITTED:
-      case TaskStatus.DISCARDED:
-        return 'completed-task-list';
-      default: return 'backlog-list';
-    }
-  }
-
-  private ensureEmptyMessage(columnId: string) {
-    const list = this.container?.querySelector(`#${columnId}`);
-    if (!list) return;
-    if (list.children.length === 0) {
-      const key = columnId.replace('-list', '');
-      const meta = this.columnMetadata[key];
-      if (meta && meta.emptyMessage) {
-        list.innerHTML = `<p class="text-app-muted italic text-sm py-4 text-center border-2 border-dashed border-app-border/30 rounded-xl">${meta.emptyMessage}</p>`;
-      }
-    }
-  }
-
-  private removeEmptyMessage(columnId: string) {
-    const list = this.container?.querySelector(`#${columnId}`);
-    if (!list) return;
-    const emptyMsg = list.querySelector('p.text-app-muted.italic');
-    if (emptyMsg) {
-      emptyMsg.remove();
-    }
   }
 
   private setupKeyboardShortcuts() {
@@ -234,7 +191,6 @@ export class PipelineDetailView extends View {
       if (!taskOrDeleted) return;
 
       if (taskOrDeleted.deleted) {
-        this.removeTaskFromDOM(taskOrDeleted.id);
         this.allLoadedTasks = this.allLoadedTasks.filter(t => t.id !== taskOrDeleted.id);
         this.refreshBacklog();
         this.refreshSelectedTask();
@@ -1961,72 +1917,6 @@ export class PipelineDetailView extends View {
     }
   }
 
-  private insertTaskIntoDOM(task: Task) {
-    if (!this.container) return;
-    const columnId = this.getTaskColumnId(task);
-    const list = this.container.querySelector(`#${columnId}`);
-    if (!list) return;
-
-    this.removeEmptyMessage(columnId);
-
-    const isHistoryColumn = columnId === 'completed-task-list';
-    const taskHtml = isHistoryColumn
-      ? HistoryItemView.render(task)
-      : TaskItem.render(
-          task,
-          columnId === 'backlog-list' || columnId === 'scheduled-list',
-          false,
-          this.collapsedTasks.has(task.id!),
-          false,
-          !this.collapsedSpecs.has(task.id!)
-        );
-    const temp = document.createElement('div');
-    temp.innerHTML = taskHtml;
-    const taskEl = temp.firstElementChild as HTMLElement;
-
-    // Don't insert a duplicate if the task is already in this list (defensive
-    // against a WebSocket update arriving more than once). Replace in place.
-    const existing = list.querySelector(`[data-view-id="${task.id}"]`);
-    if (existing) {
-      existing.replaceWith(taskEl);
-    } else {
-      list.prepend(taskEl);
-    }
-  }
-
-  private removeTaskFromDOM(taskId: string) {
-    const el = this.container?.querySelector(`[data-view-id="${taskId}"]`);
-    if (el) {
-      const columnId = el.parentElement?.id;
-      el.remove();
-      if (columnId) {
-        this.ensureEmptyMessage(columnId);
-      }
-    }
-  }
-
-  private findTaskElementInColumns(taskId: string): { columnId: string; el: HTMLElement } | null {
-    const columnIds = ['inprogress-list', 'failed-list', 'scheduled-list', 'backlog-list', 'proposed-list', 'completed-task-list'];
-    for (const columnId of columnIds) {
-      const list = this.container?.querySelector(`#${columnId}`);
-      const el = list?.querySelector(`[data-view-id="${taskId}"]`) as HTMLElement | null;
-      if (el) return { columnId, el };
-    }
-    return null;
-  }
-
-  private removeTaskFromColumns(taskId: string) {
-    const columnIds = ['inprogress-list', 'failed-list', 'scheduled-list', 'backlog-list', 'proposed-list', 'completed-task-list'];
-    for (const columnId of columnIds) {
-      const list = this.container?.querySelector(`#${columnId}`);
-      const el = list?.querySelector(`[data-view-id="${taskId}"]`) as HTMLElement | null;
-      if (el) {
-        el.remove();
-        this.ensureEmptyMessage(columnId);
-      }
-    }
-  }
-
   /**
    * Returns whether an incoming task update is a pure title change (i.e. every
    * field other than title / version / updated_at is unchanged), so callers can
@@ -2102,35 +1992,6 @@ export class PipelineDetailView extends View {
         this.updateTitleOnly(task);
         return;
       }
-    }
-
-    const targetColumnId = this.getTaskColumnId(task);
-    const loc = this.findTaskElementInColumns(taskId);
-
-    const isHistoryColumn = targetColumnId === 'completed-task-list';
-
-    if (loc && loc.columnId === targetColumnId) {
-      // Same column: replace the content in place (keeps DOM position, avoids flicker)
-      const taskHtml = isHistoryColumn
-        ? HistoryItemView.render(task)
-        : TaskItem.render(
-            task,
-            targetColumnId === 'backlog-list' || targetColumnId === 'scheduled-list',
-            false,
-            this.collapsedTasks.has(taskId),
-            false,
-            !this.collapsedSpecs.has(taskId)
-          );
-      const temp = document.createElement('div');
-      temp.innerHTML = taskHtml;
-      loc.el.replaceWith(temp.firstElementChild as HTMLElement);
-    } else {
-      // Column changed (or the task is not in a column yet): remove any copies from
-      // the columns, then insert the task into the correct one. Removing from all
-      // columns (rather than a single best-effort match) prevents stale rows when
-      // the same data-view-id also appears in the sidebar or the selected TaskView.
-      this.removeTaskFromColumns(taskId);
-      this.insertTaskIntoDOM(task);
     }
 
     this.refreshBacklog();
