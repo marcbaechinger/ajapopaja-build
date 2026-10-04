@@ -160,6 +160,9 @@ export class FileBrowseView {
       this.registry.register(name, handler);
     };
 
+    // The file view owns its own header actions (e.g. copy path).
+    FileView.registerActions(this.registry);
+
     register('file_browser_navigate', (_event, element) => {
       if (this.destroyed) return;
       void this.loadDirectory(element.getAttribute('data-path') ?? '');

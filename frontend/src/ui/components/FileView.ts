@@ -40,6 +40,7 @@ import typescript from 'highlight.js/lib/languages/typescript';
 import xml from 'highlight.js/lib/languages/xml';
 import yaml from 'highlight.js/lib/languages/yaml';
 
+import type { ActionHandler, ActionRegistry } from '../../core/ActionRegistry.ts';
 import type { FileContent } from '../../core/domain.ts';
 import { Icon } from './Icon.ts';
 import {
@@ -207,6 +208,35 @@ function highlightContent(content: string, language: string | null): string {
  * Text content is syntax-highlighted with a lightweight highlight.js subset.
  */
 export class FileView {
+  /**
+   * Register the actions owned by the file view. Currently this is the
+   * "copy path" action, which writes the repository-relative path to the
+   * clipboard so it can be pasted elsewhere (e.g. a terminal or the agent
+   * prompt).
+   */
+  static registerActions(registry: ActionRegistry): void {
+    const copyPath: ActionHandler = async (_event, element) => {
+      const path = element.getAttribute('data-path');
+      if (!path) return;
+      try {
+        await navigator.clipboard.writeText(path);
+        this.showCopiedFeedback(element);
+      } catch (error) {
+        console.error('Failed to copy file path:', error);
+      }
+    };
+    registry.register('copy_file_path', copyPath);
+  }
+
+  /** Briefly swap the copy icon for a check to confirm the copy happened. */
+  private static showCopiedFeedback(element: HTMLElement): void {
+    const original = element.innerHTML;
+    element.innerHTML = Icon.render('check', { size: 14 });
+    window.setTimeout(() => {
+      element.innerHTML = original;
+    }, 1500);
+  }
+
   static render(file: FileContent): string {
     return `
       <div class="flex flex-col h-full min-h-0">
@@ -229,6 +259,9 @@ export class FileView {
         <div class="flex items-center gap-2 min-w-0">
           <span class="shrink-0 text-app-muted" aria-hidden="true">${Icon.render('file', { size: 16 })}</span>
           <h3 class="text-sm font-bold text-app-text truncate" title="${escapeHtml(file.path)}">${escapeHtml(file.name)}</h3>
+          <button type="button" data-action-click="copy_file_path" data-path="${escapeHtml(file.path)}"
+            class="shrink-0 p-1 rounded text-app-muted hover:text-app-text hover:bg-app-surface/60 transition-colors cursor-pointer"
+            title="Copy path" aria-label="Copy path">${Icon.render('copy', { size: 14 })}</button>
           ${badge}
         </div>
         <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px] text-app-muted">

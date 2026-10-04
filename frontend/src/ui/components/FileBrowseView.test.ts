@@ -237,6 +237,39 @@ describe('FileBrowseView', () => {
     expect(main.textContent).toContain('Path not found');
   });
 
+  it('copies the selected file path to the clipboard', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+
+    view.render();
+    await flush();
+    client.readFile.mockResolvedValue(
+      new FileContent({
+        name: 'foo_bar.py',
+        path: 'backend/core/foo_bar.py',
+        size: 2,
+        content: 'x\n',
+      })
+    );
+    registry.get('file_browser_open_file')(
+      new Event('click'),
+      elementWithPath('backend/core/foo_bar.py')
+    );
+    await flush();
+
+    const button = root.querySelector(
+      '[data-action-click="copy_file_path"]'
+    ) as HTMLButtonElement;
+    expect(button).not.toBeNull();
+
+    await registry.get('copy_file_path')(new Event('click'), button);
+
+    expect(writeText).toHaveBeenCalledWith('backend/core/foo_bar.py');
+  });
+
   it('refreshes the current directory and re-reads the selected file', async () => {
     view.render();
     await flush();

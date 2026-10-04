@@ -68,4 +68,17 @@ describe('FileView', () => {
     expect(host.querySelector('code.hljs')).toBeNull();
     expect(host.textContent).toContain('binary file');
   });
+
+  it('renders a copy-path action carrying the repository-relative path', () => {
+    const host = renderIntoDom(
+      file({ name: 'foo_bar.py', path: 'backend/core/foo_bar.py', content: '' })
+    );
+
+    const button = host.querySelector(
+      '[data-action-click="copy_file_path"]'
+    ) as HTMLButtonElement | null;
+    expect(button).not.toBeNull();
+    expect(button!.getAttribute('data-path')).toBe('backend/core/foo_bar.py');
+    expect(button!.getAttribute('title')).toBe('Copy path');
+  });
 });
