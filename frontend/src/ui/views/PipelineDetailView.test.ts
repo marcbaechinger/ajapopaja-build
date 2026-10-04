@@ -1315,6 +1315,11 @@ describe('PipelineDetailView Interactive Session', () => {
         pauseSession: vi.fn().mockResolvedValue(undefined),
         getSessions: vi.fn().mockReturnValue([]),
       },
+      fileBrowserClient: {
+        listDirectory: vi.fn().mockResolvedValue({ path: '', parent: null, entries: [] }),
+        readFile: vi.fn().mockResolvedValue({ path: 'a.txt', name: 'a.txt', content: '' }),
+        getMeta: vi.fn(),
+      },
     };
 
     vi.stubGlobal('localStorage', {
@@ -1384,7 +1389,7 @@ describe('PipelineDetailView Interactive Session', () => {
     mockContext.interactiveCodingService.getSessions.mockReturnValue([
       { uid: 's1', pipeline_id: 'p1', status: 'paused', label: 'Paused session' },
     ]);
-    (view as any).updateInteractiveSlot();
+    (view as any).updateContentTabs();
 
     const bar = container.querySelector('#interactive-session-bar') as HTMLElement;
     const sessionList = container.querySelector('#pipeline-session-list') as HTMLElement;
@@ -1448,7 +1453,7 @@ describe('PipelineDetailView Interactive Session', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(InteractiveCodingView).toHaveBeenCalled();
-    expect((view as any).interactiveMode).toBe(true);
+    expect((view as any).contentTab).toBe('coding-agent');
     expect(selected.classList.contains('hidden')).toBe(true);
     expect(mount.classList.contains('hidden')).toBe(false);
 
@@ -1464,7 +1469,7 @@ describe('PipelineDetailView Interactive Session', () => {
       busy: false,
     });
     dataManagerHandlers['ws:INTERACTIVE_STOPPED:p1']({ pipeline_id: 'p1' });
-    expect((view as any).interactiveMode).toBe(false);
+    expect((view as any).contentTab).toBe('task-editor');
     expect(selected.classList.contains('hidden')).toBe(false);
     expect(mount.classList.contains('hidden')).toBe(true);
     expect((view as any).interactiveCodingView).toBeNull();
@@ -1479,9 +1484,11 @@ describe('PipelineDetailView Interactive Session', () => {
 
     const tablist = container.querySelector('#content-tablist') as HTMLElement;
     expect(tablist).not.toBeNull();
-    // No session yet: the tab list is hidden, and the removed redundant buttons
-    // are gone from the DOM.
-    expect(tablist.classList.contains('hidden')).toBe(true);
+    // The tab list is always visible; without a session the Coding Agent tab is
+    // hidden. The removed redundant buttons are gone from the DOM.
+    expect(tablist.classList.contains('hidden')).toBe(false);
+    const initialCodingTab = container.querySelector('#tab-coding-agent') as HTMLElement;
+    expect(initialCodingTab.classList.contains('hidden')).toBe(true);
     expect(container.querySelector('#toggle-interactive-btn')).toBeNull();
     expect(container.querySelector('#stop-interactive-btn')).toBeNull();
     expect(container.querySelector('#manage-sessions-btn')).toBeNull();
@@ -1532,5 +1539,43 @@ describe('PipelineDetailView Interactive Session', () => {
     expect(selected.classList.contains('hidden')).toBe(true);
     expect(mount.classList.contains('hidden')).toBe(false);
     expect((InteractiveCodingView as any).mock.calls.length).toBe(mountCountBefore);
+  });
+
+  it('shows the File Browser tab without a session and keeps it mounted across tab switches', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await view.loadPipeline();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const tablist = container.querySelector('#content-tablist') as HTMLElement;
+    const taskTab = container.querySelector('#tab-task-editor') as HTMLElement;
+    const codingTab = container.querySelector('#tab-coding-agent') as HTMLElement;
+    const fileTab = container.querySelector('#tab-file-browser') as HTMLElement;
+    expect(tablist.classList.contains('hidden')).toBe(false);
+    expect(fileTab.textContent).toContain('File Browser');
+    // No session: the Coding Agent tab is hidden but the File Browser is usable.
+    expect(codingTab.classList.contains('hidden')).toBe(true);
+
+    getAction('select_content_tab')(null, fileTab);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const fileMount = container.querySelector('#file-browser-view-mount') as HTMLElement;
+    const selected = container.querySelector('#selected-task-view') as HTMLElement;
+    expect((view as any).contentTab).toBe('file-browser');
+    expect(fileMount.classList.contains('hidden')).toBe(false);
+    expect(selected.classList.contains('hidden')).toBe(true);
+    expect(fileTab.getAttribute('aria-selected')).toBe('true');
+    expect(mockContext.fileBrowserClient.listDirectory).toHaveBeenCalledWith('p1', '');
+
+    // Switching away and back reuses the same mounted fragment (no remount).
+    getAction('select_content_tab')(null, taskTab);
+    expect(fileMount.classList.contains('hidden')).toBe(true);
+    expect(selected.classList.contains('hidden')).toBe(false);
+
+    getAction('select_content_tab')(null, fileTab);
+    expect(container.querySelector('#file-browser-view-mount')).toBe(fileMount);
+    expect(fileMount.classList.contains('hidden')).toBe(false);
+    expect(mockContext.fileBrowserClient.listDirectory).toHaveBeenCalledTimes(1);
   });
 });

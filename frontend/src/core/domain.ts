@@ -328,6 +328,95 @@ export interface GitLogResponse {
   error?: string | null;
 }
 
+/** Git status of a single file or directory in the pipeline repository. */
+export const FileGitStatus = {
+  CLEAN: 'clean',
+  MODIFIED: 'modified',
+  ADDED: 'added',
+  DELETED: 'deleted',
+  UNTRACKED: 'untracked',
+  IGNORED: 'ignored',
+  CONFLICTED: 'conflicted',
+} as const;
+
+export type FileGitStatus = typeof FileGitStatus[keyof typeof FileGitStatus];
+
+export function isFileGitStatus(value: any): value is FileGitStatus {
+  return Object.values(FileGitStatus).includes(value);
+}
+
+/** A single file or directory entry in a directory listing. */
+export class FileEntry {
+  name: string = '';
+  path: string = '';
+  isDir: boolean = false;
+  size?: number | null;
+  createdAt?: string | null;
+  modifiedAt?: string | null;
+  gitStatus?: FileGitStatus | null;
+  hasChildren?: boolean | null;
+
+  constructor(json: any) {
+    if (!json) return;
+    if (json.name !== undefined) this.name = String(json.name);
+    if (json.path !== undefined) this.path = String(json.path);
+    if (json.is_dir !== undefined) this.isDir = Boolean(json.is_dir);
+    if (json.size !== undefined) this.size = json.size === null ? null : Number(json.size);
+    if (json.created_at !== undefined) this.createdAt = json.created_at === null ? null : String(json.created_at);
+    if (json.modified_at !== undefined) this.modifiedAt = json.modified_at === null ? null : String(json.modified_at);
+    if (json.git_status !== undefined) {
+      this.gitStatus = isFileGitStatus(json.git_status) ? json.git_status : null;
+    }
+    if (json.has_children !== undefined) this.hasChildren = json.has_children === null ? null : Boolean(json.has_children);
+  }
+}
+
+/** Contents of a single directory in the pipeline repository. */
+export class DirectoryListing {
+  path: string = '';
+  parent?: string | null;
+  entries: FileEntry[] = [];
+
+  constructor(json: any) {
+    if (!json) return;
+    if (json.path !== undefined) this.path = String(json.path);
+    if (json.parent !== undefined) this.parent = json.parent === null ? null : String(json.parent);
+    if (Array.isArray(json.entries)) {
+      this.entries = json.entries.map((e: any) => new FileEntry(e));
+    }
+  }
+}
+
+/** Read-only content and metadata of a single file. */
+export class FileContent {
+  path: string = '';
+  name: string = '';
+  size: number = 0;
+  createdAt?: string | null;
+  modifiedAt?: string | null;
+  gitStatus?: FileGitStatus | null;
+  isBinary: boolean = false;
+  truncated: boolean = false;
+  encoding?: string | null;
+  content?: string | null;
+
+  constructor(json: any) {
+    if (!json) return;
+    if (json.path !== undefined) this.path = String(json.path);
+    if (json.name !== undefined) this.name = String(json.name);
+    if (json.size !== undefined) this.size = Number(json.size);
+    if (json.created_at !== undefined) this.createdAt = json.created_at === null ? null : String(json.created_at);
+    if (json.modified_at !== undefined) this.modifiedAt = json.modified_at === null ? null : String(json.modified_at);
+    if (json.git_status !== undefined) {
+      this.gitStatus = isFileGitStatus(json.git_status) ? json.git_status : null;
+    }
+    if (json.is_binary !== undefined) this.isBinary = Boolean(json.is_binary);
+    if (json.truncated !== undefined) this.truncated = Boolean(json.truncated);
+    if (json.encoding !== undefined) this.encoding = json.encoding === null ? null : String(json.encoding);
+    if (json.content !== undefined) this.content = json.content === null ? null : String(json.content);
+  }
+}
+
 export const NotificationType = {
   MESSAGE: "message",
   CONFIRMATION: "confirmation",

@@ -550,6 +550,121 @@ def get_git_log(repo: git.Repo, limit: int = 50) -> list:
     ]
 
 
+# Git porcelain status codes mapped to the small status vocabulary the UI
+# understands. Conflicts use two-letter codes (e.g. ``UU``, ``AA``, ``DU``)
+# and are handled explicitly.
+_GIT_STATUS_PRIORITY = [
+    "clean",
+    "ignored",
+    "untracked",
+    "deleted",
+    "added",
+    "modified",
+    "conflicted",
+]
+
+
+def _porcelain_status(x: str, y: str) -> str:
+    """Map a two-letter porcelain status code to a status string."""
+    if x == "?" and y == "?":
+        return "untracked"
+    if x == "!" and y == "!":
+        return "ignored"
+    if x in ("U", "A", "D") and y in ("U", "A", "D"):
+        # Any mixed state involving U is a merge conflict; AA/DD are both-sided
+        # adds/deletes which git also reports as conflicted.
+        if "U" in (x, y) or (x == y and x in ("A", "D")):
+            return "conflicted"
+    if x == "A" or y == "A":
+        return "added"
+    if x == "D" or y == "D":
+        return "deleted"
+    if x == "R" or y == "R":
+        return "modified"
+    if x == "M" or y == "M":
+        return "modified"
+    return "clean"
+
+
+def _normalize_status_path(path: str) -> str:
+    """Normalize a porcelain path to a repo-relative POSIX string."""
+    path = path.strip()
+    if len(path) >= 2 and path[0] == '"' and path[-1] == '"':
+        path = path[1:-1]
+    return path.replace("\\", "/").strip("/")
+
+
+def _collect_repo_git_status(repo: git.Repo) -> Dict[str, str]:
+    """Run one ``git status --porcelain`` and return a path -> status map.
+
+    Returns an empty map when git is unavailable or the command fails; callers
+    treat an empty map as "everything clean / status unknown".
+    """
+    try:
+        output = repo.git.status("--porcelain=v1", "--untracked-files=all", "--ignored")
+    except Exception:
+        logger.debug("Could not read git status", exc_info=True)
+        return {}
+
+    result: Dict[str, str] = {}
+    for line in output.splitlines():
+        if len(line) < 3:
+            continue
+        x, y = line[0], line[1]
+        path = line[3:]
+        if " -> " in path:
+            # Renames are reported as ``old -> new``; track the new path.
+            path = path.split(" -> ", 1)[1]
+        result[_normalize_status_path(path)] = _porcelain_status(x, y)
+    return result
+
+
+def _aggregate_status(statuses: list[str]) -> str:
+    """Return the most significant status from a list (dirty subtrees)."""
+    best = "clean"
+    best_rank = 0
+    for status in statuses:
+        rank = (
+            _GIT_STATUS_PRIORITY.index(status) if status in _GIT_STATUS_PRIORITY else 0
+        )
+        if rank > best_rank:
+            best = status
+            best_rank = rank
+    return best
+
+
+def get_paths_git_status(repo: git.Repo, rel_paths: list[str]) -> Dict[str, str]:
+    """Map repo-relative paths to a git status using one git invocation.
+
+    Values are ``clean|modified|added|deleted|untracked|ignored|conflicted``.
+    Directories are reported as the aggregated status of their descendants so
+    the UI can mark dirty subtrees. Unknown paths default to ``clean``.
+    """
+    exact = _collect_repo_git_status(repo)
+
+    result: Dict[str, str] = {}
+    for raw_path in rel_paths:
+        path = _normalize_status_path(raw_path)
+        if path in exact:
+            result[raw_path] = exact[path]
+            continue
+
+        if path == "":
+            descendants = list(exact.values())
+        else:
+            prefix = path + "/"
+            descendants = [
+                status for key, status in exact.items() if key.startswith(prefix)
+            ]
+        result[raw_path] = _aggregate_status(descendants) if descendants else "clean"
+    return result
+
+
+def get_file_git_status(repo: git.Repo, rel_path: str) -> str:
+    """Return the git status for a single repo-relative path."""
+    return get_paths_git_status(repo, [rel_path]).get(rel_path, "clean")
+
+
 async def get_pipeline_repo_readonly(pipeline_id: str) -> Tuple[Pipeline, git.Repo]:
     """Resolve a pipeline's repository for read-only inspection.
 

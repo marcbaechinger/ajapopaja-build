@@ -47,4 +47,7 @@ export const iconMap: Record<string, string> = {
   eye: 'eye-icon',
   eyeOff: 'eye-off-icon',
   alert: 'alert-icon',
+  folder: 'folder-icon',
+  folderOpen: 'folder-open-icon',
+  file: 'file-icon',
 };

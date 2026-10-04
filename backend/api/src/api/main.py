@@ -47,6 +47,7 @@ from api.routes.auth import router as auth_router
 from api.routes.dev_server import router as dev_server_router
 from api.routes.docbot import router as docbot_router
 from api.routes.editor_commands import router as editor_router
+from api.routes.file_browser import router as file_browser_router
 from api.reviewbot.router import router as reviewbot_router
 from api.archbot.router import router as archbot_router
 from api.coderbot.manager import coderbot_manager
@@ -289,6 +290,7 @@ api_router.include_router(archbot_router)
 api_router.include_router(coderbot_router)
 api_router.include_router(pull_request_router)
 api_router.include_router(dev_server_router)
+api_router.include_router(file_browser_router)
 api_router.include_router(notifications_router)
 
 app.include_router(api_router)

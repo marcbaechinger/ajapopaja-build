@@ -320,6 +320,48 @@ class GitLogEntry(BaseModel):
     subject: Optional[str] = None
 
 
+class FileEntry(BaseModel):
+    """A single entry (file or directory) in a directory listing.
+
+    ``path`` is always a repository-relative POSIX path; absolute paths are
+    never exposed to the client. ``git_status`` is one of
+    ``clean|modified|added|deleted|untracked|ignored|conflicted`` or ``None``
+    when git status is unavailable.
+    """
+
+    name: str
+    path: str
+    is_dir: bool
+    size: Optional[int] = None
+    created_at: Optional[datetime] = None
+    modified_at: Optional[datetime] = None
+    git_status: Optional[str] = None
+    has_children: Optional[bool] = None
+
+
+class DirectoryListing(BaseModel):
+    """Contents of a single directory in the pipeline repository."""
+
+    path: str
+    parent: Optional[str] = None
+    entries: List[FileEntry] = Field(default_factory=list)
+
+
+class FileContent(BaseModel):
+    """Read-only content and metadata of a single file."""
+
+    path: str
+    name: str
+    size: int
+    created_at: Optional[datetime] = None
+    modified_at: Optional[datetime] = None
+    git_status: Optional[str] = None
+    is_binary: bool = False
+    truncated: bool = False
+    encoding: Optional[str] = None
+    content: Optional[str] = None
+
+
 class User(Document):
     username: str
     hashed_password: str

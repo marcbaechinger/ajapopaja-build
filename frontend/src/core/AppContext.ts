@@ -25,6 +25,7 @@ import { ArchBotClient } from './clients/ArchBotClient';
 import { CoderBotClient } from './clients/CoderBotClient';
 import { PullRequestClient } from './clients/PullRequestClient';
 import { EditorClient } from './clients/EditorClient';
+import { FileBrowserClient } from './clients/FileBrowserClient';
 import { WebSocketClient } from './WebSocketClient.ts';
 import { DataManager } from './DataManager.ts';
 import { AuthService } from './AuthService.ts';
@@ -59,6 +60,7 @@ export class AppContext {
   public readonly coderBotClient: CoderBotClient;
   public readonly pullRequestClient: PullRequestClient;
   public readonly editorClient: EditorClient;
+  public readonly fileBrowserClient: FileBrowserClient;
   public readonly wsClient: WebSocketClient;
   public readonly dataManager: DataManager;
   public readonly authService: AuthService;
@@ -83,6 +85,7 @@ export class AppContext {
     this.coderBotClient = new CoderBotClient(this.authService);
     this.pullRequestClient = new PullRequestClient(this.authService);
     this.editorClient = new EditorClient(apiBaseUrl, this.authService);
+    this.fileBrowserClient = new FileBrowserClient(apiBaseUrl, this.authService);
     this.wsClient = new WebSocketClient(apiBaseUrl, this.authService);
     this.dataManager = new DataManager(this.wsClient);
     this.assistantService = new AssistantService(this.wsClient, this.authService);

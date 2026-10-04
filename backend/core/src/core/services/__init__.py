@@ -27,6 +27,11 @@ from core.services.dev_process_manager import (
     DevProcessNotFoundError,
     ProcessInfo,
 )
+from core.services.file_browser import (
+    FileBrowserService,
+    PathEscapeError,
+    UnreadablePathError,
+)
 from core.services.notification_manager import (
     NotificationActionAlreadyRegisteredError,
     NotificationActionContext,
@@ -43,6 +48,9 @@ __all__ = [
     "DevProcessAlreadyRunningError",
     "DevProcessNotFoundError",
     "ProcessInfo",
+    "FileBrowserService",
+    "PathEscapeError",
+    "UnreadablePathError",
     "NotificationManager",
     "NotificationError",
     "NotificationActionNotFoundError",

@@ -39,6 +39,7 @@ import { DiffDialog } from '../components/DiffDialog.ts';
 import { IteratePullRequestDialog } from '../components/IteratePullRequestDialog.ts';
 import { CoderBotDialog } from '../components/CoderBotDialog.ts';
 import { InteractiveCodingView } from '../components/InteractiveCodingView.ts';
+import { FileBrowseView } from '../components/FileBrowseView.ts';
 import { SessionListItemView } from '../components/SessionListItemView.ts';
 import type { PiSessionSummary } from '../../core/InteractiveCodingService.ts';
 import { DevServerDialog } from '../components/DevServerDialog.ts';
@@ -74,9 +75,12 @@ export class PipelineDetailView extends View {
   private enginePiView: PiView | null = null;
   private enginePiMountedKey: string | null = null;
 
-  // Interactive coding session shown next to (never together with) the TaskItem.
-  private interactiveMode: boolean = false;
+  // Which content tab is active in the prep column. The tab list is always
+  // visible; the Coding Agent tab is only selectable while a session is
+  // attached to this pipeline.
+  private contentTab: 'task-editor' | 'coding-agent' | 'file-browser' = 'task-editor';
   private interactiveCodingView: InteractiveCodingView | null = null;
+  private fileBrowseView: FileBrowseView | null = null;
   private interactiveSession: { pipelineId: string; active: boolean } | null = null;
   private sessionListClickHandler: ((e: Event) => void) | null = null;
 
@@ -269,13 +273,13 @@ export class PipelineDetailView extends View {
         // Re-attach to the freshly started session, then switch into the
         // interactive view for this pipeline.
         Promise.resolve(this.context.interactiveCodingService?.refreshSession?.()).then(() => {
-          this.interactiveMode = true;
+          this.contentTab = 'coding-agent';
           this.syncInteractiveSession();
         });
       },
       'INTERACTIVE_STOPPED': (p) => {
         if (p?.pipeline_id && p.pipeline_id !== this.pipelineId) return;
-        this.interactiveMode = false;
+        this.contentTab = 'task-editor';
         this.syncInteractiveSession();
       },
       'DEV_PROCESS_STARTED': (p) => {
@@ -509,7 +513,7 @@ export class PipelineDetailView extends View {
 
       try {
         await this.context.interactiveCodingService.startSession(this.pipelineId);
-        this.interactiveMode = true;
+        this.contentTab = 'coding-agent';
         this.syncInteractiveSession();
       } catch (error) {
         console.error('Start interactive session error:', error);
@@ -527,20 +531,27 @@ export class PipelineDetailView extends View {
       this.context.sessionManagerPanel?.open(this.pipelineId);
     });
 
-    // Tab selection. "Task editor" and "Coding Agent" are two pre-rendered DOM
-    // fragments that are shown/hidden in place; selecting a tab never re-renders
-    // (and never tears down) either fragment.
+    // Tab selection. The Task editor, Coding Agent and File Browser are
+    // pre-rendered DOM fragments that are shown/hidden in place; selecting a
+    // tab never re-renders (and never tears down) an already mounted fragment.
     this.context.actionRegistry.register('select_content_tab', (_e, el) => {
       const tab = el.getAttribute('data-content-tab');
       // The Coding Agent tab is only selectable while a session is attached to
       // this pipeline.
       if (tab === 'coding-agent' && !this.isInteractiveSessionMine()) return;
-      this.interactiveMode = tab === 'coding-agent';
-      this.updateInteractiveSlot();
+      if (tab !== 'task-editor' && tab !== 'coding-agent' && tab !== 'file-browser') {
+        return;
+      }
+      this.contentTab = tab;
+      this.updateContentTabs();
     });
 
     this.context.actionRegistry.register('toggle_interactive_view', () => {
-      this.interactiveMode = !this.interactiveMode;
+      if (this.contentTab === 'coding-agent') {
+        this.contentTab = 'task-editor';
+      } else if (this.isInteractiveSessionMine()) {
+        this.contentTab = 'coding-agent';
+      }
       this.syncInteractiveSession();
     });
 
@@ -1431,11 +1442,11 @@ export class PipelineDetailView extends View {
             </button>
           </div>
           <div id="pipeline-session-list" class="mt-3 hidden flex flex-col gap-2"></div>
-          <!-- Two tabs over two pre-rendered DOM fragments. The tab list only
-               appears while an interactive session is attached to this
-               pipeline; "Task editor" is then the always-present default. -->
+          <!-- Three tabs over three pre-rendered DOM fragments. The tab list is
+               always visible; the Coding Agent tab is hidden while no session
+               is attached to this pipeline. "Task editor" is the default. -->
           <div id="content-tablist" role="tablist" aria-label="Pipeline content"
-            class="mt-6 hidden flex items-center gap-1 border-b border-app-border/40">
+            class="mt-6 flex items-center gap-1 border-b border-app-border/40">
             <button id="tab-task-editor" data-action-click="select_content_tab" data-content-tab="task-editor" type="button"
               role="tab" aria-selected="true" aria-controls="selected-task-view"
               class="px-3 py-2 text-xs font-bold uppercase tracking-widest border-b-2 -mb-px transition-colors cursor-pointer border-app-accent-1 text-app-accent-1">
@@ -1446,11 +1457,17 @@ export class PipelineDetailView extends View {
               class="px-3 py-2 text-xs font-bold uppercase tracking-widest border-b-2 -mb-px transition-colors cursor-pointer border-transparent text-app-muted hover:text-app-text">
               Coding Agent
             </button>
+            <button id="tab-file-browser" data-action-click="select_content_tab" data-content-tab="file-browser" type="button"
+              role="tab" aria-selected="false" aria-controls="file-browser-view-mount"
+              class="px-3 py-2 text-xs font-bold uppercase tracking-widest border-b-2 -mb-px transition-colors cursor-pointer border-transparent text-app-muted hover:text-app-text">
+              File Browser
+            </button>
           </div>
           <div id="selected-task-view" role="tabpanel" aria-labelledby="tab-task-editor" class="mt-6">
             <p class="text-app-muted/60 text-xs italic text-center border border-dashed border-app-border/40 rounded-xl py-6 px-3">Select a task from the backlog to open it here.</p>
           </div>
           <div id="interactive-coding-view-mount" role="tabpanel" aria-labelledby="tab-coding-agent" class="mt-6 hidden"></div>
+          <div id="file-browser-view-mount" role="tabpanel" aria-labelledby="tab-file-browser" class="mt-6 hidden"></div>
           <div id="col-prep" class="space-y-10 mt-6">
             <p class="text-app-muted animate-pulse text-center py-10">Loading backlog...</p>
           </div>
@@ -1570,7 +1587,7 @@ export class PipelineDetailView extends View {
         if (!confirmed) return;
       }
       await service.switchSession(uid);
-      this.interactiveMode = true;
+      this.contentTab = 'coding-agent';
       this.syncInteractiveSession();
     } catch (error) {
       console.error('Switch interactive session error:', error);
@@ -1598,6 +1615,10 @@ export class PipelineDetailView extends View {
     }
     this.sessionListClickHandler = null;
     this.teardownInteractiveCodingView();
+    if (this.fileBrowseView) {
+      this.fileBrowseView.destroy();
+      this.fileBrowseView = null;
+    }
     this.unsubs.forEach(unsub => unsub());
     this.unsubs = [];
     this.pendingSpecEditTaskId = null;
@@ -1985,10 +2006,10 @@ export class PipelineDetailView extends View {
       }
     } else {
       this.teardownInteractiveCodingView();
-      this.interactiveMode = false;
+      if (this.contentTab === 'coding-agent') this.contentTab = 'task-editor';
     }
 
-    this.updateInteractiveSlot();
+    this.updateContentTabs();
   }
 
   private teardownInteractiveCodingView() {
@@ -1999,12 +2020,33 @@ export class PipelineDetailView extends View {
   }
 
   /**
-   * Shows/hides the session controls and ensures only one of the TaskItem and
-   * the InteractiveCodingView is visible at a time. Tab switching only toggles
-   * the visibility of two pre-rendered DOM fragments (no re-render, no mount /
-   * teardown), so in-progress edits survive switching back and forth.
+   * Lazily mounts the FileBrowseView the first time the File Browser tab is
+   * selected, then keeps it mounted so its state (current directory, selected
+   * file, scroll position) survives tab switches.
    */
-  private updateInteractiveSlot() {
+  private mountFileBrowseView() {
+    if (this.fileBrowseView || !this.container) return;
+    const mount = this.container.querySelector(
+      '#file-browser-view-mount'
+    ) as HTMLElement | null;
+    if (!mount) return;
+    this.fileBrowseView = new FileBrowseView(mount, {
+      pipelineId: this.pipelineId,
+      client: this.context.fileBrowserClient,
+      actionRegistry: this.context.actionRegistry,
+    });
+    this.fileBrowseView.render();
+  }
+
+  /**
+   * Shows/hides the session controls and the three content fragments (TaskItem,
+   * InteractiveCodingView, FileBrowseView) and keeps every tab button's
+   * active/disabled state in sync. Switching tabs only toggles the visibility of
+   * pre-rendered DOM fragments (no re-render, no teardown), so in-progress edits
+   * and the file browser's state survive switching back and forth. The File
+   * Browser is lazily mounted on first activation.
+   */
+  private updateContentTabs() {
     if (!this.container) return;
     const startBtn = this.container.querySelector('#start-interactive-btn') as HTMLElement | null;
     const resumeBtn = this.container.querySelector('#resume-interactive-btn') as HTMLElement | null;
@@ -2012,9 +2054,10 @@ export class PipelineDetailView extends View {
     const sessionBar = this.container.querySelector('#interactive-session-bar') as HTMLElement | null;
     const selected = this.container.querySelector('#selected-task-view') as HTMLElement | null;
     const mount = this.container.querySelector('#interactive-coding-view-mount') as HTMLElement | null;
-    const tablist = this.container.querySelector('#content-tablist') as HTMLElement | null;
+    const fileMount = this.container.querySelector('#file-browser-view-mount') as HTMLElement | null;
     const taskTab = this.container.querySelector('#tab-task-editor') as HTMLElement | null;
     const codingTab = this.container.querySelector('#tab-coding-agent') as HTMLElement | null;
+    const fileTab = this.container.querySelector('#tab-file-browser') as HTMLElement | null;
 
     const isRemote = !!this.pipeline?.repo_uri;
     const mine =
@@ -2040,16 +2083,24 @@ export class PipelineDetailView extends View {
       resumeBtn.textContent = '\u25b6 Resume Session';
     }
 
-    // The tab list (and the Coding Agent tab) only exists while an interactive
-    // session is attached to this pipeline; otherwise the content area is the
-    // task editor alone.
-    tablist?.classList.toggle('hidden', !mine);
-    if (!mine) this.interactiveMode = false;
+    // The Coding Agent tab is only available while a session is attached to
+    // this pipeline; fall back to the default tab when it disappears.
+    codingTab?.classList.toggle('hidden', !mine);
+    if (!mine && this.contentTab === 'coding-agent') {
+      this.contentTab = 'task-editor';
+    }
 
-    // Only one of the TaskItem and the InteractiveCodingView is visible at once.
-    const showInteractive = mine && this.interactiveMode;
-    selected?.classList.toggle('hidden', showInteractive);
+    const showTaskEditor = this.contentTab === 'task-editor';
+    const showInteractive = this.contentTab === 'coding-agent' && mine;
+    const showFileBrowser = this.contentTab === 'file-browser';
+
+    selected?.classList.toggle('hidden', !showTaskEditor);
     mount?.classList.toggle('hidden', !showInteractive);
+    fileMount?.classList.toggle('hidden', !showFileBrowser);
+
+    if (showFileBrowser) {
+      this.mountFileBrowseView();
+    }
 
     const setTabActive = (el: HTMLElement | null, active: boolean) => {
       if (!el) return;
@@ -2059,8 +2110,9 @@ export class PipelineDetailView extends View {
       el.classList.toggle('text-app-muted', !active);
       el.setAttribute('aria-selected', String(active));
     };
-    setTabActive(taskTab, !showInteractive);
+    setTabActive(taskTab, showTaskEditor);
     setTabActive(codingTab, showInteractive);
+    setTabActive(fileTab, showFileBrowser);
 
     this.renderPipelineSessionList(isRemote ? resumable : []);
   }
