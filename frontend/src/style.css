@@ -375,6 +375,18 @@ mark.piview-search-current {
 /* Markdown-rendered blocks ("Format as markup" toggle) */
 .piview-formatted {
   /*
+   * One knob per rhythm role. All gaps are `em`-based so they scale with the
+   * container's `12px` font size. Margin collapsing means adjacent siblings use
+   * the larger of the two touching margins, so a `p` followed by a `ul` yields a
+   * single `--piview-gap-block` gap (not the sum), keeping the rhythm even.
+   */
+  --piview-gap-block: 0.4em; /* p, ul, ol, dl, blockquote, figure, table */
+  --piview-gap-li: 0.2em; /* between list items */
+  --piview-gap-heading-top: 0.6em;
+  --piview-gap-heading-bottom: 0.2em;
+  --piview-gap-pre: 0.4em;
+  --piview-gap-hr: 0.65em;
+  /*
    * The PiView log is a dense, terminal-style surface (`text-[11px]
    * leading-tight`), so the typography plugin's long-form defaults
    * (`line-height: 1.75`, generous block margins) make rendered Markdown look
@@ -391,23 +403,35 @@ mark.piview-search-current {
  * `@apply prose-theme` scopes those rules under `.piview-formatted`, we can
  * override them here (unlayered rules beat the plugin's layered utilities and
  * these come later in source order than the scoped `@apply` output). The
- * spacing is tightened to a few pixels so the rendered block stays as dense as
- * the surrounding terminal-style log. `pre` needs `!important` to win over the
- * shared `.prose-theme pre` rule above, which pins block padding/margins with
- * `!` utilities for the document editors.
+ * spacing is kept compact for the dense terminal-style log while still giving
+ * paragraphs, list items and the `p <-> ul` boundary a comfortably larger gap
+ * than the raw log's line height. The values are declared once as the
+ * `--piview-gap-*` custom properties above so the whole rhythm is tunable from
+ * one place. `pre` needs `!important` to win over the shared `.prose-theme pre`
+ * rule above, which pins block padding/margins with `!` utilities for the
+ * document editors.
  */
 .piview-formatted :where(p, ul, ol, dl, blockquote, figure, table) {
-  margin-top: 0.2em;
-  margin-bottom: 0.2em;
+  margin-top: var(--piview-gap-block);
+  margin-bottom: var(--piview-gap-block);
 }
 
 .piview-formatted :where(h1, h2, h3, h4, h5, h6) {
-  margin-top: 0.4em;
-  margin-bottom: 0.15em;
+  margin-top: var(--piview-gap-heading-top);
+  margin-bottom: var(--piview-gap-heading-bottom);
 }
 
 .piview-formatted :where(li) {
+  margin-top: var(--piview-gap-li);
+  margin-bottom: var(--piview-gap-li);
+}
+
+/* Keep list ends flush with the list box, mirroring the container-level reset. */
+.piview-formatted :where(li:first-child) {
   margin-top: 0;
+}
+
+.piview-formatted :where(li:last-child) {
   margin-bottom: 0;
 }
 
@@ -417,13 +441,13 @@ mark.piview-search-current {
 }
 
 .piview-formatted :where(hr) {
-  margin-top: 0.5em;
-  margin-bottom: 0.5em;
+  margin-top: var(--piview-gap-hr);
+  margin-bottom: var(--piview-gap-hr);
 }
 
 .piview-formatted pre {
-  margin-top: 0.25em !important;
-  margin-bottom: 0.25em !important;
+  margin-top: var(--piview-gap-pre) !important;
+  margin-bottom: var(--piview-gap-pre) !important;
   padding-top: 0.4rem !important;
   padding-bottom: 0.4rem !important;
 }

@@ -18,6 +18,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { marked } from 'marked';
 import { PiView, type PiSessionService } from './PiView.ts';
 import type { RenderBlock } from '../../core/CoderBotService.ts';
+// Raw CSS source, used by the vertical-rhythm guard tests below. jsdom has no
+// layout engine and the app stylesheet is not loaded in the test environment,
+// so the declared gap values are asserted against the source instead.
+import styleCss from '../../style.css?raw';
 
 // PiView coalesces block reconciliations onto the next animation frame. Tests
 // drive that frame manually via flushRaf() so DOM assertions stay synchronous.
@@ -1602,6 +1606,45 @@ describe('PiView keyboard tooltips', () => {
     expect(mount.querySelector('#log-content-container')?.classList.contains('font-mono')).toBe(
       true
     );
+
+    view.destroy();
+  });
+
+  it('declares a slightly larger, tunable vertical rhythm for rendered Markdown', () => {
+    // The effective rhythm is owned by the unlayered `.piview-formatted` rules
+    // in style.css (they beat Tailwind's layered `prose-*` utilities). jsdom has
+    // no layout engine and the stylesheet is not applied in tests, so guard the
+    // declared values directly: they must stay larger than the old `0.2em`
+    // block gap and `0` list-item gap.
+    expect(styleCss).toMatch(/--piview-gap-block:\s*0\.4em/);
+    expect(styleCss).toMatch(/--piview-gap-li:\s*0\.2em/);
+    expect(styleCss).toMatch(/--piview-gap-heading-top:\s*0\.6em/);
+    expect(styleCss).toMatch(/--piview-gap-pre:\s*0\.4em/);
+
+    // The block/list/heading rules must reference those shared properties so
+    // there is a single source of truth for the rhythm.
+    expect(styleCss).toMatch(
+      /\.piview-formatted :where\(p, ul, ol, dl, blockquote, figure, table\)\s*\{[^}]*var\(--piview-gap-block\)/
+    );
+    expect(styleCss).toMatch(/\.piview-formatted :where\(li\)\s*\{[^}]*var\(--piview-gap-li\)/);
+    expect(styleCss).toMatch(
+      /\.piview-formatted :where\(h1, h2, h3, h4, h5, h6\)\s*\{[^}]*var\(--piview-gap-heading-top\)/
+    );
+  });
+
+  it('owns the vertical rhythm in CSS instead of inert prose-* utilities', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+    emitBlocks([{ id: 'g1', kind: 'text', text: 'Intro.\n\n- one\n- two', complete: true }]);
+    view.flushAutoFormat();
+
+    const formatted = mount.querySelector('.piview-formatted') as HTMLElement;
+    expect(formatted).not.toBeNull();
+    expect(formatted.classList.contains('prose-theme')).toBe(true);
+    // The old `prose-p:my-*` / `prose-li:my-*` utilities were silently
+    // overridden by style.css; pin their removal to keep one source of truth.
+    expect(formatted.className).not.toMatch(/prose-[a-z]+:my-/);
 
     view.destroy();
   });
