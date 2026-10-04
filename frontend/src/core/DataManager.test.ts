@@ -109,4 +109,31 @@ describe('DataManager', () => {
     expect(dataManager.getPipeline('p1')?.name).toBe('Test Pipeline');
     expect(callback).toHaveBeenCalled();
   });
+
+  it('should forward SpecAgent WebSocket events to the ws:<type>:<pipeline> query', () => {
+    // Regression: the SpecAgent events were missing from DataManager's
+    // processEvents allow-list, so `SPECAGENT_SPEC_READY` never reached
+    // PipelineDetailView and the elaborated-spec proposal was never shown.
+    const ready = vi.fn();
+    const started = vi.fn();
+    const completed = vi.fn();
+    dataManager.on('ws:SPECAGENT_SPEC_READY:p1', ready);
+    dataManager.on('ws:SPECAGENT_STARTED:p1', started);
+    dataManager.on('ws:SPECAGENT_COMPLETED:p1', completed);
+
+    expect(handlers.has('SPECAGENT_SPEC_READY')).toBe(true);
+    expect(handlers.has('SPECAGENT_STARTED')).toBe(true);
+    expect(handlers.has('SPECAGENT_COMPLETED')).toBe(true);
+
+    handlers.get('SPECAGENT_SPEC_READY')!({
+      type: 'SPECAGENT_SPEC_READY',
+      payload: { pipeline_id: 'p1', task_id: 't1' },
+    });
+    handlers.get('SPECAGENT_STARTED')!({ type: 'SPECAGENT_STARTED', payload: { pipeline_id: 'p1', task_id: 't1' } });
+    handlers.get('SPECAGENT_COMPLETED')!({ type: 'SPECAGENT_COMPLETED', payload: { pipeline_id: 'p1', task_id: 't1' } });
+
+    expect(ready).toHaveBeenCalledWith({ pipeline_id: 'p1', task_id: 't1' });
+    expect(started).toHaveBeenCalledTimes(1);
+    expect(completed).toHaveBeenCalledTimes(1);
+  });
 });

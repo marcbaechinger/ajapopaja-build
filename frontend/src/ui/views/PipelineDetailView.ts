@@ -283,8 +283,10 @@ export class PipelineDetailView extends View {
       'SPECAGENT_SPEC_READY': (p) => {
         if (p?.pipeline_id && p.pipeline_id !== this.pipelineId) return;
         if (!p?.task_id) return;
-        // Ignore stale events for tasks that are no longer displayed.
-        if (!this.container?.querySelector(`[data-task-id="${p.task_id}"]`)) return;
+        // Ignore stale events for tasks that are no longer displayed. Match the
+        // TaskItem card root (`data-view-id`), not a nested `data-task-id` node
+        // (the title container), so the spec container can be found below it.
+        if (!this.container?.querySelector(`[data-view-id="${p.task_id}"]`)) return;
         void this.fetchSpecProposal(p.task_id);
       },
       'CODERBOT_STARTED': (p) => { this.coderbotState = { status: 'inProgress', taskId: p.task_id }; },
@@ -431,7 +433,11 @@ export class PipelineDetailView extends View {
    * reject clears the pending proposal on the backend.
    */
   private renderSpecProposal(proposal: SpecProposal) {
-    const taskEl = this.container?.querySelector(`[data-task-id="${proposal.task_id}"]`);
+    // Locate the TaskItem card root by its `data-view-id` (the same anchor used
+    // by `focusSpecAfterTitleSave`). Looking up `[data-task-id]` would match the
+    // nested title container instead, whose `.spec-container` is a sibling - not
+    // a descendant - so the proposal would never be injected.
+    const taskEl = this.container?.querySelector(`[data-view-id="${proposal.task_id}"]`);
     const specContainer = taskEl?.querySelector('.spec-container') as HTMLElement | null;
     if (!specContainer) return;
 

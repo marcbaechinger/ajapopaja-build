@@ -1790,10 +1790,18 @@ describe('PipelineDetailView SpecAgent', () => {
   });
 
   const renderTaskShell = () => {
+    // Mirror the real TaskItem layout: the card root carries `data-view-id`, the
+    // title container (first `data-task-id`) and the `.spec-container` (also
+    // `data-task-id`) are siblings under it - not nested.
     container.innerHTML = `
-      <div data-task-id="t1">
-        <div class="spec-container">
-          <div class="spec-display">Spec</div>
+      <div data-view-type="task" data-view-id="t1">
+        <div class="title-container" data-task-id="t1">
+          <span class="font-medium text-app-text">Task 1</span>
+        </div>
+        <div class="task-body">
+          <div class="spec-container" data-task-id="t1">
+            <div class="spec-display">Spec</div>
+          </div>
         </div>
       </div>
     `;
@@ -1824,7 +1832,7 @@ describe('PipelineDetailView SpecAgent', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(mockContext.specBotClient.getProposal).toHaveBeenCalledWith('p1', 't1');
-    const specContainer = container.querySelector('[data-task-id="t1"] .spec-container')!;
+    const specContainer = container.querySelector('[data-view-id="t1"] .spec-container')!;
     expect(specContainer.querySelector('.spec-proposal-result')).toBeTruthy();
     expect(specContainer.textContent).toContain('Suggested Specification');
     expect(specContainer.querySelector('[data-spec-proposal-action="accept"]')).toBeTruthy();
@@ -1869,7 +1877,7 @@ describe('PipelineDetailView SpecAgent', () => {
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const specContainer = container.querySelector('[data-task-id="t1"] .spec-container')!;
+    const specContainer = container.querySelector('[data-view-id="t1"] .spec-container')!;
     specContainer
       .querySelector<HTMLButtonElement>('[data-spec-proposal-action="accept"]')!
       .click();
@@ -1890,7 +1898,7 @@ describe('PipelineDetailView SpecAgent', () => {
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const specContainer = container.querySelector('[data-task-id="t1"] .spec-container')!;
+    const specContainer = container.querySelector('[data-view-id="t1"] .spec-container')!;
     specContainer
       .querySelector<HTMLButtonElement>('[data-spec-proposal-action="reject"]')!
       .click();
