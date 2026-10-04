@@ -37,6 +37,7 @@ vi.mock('./PiView.ts', () => {
       this.service = service;
       this.root = root;
       this.options = options;
+      this.blocksCollapsed = options?.blocksCollapsedInitially ?? false;
       piViewInstances.push(this);
     }
     render() {
@@ -279,6 +280,16 @@ describe('InteractiveCodingView', () => {
     expect(root.querySelector('#interactive-error-toggle-btn')).not.toBeNull();
   });
 
+  it('collapses tool blocks by default in the embedded PiView', () => {
+    view.render();
+    expect(piViewInstances[0].options.blocksCollapsedInitially).toBe(true);
+    expect(piViewInstances[0].blocksCollapsed).toBe(true);
+
+    const collapseBtn = root.querySelector('#interactive-collapse-blocks-btn') as HTMLButtonElement;
+    expect(collapseBtn.getAttribute('aria-pressed')).toBe('true');
+    expect(collapseBtn.getAttribute('aria-label')).toBe('Expand all blocks');
+  });
+
   it('wires the header display buttons to the PiView toggles', () => {
     view.render();
     const pi = piViewInstances[0];
@@ -290,6 +301,10 @@ describe('InteractiveCodingView', () => {
     thinkingBtn.click();
     expect(pi.thinkingExpanded).toBe(false);
     expect(thinkingBtn.getAttribute('aria-pressed')).toBe('false');
+
+    collapseBtn.click();
+    expect(pi.blocksCollapsed).toBe(false);
+    expect(collapseBtn.getAttribute('aria-pressed')).toBe('false');
 
     collapseBtn.click();
     expect(pi.blocksCollapsed).toBe(true);

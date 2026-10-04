@@ -60,11 +60,20 @@ export class InteractiveCodingView {
     if (mount) {
       // showFooter: false — the view owns the session control (Pause), so the
       // reused log's own footer Stop button would be a duplicate.
+      // blocksCollapsedInitially: true — interactive sessions are tool-heavy,
+      // so tool output starts collapsed to keep the streaming log scannable.
+      // The header toggle expands it on demand.
       this.piView = new PiView(this.service, mount, {
         showFooter: false,
         logHeightClass: 'h-[46vh]',
+        blocksCollapsedInitially: true,
       });
       this.piView.render();
+      // Stay robust if a PiView build predates the option: force the collapsed
+      // state so the embedded log always starts with tool bodies hidden.
+      if (!this.piView.areBlocksCollapsed()) {
+        this.piView.toggleBlocksCollapse();
+      }
     }
 
     // Header controls that drive the reused PiView's rendering toggles. The

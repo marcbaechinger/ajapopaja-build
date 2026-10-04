@@ -71,6 +71,11 @@ export interface PiViewOptions {
   /** Start with follow-mode auto-scroll enabled. Default true. */
   followInitially?: boolean;
   /**
+   * Start with `tool`/`verification` blocks collapsed, showing only their
+   * headers. Newly rendered blocks follow this state. Default false (expanded).
+   */
+  blocksCollapsedInitially?: boolean;
+  /**
    * Tailwind height class for the log area, so embedded use (e.g. a sidebar)
    * can be more compact than the modal default. Default 'h-[60vh]'.
    */
@@ -255,6 +260,7 @@ export class PiView {
     this.root = mount;
     this.showFooter = options.showFooter ?? true;
     this.isFollowMode = options.followInitially ?? true;
+    this.blocksCollapsed = options.blocksCollapsedInitially ?? false;
     this.logHeightClass = options.logHeightClass ?? 'h-[60vh]';
     this.deferInitialRender = options.deferInitialRender ?? false;
     this.autoFormatText = options.autoFormatText ?? true;

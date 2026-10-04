@@ -773,6 +773,27 @@ describe('PiView', () => {
     expect(toolBody.classList.contains('hidden')).toBe(false);
   });
 
+  it('blocksCollapsedInitially starts tool/verification blocks collapsed', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount, { blocksCollapsedInitially: true });
+    view.render();
+    emitBlocks([
+      { id: 't1', kind: 'tool', header: '→ write', text: 'body1' },
+      { id: 'v1', kind: 'verification', text: '● PASS', sub: ['- ok'] },
+    ]);
+
+    const bodies = mount.querySelectorAll('.piview-toolverify [data-role="body"]');
+    expect(bodies.length).toBe(2);
+    bodies.forEach((body) => expect(body.classList.contains('hidden')).toBe(true));
+
+    const collapseBtn = mount.querySelector('#collapse-blocks-btn') as HTMLButtonElement;
+    expect(collapseBtn.getAttribute('aria-pressed')).toBe('true');
+    expect(collapseBtn.getAttribute('aria-label')).toContain('Expand');
+
+    collapseBtn.click();
+    expect(bodies[0].classList.contains('hidden')).toBe(false);
+  });
+
   it('new tool/verification blocks follow the collapsed state', () => {
     const { service, emitBlocks } = createStubService();
     const view = new PiView(service, mount);
