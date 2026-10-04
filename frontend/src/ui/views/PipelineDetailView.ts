@@ -83,6 +83,10 @@ export class PipelineDetailView extends View {
   private interactiveSession: { pipelineId: string; active: boolean } | null = null;
   private sessionListClickHandler: ((e: Event) => void) | null = null;
 
+  // Whether the left backlog sidebar (proposed designs + backlog) is collapsed.
+  // Persisted per pipeline so the chosen layout survives reloads.
+  private sidebarCollapsed: boolean = false;
+
   private loadPendingReviews() {
     this.pendingReviews = this.storage.get<string[]>(`pending_reviews:${this.pipelineId}`, []) || [];
   }
@@ -128,6 +132,8 @@ export class PipelineDetailView extends View {
     super();
     this.context = context;
     this.pipelineId = params.id;
+    this.sidebarCollapsed =
+      this.storage.get<boolean>(`sidebar_collapsed:${this.pipelineId}`, false) === true;
     this.loadPendingReviews();
     this.registerActions();
     this.setupDataManagerSubscriptions();
@@ -552,6 +558,15 @@ export class PipelineDetailView extends View {
         this.contentTab = 'coding-agent';
       }
       this.syncInteractiveSession();
+    });
+
+    // Collapse/expand the left backlog sidebar (proposed designs + backlog) to
+    // reclaim horizontal space on demand. The chosen state is persisted per
+    // pipeline and restored on the next visit.
+    this.context.actionRegistry.register('toggle_backlog_sidebar', () => {
+      this.sidebarCollapsed = !this.sidebarCollapsed;
+      this.storage.put(`sidebar_collapsed:${this.pipelineId}`, this.sidebarCollapsed);
+      this.applySidebarState();
     });
 
     this.context.actionRegistry.register('open_review_dialog', async (_e, el) => {
@@ -1503,7 +1518,35 @@ export class PipelineDetailView extends View {
 
 
 
+  /** Chevron icon for the backlog sidebar toggle (points the way it will move). */
+  private sidebarToggleIcon(): string {
+    const points = this.sidebarCollapsed ? '9 18 15 12 9 6' : '15 18 9 12 15 6';
+    return `<svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="${points}"></polyline></svg>`;
+  }
+
+  /**
+   * Applies the persisted backlog-sidebar collapse state to the mounted DOM.
+   * The sidebar is fully hidden to reclaim its width; the toggle rail next to
+   * it stays visible so it can be expanded again.
+   */
+  private applySidebarState(): void {
+    if (!this.container) return;
+    const sidebar = this.container.querySelector<HTMLElement>('#backlog-sidebar');
+    sidebar?.classList.toggle('hidden', this.sidebarCollapsed);
+
+    const button = this.container.querySelector<HTMLElement>('#backlog-sidebar-toggle');
+    if (button) {
+      button.setAttribute('aria-pressed', String(this.sidebarCollapsed));
+      button.setAttribute(
+        'title',
+        this.sidebarCollapsed ? 'Expand backlog sidebar' : 'Collapse backlog sidebar'
+      );
+      button.innerHTML = this.sidebarToggleIcon();
+    }
+  }
+
   render() {
+    const backlogHidden = this.sidebarCollapsed ? ' hidden' : '';
     return `
       <div class="h-screen flex flex-col overflow-hidden bg-app-bg">
         <div id="pipeline-header-container" class="flex-none shrink-0 border-b border-app-border/60">
@@ -1511,8 +1554,21 @@ export class PipelineDetailView extends View {
         </div>
 
         <div class="flex flex-1 min-h-0">
-          <!-- Left Sidebar: BacklogView -->
-          <aside class="w-96 flex-none shrink-0 border-r border-app-border/60 bg-app-surface/30 overflow-y-auto">
+          <!-- Sidebar toggle rail: always visible so the backlog sidebar can be
+               collapsed to reclaim horizontal space and expanded again. -->
+          <div class="w-9 flex-none shrink-0 flex flex-col items-center py-2 bg-app-surface/30 border-r border-app-border/60">
+            <button id="backlog-sidebar-toggle" type="button"
+              data-action-click="toggle_backlog_sidebar"
+              class="p-1.5 rounded-lg text-app-muted hover:text-app-accent-1 hover:bg-app-bg transition-colors cursor-pointer"
+              aria-pressed="${this.sidebarCollapsed}" aria-controls="backlog-sidebar"
+              title="${this.sidebarCollapsed ? 'Expand backlog sidebar' : 'Collapse backlog sidebar'}">
+              ${this.sidebarToggleIcon()}
+            </button>
+          </div>
+
+          <!-- Left Sidebar: BacklogView (proposed designs + backlog) -->
+          <aside id="backlog-sidebar"
+            class="w-96 flex-none shrink-0 border-r border-app-border/60 bg-app-surface/30 overflow-y-auto${backlogHidden}">
             <div id="backlog-view" class="min-h-full">
               <p class="text-app-muted/40 text-[10px] uppercase font-bold tracking-widest text-center py-6">Loading backlog...</p>
             </div>
@@ -1539,6 +1595,7 @@ export class PipelineDetailView extends View {
 
   mount(container: HTMLElement) {
     this.container = container;
+    this.applySidebarState();
     this.loadPipeline();
     this.refreshTasks();
     this.checkOllama();

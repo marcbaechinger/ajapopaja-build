@@ -182,6 +182,41 @@ describe('PipelineDetailView Layout', () => {
     expect(backlog!.innerHTML).toContain('Created Task');
   });
 
+  it('should collapse and expand the backlog sidebar and persist the state', async () => {
+    mockContext.taskClient.listByPipeline.mockResolvedValue([]);
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await view.refreshTasks();
+
+    const sidebar = container.querySelector('#backlog-sidebar') as HTMLElement;
+    expect(sidebar).not.toBeNull();
+    expect(sidebar.classList.contains('hidden')).toBe(false);
+
+    const toggle = mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === 'toggle_backlog_sidebar')![1];
+    expect(toggle).toBeDefined();
+
+    toggle(new Event('click'), container.querySelector('#backlog-sidebar-toggle') as HTMLElement);
+    expect(sidebar.classList.contains('hidden')).toBe(true);
+    expect(storage['pipeline:sidebar_collapsed:p1']).toBe('true');
+
+    toggle(new Event('click'), container.querySelector('#backlog-sidebar-toggle') as HTMLElement);
+    expect(sidebar.classList.contains('hidden')).toBe(false);
+    expect(storage['pipeline:sidebar_collapsed:p1']).toBe('false');
+  });
+
+  it('should restore a collapsed backlog sidebar from persisted state', () => {
+    storage['pipeline:sidebar_collapsed:p1'] = 'true';
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+
+    const sidebar = container.querySelector('#backlog-sidebar') as HTMLElement;
+    expect(sidebar.classList.contains('hidden')).toBe(true);
+    // The toggle remains reachable so the sidebar can be expanded again.
+    expect(container.querySelector('#backlog-sidebar-toggle')).not.toBeNull();
+  });
+
   it('should render the selected task in the TaskView under the Quick Add Task panel', async () => {
     mockContext.taskClient.listByPipeline.mockResolvedValue([
       { id: 'c1', title: 'Currently Worked On', status: TaskStatus.CREATED, deleted: false, version: 2, order: 0, type: 'manual', want_design_doc: false },
