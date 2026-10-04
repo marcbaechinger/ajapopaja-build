@@ -264,16 +264,20 @@ export class FileView {
             title="Copy path" aria-label="Copy path">${Icon.render('copy', { size: 14 })}</button>
           ${badge}
         </div>
-        <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px] text-app-muted">
-          <dt class="font-semibold uppercase tracking-wider text-[9px]">Path</dt>
-          <dd class="truncate" title="${escapeHtml(file.path)}">${escapeHtml(file.path)}</dd>
-          <dt class="font-semibold uppercase tracking-wider text-[9px]">Size</dt>
-          <dd>${escapeHtml(formatFileSize(file.size))}</dd>
-          <dt class="font-semibold uppercase tracking-wider text-[9px]">Created</dt>
-          <dd>${escapeHtml(formatTimestamp(file.createdAt))}</dd>
-          <dt class="font-semibold uppercase tracking-wider text-[9px]">Modified</dt>
-          <dd>${escapeHtml(formatTimestamp(file.modifiedAt))}</dd>
-        </dl>
+        <div class="grid grid-cols-2 gap-x-6 text-[11px] text-app-muted" data-role="file-metadata">
+          <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 min-w-0" data-role="file-metadata-column">
+            <dt class="font-semibold uppercase tracking-wider text-[9px]">Path</dt>
+            <dd class="truncate" title="${escapeHtml(file.path)}">${escapeHtml(file.path)}</dd>
+            <dt class="font-semibold uppercase tracking-wider text-[9px]">Size</dt>
+            <dd>${escapeHtml(formatFileSize(file.size))}</dd>
+          </dl>
+          <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 min-w-0 border-l border-app-border/40 pl-6" data-role="file-metadata-column">
+            <dt class="font-semibold uppercase tracking-wider text-[9px]">Created</dt>
+            <dd class="truncate" title="${escapeHtml(formatTimestamp(file.createdAt))}">${escapeHtml(formatTimestamp(file.createdAt))}</dd>
+            <dt class="font-semibold uppercase tracking-wider text-[9px]">Modified</dt>
+            <dd class="truncate" title="${escapeHtml(formatTimestamp(file.modifiedAt))}">${escapeHtml(formatTimestamp(file.modifiedAt))}</dd>
+          </dl>
+        </div>
       </div>
     `;
   }
