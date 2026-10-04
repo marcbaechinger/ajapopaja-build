@@ -99,6 +99,35 @@ describe('FileBrowseView', () => {
     expect(root.querySelector('#file-browser-breadcrumb')!.textContent).toContain('repo');
   });
 
+  it('keeps the main panel non-resizable by default', async () => {
+    view.render();
+    await flush();
+
+    const main = root.querySelector('#file-browser-main') as HTMLElement;
+    expect(main.className).toBe('flex-1 min-w-0 flex flex-col overflow-hidden');
+    expect(main.classList.contains('resize-y')).toBe(false);
+  });
+
+  it('makes the main panel vertically resizable when enabled', async () => {
+    view.destroy();
+    view = new FileBrowseView(root, {
+      pipelineId: 'p1',
+      client,
+      actionRegistry: registry as any,
+      resizable: true,
+    });
+    view.render();
+    await flush();
+
+    const main = root.querySelector('#file-browser-main') as HTMLElement;
+    expect(main.className).toBe('resize-y overflow-x-hidden h-[70vh]');
+    // Vertical resize only: never the width.
+    expect(main.classList.contains('resize-y')).toBe(true);
+    expect(main.classList.contains('resize-x')).toBe(false);
+    // The listing still renders inside the resizable panel.
+    expect(main.textContent).toContain('README.md');
+  });
+
   it('navigates into a directory and updates the breadcrumb', async () => {
     client.listDirectory.mockImplementation((_pipeline: string, path: string) =>
       Promise.resolve(listing(path, [['App.ts', false]]))

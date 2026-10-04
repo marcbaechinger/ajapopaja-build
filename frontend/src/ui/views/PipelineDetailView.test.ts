@@ -1611,6 +1611,11 @@ describe('PipelineDetailView Interactive Session', () => {
     expect(selected.classList.contains('hidden')).toBe(true);
     expect(fileTab.getAttribute('aria-selected')).toBe('true');
     expect(mockContext.fileBrowserClient.listDirectory).toHaveBeenCalledWith('p1', '');
+    // The file browser's main panel is vertically resizable in the detail view.
+    const mainPanel = container.querySelector('#file-browser-main') as HTMLElement;
+    expect(mainPanel).not.toBeNull();
+    expect(mainPanel.className).toContain('resize-y');
+    expect(mainPanel.className).toContain('h-[70vh]');
 
     // Switching away and back reuses the same mounted fragment (no remount).
     getAction('select_content_tab')(null, taskTab);

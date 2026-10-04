@@ -30,6 +30,14 @@ export interface FileBrowseViewOptions {
   pipelineId: string;
   client: FileBrowserClient;
   actionRegistry: ActionRegistry;
+  /**
+   * When true, the main content area (the directory listing / file content)
+   * can be resized vertically by dragging its bottom edge, so the user can
+   * tune the height to fit. The initial height is `h-[70vh]`; width is never
+   * resizable. The breadcrumb and bottom bar stay fixed. Default false, which
+   * keeps the historic `flex-1` layout.
+   */
+  resizable?: boolean;
 }
 
 /**
@@ -45,6 +53,7 @@ export class FileBrowseView {
   private pipelineId: string;
   private client: FileBrowserClient;
   private registry: ActionRegistry;
+  private resizable: boolean;
   private storage = LocalStorageManager.getInstance('file-browser');
 
   private currentDir: string = '';
@@ -60,6 +69,7 @@ export class FileBrowseView {
     this.pipelineId = options.pipelineId;
     this.client = options.client;
     this.registry = options.actionRegistry;
+    this.resizable = options.resizable ?? false;
   }
 
   render(): void {
@@ -136,6 +146,12 @@ export class FileBrowseView {
   // --- rendering ----------------------------------------------------------
 
   private shell(): string {
+    // `resize-y` needs a non-visible overflow; `overflow-x-hidden` supplies it
+    // while keeping the resize handle from ever changing the width. The fixed
+    // `h-[70vh]` is the initial height the browser then lets the user adjust.
+    const mainClass = this.resizable
+      ? 'resize-y overflow-x-hidden h-[70vh]'
+      : 'flex-1 min-w-0 flex flex-col overflow-hidden';
     return `
       <div class="flex flex-col bg-app-surface/30 rounded-3xl border border-app-border/30 overflow-hidden h-[70vh] min-h-[28rem]">
         <div class="flex items-center gap-2 px-3 py-2 border-b border-app-border/40">
@@ -150,7 +166,7 @@ export class FileBrowseView {
             </button>
           </div>
         </div>
-        <main id="file-browser-main" class="flex-1 min-w-0 flex flex-col overflow-hidden"></main>
+        <main id="file-browser-main" class="${mainClass}"></main>
         <div class="flex items-center gap-2 px-3 py-2 border-t border-app-border/40">
           <nav id="file-browser-breadcrumb-bottom" aria-label="Current path"
             class="flex items-center gap-1 min-w-0 flex-1 flex-wrap"></nav>

@@ -2362,6 +2362,9 @@ export class PipelineDetailView extends View {
       pipelineId: this.pipelineId,
       client: this.context.fileBrowserClient,
       actionRegistry: this.context.actionRegistry,
+      // Let the user drag the listing / file content area's bottom edge to
+      // tune its height within the detail view.
+      resizable: true,
     });
     this.fileBrowseView.render();
   }

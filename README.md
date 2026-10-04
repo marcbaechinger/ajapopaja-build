@@ -57,6 +57,11 @@ Agents work on real code inside isolated sandboxes and report back through the U
   session output with follow‑mode auto‑scroll, collapsible `thinking`/`tool`
   blocks, an error visibility toggle, copy‑to‑clipboard, an elapsed‑time
   indicator, and empty / session‑ended states.
+- **Read‑only file browser** – the **File Browser** tab lets you inspect a
+  pipeline's repository without a session: navigate directories, view
+  syntax‑highlighted files, and copy paths. Its listing / content panel can be
+  resized vertically (`FileBrowseView` `resizable` option) so you can tune the
+  visible height.
 - **Interactive coding session** – a stateful, multi‑turn Pi chat attached to a
   pipeline's repository. The agent is pinned to that repository (no
   filesystem‑wide searches outside it) and can read and manage pipeline tasks
