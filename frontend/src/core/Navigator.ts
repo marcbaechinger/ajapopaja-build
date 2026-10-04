@@ -18,6 +18,15 @@ export abstract class View {
   abstract render(): string | HTMLElement;
   mount?(container: HTMLElement): void;
   unmount?(): void;
+  /**
+   * Optional in-place update hook. When the same route pattern matches an
+   * already-mounted view, `resolve()` calls `update(params)` and only reuses
+   * the view when it returns `true`. This lets views own their sub-routes
+   * (e.g. the content tab encoded in the hash) without being torn down and
+   * re-created on every hash change. Returning `false` forces a full
+   * `unmount()`/`render()`/`mount()` cycle.
+   */
+  update?(params: Record<string, string>): boolean;
 }
 
 export type ViewConstructor = (params: Record<string, string>) => View;
@@ -26,6 +35,7 @@ export class Navigator {
   private routes: Map<string, ViewConstructor> = new Map();
   private container: HTMLElement;
   private currentView: View | null = null;
+  private currentPattern: string | null = null;
 
   constructor(containerId: string) {
     const el = document.getElementById(containerId);
@@ -45,10 +55,20 @@ export class Navigator {
 
     for (const [pattern, constructor] of this.routes.entries()) {
       const params = this.match(pattern, path);
-      if (params) {
-        this.navigate(constructor(params));
+      if (!params) continue;
+
+      // Same route pattern → let the mounted view decide whether it can absorb
+      // the new sub-route in place (e.g. a tab / file-browser path change)
+      // instead of being torn down and re-created.
+      if (
+        this.currentPattern === pattern &&
+        this.currentView?.update?.(params) === true
+      ) {
         return;
       }
+
+      this.navigate(constructor(params), pattern);
+      return;
     }
 
     console.warn(`No route matched for hash: ${hash}`);
@@ -58,25 +78,35 @@ export class Navigator {
     const patternParts = pattern.split('/').filter(p => p !== '');
     const pathParts = path.split('/').filter(p => p !== '');
 
-    if (patternParts.length !== pathParts.length) return null;
+    // An optional trailing `*` captures zero or more remaining segments into
+    // `params.rest` so a stable pattern such as `/pipeline/:id/*` can serve both
+    // the bare route and its sub-routes without re-mounting the view.
+    const splat = patternParts[patternParts.length - 1] === '*';
+    const fixed = splat ? patternParts.length - 1 : patternParts.length;
+
+    if (splat ? pathParts.length < fixed : pathParts.length !== fixed) return null;
 
     const params: Record<string, string> = {};
-    for (let i = 0; i < patternParts.length; i++) {
+    for (let i = 0; i < fixed; i++) {
       if (patternParts[i].startsWith(':')) {
         params[patternParts[i].substring(1)] = pathParts[i];
       } else if (patternParts[i] !== pathParts[i]) {
         return null;
       }
     }
+    if (splat) {
+      params.rest = pathParts.slice(fixed).join('/');
+    }
     return params;
   }
 
-  private navigate(view: View) {
+  private navigate(view: View, pattern: string) {
     if (this.currentView?.unmount) {
       this.currentView.unmount();
     }
 
     this.currentView = view;
+    this.currentPattern = pattern;
     const content = view.render();
     
     if (typeof content === 'string') {

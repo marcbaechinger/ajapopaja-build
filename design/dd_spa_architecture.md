@@ -81,6 +81,38 @@ This document defines the architecture and design principles for the Ajapopaja B
   - Listens to `hashchange` events (e.g., `#pipeline/123`).
   - Maps hashes to View constructors.
   - Handles "Back" button support and initial routing.
+  - Supports an **optional trailing `*` splat** in a pattern (`/pipeline/:id/*`).
+    It captures zero or more remaining segments into `params.rest`, so one
+    stable pattern serves both a bare route and all of its sub-routes without
+    re-mounting the view.
+  - Supports **in-place updates**: when the *same* pattern matches again and
+    the mounted view implements `update(params)`, the Navigator calls it and
+    reuses the view only when it returns `true`. Returning `false` (or omitting
+    `update`) forces the full `unmount()` → `render()` → `mount()` cycle. This
+    keeps the Navigator generic while letting views own their sub-routes.
+
+### Pipeline sub-route grammar
+
+`PipelineDetailView` encodes its in-view navigation in the hash so the browser
+Back/Forward buttons walk the tab and file-browser history. All parsing and
+building lives in the pure value object `PipelineRoute`
+(`frontend/src/core/PipelineRoute.ts`).
+
+| URL | State |
+| --- | --- |
+| `#/pipeline/<id>` | Pipeline detail, default tab |
+| `#/pipeline/<id>/tab/task` | Task editor tab |
+| `#/pipeline/<id>/tab/agent` | Coding Agent tab (only while a session is attached) |
+| `#/pipeline/<id>/tab/fb` | File Browser tab, path from the persisted `lastPath` |
+| `#/pipeline/<id>/tab/fb/` | File Browser tab, repository root (explicit) |
+| `#/pipeline/<id>/tab/fb/path/to/folder` | File Browser showing that directory |
+| `#/pipeline/<id>/tab/fb/path/to/folder/index.html` | File Browser showing that file |
+
+The trailing file-browser path is a repo-relative POSIX path, encoded per
+segment, never absolute. It is opaque to the router; `FileBrowseView.navigateTo`
+resolves file vs. directory with a single `FileBrowserClient.getMeta()` call.
+User-initiated navigation pushes a history entry; route-driven and initial loads
+are silent so no push/`hashchange` loop can form.
 
 - **Navigator**: `frontend/src/core/Navigator.ts`
 - **Login View**: `frontend/src/ui/views/LoginView.ts`

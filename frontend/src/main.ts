@@ -44,7 +44,7 @@ const requireAuth = (factory: (params: Record<string, string>) => any) => {
 
 // Register Routes
 app.navigator.register('/', requireAuth(() => new DashboardView(app)));
-app.navigator.register('/pipeline/:id', requireAuth((params) => new PipelineDetailView(app, params)));
+app.navigator.register('/pipeline/:id/*', requireAuth((params) => new PipelineDetailView(app, params)));
 app.navigator.register('/login', () => new LoginView(app));
 app.navigator.register('/register', () => new RegisterView(app));
 

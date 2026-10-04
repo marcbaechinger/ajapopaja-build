@@ -25,6 +25,10 @@ export interface FileBrowseViewOptions {
   actionRegistry: ActionRegistry;
   /** Optional; default false. */
   resizable?: boolean;
+  /** Explicit route path ('' = root). null/omitted = persisted lastPath. */
+  initialPath?: string | null;
+  /** Emitted for user-initiated navigation only. */
+  onNavigate?: (state: { dir: string; file: string | null }) => void;
 }
 ```
 
@@ -34,6 +38,35 @@ export interface FileBrowseViewOptions {
 | `client` | `FileBrowserClient` | – | Read-only fetch client (list/read). |
 | `actionRegistry` | `ActionRegistry` | – | Registry for the browser's actions (`file_browser_*`, `copy_file_path`). |
 | `resizable` | `boolean` | `false` | When `true`, the main content panel can be resized vertically by dragging its bottom edge. Width is never resizable and the breadcrumb/status bars stay fixed. |
+| `initialPath` | `string \| null` | `null` | Explicit repo-relative path from the route. A non-empty value wins over the persisted `lastPath:`; `null`/omitted falls back to `lastPath:`; `''` explicitly selects the repository root. |
+| `onNavigate` | `(state) => void` | – | Called with `{ dir, file }` only for user-initiated navigation (entry click, breadcrumb, file open) — never for `render()`/initial-restore, route-driven (`navigateTo(…, { silent: true })`) or `refresh()` loads. |
+
+### Path resolution and the route
+
+`render()` follows the precedence `initialPath` (non-empty) > persisted
+`lastPath:` > repository root, then calls `navigateTo(initialPath, { silent: true })`
+for an explicit path:
+
+```ts
+async navigateTo(path: string, opts: { silent?: boolean } = {}): Promise<void> {
+  if (!path) return this.loadDirectory('', opts);
+  try {
+    const meta = await this.client.getMeta(this.pipelineId, path);
+    if (meta?.isDir === false) return this.openFile(path, opts);
+  } catch { /* fall through: treat as a directory */ }
+  return this.loadDirectory(path, opts);
+}
+```
+
+`getMeta()` decides file vs. directory in one request (a missing `isDir` on a
+test double / older backend defaults to a directory), and a directory load
+still surfaces the normal error state on failure. `loadDirectory()` and
+`openFile()` accept the same `{ silent }` flag; only non-silent calls emit
+`onNavigate`, which is what prevents a push/`hashchange` feedback loop.
+`getCurrentPath()` returns `{ dir, file }` for host-side idempotence checks.
+The existing `requestId` stale-guard covers any overlap introduced by the extra
+`getMeta()` request.
+
 
 ## 3. Resizable height
 The option mirrors the established resizable-log pattern in `PiView`:

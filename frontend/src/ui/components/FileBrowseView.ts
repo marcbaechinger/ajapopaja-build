@@ -38,6 +38,18 @@ export interface FileBrowseViewOptions {
    * keeps the historic `flex-1` layout.
    */
   resizable?: boolean;
+  /**
+   * Explicit repo-relative path from the route (`''` = repository root).
+   * `null`/omitted means "no explicit path": fall back to the persisted
+   * `lastPath:`. A non-empty value takes precedence over the persisted path.
+   */
+  initialPath?: string | null;
+  /**
+   * Emitted for user-initiated navigation only (entry click, breadcrumb, file
+   * open) — never for route-driven or initial-restore loads. `dir` is the
+   * containing directory; `file` is the selected file, if any.
+   */
+  onNavigate?: (state: { dir: string; file: string | null }) => void;
 }
 
 /**
@@ -54,6 +66,8 @@ export class FileBrowseView {
   private client: FileBrowserClient;
   private registry: ActionRegistry;
   private resizable: boolean;
+  private initialPath: string | null;
+  private onNavigate?: (state: { dir: string; file: string | null }) => void;
   private storage = LocalStorageManager.getInstance('file-browser');
 
   private currentDir: string = '';
@@ -70,6 +84,11 @@ export class FileBrowseView {
     this.client = options.client;
     this.registry = options.actionRegistry;
     this.resizable = options.resizable ?? false;
+    this.initialPath =
+      options.initialPath !== undefined && options.initialPath !== null
+        ? options.initialPath
+        : null;
+    this.onNavigate = options.onNavigate;
   }
 
   render(): void {
@@ -77,7 +96,8 @@ export class FileBrowseView {
     this.registerActions();
     this.restoreState();
     this.renderBreadcrumb();
-    void this.loadDirectory(this.currentDir);
+    if (this.initialPath) void this.navigateTo(this.initialPath, { silent: true });
+    else void this.loadDirectory(this.currentDir, { silent: true });
   }
 
   destroy(): void {
@@ -87,13 +107,32 @@ export class FileBrowseView {
 
   // --- navigation ---------------------------------------------------------
 
-  async loadDirectory(path: string): Promise<void> {
+  /**
+   * Resolves a repo-relative path from the route: a single `getMeta()` call
+   * decides whether it names a directory (list it) or a file (open it). A
+   * failed meta lookup falls through to the directory path so the normal error
+   * state is surfaced by `loadDirectory`.
+   */
+  async navigateTo(path: string, opts: { silent?: boolean } = {}): Promise<void> {
+    if (!path) return this.loadDirectory('', opts);
+    try {
+      const meta = await this.client.getMeta(this.pipelineId, path);
+      // Default to a directory when a test double / older backend omits the flag.
+      if (meta?.isDir === false) return this.openFile(path, opts);
+    } catch {
+      /* fall through: treat as a directory and let loadDirectory surface the error */
+    }
+    return this.loadDirectory(path, opts);
+  }
+
+  async loadDirectory(path: string, opts: { silent?: boolean } = {}): Promise<void> {
     const requestId = ++this.requestId;
     this.loading = true;
     this.error = null;
     this.currentDir = path;
     this.selectedFile = null;
     this.storage.put(`lastPath:${this.pipelineId}`, path);
+    if (!opts.silent) this.onNavigate?.({ dir: path, file: null });
     this.renderBreadcrumb();
     this.renderMain();
 
@@ -112,11 +151,12 @@ export class FileBrowseView {
     }
   }
 
-  async openFile(path: string): Promise<void> {
+  async openFile(path: string, opts: { silent?: boolean } = {}): Promise<void> {
     const requestId = ++this.requestId;
     this.loading = true;
     this.error = null;
     this.selectedFile = null;
+    if (!opts.silent) this.onNavigate?.({ dir: this.currentDir, file: path });
     this.renderMain();
 
     try {
@@ -135,12 +175,17 @@ export class FileBrowseView {
 
   async refresh(): Promise<void> {
     const selected = this.selectedFile?.path ?? null;
-    await this.loadDirectory(this.currentDir);
+    await this.loadDirectory(this.currentDir, { silent: true });
     if (this.error || !selected) return;
     const exists = this.listing?.entries.some((entry) => entry.path === selected);
     if (exists) {
-      await this.openFile(selected);
+      await this.openFile(selected, { silent: true });
     }
+  }
+
+  /** Current directory and selected file, for host-side idempotence checks. */
+  getCurrentPath(): { dir: string; file: string | null } {
+    return { dir: this.currentDir, file: this.selectedFile?.path ?? null };
   }
 
   // --- rendering ----------------------------------------------------------
@@ -302,6 +347,10 @@ export class FileBrowseView {
   // --- state --------------------------------------------------------------
 
   private restoreState(): void {
+    if (this.initialPath !== null && this.initialPath !== undefined) {
+      this.currentDir = this.initialPath;
+      return;
+    }
     const lastPath = this.storage.get<string>(`lastPath:${this.pipelineId}`, '');
     this.currentDir = typeof lastPath === 'string' ? lastPath : '';
   }

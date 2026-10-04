@@ -410,3 +410,154 @@ describe('FileBrowseView', () => {
     expect(main.scrollTop).toBe(0);
   });
 });
+
+describe('FileBrowseView route wiring', () => {
+  let root: HTMLElement;
+  let registry: FakeRegistry;
+  let client: any;
+  let view: FileBrowseView | null = null;
+
+  const makeListing = (path: string) => listing(path, [['App.ts', false]]);
+  const makeFile = (path: string) =>
+    new FileContent({ name: 'App.ts', path, size: 4, content: 'app\n' });
+
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    root = document.createElement('div');
+    document.body.appendChild(root);
+    window.localStorage.clear();
+    LocalStorageManager.resetInstances();
+
+    registry = new FakeRegistry();
+    client = {
+      listDirectory: vi.fn((_pipeline: string, path: string) =>
+        Promise.resolve(makeListing(path))
+      ),
+      readFile: vi.fn((_pipeline: string, path: string) => Promise.resolve(makeFile(path))),
+      getMeta: vi.fn(),
+    };
+  });
+
+  afterEach(() => {
+    view?.destroy();
+    view = null;
+  });
+
+  const build = (options: { initialPath?: string | null; onNavigate?: any } = {}) => {
+    view = new FileBrowseView(root, {
+      pipelineId: 'p1',
+      client,
+      actionRegistry: registry as any,
+      ...options,
+    });
+    return view;
+  };
+
+  it('lets an explicit initialPath beat the persisted lastPath', async () => {
+    window.localStorage.setItem('file-browser:lastPath:p1', JSON.stringify('persisted'));
+    LocalStorageManager.resetInstances();
+    client.getMeta.mockResolvedValue({ isDir: true });
+
+    build({ initialPath: 'src' }).render();
+    await flush();
+
+    expect(client.getMeta).toHaveBeenCalledWith('p1', 'src');
+    expect(client.listDirectory).toHaveBeenCalledWith('p1', 'src');
+  });
+
+  it('falls back to the persisted lastPath when no explicit path is given', async () => {
+    window.localStorage.setItem('file-browser:lastPath:p1', JSON.stringify('persisted'));
+    LocalStorageManager.resetInstances();
+
+    build().render();
+    await flush();
+
+    expect(client.listDirectory).toHaveBeenCalledWith('p1', 'persisted');
+  });
+
+  it('resolves a directory deep link via getMeta', async () => {
+    client.getMeta.mockResolvedValue({ isDir: true });
+
+    const v = build({ initialPath: 'src' });
+    await v.navigateTo('src');
+
+    expect(client.getMeta).toHaveBeenCalledWith('p1', 'src');
+    expect(client.listDirectory).toHaveBeenLastCalledWith('p1', 'src');
+  });
+
+  it('resolves a file deep link via getMeta', async () => {
+    client.getMeta.mockResolvedValue({ isDir: false });
+
+    const v = build();
+    await v.navigateTo('src/App.ts');
+
+    expect(client.getMeta).toHaveBeenCalledWith('p1', 'src/App.ts');
+    expect(client.readFile).toHaveBeenCalledWith('p1', 'src/App.ts');
+  });
+
+  it('defaults to a directory when getMeta is missing or rejects', async () => {
+    const missing = build();
+    await missing.navigateTo('src');
+    expect(client.listDirectory).toHaveBeenLastCalledWith('p1', 'src');
+
+    client.getMeta.mockReset();
+    client.getMeta.mockRejectedValue(new Error('boom'));
+    await missing.navigateTo('other');
+    expect(client.listDirectory).toHaveBeenLastCalledWith('p1', 'other');
+  });
+
+  it('treats the empty path as the repository root', async () => {
+    const v = build();
+    await v.navigateTo('');
+    expect(client.getMeta).not.toHaveBeenCalled();
+    expect(client.listDirectory).toHaveBeenLastCalledWith('p1', '');
+  });
+
+  it('reports getCurrentPath for directories and files', async () => {
+    client.getMeta.mockResolvedValue({ isDir: true });
+    const v = build();
+    await v.navigateTo('src');
+    expect(v.getCurrentPath()).toEqual({ dir: 'src', file: null });
+
+    await v.openFile('src/App.ts');
+    expect(v.getCurrentPath()).toEqual({ dir: 'src', file: 'src/App.ts' });
+  });
+
+  it('emits onNavigate for user navigation but never for silent loads', async () => {
+    const onNavigate = vi.fn();
+    client.getMeta.mockResolvedValue({ isDir: true });
+
+    const v = build({ initialPath: 'src', onNavigate });
+    v.render();
+    await flush();
+    // render() / route-driven loads are silent.
+    expect(onNavigate).not.toHaveBeenCalled();
+
+    // Entry click.
+    registry.get('file_browser_navigate')(new Event('click'), elementWithPath('src/lib'));
+    await flush();
+    expect(onNavigate).toHaveBeenLastCalledWith({ dir: 'src/lib', file: null });
+
+    // Breadcrumb.
+    registry.get('file_browser_breadcrumb')(new Event('click'), elementWithPath('src'));
+    await flush();
+    expect(onNavigate).toHaveBeenLastCalledWith({ dir: 'src', file: null });
+
+    // File open.
+    registry.get('file_browser_open_file')(
+      new Event('click'),
+      elementWithPath('src/App.ts')
+    );
+    await flush();
+    expect(onNavigate).toHaveBeenLastCalledWith({ dir: 'src', file: 'src/App.ts' });
+
+    // Explicit silent navigation is not reported.
+    const before = onNavigate.mock.calls.length;
+    await v.navigateTo('other', { silent: true });
+    expect(onNavigate.mock.calls.length).toBe(before);
+
+    // Refresh is not reported either.
+    await v.refresh();
+    expect(onNavigate.mock.calls.length).toBe(before);
+  });
+});

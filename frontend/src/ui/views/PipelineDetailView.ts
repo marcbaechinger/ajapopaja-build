@@ -15,6 +15,7 @@
  */
 
 import { View } from '../../core/Navigator.ts';
+import { PipelineRoute, type ContentTab } from '../../core/PipelineRoute.ts';
 import { AppContext } from '../../core/AppContext.ts';
 import { Pipeline, TaskStatus, Task, type GitStatusDetails } from '../../core/domain.ts';
 import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
@@ -79,9 +80,12 @@ export class PipelineDetailView extends View {
   // Which content tab is active in the prep column. The tab list is always
   // visible; the Coding Agent tab is only selectable while a session is
   // attached to this pipeline.
-  private contentTab: 'task-editor' | 'coding-agent' | 'file-browser' = 'task-editor';
+  private contentTab: ContentTab = 'task-editor';
   private interactiveCodingView: InteractiveCodingView | null = null;
   private fileBrowseView: FileBrowseView | null = null;
+  // Explicit file-browser path from the route, consumed once when the File
+  // Browser is lazily mounted. `null` = use the persisted last path.
+  private pendingFbPath: string | null = null;
   private interactiveSession: { pipelineId: string; active: boolean } | null = null;
   private sessionListClickHandler: ((e: Event) => void) | null = null;
 
@@ -144,6 +148,12 @@ export class PipelineDetailView extends View {
     super();
     this.context = context;
     this.pipelineId = params.id;
+    // Parse the sub-route once so the very first render already reflects a
+    // deep link (no flash of the wrong tab). The Coding-Agent guard is applied
+    // later, once the session state is known.
+    const route = PipelineRoute.parse(params.rest);
+    this.contentTab = route.tab;
+    this.pendingFbPath = route.fbPath;
     this.sidebarCollapsed =
       this.storage.get<boolean>(`sidebar_collapsed:${this.pipelineId}`, false) === true;
     this.loadPendingReviews();
@@ -318,13 +328,13 @@ export class PipelineDetailView extends View {
         // Re-attach to the freshly started session, then switch into the
         // interactive view for this pipeline.
         Promise.resolve(this.context.interactiveCodingService?.refreshSession?.()).then(() => {
-          this.contentTab = 'coding-agent';
+          this.setContentTab('coding-agent', { hash: 'push' });
           this.syncInteractiveSession();
         });
       },
       'INTERACTIVE_STOPPED': (p) => {
         if (p?.pipeline_id && p.pipeline_id !== this.pipelineId) return;
-        this.contentTab = 'task-editor';
+        this.setContentTab('task-editor', { hash: 'push' });
         this.syncInteractiveSession();
       },
       'DEV_PROCESS_STARTED': (p) => {
@@ -680,10 +690,9 @@ export class PipelineDetailView extends View {
       if (!taskId) return;
       this.pendingSpecEditTaskId = null;
       this.selectedTask = this.allLoadedTasks.find(t => t.id === taskId) || null;
-      this.contentTab = 'task-editor';
+      this.setContentTab('task-editor', { hash: 'push' });
       this.refreshBacklog();
       this.refreshSelectedTask();
-      this.updateContentTabs();
       if (!this.pendingSpecProposals.some(p => p.task_id === taskId)) {
         void this.fetchSpecProposal(taskId);
       }
@@ -736,7 +745,7 @@ export class PipelineDetailView extends View {
 
       try {
         await this.context.interactiveCodingService.startSession(this.pipelineId);
-        this.contentTab = 'coding-agent';
+        this.setContentTab('coding-agent', { hash: 'push' });
         this.syncInteractiveSession();
       } catch (error) {
         console.error('Start interactive session error:', error);
@@ -765,15 +774,14 @@ export class PipelineDetailView extends View {
       if (tab !== 'task-editor' && tab !== 'coding-agent' && tab !== 'file-browser') {
         return;
       }
-      this.contentTab = tab;
-      this.updateContentTabs();
+      this.setContentTab(tab, { hash: 'push' });
     });
 
     this.context.actionRegistry.register('toggle_interactive_view', () => {
       if (this.contentTab === 'coding-agent') {
-        this.contentTab = 'task-editor';
+        this.setContentTab('task-editor', { hash: 'push' });
       } else if (this.isInteractiveSessionMine()) {
-        this.contentTab = 'coding-agent';
+        this.setContentTab('coding-agent', { hash: 'push' });
       }
       this.syncInteractiveSession();
     });
@@ -954,10 +962,9 @@ export class PipelineDetailView extends View {
         this.pendingSpecEditTaskId = created.id ?? null;
         // Selecting a task must be visible to the user, so make sure the Task
         // editor tab is the active one in the main content area.
-        this.contentTab = 'task-editor';
+        this.setContentTab('task-editor', { hash: 'push' });
         this.refreshBacklog();
         this.refreshSelectedTask();
-        this.updateContentTabs();
       } catch (error) {
         alert('Failed to create task');
       }
@@ -971,10 +978,9 @@ export class PipelineDetailView extends View {
       // Selecting a task must surface it in the main content area: switch the
       // active tab back to the Task editor so the selection is visible even
       // when the Coding Agent or File Browser tab was active.
-      this.contentTab = 'task-editor';
+      this.setContentTab('task-editor', { hash: 'push' });
       this.refreshBacklog();
       this.refreshSelectedTask();
-      this.updateContentTabs();
     });
 
     this.context.actionRegistry.register('prev_history_page', () => {
@@ -1830,6 +1836,13 @@ export class PipelineDetailView extends View {
   mount(container: HTMLElement) {
     this.container = container;
     this.applySidebarState();
+    // Reflect a deep-linked sub-route (tab / file-browser path) before the
+    // async pipeline and session loads resolve, then canonicalise the hash so
+    // a missing tab segment or an unavailable Coding Agent tab is rewritten
+    // without adding a history entry.
+    this.captureInteractiveSession();
+    this.updateContentTabs();
+    this.canonicaliseRoute();
     this.loadPipeline();
     this.refreshTasks();
     this.checkOllama();
@@ -1921,7 +1934,7 @@ export class PipelineDetailView extends View {
         if (!confirmed) return;
       }
       await service.switchSession(uid);
-      this.contentTab = 'coding-agent';
+      this.setContentTab('coding-agent', { hash: 'push' });
       this.syncInteractiveSession();
     } catch (error) {
       console.error('Switch interactive session error:', error);
@@ -1953,6 +1966,7 @@ export class PipelineDetailView extends View {
       this.fileBrowseView.destroy();
       this.fileBrowseView = null;
     }
+    this.pendingFbPath = null;
     this.unsubs.forEach(unsub => unsub());
     this.unsubs = [];
     this.pendingSpecEditTaskId = null;
@@ -2320,10 +2334,7 @@ export class PipelineDetailView extends View {
   private syncInteractiveSession() {
     if (!this.container) return;
 
-    const session = this.context.interactiveCodingService?.getCurrentSession?.() ?? null;
-    this.interactiveSession = session?.pipelineId
-      ? { pipelineId: session.pipelineId, active: !!session.active }
-      : null;
+    this.captureInteractiveSession();
 
     if (this.isInteractiveSessionMine()) {
       if (!this.interactiveCodingView) {
@@ -2343,7 +2354,9 @@ export class PipelineDetailView extends View {
       }
     } else {
       this.teardownInteractiveCodingView();
-      if (this.contentTab === 'coding-agent') this.contentTab = 'task-editor';
+      if (this.contentTab === 'coding-agent') {
+        this.setContentTab('task-editor', { hash: 'replace' });
+      }
     }
 
     this.updateContentTabs();
@@ -2354,6 +2367,14 @@ export class PipelineDetailView extends View {
       this.interactiveCodingView.destroy();
       this.interactiveCodingView = null;
     }
+  }
+
+  /** Refresh the cached interactive-session snapshot from the service. */
+  private captureInteractiveSession(): void {
+    const session = this.context.interactiveCodingService?.getCurrentSession?.() ?? null;
+    this.interactiveSession = session?.pipelineId
+      ? { pipelineId: session.pipelineId, active: !!session.active }
+      : null;
   }
 
   /**
@@ -2367,6 +2388,10 @@ export class PipelineDetailView extends View {
       '#file-browser-view-mount'
     ) as HTMLElement | null;
     if (!mount) return;
+    // Consume the route-supplied path once, on the lazy first mount, so a later
+    // re-mount never re-applies a stale deep link.
+    const initialPath = this.pendingFbPath;
+    this.pendingFbPath = null;
     this.fileBrowseView = new FileBrowseView(mount, {
       pipelineId: this.pipelineId,
       client: this.context.fileBrowserClient,
@@ -2374,6 +2399,12 @@ export class PipelineDetailView extends View {
       // Let the user drag the listing / file content area's bottom edge to
       // tune its height within the detail view.
       resizable: true,
+      initialPath,
+      // Fold user-driven file/directory navigation into the sub-route and push
+      // a history entry, so the browser Back button walks back through them.
+      onNavigate: ({ dir, file }) => {
+        this.writeRoute('push', file ?? dir);
+      },
     });
     this.fileBrowseView.render();
   }
@@ -2427,7 +2458,7 @@ export class PipelineDetailView extends View {
     // this pipeline; fall back to the default tab when it disappears.
     codingTab?.classList.toggle('hidden', !mine);
     if (!mine && this.contentTab === 'coding-agent') {
-      this.contentTab = 'task-editor';
+      this.setContentTab('task-editor', { hash: 'replace' });
     }
 
     const showTaskEditor = this.contentTab === 'task-editor';
@@ -2455,6 +2486,101 @@ export class PipelineDetailView extends View {
     setTabActive(fileTab, showFileBrowser);
 
     this.renderPipelineSessionList(isRemote ? resumable : []);
+  }
+
+  // --- pipeline sub-route (tab + file-browser path) -----------------------
+
+  /**
+   * Applies a hash sub-route to the mounted view. Returns `false` when the
+   * route belongs to a different pipeline, forcing the Navigator to re-create
+   * the view. Returns `true` when the update was applied in place.
+   */
+  update(params: Record<string, string>): boolean {
+    if (params.id !== this.pipelineId) return false;
+    this.applyRoute(params);
+    return true;
+  }
+
+  private applyRoute(params: Record<string, string>): void {
+    const { tab, fbPath } = PipelineRoute.parse(params.rest);
+    // The Coding Agent tab is only selectable while a session is attached;
+    // fall back to the task editor so the URL never advertises a dead tab.
+    const target: ContentTab =
+      tab === 'coding-agent' && !this.isInteractiveSessionMine() ? 'task-editor' : tab;
+
+    if (target === 'file-browser' && fbPath !== null) {
+      // Only a lazy first mount consumes the explicit path; when the view is
+      // already mounted we resolve the path directly below.
+      if (!this.fileBrowseView) this.pendingFbPath = fbPath;
+      this.setContentTab(target, { hash: 'none' });
+      this.mountFileBrowseView(); // no-op when already mounted
+      const current = this.currentFbPath();
+      if (current !== fbPath) void this.fileBrowseView?.navigateTo(fbPath, { silent: true });
+      return;
+    }
+
+    this.setContentTab(target, { hash: 'none' });
+  }
+
+  /**
+   * Single mutation point for the active content tab. Also synchronises the
+   * URL so the browser history reflects in-view tab changes.
+   */
+  private setContentTab(
+    tab: ContentTab,
+    opts: { hash?: 'push' | 'replace' | 'none' } = {}
+  ): void {
+    this.captureInteractiveSession();
+    this.contentTab = tab;
+    this.updateContentTabs();
+    this.writeRoute(opts.hash ?? 'none');
+  }
+
+  /**
+   * Pushes (user navigation) or replaces (canonicalisation) the pipeline
+   * sub-route. `replaceState` never fires `hashchange`, and the equality guard
+   * makes the `push` re-entry a no-op, so the route stays idempotent.
+   */
+  private writeRoute(
+    mode: 'push' | 'replace' | 'none',
+    fbPath: string | null = this.currentFbPath()
+  ): void {
+    if (mode === 'none') return;
+    const hash = PipelineRoute.build(this.pipelineId, this.contentTab, fbPath);
+    if (window.location.hash === hash) return;
+    if (mode === 'push') {
+      window.location.hash = hash;
+    } else {
+      history.replaceState(null, '', hash);
+    }
+  }
+
+  /** Current file-browser path from the mounted view, or `null` when not relevant. */
+  private currentFbPath(): string | null {
+    if (this.contentTab !== 'file-browser') return null;
+    const path = this.fileBrowseView?.getCurrentPath();
+    if (!path) return null;
+    if (path.file) return path.file;
+    return path.dir ? path.dir : null;
+  }
+
+  /**
+   * Canonicalises the hash once, after the first mount: a missing tab segment
+   * is filled in and an unavailable Coding Agent tab is rewritten to the task
+   * editor. `replaceState` keeps Back pointing at the previous page.
+   */
+  private canonicaliseRoute(): void {
+    const canonical = PipelineRoute.build(
+      this.pipelineId,
+      this.contentTab,
+      this.currentFbPath()
+    );
+    if (window.location.hash === canonical) return;
+    try {
+      history.replaceState(null, '', canonical);
+    } catch {
+      /* a hash-only URL must never break the view */
+    }
   }
 
   /**

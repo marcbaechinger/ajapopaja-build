@@ -1762,6 +1762,108 @@ describe('PipelineDetailView Interactive Session', () => {
 
     expect(unsub).toHaveBeenCalled();
   });
+
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it('deep-links the File Browser tab and resolves the path with getMeta', async () => {
+    mockContext.fileBrowserClient.getMeta.mockResolvedValue({ isDir: true });
+    const view = new PipelineDetailView(mockContext, { id: 'p1', rest: 'tab/fb/src' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await flush();
+    await flush();
+
+    expect((view as any).contentTab).toBe('file-browser');
+    const fileMount = container.querySelector('#file-browser-view-mount') as HTMLElement;
+    expect(fileMount.classList.contains('hidden')).toBe(false);
+    expect(mockContext.fileBrowserClient.getMeta).toHaveBeenCalledWith('p1', 'src');
+  });
+
+  it('writes the canonical hash when a content tab is selected', async () => {
+    window.location.hash = '';
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await flush();
+
+    const fileTab = container.querySelector('#tab-file-browser') as HTMLElement;
+    getAction('select_content_tab')(null, fileTab);
+    expect(window.location.hash).toBe('#/pipeline/p1/tab/fb');
+
+    const taskTab = container.querySelector('#tab-task-editor') as HTMLElement;
+    getAction('select_content_tab')(null, taskTab);
+    expect(window.location.hash).toBe('#/pipeline/p1/tab/task');
+
+    // The Coding Agent tab is only selectable while a session is attached.
+    mockContext.interactiveCodingService.getCurrentSession.mockReturnValue({
+      pipelineId: 'p1',
+      active: true,
+      busy: false,
+    });
+    const codingTab = container.querySelector('#tab-coding-agent') as HTMLElement;
+    getAction('select_content_tab')(null, codingTab);
+    expect(window.location.hash).toBe('#/pipeline/p1/tab/agent');
+  });
+
+  it('applies a Back/Forward sub-route in place without remounting fragments', async () => {
+    mockContext.fileBrowserClient.getMeta.mockResolvedValue({ isDir: true });
+    const view = new PipelineDetailView(mockContext, { id: 'p1', rest: 'tab/fb/src' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await flush();
+    await flush();
+
+    const selected = container.querySelector('#selected-task-view') as HTMLElement;
+    const fileMount = container.querySelector('#file-browser-view-mount') as HTMLElement;
+    const listDirCalls = mockContext.fileBrowserClient.listDirectory.mock.calls.length;
+    const interactiveCalls = (InteractiveCodingView as any).mock.calls.length;
+
+    expect(view.update({ id: 'p1', rest: 'tab/task' })).toBe(true);
+
+    expect((view as any).contentTab).toBe('task-editor');
+    // The very same DOM nodes are reused (no unmount/re-render).
+    expect(container.querySelector('#selected-task-view')).toBe(selected);
+    expect(container.querySelector('#file-browser-view-mount')).toBe(fileMount);
+    expect(selected.classList.contains('hidden')).toBe(false);
+    expect(fileMount.classList.contains('hidden')).toBe(true);
+    expect(mockContext.fileBrowserClient.listDirectory.mock.calls.length).toBe(listDirCalls);
+    expect((InteractiveCodingView as any).mock.calls.length).toBe(interactiveCalls);
+  });
+
+  it('returns false from update() for a different pipeline', () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+
+    expect(view.update({ id: 'p2', rest: '' })).toBe(false);
+  });
+
+  it('falls back to the Task editor and canonicalises the hash for a session-less agent deep link', async () => {
+    window.location.hash = '#/pipeline/p1/tab/agent';
+    const view = new PipelineDetailView(mockContext, { id: 'p1', rest: 'tab/agent' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await flush();
+
+    expect((view as any).contentTab).toBe('task-editor');
+    expect(window.location.hash).toBe('#/pipeline/p1/tab/task');
+  });
+
+  it('pushes a history entry when the file browser reports user navigation', async () => {
+    window.location.hash = '';
+    const view = new PipelineDetailView(mockContext, { id: 'p1', rest: 'tab/fb' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await flush();
+    await flush();
+
+    const crumb = document.createElement('button');
+    crumb.setAttribute('data-path', '');
+    getAction('file_browser_breadcrumb')(new Event('click'), crumb);
+    await flush();
+
+    expect(window.location.hash).toBe('#/pipeline/p1/tab/fb/');
+  });
 });
 
 describe('PipelineDetailView SpecAgent', () => {
