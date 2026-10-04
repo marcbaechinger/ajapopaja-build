@@ -124,6 +124,21 @@ export class AppContext {
   private initOnePrompt() {
     registerOnePromptHandlers(this.wsClient);
 
+    // The "Open" action on a SpecAgent proposal notification navigates to the
+    // owning pipeline, where the durable reconciliation re-surfaces the proposal.
+    this.notifications.onActionResult((result) => {
+      const target = result.result;
+      if (
+        result.action === 'specagent_open' &&
+        result.status === 'ok' &&
+        target &&
+        typeof target === 'object' &&
+        target.pipeline_id
+      ) {
+        window.location.hash = `#/pipeline/${target.pipeline_id}`;
+      }
+    });
+
     // Accepted SpecAgent proposals are written back onto the task spec through
     // the regular task update endpoint.
     setTaskSpecProposalUpdater(async (taskId, spec) => {

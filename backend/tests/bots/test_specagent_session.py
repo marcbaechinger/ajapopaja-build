@@ -27,7 +27,16 @@ async def test_specagent_session_init(init_mock_db):
     assert session.task_id == "t1"
     assert session.bot_type == "specagent"
     assert session.use_sandbox is False
+    assert session.requested_by is None
     assert "system" in [m["role"] for m in session.history]
+
+
+@pytest.mark.asyncio
+async def test_specagent_session_stores_requested_by(init_mock_db):
+    session = SpecAgentSession(
+        pipeline_id="p1", task_id="t1", requested_by="alice"
+    )
+    assert session.requested_by == "alice"
 
 
 @pytest.mark.asyncio

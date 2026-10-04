@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import logging
+from typing import Optional
 
 from api.bot.manager import bot_manager
 from api.bot.session_config import BaseBotSessionConfig
@@ -28,9 +29,12 @@ logger = logging.getLogger(__name__)
 
 class SpecAgentManager:
     @staticmethod
-    async def process_task(task: Task):
+    async def process_task(task: Task, username: Optional[str] = None):
         """
         Enqueues a SpecAgentSession that elaborates the task's specification.
+
+        ``username`` identifies the user who triggered the elaboration so the
+        completion notification can be delivered to them specifically.
         """
         logger.info(f"SpecAgentManager: Enqueueing SpecAgent for task {task.id}")
         pipeline = None
@@ -49,5 +53,6 @@ class SpecAgentManager:
             pipeline_id=str(task.pipeline_id),
             task_id=str(task.id),
             session_config=config,
+            requested_by=username,
         )
         await bot_manager.enqueue(session)

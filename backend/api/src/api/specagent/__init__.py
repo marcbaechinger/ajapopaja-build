@@ -14,6 +14,15 @@
 
 from .registry import specagent_registry
 from . import tools  # noqa: F401
+from .actions import register_specagent_actions
 from .router import router as specagent_router
 
-__all__ = ["specagent_registry", "specagent_router"]
+# Register the accept/reject/open actions at import time so the notification
+# framework can dispatch them as soon as the SpecAgent router is wired up.
+register_specagent_actions()
+
+__all__ = [
+    "register_specagent_actions",
+    "specagent_registry",
+    "specagent_router",
+]

@@ -39,6 +39,9 @@ from api.assistant.tools.git_tools import (
 from api.assistant.tools.search_tools import find, grep, tree
 from api.assistant.tools.task_tools import get_task, list_tasks
 from api.websocket_manager import WSMessage, manager
+from core.models.models import NotificationAction
+from core.queries import task as task_queries
+from core.services.notification_manager import notification_manager
 
 from .cache import SpecProposal, set_proposal
 from .registry import specagent_registry
@@ -59,6 +62,48 @@ specagent_registry.register_tool(git_blame)
 specagent_registry.register_tool(git_diff)
 specagent_registry.register_tool(get_task)
 specagent_registry.register_tool(list_tasks)
+
+
+async def _notify_proposal_ready(
+    session: Optional[Any], pipeline_id: str, task_id: str
+) -> None:
+    """Sends the targeted \"proposal ready\" action notification.
+
+    The stable id ``specagent:<task_id>`` lets the frontend de-duplicate
+    re-deliveries after a reconnect or reload. When the triggering user is
+    unknown the notification is broadcast (``targets=None``).
+    """
+    requested_by = getattr(session, "requested_by", None) if session else None
+    targets = [requested_by] if isinstance(requested_by, str) and requested_by else None
+
+    title = task_id
+    try:
+        task = await task_queries.get_task_by_id(task_id)
+        if task and task.title:
+            title = task.title
+    except Exception:  # noqa: BLE001 - the title is cosmetic
+        pass
+
+    data = {"pipeline_id": pipeline_id, "task_id": task_id}
+    actions = [
+        NotificationAction(
+            name="specagent_accept", label="Accept", data=data, style="primary"
+        ),
+        NotificationAction(
+            name="specagent_reject", label="Reject", data=data, style="danger"
+        ),
+        NotificationAction(name="specagent_open", label="Open", data=data),
+    ]
+    await notification_manager.notify_actions(
+        "Specification proposal ready",
+        title,
+        actions=actions,
+        targets=targets,
+        id=f"specagent:{task_id}",
+    )
+    logger.info(
+        f"[SpecAgent] (B3) proposal notification sent task={task_id} targets={targets}"
+    )
 
 
 async def save_elaborated_spec(
@@ -139,6 +184,17 @@ async def save_elaborated_spec(
             )
         )
         logger.info(f"[SpecAgent] (B3) SPECAGENT_SPEC_READY broadcast complete for {task_id}")
+
+        # Surface the finished proposal through the notification framework so it
+        # reaches the triggering user no matter which pipeline/page they are on.
+        # The inline SPECAGENT_SPEC_READY event above only reaches a mounted view.
+        # Notification delivery is best-effort and must never fail the tool.
+        try:
+            await _notify_proposal_ready(session, pipeline_id, task_id)
+        except Exception as notify_error:  # noqa: BLE001
+            logger.error(
+                f"[SpecAgent] proposal notification failed for {task_id}: {notify_error}"
+            )
 
         return f"Successfully saved elaborated specification proposal for {task_id}."
     except Exception as e:

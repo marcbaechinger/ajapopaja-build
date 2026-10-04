@@ -117,6 +117,11 @@ export class PipelineDetailView extends View {
     taskId: null,
   };
 
+  // Outstanding SpecAgent proposals for this pipeline, reconciled from the
+  // durable backend cache and kept in sync with live SPECAGENT_SPEC_READY
+  // events. Drives the header badge and the inline injection.
+  private pendingSpecProposals: SpecProposal[] = [];
+
   private coderbotState: CoderbotState = {
     status: 'none',
     taskId: null,
@@ -301,14 +306,9 @@ export class PipelineDetailView extends View {
           console.warn('[SpecAgent] (4) drop SPEC_READY: missing task_id');
           return;
         }
-        // Ignore stale events for tasks that are no longer displayed. Match the
-        // TaskItem card root (`data-view-id`), not a nested `data-task-id` node
-        // (the title container), so the spec container can be found below it.
-        const card = this.container?.querySelector(`[data-view-id="${p.task_id}"]`);
-        console.log(
-          `[SpecAgent] (4) task card [data-view-id="${p.task_id}"] present? ${!!card}`
-        );
-        if (!card) return;
+        // Always reconcile, even when the owning task card is not mounted: the
+        // proposal is surfaced through the header badge and (once selected) the
+        // inline controls. The notification framework carries the primary path.
         void this.fetchSpecProposal(p.task_id);
       },
       'CODERBOT_STARTED': (p) => { this.coderbotState = { status: 'inProgress', taskId: p.task_id }; },
@@ -454,8 +454,8 @@ export class PipelineDetailView extends View {
         console.warn('[SpecAgent] (5) drop: proposal response was falsy');
         return;
       }
-      this.specagentState = { status: 'ready', taskId: proposal.task_id };
-      this.renderSpecProposal(proposal);
+      this.upsertPendingSpecProposal(proposal);
+      this.renderPendingSpecProposals();
       this.updateHeader();
     } catch (error) {
       console.error('[SpecAgent] (5) fetchSpecProposal failed', error);
@@ -463,26 +463,84 @@ export class PipelineDetailView extends View {
   }
 
   /**
-   * Renders an elaborated-spec proposal inline in the owning task's spec
-   * container. Accept writes the spec back through the registered updater;
-   * reject clears the pending proposal on the backend.
+   * Reconciles outstanding proposals from the durable backend cache. Called on
+   * every full task refresh so a proposal that finished while the user was on
+   * another page (or before a reload) is re-surfaced when the pipeline opens.
+   */
+  private async fetchSpecProposals() {
+    const client = this.context.specBotClient;
+    if (!client?.getProposals) return;
+    try {
+      const proposals = await client.getProposals(this.pipelineId);
+      this.pendingSpecProposals = Array.isArray(proposals) ? proposals : [];
+      this.renderPendingSpecProposals();
+      this.updateHeader();
+    } catch (error) {
+      console.error('[SpecAgent] Failed to fetch pending proposals:', error);
+    }
+  }
+
+  private upsertPendingSpecProposal(proposal: SpecProposal) {
+    const index = this.pendingSpecProposals.findIndex(
+      (p) => p.task_id === proposal.task_id
+    );
+    if (index === -1) this.pendingSpecProposals.push(proposal);
+    else this.pendingSpecProposals[index] = proposal;
+  }
+
+  private removePendingSpecProposal(taskId: string) {
+    this.pendingSpecProposals = this.pendingSpecProposals.filter(
+      (p) => p.task_id !== taskId
+    );
+    // A task update can re-render the selected view while the accept is in
+    // flight, so re-run the injection pass to drop any stale controls.
+    this.renderPendingSpecProposals();
+    this.updateHeader();
+  }
+
+  /**
+   * Re-renders the inline proposal controls for the selected task view,
+   * removing any stale injections whose proposal no longer exists. Only the
+   * card inside `#selected-task-view` is ever targeted, so sidebar backlog cards
+   * are never touched.
+   */
+  private renderPendingSpecProposals() {
+    const viewRoot = this.container?.querySelector('#selected-task-view') as HTMLElement | null;
+    if (!viewRoot) return;
+    viewRoot
+      .querySelectorAll('.spec-proposal-host')
+      .forEach((el) => el.remove());
+    for (const proposal of this.pendingSpecProposals) {
+      this.renderSpecProposal(proposal);
+    }
+  }
+
+  /**
+   * Renders an elaborated-spec proposal inline in the selected task's spec
+   * container. Looking only inside `#selected-task-view` avoids injecting the
+   * proposal into an unrelated sidebar backlog card. Accept writes the spec back
+   * through the registered updater; reject clears the pending proposal on the
+   * backend. Missing the selected card is non-fatal: the notification dialog and
+   * the header badge remain the primary, view-independent paths.
    */
   private renderSpecProposal(proposal: SpecProposal) {
+    const viewRoot = this.container?.querySelector('#selected-task-view') as HTMLElement | null;
+    if (!viewRoot) {
+      console.warn('[SpecAgent] (6) renderSpecProposal: no #selected-task-view mounted');
+      return;
+    }
     // Locate the TaskItem card root by its `data-view-id` (the same anchor used
-    // by `focusSpecAfterTitleSave`). Looking up `[data-task-id]` would match the
-    // nested title container instead, whose `.spec-container` is a sibling - not
-    // a descendant - so the proposal would never be injected.
-    const selector = `[data-view-id="${proposal.task_id}"]`;
-    const taskEl = this.container?.querySelector(selector);
+    // by `focusSpecAfterTitleSave`).
+    const taskEl = viewRoot.querySelector(`[data-view-id="${proposal.task_id}"]`);
     const specContainer = taskEl?.querySelector('.spec-container') as HTMLElement | null;
     console.log(
-      `[SpecAgent] (6) renderSpecProposal task card (${selector}) found? ${!!taskEl}, ` +
+      `[SpecAgent] (6) renderSpecProposal selected task found? ${!!taskEl}, ` +
         `.spec-container found? ${!!specContainer}`
     );
     if (!specContainer) {
       console.warn(
-        '[SpecAgent] (6) DROPPING proposal: no .spec-container inside the task card',
-        proposal
+        '[SpecAgent] (6) proposal not rendered inline: task is not the selected task',
+        proposal.task_id
       );
       return;
     }
@@ -499,9 +557,15 @@ export class PipelineDetailView extends View {
       onAccept: async (spec) => {
         const updater = getTaskSpecProposalUpdater();
         if (updater) await updater(proposal.task_id, spec);
+        // Accepting locally must also drop the durable proposal, otherwise it
+        // would be reconciled and re-surfaced on the next reload.
+        try {
+          await this.context.specBotClient?.clearProposal(this.pipelineId, proposal.task_id);
+        } catch (error) {
+          console.error('Failed to clear accepted SpecAgent proposal:', error);
+        }
         resultEl!.innerHTML = '';
-        this.specagentState = { status: 'none', taskId: null };
-        this.updateHeader();
+        this.removePendingSpecProposal(proposal.task_id);
       },
       onReject: async () => {
         try {
@@ -510,8 +574,7 @@ export class PipelineDetailView extends View {
           console.error('Failed to reject SpecAgent proposal:', error);
         }
         resultEl!.innerHTML = '';
-        this.specagentState = { status: 'none', taskId: null };
-        this.updateHeader();
+        this.removePendingSpecProposal(proposal.task_id);
       },
     });
   }
@@ -607,6 +670,22 @@ export class PipelineDetailView extends View {
       } catch (error) {
         console.error('[SpecAgent] (0) trigger failed', error);
         alert('Failed to trigger the specification bot');
+      }
+    });
+
+    // Header-badge entry point: select the task that owns an outstanding
+    // proposal and surface it inline in the Task editor tab.
+    this.context.actionRegistry.register('open_spec_proposal', async (_e, el) => {
+      const taskId = el.getAttribute('data-task-id');
+      if (!taskId) return;
+      this.pendingSpecEditTaskId = null;
+      this.selectedTask = this.allLoadedTasks.find(t => t.id === taskId) || null;
+      this.contentTab = 'task-editor';
+      this.refreshBacklog();
+      this.refreshSelectedTask();
+      this.updateContentTabs();
+      if (!this.pendingSpecProposals.some(p => p.task_id === taskId)) {
+        void this.fetchSpecProposal(taskId);
       }
     });
 
@@ -1508,6 +1587,9 @@ export class PipelineDetailView extends View {
       this.refreshBacklog();
       this.refreshSelectedTask();
       this.refreshExecutionEngine();
+      // Reconcile outstanding SpecAgent proposals from the durable cache so a
+      // proposal that finished while the user was elsewhere is re-surfaced.
+      void this.fetchSpecProposals();
     } catch (error) {
       console.error('Error refreshing tasks:', error);
     }
@@ -1590,7 +1672,8 @@ export class PipelineDetailView extends View {
       user: this.context.authService.getUser(),
       allTasks: this.allLoadedTasks,
       gitStatus: this.gitStatus,
-      pendingReviews: this.pendingReviews
+      pendingReviews: this.pendingReviews,
+      pendingSpecProposals: this.pendingSpecProposals
     });
 
 
@@ -1763,6 +1846,15 @@ export class PipelineDetailView extends View {
         this.refreshPipelineSessionList()
       );
     if (sessionsUnsub) this.unsubs.push(sessionsUnsub);
+
+    // When a SpecAgent notification action (accept/reject) completes, possibly
+    // from another page, reconcile the proposals for this pipeline.
+    const notificationsUnsub = this.context.notifications?.onActionResult?.((result) => {
+      if (result?.action?.startsWith('specagent_')) {
+        void this.fetchSpecProposals();
+      }
+    });
+    if (notificationsUnsub) this.unsubs.push(notificationsUnsub);
 
     // Reconnect a running CoderBot session to this view (e.g. after a reload).
     this.refreshEnginePiSlot();
@@ -2069,6 +2161,9 @@ export class PipelineDetailView extends View {
     if (this.pendingSpecEditTaskId && fresh.id === this.pendingSpecEditTaskId) {
       this.enterSpecEditMode();
     }
+
+    // Re-inject any outstanding proposal for the task that is now shown.
+    this.renderPendingSpecProposals();
   }
 
   /**

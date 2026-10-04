@@ -1735,6 +1735,18 @@ describe('PipelineDetailView SpecAgent', () => {
   const getAction = (name: string) =>
     mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === name)![1];
 
+  const TASK = {
+    id: 't1',
+    title: 'Task 1',
+    spec: 'Spec',
+    status: TaskStatus.CREATED,
+    deleted: false,
+    version: 1,
+    order: 0,
+    type: 'manual',
+    want_design_doc: false,
+  };
+
   beforeEach(() => {
     document.body.innerHTML = '';
     container = document.createElement('div');
@@ -1773,8 +1785,11 @@ describe('PipelineDetailView SpecAgent', () => {
           spec_md: '# Elaborated\n\nBody',
           rationale: 'because',
         }),
+        getProposals: vi.fn().mockResolvedValue([]),
         rejectProposal: vi.fn().mockResolvedValue(undefined),
+        clearProposal: vi.fn().mockResolvedValue(undefined),
       },
+      notifications: { onActionResult: vi.fn(() => () => {}) },
       pullRequestClient: { getPullRequestsByPipeline: vi.fn().mockResolvedValue([]) },
       systemClient: { isOllamaAvailable: vi.fn().mockResolvedValue(true) },
     };
@@ -1789,22 +1804,23 @@ describe('PipelineDetailView SpecAgent', () => {
     setTaskSpecProposalUpdater(null);
   });
 
-  const renderTaskShell = () => {
-    // Mirror the real TaskItem layout: the card root carries `data-view-id`, the
-    // title container (first `data-task-id`) and the `.spec-container` (also
-    // `data-task-id`) are siblings under it - not nested.
-    container.innerHTML = `
-      <div data-view-type="task" data-view-id="t1">
-        <div class="title-container" data-task-id="t1">
-          <span class="font-medium text-app-text">Task 1</span>
-        </div>
-        <div class="task-body">
-          <div class="spec-container" data-task-id="t1">
-            <div class="spec-display">Spec</div>
-          </div>
-        </div>
-      </div>
-    `;
+  const setupView = async () => {
+    mockContext.taskClient.listByPipeline.mockResolvedValue([{ ...TASK }]);
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await view.refreshTasks();
+    // Let the fire-and-forget loadPipeline -> fetchPullRequests -> refreshTasks
+    // chain settle so the assertions are deterministic.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    return view;
+  };
+
+  const selectTask = (taskId: string) => {
+    const selectAction = getAction('select_task');
+    const el = document.createElement('div');
+    el.setAttribute('data-view-id', taskId);
+    selectAction(new Event('click'), el);
   };
 
   it('registers a trigger_specagent action that calls the client', async () => {
@@ -1822,17 +1838,20 @@ describe('PipelineDetailView SpecAgent', () => {
   });
 
   it('renders the proposal inline on SPECAGENT_SPEC_READY', async () => {
-    const view = new PipelineDetailView(mockContext, { id: 'p1' });
-    view.mount(container);
-    renderTaskShell();
+    await setupView();
+    selectTask('t1');
 
-    const handler = dataManagerHandlers['ws:SPECAGENT_SPEC_READY:p1'];
-    expect(handler).toBeDefined();
-    handler({ task_id: 't1', pipeline_id: 'p1' });
+    dataManagerHandlers['ws:SPECAGENT_SPEC_READY:p1']({
+      task_id: 't1',
+      pipeline_id: 'p1',
+    });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(mockContext.specBotClient.getProposal).toHaveBeenCalledWith('p1', 't1');
-    const specContainer = container.querySelector('[data-view-id="t1"] .spec-container')!;
+    const specContainer = container.querySelector(
+      '#selected-task-view [data-view-id="t1"] .spec-container'
+    )!;
+    expect(specContainer).toBeTruthy();
     expect(specContainer.querySelector('.spec-proposal-result')).toBeTruthy();
     expect(specContainer.textContent).toContain('Suggested Specification');
     expect(specContainer.querySelector('[data-spec-proposal-action="accept"]')).toBeTruthy();
@@ -1842,7 +1861,6 @@ describe('PipelineDetailView SpecAgent', () => {
   it('ignores a SPECAGENT_SPEC_READY event for another pipeline', () => {
     const view = new PipelineDetailView(mockContext, { id: 'p1' });
     view.mount(container);
-    renderTaskShell();
 
     dataManagerHandlers['ws:SPECAGENT_SPEC_READY:p1']({
       task_id: 't1',
@@ -1863,10 +1881,9 @@ describe('PipelineDetailView SpecAgent', () => {
     expect((view as any).specagentState).toEqual({ status: 'none', taskId: null });
   });
 
-  it('accept writes the spec back through the registered updater', async () => {
-    const view = new PipelineDetailView(mockContext, { id: 'p1' });
-    view.mount(container);
-    renderTaskShell();
+  it('accept writes the spec back through the registered updater and clears the proposal', async () => {
+    await setupView();
+    selectTask('t1');
 
     const updater = vi.fn().mockResolvedValue(undefined);
     setTaskSpecProposalUpdater(updater);
@@ -1877,20 +1894,22 @@ describe('PipelineDetailView SpecAgent', () => {
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const specContainer = container.querySelector('[data-view-id="t1"] .spec-container')!;
+    const specContainer = container.querySelector(
+      '#selected-task-view [data-view-id="t1"] .spec-container'
+    )!;
     specContainer
       .querySelector<HTMLButtonElement>('[data-spec-proposal-action="accept"]')!
       .click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(updater).toHaveBeenCalledWith('t1', expect.stringContaining('# Elaborated'));
+    expect(mockContext.specBotClient.clearProposal).toHaveBeenCalledWith('p1', 't1');
     expect(specContainer.querySelector('.spec-proposal-result')).toBeFalsy();
   });
 
   it('reject clears the proposal and calls SpecBotClient.rejectProposal', async () => {
-    const view = new PipelineDetailView(mockContext, { id: 'p1' });
-    view.mount(container);
-    renderTaskShell();
+    await setupView();
+    selectTask('t1');
 
     dataManagerHandlers['ws:SPECAGENT_SPEC_READY:p1']({
       task_id: 't1',
@@ -1898,7 +1917,9 @@ describe('PipelineDetailView SpecAgent', () => {
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const specContainer = container.querySelector('[data-view-id="t1"] .spec-container')!;
+    const specContainer = container.querySelector(
+      '#selected-task-view [data-view-id="t1"] .spec-container'
+    )!;
     specContainer
       .querySelector<HTMLButtonElement>('[data-spec-proposal-action="reject"]')!
       .click();
@@ -1906,5 +1927,37 @@ describe('PipelineDetailView SpecAgent', () => {
 
     expect(mockContext.specBotClient.rejectProposal).toHaveBeenCalledWith('p1', 't1');
     expect(specContainer.querySelector('.spec-proposal-result')).toBeFalsy();
+  });
+
+  it('reconciles outstanding proposals even when no task card is mounted', async () => {
+    mockContext.specBotClient.getProposals.mockResolvedValue([
+      { task_id: 't9', pipeline_id: 'p1', spec_md: '# late', rationale: '' },
+    ]);
+    const view = await setupView();
+
+    // The proposal's task is not rendered in the selected task view ...
+    expect(container.querySelector('#selected-task-view [data-view-id="t9"]')).toBeNull();
+    // ... but the proposal is tracked and surfaced by the header badge.
+    expect((view as any).pendingSpecProposals).toHaveLength(1);
+    expect((view as any).pendingSpecProposals[0].task_id).toBe('t9');
+  });
+
+  it('never injects an inline proposal into sidebar backlog cards', () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+    container.innerHTML = `
+      <div id="selected-task-view"></div>
+      <div id="backlog-view">
+        <div data-view-id="t1"><div class="spec-container"></div></div>
+      </div>
+    `;
+
+    (view as any).renderSpecProposal({
+      task_id: 't1',
+      pipeline_id: 'p1',
+      spec_md: '# x',
+    });
+
+    expect(container.querySelector('#backlog-view .spec-proposal-result')).toBeNull();
   });
 });

@@ -165,6 +165,50 @@ describe('NotificationService', () => {
     });
   });
 
+  it('renders a SpecAgent proposal and sends the selected specagent_* action', async () => {
+    ws.emit(NOTIFICATION, {
+      id: 'specagent:t1',
+      type: 'actions',
+      title: 'Specification proposal ready',
+      message: 'Task One',
+      actions: [
+        { name: 'specagent_accept', label: 'Accept', data: { pipeline_id: 'p1', task_id: 't1' }, style: 'primary' },
+        { name: 'specagent_reject', label: 'Reject', data: { pipeline_id: 'p1', task_id: 't1' }, style: 'danger' },
+        { name: 'specagent_open', label: 'Open', data: { pipeline_id: 'p1', task_id: 't1' } },
+      ],
+    });
+
+    const buttons = document.querySelectorAll('[data-notification-action]');
+    expect(buttons).toHaveLength(3);
+
+    (
+      document.querySelector('[data-notification-action="specagent_accept"]') as HTMLButtonElement
+    ).click();
+    await flush();
+
+    expect(ws.send).toHaveBeenCalledWith(NOTIFICATION_ACTION, {
+      notification_id: 'specagent:t1',
+      action: 'specagent_accept',
+      data: { pipeline_id: 'p1', task_id: 't1' },
+      token: 'tok-123',
+    });
+  });
+
+  it('de-duplicates a re-delivered SpecAgent notification by its stable id', () => {
+    const notification = {
+      id: 'specagent:t1',
+      type: 'actions',
+      title: 'Specification proposal ready',
+      actions: [{ name: 'specagent_accept', label: 'Accept' }],
+    };
+    ws.emit(NOTIFICATION, notification);
+    ws.emit(NOTIFICATION, notification);
+
+    expect(
+      document.querySelectorAll('[data-notification-action="specagent_accept"]'),
+    ).toHaveLength(1);
+  });
+
   it('sends nothing when a notification is dismissed', async () => {
     ws.emit(NOTIFICATION, {
       id: 'n-dismiss',

@@ -52,10 +52,24 @@ export class SpecBotClient extends BaseClient {
     return (await response.json()) as SpecProposal;
   }
 
+  /** Returns every outstanding proposal for a pipeline (durable reconciliation). */
+  async getProposals(pipelineId: string): Promise<SpecProposal[]> {
+    const response = await this.fetch(
+      `${this.apiBaseUrl}/pipelines/${pipelineId}/specagent/proposals`
+    );
+    const body = (await response.json()) as SpecProposal[];
+    return Array.isArray(body) ? body : [];
+  }
+
   /** Clears a proposal (used on reject, and after an accepted proposal). */
   async rejectProposal(pipelineId: string, taskId: string): Promise<void> {
     await this.fetch(`${this.apiBaseUrl}/pipelines/${pipelineId}/specagent/proposal/${taskId}`, {
       method: 'DELETE'
     });
+  }
+
+  /** Clears a proposal after it has been accepted (same endpoint as reject). */
+  async clearProposal(pipelineId: string, taskId: string): Promise<void> {
+    await this.rejectProposal(pipelineId, taskId);
   }
 }

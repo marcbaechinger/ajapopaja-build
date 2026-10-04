@@ -28,7 +28,7 @@ reload instead of living only in transient WebSocket state.
 import json
 import logging
 import os
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel
 
@@ -94,3 +94,20 @@ async def clear_proposal(task_id: str):
     if task_id in cache:
         del cache[task_id]
         _save_cache(cache)
+
+
+async def list_proposals(pipeline_id: str) -> List[SpecProposal]:
+    """Returns every outstanding proposal belonging to ``pipeline_id``."""
+    cache = _load_cache()
+    proposals: List[SpecProposal] = []
+    for data in cache.values():
+        if str(data.get("pipeline_id")) != str(pipeline_id):
+            continue
+        try:
+            proposals.append(SpecProposal(**data))
+        except Exception as e:  # noqa: BLE001 - skip malformed cache entries
+            logger.error(f"Skipping malformed specagent proposal: {e}")
+    logger.info(
+        f"[SpecAgent] list_proposals pipeline={pipeline_id} count={len(proposals)}"
+    )
+    return proposals

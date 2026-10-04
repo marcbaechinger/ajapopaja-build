@@ -88,9 +88,13 @@ class SpecAgentSession(BaseBotSession):
         pipeline_id: str,
         task_id: str,
         session_config: Optional[BaseBotSessionConfig] = None,
+        requested_by: Optional[str] = None,
     ):
         super().__init__(pipeline_id, task_id, session_config)
         self.session_result: Optional[Dict[str, Any]] = None
+        # Username that triggered the elaboration. Used to target the
+        # completion notification; ``None`` means "broadcast".
+        self.requested_by = requested_by
 
     def get_system_instruction(self) -> str:
         return SYSTEM_INSTRUCTION

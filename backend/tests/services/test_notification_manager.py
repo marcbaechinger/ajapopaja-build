@@ -91,6 +91,19 @@ async def test_notify_actions_preserves_action_order():
     assert [a.name for a in notification.actions] == ["a", "b"]
 
 
+async def test_notify_actions_accepts_stable_id():
+    notification_manager.set_delivery_sink(AsyncMock())
+
+    notification = await notification_manager.notify_actions(
+        "Ready",
+        "Body",
+        actions=[NotificationAction(name="a", label="A")],
+        id="specagent:task-1",
+    )
+
+    assert notification.id == "specagent:task-1"
+
+
 async def test_send_without_sink_is_soft_failure():
     # No sink installed -> should not raise, just return the notification.
     notification = Notification(

@@ -21,7 +21,9 @@ import { RepositoryStatusBadge } from './RepositoryStatusBadge.ts';
 import { HeaderDialogButtons } from './HeaderDialogButtons.ts';
 import { TaskForm } from './TaskForm.ts';
 import { ReviewNotificationBadge } from './ReviewNotificationBadge.ts';
+import { SpecProposalBadge } from './SpecProposalBadge.ts';
 import { Icon } from './Icon.ts';
+import type { SpecProposal } from '../../core/clients/SpecBotClient.ts';
 
 export interface DocbotState {
   status: 'none' | 'ready' | 'inProgress' | 'noUpdate';
@@ -68,11 +70,12 @@ export interface PipelineHeaderViewProps {
   allTasks: Task[];
   gitStatus?: GitStatusDetails;
   pendingReviews: string[];
+  pendingSpecProposals?: SpecProposal[];
 }
 
 export class PipelineHeaderView {
   static render(props: PipelineHeaderViewProps): string {
-    const { pipeline, pipelineId, docbotState, reviewbotState, archbotState, specagentState, coderbotState, devProcessState, user, allTasks, gitStatus, pendingReviews } = props;
+    const { pipeline, pipelineId, docbotState, reviewbotState, archbotState, specagentState, coderbotState, devProcessState, user, allTasks, gitStatus, pendingReviews, pendingSpecProposals } = props;
 
     let docbotBannerHtml = '';
     if (docbotState.status === 'inProgress') {
@@ -212,6 +215,7 @@ export class PipelineHeaderView {
                 ${specagentBannerHtml}
                 ${coderbotBannerHtml}
                 ${devServerBannerHtml}
+                ${SpecProposalBadge.render(pendingSpecProposals, allTasks)}
                 ${ReviewNotificationBadge.render(pendingReviews, allTasks)}
               </div>
             </div>

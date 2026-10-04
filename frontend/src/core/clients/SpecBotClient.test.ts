@@ -74,6 +74,33 @@ describe('SpecBotClient', () => {
     expect((fetch as any).mock.calls[0][1].method).toBe('DELETE');
   });
 
+  it('fetches all outstanding proposals for a pipeline', async () => {
+    const proposals = [
+      { task_id: 'task-1', pipeline_id: 'pipe-1', spec_md: '# one' },
+      { task_id: 'task-2', pipeline_id: 'pipe-1', spec_md: '# two' },
+    ];
+    (fetch as any).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(proposals),
+    });
+
+    const result = await client.getProposals('pipe-1');
+
+    const url = new URL((fetch as any).mock.calls[0][0]);
+    expect(url.pathname).toBe('/pipelines/pipe-1/specagent/proposals');
+    expect(result).toEqual(proposals);
+  });
+
+  it('normalizes a non-array proposals response to an empty list', async () => {
+    (fetch as any).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(null),
+    });
+
+    const result = await client.getProposals('pipe-1');
+    expect(result).toEqual([]);
+  });
+
   it('sends the bearer token', async () => {
     (fetch as any).mockResolvedValue({ ok: true });
 

@@ -19,7 +19,8 @@ import pytest
 from api.specagent import cache as cache_mod
 from api.specagent.cache import get_proposal
 from api.specagent.tools import save_elaborated_spec
-from core.models.models import Pipeline, Task
+from core.models.models import Notification, NotificationType, Pipeline, Task
+from core.services.notification_manager import NotificationManager
 
 
 @pytest.mark.asyncio
@@ -99,3 +100,96 @@ async def test_save_elaborated_spec_stores_proposal_and_broadcasts(
     # The task specification must NOT be mutated by the terminal tool.
     refreshed = await Task.get(task.id)
     assert refreshed.spec == "- original base spec"
+
+
+@pytest.mark.asyncio
+async def test_save_elaborated_spec_emits_targeted_actions_notification(
+    init_mock_db, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(cache_mod, "CACHE_FILE", str(tmp_path / "proposals.json"))
+
+    pipeline = Pipeline(name="Test Pipeline")
+    await pipeline.save()
+    task = Task(
+        title="Notify me",
+        pipeline_id=str(pipeline.id),
+        spec="- original base spec",
+    )
+    await task.save()
+
+    session = MagicMock()
+    session.session_result = None
+    session.requested_by = "alice"
+
+    recorded: list[tuple[Notification, list[str] | None]] = []
+
+    async def sink(notification: Notification, targets):
+        recorded.append((notification, targets))
+
+    NotificationManager.set_delivery_sink(sink)
+    try:
+        with patch(
+            "api.specagent.tools.manager.broadcast", new_callable=AsyncMock
+        ):
+            result = await save_elaborated_spec(
+                str(pipeline.id),
+                str(task.id),
+                "# Elaborated\n\nBody",
+                session=session,
+            )
+    finally:
+        NotificationManager.set_delivery_sink(None)
+
+    assert "Successfully saved" in result
+    assert len(recorded) == 1
+    notification, targets = recorded[0]
+    assert notification.id == f"specagent:{task.id}"
+    assert notification.type == NotificationType.ACTIONS
+    assert notification.title == "Specification proposal ready"
+    assert notification.message == "Notify me"
+    assert targets == ["alice"]
+    assert [a.name for a in notification.actions] == [
+        "specagent_accept",
+        "specagent_reject",
+        "specagent_open",
+    ]
+    for action in notification.actions:
+        assert action.data == {
+            "pipeline_id": str(pipeline.id),
+            "task_id": str(task.id),
+        }
+
+
+@pytest.mark.asyncio
+async def test_save_elaborated_spec_broadcasts_when_requester_unknown(
+    init_mock_db, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(cache_mod, "CACHE_FILE", str(tmp_path / "proposals.json"))
+
+    pipeline = Pipeline(name="Test Pipeline")
+    await pipeline.save()
+    task = Task(title="Anon", pipeline_id=str(pipeline.id), spec="- spec")
+    await task.save()
+
+    session = MagicMock()
+    session.session_result = None
+    session.requested_by = None
+
+    recorded = []
+
+    async def sink(notification, targets):
+        recorded.append((notification, targets))
+
+    NotificationManager.set_delivery_sink(sink)
+    try:
+        with patch(
+            "api.specagent.tools.manager.broadcast", new_callable=AsyncMock
+        ):
+            await save_elaborated_spec(
+                str(pipeline.id), str(task.id), "# Elaborated", session=session
+            )
+    finally:
+        NotificationManager.set_delivery_sink(None)
+
+    _, targets = recorded[0]
+    assert targets is None

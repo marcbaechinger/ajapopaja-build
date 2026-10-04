@@ -52,7 +52,7 @@ async def test_trigger_specagent_success(async_client, init_mock_db):
 
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["status"] == "success"
-        mock_process.assert_called_once_with(task)
+        mock_process.assert_called_once_with(task, username="testuser")
 
 
 @pytest.mark.asyncio
@@ -121,3 +121,27 @@ async def test_get_and_delete_proposal(
         response = await async_client.delete("/api/pipelines/p1/specagent/proposal/t1")
         assert response.status_code == status.HTTP_200_OK
         mock_clear.assert_called_once_with("t1")
+
+
+@pytest.mark.asyncio
+async def test_list_proposals_filters_by_pipeline(
+    async_client, init_mock_db, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(cache_mod, "CACHE_FILE", str(tmp_path / "proposals.json"))
+
+    await cache_mod.set_proposal(
+        "t1", SpecProposal(task_id="t1", pipeline_id="p1", spec_md="# one")
+    )
+    await cache_mod.set_proposal(
+        "t2", SpecProposal(task_id="t2", pipeline_id="p1", spec_md="# two")
+    )
+    await cache_mod.set_proposal(
+        "t3", SpecProposal(task_id="t3", pipeline_id="other", spec_md="# three")
+    )
+
+    response = await async_client.get("/api/pipelines/p1/specagent/proposals")
+
+    assert response.status_code == status.HTTP_200_OK
+    body = response.json()
+    assert {p["task_id"] for p in body} == {"t1", "t2"}
+    assert all(p["pipeline_id"] == "p1" for p in body)

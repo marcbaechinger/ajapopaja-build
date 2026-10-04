@@ -51,6 +51,7 @@ from api.routes.file_browser import router as file_browser_router
 from api.reviewbot.router import router as reviewbot_router
 from api.archbot.router import router as archbot_router
 from api.specagent.router import router as specagent_router
+from api.specagent.actions import register_specagent_actions
 from api.coderbot.manager import coderbot_manager
 from api.coderbot.router import router as coderbot_router
 from api.coderbot.session_title import register_session_title_hooks
@@ -119,6 +120,7 @@ async def lifespan(app: FastAPI):
     register_oneprompt_handlers()
     register_dev_process_ws()
     register_notification_handlers()
+    register_specagent_actions()
     initialize_oneprompt()
     register_session_title_hooks()
     yield

@@ -221,19 +221,25 @@ class NotificationManager:
         targets: Optional[List[str]] = None,
         severity: NotificationSeverity = NotificationSeverity.NORMAL,
         dismissible: bool = True,
+        id: Optional[str] = None,
     ) -> Notification:
-        """Sends an :attr:`NotificationType.ACTIONS` notification."""
-        return await self.send(
-            Notification(
-                type=NotificationType.ACTIONS,
-                severity=severity,
-                title=title,
-                message=message,
-                actions=list(actions),
-                dismissible=dismissible,
-            ),
-            targets,
-        )
+        """Sends an :attr:`NotificationType.ACTIONS` notification.
+
+        Passing a stable ``id`` lets the client de-duplicate re-delivered
+        notifications (e.g. after a reconnect or reload) instead of presenting
+        the same action dialog twice.
+        """
+        fields: Dict[str, Any] = {
+            "type": NotificationType.ACTIONS,
+            "severity": severity,
+            "title": title,
+            "message": message,
+            "actions": list(actions),
+            "dismissible": dismissible,
+        }
+        if id is not None:
+            fields["id"] = id
+        return await self.send(Notification(**fields), targets)
 
     # -- Inbound action execution -----------------------------------------
 

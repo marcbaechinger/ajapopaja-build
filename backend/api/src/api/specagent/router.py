@@ -19,8 +19,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from api.auth import get_current_user
 from core.queries import task as task_queries
 from core.exceptions import EntityNotFoundError
+from core.models.models import User
 
-from .cache import clear_proposal, get_proposal
+from .cache import clear_proposal, get_proposal, list_proposals
 from .manager import SpecAgentManager
 
 router = APIRouter(
@@ -32,7 +33,11 @@ logger = logging.getLogger(__name__)
 
 
 @router.post("/trigger/{task_id}")
-async def trigger_specagent(pipeline_id: str, task_id: str):
+async def trigger_specagent(
+    pipeline_id: str,
+    task_id: str,
+    current_user: User = Depends(get_current_user),
+):
     """
     Triggers the SpecAgent for a specific task.
 
@@ -64,9 +69,16 @@ async def trigger_specagent(pipeline_id: str, task_id: str):
             detail="Task must have a specification to elaborate",
         )
 
-    await SpecAgentManager.process_task(task)
+    await SpecAgentManager.process_task(task, username=current_user.username)
 
     return {"status": "success", "message": "SpecAgent enqueued"}
+
+
+@router.get("/proposals")
+async def list_spec_proposals(pipeline_id: str):
+    """Returns all outstanding elaborated-spec proposals for the pipeline."""
+    logger.info(f"[SpecAgent] (B4) GET proposals pipeline={pipeline_id}")
+    return await list_proposals(pipeline_id)
 
 
 @router.get("/proposal/{task_id}")
