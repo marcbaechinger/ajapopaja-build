@@ -66,6 +66,7 @@ from core.exceptions import (
     ValidationError,
     VersionMismatchError,
 )
+from core.services import repo_bootstrap
 from core.services.dev_process_manager import DevProcessManager
 
 # Configure logging
@@ -109,6 +110,10 @@ async def lifespan(app: FastAPI):
         await coderbot_manager.reconcile_on_startup()
     except Exception:  # pragma: no cover - never block startup on reconciliation
         logger.warning("Pi session reconciliation failed", exc_info=True)
+    try:
+        await repo_bootstrap.bootstrap_remote_repos()
+    except Exception:  # pragma: no cover - never block startup on repo bootstrap
+        logger.warning("Remote repo bootstrap failed", exc_info=True)
     register_assistant_handlers()
     register_oneprompt_handlers()
     register_dev_process_ws()

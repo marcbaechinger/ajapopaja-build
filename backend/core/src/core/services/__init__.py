@@ -20,6 +20,7 @@ It can be used by the REST API, agent tools or any other part of the
 application.
 """
 
+from core.services import repo_bootstrap
 from core.services.dev_process_manager import (
     DevProcessAlreadyRunningError,
     DevProcessError,
@@ -58,4 +59,5 @@ __all__ = [
     "NotificationActionContext",
     "notification_manager",
     "register_action",
+    "repo_bootstrap",
 ]

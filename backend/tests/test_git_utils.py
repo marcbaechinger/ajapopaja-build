@@ -20,6 +20,7 @@ import git
 import pytest
 
 from core.exceptions import EntityNotFoundError
+from core.models.models import RepoBootstrapStatus
 from core.utils import git_utils
 
 RUN_GIT_ENV = {
@@ -239,6 +240,54 @@ async def test_ensure_repo_cloned_syncs_when_present(tmp_path):
         await git_utils.ensure_repo_cloned(pipeline)
         mock_repo.remotes.origin.fetch.assert_called_once()
         mock_repo.git.pull.assert_called_once_with("--ff-only")
+
+
+def test_ensure_repo_present_local_returns_none():
+    pipeline = MagicMock()
+    pipeline.repo_uri = None
+    with patch("core.utils.git_utils.git") as mock_git:
+        assert git_utils.ensure_repo_present(pipeline) is None
+        mock_git.Repo.clone_from.assert_not_called()
+
+
+def test_ensure_repo_present_clones_when_missing(tmp_path):
+    pipeline = MagicMock()
+    pipeline.repo_uri = "https://host/org/my-app.git"
+    pipeline.workspace_abs_path = tmp_path / "my-app"
+
+    with patch("core.utils.git_utils.git") as mock_git:
+        status = git_utils.ensure_repo_present(pipeline)
+
+        assert status is RepoBootstrapStatus.CLONED
+        mock_git.Repo.clone_from.assert_called_once_with(
+            "https://host/org/my-app.git", str(tmp_path / "my-app")
+        )
+
+
+def test_ensure_repo_present_available_when_present(tmp_path):
+    pipeline = MagicMock()
+    pipeline.repo_uri = "https://host/org/my-app.git"
+    target = tmp_path / "my-app"
+    target.mkdir(parents=True)
+    pipeline.workspace_abs_path = target
+
+    with patch("core.utils.git_utils.git") as mock_git:
+        status = git_utils.ensure_repo_present(pipeline)
+
+        assert status is RepoBootstrapStatus.AVAILABLE
+        # An existing checkout is a strictly read-only no-op.
+        mock_git.Repo.clone_from.assert_not_called()
+        mock_git.Repo.assert_not_called()
+
+
+def test_ensure_repo_present_none_without_workspace():
+    pipeline = MagicMock()
+    pipeline.repo_uri = "https://host/org/my-app.git"
+    pipeline.workspace_abs_path = None
+
+    with patch("core.utils.git_utils.git") as mock_git:
+        assert git_utils.ensure_repo_present(pipeline) is None
+        mock_git.Repo.clone_from.assert_not_called()
 
 
 @pytest.mark.asyncio

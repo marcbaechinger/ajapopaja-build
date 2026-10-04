@@ -17,14 +17,14 @@ import logging
 import re
 import subprocess
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 from urllib.parse import quote, urlsplit, urlunsplit
 
 import git
 
 from core import config
 from core.exceptions import EntityNotFoundError, ValidationError
-from core.models.models import Pipeline
+from core.models.models import Pipeline, RepoBootstrapStatus
 from core.queries import pipeline as pipeline_queries
 from core.queries import task as task_queries
 from core.utils.path_utils import get_workspace_path
@@ -67,6 +67,28 @@ async def ensure_repo_cloned(pipeline: Pipeline) -> None:
             )
             default = repo.git.symbolic_ref("refs/remotes/origin/HEAD").split("/")[-1]
             repo.git.reset("--hard", f"origin/{default}")
+
+
+def ensure_repo_present(pipeline: Pipeline) -> Optional[RepoBootstrapStatus]:
+    """Clone the pipeline's remote repo if it is not present locally.
+
+    Unlike :func:`ensure_repo_cloned` this never fetches, pulls or resets an
+    existing checkout: if the target directory already exists it is a strictly
+    read-only no-op. Returns ``CLONED`` when a clone was performed,
+    ``AVAILABLE`` when the checkout already existed, and ``None`` for local
+    pipelines or pipelines without a resolvable workspace path.
+    """
+    if not pipeline.repo_uri:
+        return None
+    target = pipeline.workspace_abs_path
+    if not target:
+        return None
+    target = Path(target)
+    if target.is_dir():
+        return RepoBootstrapStatus.AVAILABLE
+    target.parent.mkdir(parents=True, exist_ok=True)
+    git.Repo.clone_from(pipeline.repo_uri, str(target))
+    return RepoBootstrapStatus.CLONED
 
 
 def verify_remote_repo(repo_uri: str, username: str = "", token: str = "") -> None:

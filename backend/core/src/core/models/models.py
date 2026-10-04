@@ -139,6 +139,13 @@ class PipelineStatus(str, Enum):
     COMPLETED = "completed"
 
 
+class RepoBootstrapStatus(str, Enum):
+    """Outcome of the startup clone-if-missing check for a remote repo."""
+
+    CLONED = "cloned"  # repo was missing and has been cloned
+    AVAILABLE = "available"  # repo already present; no action taken
+
+
 class Pipeline(Document):
     name: str
     description: Optional[str] = None
