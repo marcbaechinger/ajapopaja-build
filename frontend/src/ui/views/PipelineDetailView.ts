@@ -1582,7 +1582,7 @@ export class PipelineDetailView extends View {
           </main>
 
           <!-- Right Sidebar: ExecutionEngineView + PipelineHistoryView (bottom) -->
-          <aside class="flex-1 min-w-0 shrink-0 border-l border-app-border/60 bg-app-surface/30 flex flex-col overflow-hidden">
+          <aside class="flex-1 min-w-[660px] shrink-0 border-l border-app-border/60 bg-app-surface/30 flex flex-col overflow-hidden">
             <div id="execution-engine-view" class="flex-1 min-h-0 flex flex-col overflow-hidden">
               <p class="text-app-muted/40 text-[10px] uppercase font-bold tracking-widest text-center py-6">Loading execution engine...</p>
             </div>
