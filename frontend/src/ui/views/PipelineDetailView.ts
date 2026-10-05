@@ -1449,7 +1449,11 @@ export class PipelineDetailView extends View {
       if (this.pipeline) {
         this.context.dataManager.updatePipeline(this.pipeline);
       }
-      this.fetchPullRequests();
+      // Refresh only the PR container here. `mount()` already runs a full
+      // `refreshTasks()`; calling `fetchPullRequests()` (which re-runs it) would
+      // render every task — and the selected task — a second time on first
+      // paint even though nothing changed.
+      this.refreshPullRequests();
       this.scheduleRefreshGitStatus();
       this.loadDevServerStatus();
       this.updateHeader();
@@ -2372,6 +2376,17 @@ export class PipelineDetailView extends View {
       this.mountFileBrowseView(); // no-op when already mounted
       const current = this.currentFbPath();
       if (current !== fbPath) void this.fileBrowseView?.navigateTo(fbPath, { silent: true });
+      return;
+    }
+
+    // A redundant hash application (same tab and, for the task editor, the same
+    // selection) must be a complete no-op: re-applying `setContentTab` rebuilds
+    // the session list and tab chrome even though the content is already current.
+    if (
+      target === this.contentTab &&
+      target !== 'file-browser' &&
+      this.currentTaskId() === (taskId ?? null)
+    ) {
       return;
     }
 
