@@ -268,6 +268,23 @@ describe('TaskItem', () => {
       expect(body.querySelector('[data-action-click="schedule_task"]')).toBeNull();
     });
 
+    it('moves Delete and Cancel Schedule into the header action bar for SCHEDULED tasks', () => {
+      const container = parse(TaskItem.render({ ...mockTask, status: TaskStatus.SCHEDULED } as any));
+      const actions = container.querySelector('.task-header-actions')!;
+      expect(actions).not.toBeNull();
+
+      const deleteBtn = actions.querySelector('[data-action-click="delete_task"]')!;
+      const unscheduleBtn = actions.querySelector('[data-action-click="unschedule_task"]')!;
+      expect(deleteBtn).not.toBeNull();
+      expect(deleteBtn.textContent).toContain('Delete');
+      expect(unscheduleBtn).not.toBeNull();
+      expect(unscheduleBtn.textContent).toContain('Cancel Schedule');
+
+      // It must not be rendered again in the body action row.
+      const body = container.querySelector('.task-body')!;
+      expect(body.querySelector('[data-action-click="unschedule_task"]')).toBeNull();
+    });
+
     it('renders Send to CoderBot with the lightning icon for CREATED and SCHEDULED tasks', () => {
       for (const status of [TaskStatus.CREATED, TaskStatus.SCHEDULED]) {
         const container = parse(TaskItem.render({ ...mockTask, status } as any));

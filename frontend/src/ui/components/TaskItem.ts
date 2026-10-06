@@ -109,9 +109,9 @@ export class TaskItem {
 
     const titleEditAttributes: Record<string, string> = isEditableTitle ? { "data-action-click": "edit_title" } : {};
 
-    // Shared styling for the primary actions in the header toolbar so all
-    // three buttons (Delete / Schedule Execution / Send to CoderBot) share the
-    // same height and are perfectly aligned.
+    // Shared styling for the primary actions in the header toolbar so the
+    // buttons (Delete / Schedule Execution / Cancel Schedule / Send to
+    // CoderBot) share the same height and are perfectly aligned.
     const headerButtonBase =
       'inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg transition-all cursor-pointer';
 
@@ -198,6 +198,12 @@ export class TaskItem {
                   <span>Schedule Execution</span>
                 </button>
               ` : ''}
+              ${canUnschedule ? `
+                <button data-action-click="unschedule_task" data-version="${task.version}"
+                        class="${headerButtonBase} bg-slate-700 hover:bg-slate-600 text-slate-200 shadow-lg">
+                  <span>Cancel Schedule</span>
+                </button>
+              ` : ''}
             ` : ''}
             ${canTriggerExecution ? `
               <button data-action-click="trigger_coderbot" data-task-id="${taskId}"
@@ -274,12 +280,6 @@ export class TaskItem {
                   <button data-action-click="fail_task" data-version="${task.version}" 
                           class="text-xs text-red-400 hover:text-red-300 px-3 py-1 rounded transition-all cursor-pointer">
                     Mark as Failed
-                  </button>
-                ` : ''}
-                ${canUnschedule ? `
-                  <button data-action-click="unschedule_task" data-version="${task.version}" 
-                          class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1 rounded transition-all shadow-lg cursor-pointer">
-                    Cancel Schedule
                   </button>
                 ` : ''}
                 ${isInProgress ? `
