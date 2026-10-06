@@ -27,7 +27,7 @@ export function renderStatusHistorySection(task: Task, expandHistory: boolean): 
   if (!task.history || task.history.length === 0) return '';
 
   return `
-    <details class="group/history mt-4 pt-4 border-t border-app-border/30" ${expandHistory ? 'open' : ''}>
+    <details class="group/history mt-0 pt-0 border-t border-app-border/30" ${expandHistory ? 'open' : ''}>
       <summary class="flex items-center gap-2 cursor-pointer list-none text-[10px] font-bold text-app-muted uppercase tracking-widest mb-2 hover:text-app-text transition-colors">
         ${Icon.render('chevronRight', { size: 12, className: 'transition-transform group-open/history:rotate-90' })}
         Status History
