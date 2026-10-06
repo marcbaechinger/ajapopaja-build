@@ -39,11 +39,6 @@ export class HeaderDialogButtons {
            icon: Icon.render('stats', { size: 16, className: 'group-hover:scale-110 transition-transform' }),
            title: 'Statistics (S)'
          })}
-         ${ButtonComponent.render({
-           action: 'open_history',
-           icon: Icon.render('clock', { size: 16, className: 'group-hover:scale-110 transition-transform' }),
-           title: 'History (H)'
-         })}
       </div>
     `;
   }
