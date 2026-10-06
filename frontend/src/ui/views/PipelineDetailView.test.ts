@@ -1375,19 +1375,39 @@ describe('PipelineDetailView Interactive Session', () => {
     });
   });
 
-  it('shows the start button for remote pipelines', async () => {
+  it('removes the detached interactive session bar and its start button', async () => {
     const view = new PipelineDetailView(mockContext, { id: 'p1' });
     container.innerHTML = view.render() as string;
     view.mount(container);
     await view.loadPipeline();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const startBtn = container.querySelector('#start-interactive-btn') as HTMLElement;
-    expect(startBtn).not.toBeNull();
-    expect(startBtn.classList.contains('hidden')).toBe(false);
+    expect(container.querySelector('#interactive-session-bar')).toBeNull();
+    expect(container.querySelector('#start-interactive-btn')).toBeNull();
+    expect(container.querySelector('#resume-interactive-btn')).toBeNull();
+    expect(container.querySelector('#start-new-interactive-btn')).toBeNull();
   });
 
-  it('hides the start button for local pipelines', async () => {
+  it('shows the Coding Agent tab without a session and passes a Start action for remote pipelines', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await view.loadPipeline();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // The tab is always available; the default tab remains the Task editor.
+    const codingTab = container.querySelector('#tab-coding-agent') as HTMLElement;
+    expect(codingTab.classList.contains('hidden')).toBe(false);
+    expect(codingTab.getAttribute('aria-selected')).toBe('false');
+
+    // The empty-state Start action starts the session for this pipeline.
+    const options = (InteractiveCodingView as any).mock.calls.at(-1)[2];
+    expect(options.emptyStateAction.label).toBe('Start Interactive Session');
+    await options.emptyStateAction.onClick();
+    expect(mockContext.interactiveCodingService.startSession).toHaveBeenCalledWith('p1');
+  });
+
+  it('omits the empty-state Start action for local pipelines', async () => {
     mockContext.pipelineClient.get.mockResolvedValue({ id: 'p1', name: 'Pipe 1' });
     const view = new PipelineDetailView(mockContext, { id: 'p1' });
     container.innerHTML = view.render() as string;
@@ -1395,52 +1415,27 @@ describe('PipelineDetailView Interactive Session', () => {
     await view.loadPipeline();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const startBtn = container.querySelector('#start-interactive-btn') as HTMLElement;
-    expect(startBtn.classList.contains('hidden')).toBe(true);
+    const codingTab = container.querySelector('#tab-coding-agent') as HTMLElement;
+    expect(codingTab.classList.contains('hidden')).toBe(false);
+    const options = (InteractiveCodingView as any).mock.calls.at(-1)[2];
+    expect(options.emptyStateAction).toBeUndefined();
   });
 
-  it('collapses the interactive session bar and list when there are no session controls', async () => {
-    mockContext.pipelineClient.get.mockResolvedValue({ id: 'p1', name: 'Pipe 1' });
+  it('hides the inline session list when empty and shows a resumable paused session', async () => {
     const view = new PipelineDetailView(mockContext, { id: 'p1' });
     container.innerHTML = view.render() as string;
     view.mount(container);
     await view.loadPipeline();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const bar = container.querySelector('#interactive-session-bar') as HTMLElement;
     const sessionList = container.querySelector('#pipeline-session-list') as HTMLElement;
-    expect(bar).not.toBeNull();
-    expect(bar.classList.contains('hidden')).toBe(true);
     expect(sessionList.classList.contains('hidden')).toBe(true);
-  });
-
-  it('keeps the interactive session bar visible for the start control but hides the empty session list', async () => {
-    const view = new PipelineDetailView(mockContext, { id: 'p1' });
-    container.innerHTML = view.render() as string;
-    view.mount(container);
-    await view.loadPipeline();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    const bar = container.querySelector('#interactive-session-bar') as HTMLElement;
-    const sessionList = container.querySelector('#pipeline-session-list') as HTMLElement;
-    expect(bar.classList.contains('hidden')).toBe(false);
-    expect(sessionList.classList.contains('hidden')).toBe(true);
-  });
-
-  it('shows the session bar and list when a paused session can be resumed', async () => {
-    const view = new PipelineDetailView(mockContext, { id: 'p1' });
-    container.innerHTML = view.render() as string;
-    view.mount(container);
-    await view.loadPipeline();
 
     mockContext.interactiveCodingService.getSessions.mockReturnValue([
       { uid: 's1', pipeline_id: 'p1', status: 'paused', label: 'Paused session' },
     ]);
     (view as any).updateContentTabs();
 
-    const bar = container.querySelector('#interactive-session-bar') as HTMLElement;
-    const sessionList = container.querySelector('#pipeline-session-list') as HTMLElement;
-    expect(bar.classList.contains('hidden')).toBe(false);
     expect(sessionList.classList.contains('hidden')).toBe(false);
     expect(sessionList.querySelector('[data-session-uid="s1"]')).not.toBeNull();
   });
@@ -1470,7 +1465,7 @@ describe('PipelineDetailView Interactive Session', () => {
     expect(mockContext.interactiveCodingService.startSession).not.toHaveBeenCalled();
   });
 
-  it('shows the InteractiveCodingView XOR the TaskItem and switches on start/stop', async () => {
+  it('keeps the InteractiveCodingView mounted and switches on start/stop', async () => {
     const view = new PipelineDetailView(mockContext, { id: 'p1' });
     container.innerHTML = view.render() as string;
     view.mount(container);
@@ -1481,9 +1476,12 @@ describe('PipelineDetailView Interactive Session', () => {
     const mount = container.querySelector('#interactive-coding-view-mount') as HTMLElement;
     expect(selected.classList.contains('hidden')).toBe(false);
     expect(mount.classList.contains('hidden')).toBe(true);
+    // The Coding Agent view is always mounted so the tab is usable without a
+    // session (the embedded PiView shows its empty state).
+    expect((view as any).interactiveCodingView).not.toBeNull();
 
-    // The session starts (e.g. from another tab): the handler re-attaches and
-    // switches into interactive mode.
+    // The session starts (e.g. from another tab): the handler switches into
+    // the Coding Agent tab.
     mockContext.interactiveCodingService.getCurrentSession.mockReturnValue({
       pipelineId: 'p1',
       active: true,
@@ -1508,18 +1506,51 @@ describe('PipelineDetailView Interactive Session', () => {
     getAction('toggle_interactive_view')(null, document.createElement('button'));
     expect(selected.classList.contains('hidden')).toBe(false);
     expect(mount.classList.contains('hidden')).toBe(true);
+    expect((view as any).interactiveCodingView).not.toBeNull();
 
-    // Stopping switches back to the TaskItem and tears the view down.
+    // Stopping keeps the view mounted (the ended log stays visible on the
+    // Coding Agent tab); it does not tear the view down.
     mockContext.interactiveCodingService.getCurrentSession.mockReturnValue({
       pipelineId: 'p1',
       active: false,
       busy: false,
     });
     dataManagerHandlers['ws:INTERACTIVE_STOPPED:p1']({ pipeline_id: 'p1' });
-    expect((view as any).contentTab).toBe('task-editor');
-    expect(selected.classList.contains('hidden')).toBe(false);
-    expect(mount.classList.contains('hidden')).toBe(true);
-    expect((view as any).interactiveCodingView).toBeNull();
+    expect((view as any).interactiveCodingView).not.toBeNull();
+  });
+
+  it('keeps the user on the Coding Agent tab when the session stops', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await view.loadPipeline();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    mockContext.interactiveCodingService.getCurrentSession.mockReturnValue({
+      pipelineId: 'p1',
+      active: true,
+      busy: false,
+    });
+    mockContext.interactiveCodingService.refreshSession.mockResolvedValue({
+      pipelineId: 'p1',
+      active: true,
+      busy: false,
+    });
+    dataManagerHandlers['ws:INTERACTIVE_STARTED:p1']({ pipeline_id: 'p1' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect((view as any).contentTab).toBe('coding-agent');
+
+    mockContext.interactiveCodingService.getCurrentSession.mockReturnValue({
+      pipelineId: 'p1',
+      active: false,
+      busy: false,
+    });
+    dataManagerHandlers['ws:INTERACTIVE_STOPPED:p1']({ pipeline_id: 'p1' });
+
+    expect((view as any).contentTab).toBe('coding-agent');
+    const mount = container.querySelector('#interactive-coding-view-mount') as HTMLElement;
+    expect(mount.classList.contains('hidden')).toBe(false);
   });
 
   it('shows Task editor / Coding Agent tabs and switches between the two DOM fragments without re-rendering', async () => {
@@ -1531,11 +1562,11 @@ describe('PipelineDetailView Interactive Session', () => {
 
     const tablist = container.querySelector('#content-tablist') as HTMLElement;
     expect(tablist).not.toBeNull();
-    // The tab list is always visible; without a session the Coding Agent tab is
-    // hidden. The removed redundant buttons are gone from the DOM.
+    // The tab list is always visible and the Coding Agent tab is available
+    // without a session. The removed redundant buttons are gone from the DOM.
     expect(tablist.classList.contains('hidden')).toBe(false);
     const initialCodingTab = container.querySelector('#tab-coding-agent') as HTMLElement;
-    expect(initialCodingTab.classList.contains('hidden')).toBe(true);
+    expect(initialCodingTab.classList.contains('hidden')).toBe(false);
     expect(container.querySelector('#toggle-interactive-btn')).toBeNull();
     expect(container.querySelector('#stop-interactive-btn')).toBeNull();
     expect(container.querySelector('#manage-sessions-btn')).toBeNull();
@@ -1601,8 +1632,9 @@ describe('PipelineDetailView Interactive Session', () => {
     const fileTab = container.querySelector('#tab-file-browser') as HTMLElement;
     expect(tablist.classList.contains('hidden')).toBe(false);
     expect(fileTab.textContent).toContain('File Browser');
-    // No session: the Coding Agent tab is hidden but the File Browser is usable.
-    expect(codingTab.classList.contains('hidden')).toBe(true);
+    // No session: the Coding Agent tab is still selectable; the File Browser
+    // remains usable too.
+    expect(codingTab.classList.contains('hidden')).toBe(false);
 
     getAction('select_content_tab')(null, fileTab);
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -1841,15 +1873,17 @@ describe('PipelineDetailView Interactive Session', () => {
     expect(view.update({ id: 'p2', rest: '' })).toBe(false);
   });
 
-  it('falls back to the Task editor and canonicalises the hash for a session-less agent deep link', async () => {
+  it('deep-links the Coding Agent tab without a session and keeps the hash', async () => {
     window.location.hash = '#/pipeline/p1/tab/agent';
     const view = new PipelineDetailView(mockContext, { id: 'p1', rest: 'tab/agent' });
     container.innerHTML = view.render() as string;
     view.mount(container);
     await flush();
 
-    expect((view as any).contentTab).toBe('task-editor');
-    expect(window.location.hash).toBe('#/pipeline/p1/tab/task');
+    expect((view as any).contentTab).toBe('coding-agent');
+    expect(window.location.hash).toBe('#/pipeline/p1/tab/agent');
+    const mount = container.querySelector('#interactive-coding-view-mount') as HTMLElement;
+    expect(mount.classList.contains('hidden')).toBe(false);
   });
 
   it('pushes a history entry when the file browser reports user navigation', async () => {

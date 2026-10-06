@@ -2,14 +2,23 @@
 
 ## Unreleased – Interactive session manager
 
+* **Coding Agent tab is always available** – the detached **Start Interactive
+  Session** button above the content area is gone. The Coding Agent tab is now
+  always shown; with no session attached it renders PiView's “No active
+  session…” empty state carrying the **Start Interactive Session** button for
+  remote pipelines (local pipelines show the empty state without it). The
+  embedded view is kept mounted across tab switches and is scoped to its own
+  pipeline, so another pipeline's running session never leaks its log into it.
+
 * **Session manager drawer** – a global right‑hand panel (Sessions button in the
   dashboard and pipeline headers, `Ctrl/Cmd+J`) lists every durable Pi session
   grouped by status (Active, Paused, Completed, Failed, Discarded) with search,
   status filters and a batch‑session toggle. Selecting a paused session pauses
   the current one and resumes the target atomically.
-* **Per‑pipeline resume** – pipeline detail views show a paused session banner
-  and an inline session list; the primary action becomes **Resume Session** when
-  the pipeline already has a paused session.
+* **Per‑pipeline resume** – pipeline detail views show an inline session list
+  of paused/completed sessions; resuming one is a single click from that list.
+  The Coding Agent tab's empty state offers **Start Interactive Session** for
+  pipelines with no session.
 * **Replay‑race fix** – resuming a session no longer loses its replayed history
   when a late `INTERACTIVE_STARTED` broadcast arrives.
 * **Session rename** – `PATCH /api/coderbot/sessions/{uid}` updates a session

@@ -118,12 +118,13 @@ function makeService() {
   const listeners = new Set<() => void>();
   const stateListeners = new Set<() => void>();
   return {
+    getCurrentSession: vi.fn(() => ({ pipelineId: 'p1', uid: 'u1', active: true, busy: false })),
     isBusy: vi.fn(() => false),
     isActive: vi.fn(() => true),
     sendMessage: vi.fn().mockResolvedValue(undefined),
     stopSession: vi.fn().mockResolvedValue(undefined),
     pauseSession: vi.fn().mockResolvedValue(undefined),
-    getHistory: vi.fn(() => []),
+    getHistory: vi.fn((): any[] => []),
     getCurrentTaskId: vi.fn(() => 'p1'),
     getSessionStartTime: vi.fn(() => null),
     clearHistory: vi.fn(),
@@ -229,6 +230,72 @@ describe('InteractiveCodingView', () => {
     expect(promptViewInstances[0].disabled).toBe(true);
     expect(promptViewInstances[0].placeholder).toBe(
       'Session paused — resume it from the session manager.'
+    );
+  });
+
+  it('forwards the host-provided empty-state action to the embedded PiView', () => {
+    const onClick = vi.fn();
+    const custom = new InteractiveCodingView(
+      service as unknown as InteractiveCodingService,
+      root,
+      {
+        pipelineId: 'p1',
+        emptyStateAction: { label: 'Start Interactive Session', onClick },
+      }
+    );
+    custom.render();
+
+    expect(piViewInstances[0].options.emptyStateAction.label).toBe('Start Interactive Session');
+    piViewInstances[0].options.emptyStateAction.onClick();
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the no-session state when another pipeline owns the session', () => {
+    service.getCurrentSession.mockReturnValue({ pipelineId: 'other', uid: 'u2', active: true, busy: false });
+    service.getHistory.mockReturnValue([{ id: 'b1', text: 'foreign' }]);
+    view.render();
+
+    // The scoped session never exposes the foreign pipeline's log or state.
+    const scoped = piViewInstances[0].service;
+    expect(scoped.getHistory()).toEqual([]);
+    expect(scoped.isActive()).toBe(false);
+    expect(promptViewInstances[0].disabled).toBe(true);
+    expect(promptViewInstances[0].placeholder).toBe(
+      'Start an interactive session to chat with the coding agent.'
+    );
+    expect((root.querySelector('#interactive-status') as HTMLElement).textContent).toBe(
+      'No active session'
+    );
+  });
+
+  it('forwards history and active state for a session belonging to this pipeline', () => {
+    const history = [{ id: 'b1', kind: 'text', text: 'hello' }];
+    service.getHistory.mockReturnValue(history);
+    view.render();
+
+    const scoped = piViewInstances[0].service;
+    expect(scoped.getHistory()).toBe(history);
+    expect(scoped.isActive()).toBe(true);
+    expect((root.querySelector('#interactive-status') as HTMLElement).textContent).toBe(
+      'Session active'
+    );
+  });
+
+  it('clears the embedded log when the session moves to another pipeline', () => {
+    view.render();
+    const scoped = piViewInstances[0].service;
+    const blockListener = vi.fn();
+    const stateListener = vi.fn();
+    scoped.onBlocks(blockListener);
+    scoped.onSessionStateChange(stateListener);
+
+    service.getCurrentSession.mockReturnValue({ pipelineId: 'p2', uid: 'u2', active: true, busy: false });
+    service._fire();
+
+    expect(blockListener).toHaveBeenCalledWith([]);
+    expect(stateListener).toHaveBeenCalledWith(false);
+    expect((root.querySelector('#interactive-status') as HTMLElement).textContent).toBe(
+      'No active session'
     );
   });
 

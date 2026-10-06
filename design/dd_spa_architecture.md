@@ -103,7 +103,7 @@ building lives in the pure value object `PipelineRoute`
 | `#/pipeline/<id>` | Pipeline detail, default tab |
 | `#/pipeline/<id>/tab/task` | Task editor tab |
 | `#/pipeline/<id>/tab/task/<uid>` | Task editor tab, task `<uid>` selected |
-| `#/pipeline/<id>/tab/agent` | Coding Agent tab (only while a session is attached) |
+| `#/pipeline/<id>/tab/agent` | Coding Agent tab (always available; shows the "No active session" empty state while detached) |
 | `#/pipeline/<id>/tab/fb` | File Browser tab, path from the persisted `lastPath` |
 | `#/pipeline/<id>/tab/fb/` | File Browser tab, repository root (explicit) |
 | `#/pipeline/<id>/tab/fb/path/to/folder` | File Browser showing that directory |

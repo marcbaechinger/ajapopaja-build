@@ -14,15 +14,164 @@
  * limitations under the License.
  */
 
-import { PiView } from './PiView.ts';
+import { PiView, type EmptyStateAction, type PiSessionService } from './PiView.ts';
 import { Icon } from './Icon.ts';
 import { InteractivePromptView } from './InteractivePromptView.ts';
+import type { RenderBlock } from '../../core/PiLogReducer.ts';
 import type { InteractiveCodingService } from '../../core/InteractiveCodingService.ts';
 
 export interface InteractiveCodingViewOptions {
   pipelineId: string;
   /** Invoked by the "Pause" control (defaults to service.pauseSession). */
   onPause?: () => void;
+  /** Optional action button rendered by the embedded PiView's empty state. */
+  emptyStateAction?: EmptyStateAction;
+}
+
+/**
+ * Adapts the singleton {@link InteractiveCodingService} to a single pipeline.
+ *
+ * The service tracks one active session at a time, so a `PiView` connected
+ * directly to it would render whichever pipeline currently owns the session.
+ * This decorator exposes only the history/state belonging to `pipelineId`:
+ *
+ * - while another pipeline owns the session (or no session exists) the view
+ *   sees an empty, inactive session, so `PiView` renders its
+ *   "No active session…" empty state (including any host-provided action);
+ * - when the session is attached to this pipeline the calls pass through
+ *   unchanged;
+ * - when the scope is left (the singleton attaches to another pipeline) the
+ *   decorator emits an empty snapshot and an inactive state so `PiView` drops
+ *   the now-stale log.
+ *
+ * Exported for testing; production code should treat it as an implementation
+ * detail of {@link InteractiveCodingView}.
+ */
+export class PipelineScopedPiSession implements PiSessionService {
+  private service: InteractiveCodingService;
+  private pipelineId: string;
+  private blockListeners = new Set<(blocks: RenderBlock[]) => void>();
+  private messageListeners = new Set<(content: string) => void>();
+  private stateListeners = new Set<(active: boolean) => void>();
+  private startTimeListeners = new Set<(startTime: number | null) => void>();
+  private mine: boolean;
+  private unsubscribe: () => void;
+
+  constructor(service: InteractiveCodingService, pipelineId: string) {
+    this.service = service;
+    this.pipelineId = pipelineId;
+    this.mine = this.computeMine();
+    this.unsubscribe = service.onSessionChange(() => this.handleSessionChange());
+  }
+
+  /** Whether the singleton currently owns a session for this pipeline. */
+  isMine(): boolean {
+    return this.computeMine();
+  }
+
+  private computeMine(): boolean {
+    const session = this.service.getCurrentSession?.();
+    return !!session && session.pipelineId === this.pipelineId;
+  }
+
+  private handleSessionChange(): void {
+    const mine = this.computeMine();
+    if (mine === this.mine) return;
+    this.mine = mine;
+    if (mine) {
+      // Attached to this pipeline: surface the session that already exists.
+      const history = this.service.getHistory();
+      this.blockListeners.forEach((listener) => listener(history));
+      this.stateListeners.forEach((listener) => listener(this.service.isActive()));
+    } else {
+      // The singleton moved to another pipeline (or detached): clear the
+      // embedded log and return to the empty state.
+      this.blockListeners.forEach((listener) => listener([]));
+      this.stateListeners.forEach((listener) => listener(false));
+    }
+  }
+
+  /** Releases the subscription to the wrapped singleton. */
+  destroy(): void {
+    try {
+      this.unsubscribe();
+    } catch (e) {
+      console.error('PipelineScopedPiSession: error tearing down subscription', e);
+    }
+    this.blockListeners.clear();
+    this.messageListeners.clear();
+    this.stateListeners.clear();
+    this.startTimeListeners.clear();
+  }
+
+  getHistory(): RenderBlock[] {
+    return this.mine ? this.service.getHistory() : [];
+  }
+
+  getCurrentTaskId(): string | null {
+    return this.mine ? this.service.getCurrentTaskId() : null;
+  }
+
+  isActive(): boolean {
+    return this.mine && this.service.isActive();
+  }
+
+  getSessionStartTime(): number | null {
+    return this.mine ? this.service.getSessionStartTime() : null;
+  }
+
+  onSessionStartTimeChange(listener: (startTime: number | null) => void): () => void {
+    this.startTimeListeners.add(listener);
+    const unsub = this.service.onSessionStartTimeChange((startTime) => {
+      if (this.mine) listener(startTime);
+    });
+    return () => {
+      this.startTimeListeners.delete(listener);
+      unsub();
+    };
+  }
+
+  clearHistory(): void {
+    if (this.mine) this.service.clearHistory();
+  }
+
+  stopSession(taskId: string): Promise<unknown> {
+    if (!this.mine) return Promise.resolve(undefined);
+    return this.service.stopSession(taskId);
+  }
+
+  onBlocks(listener: (blocks: RenderBlock[]) => void): () => void {
+    this.blockListeners.add(listener);
+    const unsub = this.service.onBlocks((blocks) => {
+      if (this.mine) listener(blocks);
+    });
+    return () => {
+      this.blockListeners.delete(listener);
+      unsub();
+    };
+  }
+
+  onMessage(listener: (content: string) => void): () => void {
+    this.messageListeners.add(listener);
+    const unsub = this.service.onMessage((content) => {
+      if (this.mine) listener(content);
+    });
+    return () => {
+      this.messageListeners.delete(listener);
+      unsub();
+    };
+  }
+
+  onSessionStateChange(listener: (active: boolean) => void): () => void {
+    this.stateListeners.add(listener);
+    const unsub = this.service.onSessionStateChange((active) => {
+      if (this.mine) listener(active);
+    });
+    return () => {
+      this.stateListeners.delete(listener);
+      unsub();
+    };
+  }
 }
 
 /**
@@ -38,8 +187,10 @@ export class InteractiveCodingView {
   private root: HTMLElement;
   private pipelineId: string;
   private onPause?: () => void;
+  private emptyStateAction?: EmptyStateAction;
   private piView: PiView | null = null;
   private promptView: InteractivePromptView | null = null;
+  private scopedSession: PipelineScopedPiSession | null = null;
   private unsubs: (() => void)[] = [];
 
   constructor(
@@ -51,6 +202,7 @@ export class InteractiveCodingView {
     this.root = root;
     this.pipelineId = options.pipelineId;
     this.onPause = options.onPause;
+    this.emptyStateAction = options.emptyStateAction;
   }
 
   render(): void {
@@ -63,7 +215,10 @@ export class InteractiveCodingView {
       // blocksCollapsedInitially: true — interactive sessions are tool-heavy,
       // so tool output starts collapsed to keep the streaming log scannable.
       // The header toggle expands it on demand.
-      this.piView = new PiView(this.service, mount, {
+      // The session is wrapped in a pipeline-scoped adapter so another
+      // pipeline's running session never leaks into this view's log.
+      this.scopedSession = new PipelineScopedPiSession(this.service, this.pipelineId);
+      this.piView = new PiView(this.scopedSession, mount, {
         showFooter: false,
         // Roughly 150% of the previous h-[46vh]: a taller log without making the
         // whole tab area grow to its content. The user can drag the log's bottom
@@ -71,6 +226,7 @@ export class InteractiveCodingView {
         logHeightClass: 'h-[69vh]',
         resizable: true,
         blocksCollapsedInitially: true,
+        emptyStateAction: this.emptyStateAction,
       });
       this.piView.render();
       // Stay robust if a PiView build predates the option: force the collapsed
@@ -126,6 +282,10 @@ export class InteractiveCodingView {
       }
     });
     this.unsubs = [];
+    if (this.scopedSession) {
+      this.scopedSession.destroy();
+      this.scopedSession = null;
+    }
     if (this.promptView) {
       this.promptView.destroy();
       this.promptView = null;
@@ -160,7 +320,37 @@ export class InteractiveCodingView {
     }
   }
 
+  /** Whether the singleton currently owns a session for this pipeline. */
+  private isMine(): boolean {
+    const session = this.service.getCurrentSession?.();
+    return !!session && session.pipelineId === this.pipelineId;
+  }
+
   private updateComposerState() {
+    // No session is attached to this pipeline (either none exists or another
+    // pipeline owns it): the embedded PiView shows its empty state with the
+    // host-provided Start action, so the composer/Pause are inert.
+    if (!this.isMine()) {
+      this.promptView?.setDisabled(true);
+      this.promptView?.setPlaceholder(
+        'Start an interactive session to chat with the coding agent.'
+      );
+
+      const status = this.root.querySelector('#interactive-status') as HTMLElement | null;
+      if (status) {
+        status.textContent = 'No active session';
+        status.className = 'text-[10px] font-bold uppercase tracking-widest text-app-muted';
+      }
+
+      const pauseBtn = this.root.querySelector('#interactive-pause-btn') as HTMLButtonElement | null;
+      if (pauseBtn) {
+        pauseBtn.disabled = true;
+        pauseBtn.className =
+          'px-3 py-1.5 rounded text-xs font-medium bg-app-surface/60 text-app-muted border border-app-border opacity-60 transition-colors flex items-center gap-1.5 cursor-not-allowed';
+      }
+      return;
+    }
+
     const busy = this.service.isBusy();
     const active = this.service.isActive();
     const disabled = busy || !active;

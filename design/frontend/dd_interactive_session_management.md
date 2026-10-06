@@ -338,30 +338,25 @@ Key behaviours:
 
 ### 7.4 Per-pipeline resume (pipeline detail integration)
 
-In [`PipelineDetailView.renderPrepColumn`](../../frontend/src/ui/views/PipelineDetailView.ts)
-the `#interactive-session-bar` currently has three mutually-hidden buttons
-(Start / Switch / Stop). The concept replaces that with a small
-session-aware control:
+The **Coding Agent** tab in
+[`PipelineDetailView.renderPrepColumn`](../../frontend/src/ui/views/PipelineDetailView.ts)
+is always available. When no session is attached to the pipeline, the embedded
+`PiView` renders its "No active session…" empty state (the detached
+`#interactive-session-bar` has been removed):
 
-```
-┌─ Interactive Coding ──────────────────────────────────────────┐
-│ Active:  ⚡ Pipeline A — working…            [Switch] [Pause]  │
-│ Paused:  ● Fix flaky auth test · 2m ago     [Resume ▸]         │
-│          ● Refactor parser    · 1h ago      [Resume ▸]         │
-│ [+ New session]                                                │
-└────────────────────────────────────────────────────────────────┘
-```
+* If the pipeline has **no** session, the empty state carries
+  `[⚡ Start Interactive Session]` (remote pipelines only; local pipelines show
+  the empty state without an action).
+* If the pipeline has a **paused** session, the inline `#pipeline-session-list`
+  below the header lists it with a **Resume** row; the empty-state Start action
+  starts a fresh session (pausing any other running one).
+* If **another** session is active, this pipeline still shows the empty state —
+  the `PipelineScopedPiSession` adapter hides the foreign log — while the global
+  session manager and the inline list offer switching.
 
-* If the pipeline has **no** session: `[⚡ Start Interactive Session]`.
-* If the pipeline has a **paused** session and **no other** session is active:
-  primary `[Resume Session ▸]` + secondary `[Start new]`.
-* If **another** session is active: `[Start new]` warns that it will pause the
-  active session; the paused rows remain individually resumable.
-* The per-pipeline list is the same session-list component, filtered to
-  `pipeline_id`, rendered inline (no drawer).
-
-This fixes the orphan problem: the user never has to know the session UID and
-never has to leave the pipeline to resume.
+One persistent `InteractiveCodingView` is mounted lazily for the tab and kept
+across tab switches, so the log survives navigation. Session rows are filtered
+to `pipeline_id` and rendered inline (no drawer).
 
 ### 7.5 Discard
 
