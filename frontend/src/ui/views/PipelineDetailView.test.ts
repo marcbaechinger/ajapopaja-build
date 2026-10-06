@@ -2016,7 +2016,7 @@ describe('PipelineDetailView Interactive Session', () => {
     const tablist = container.querySelector('#content-tablist') as HTMLElement;
     const historyTab = container.querySelector('#tab-history') as HTMLElement;
     expect(tablist.classList.contains('hidden')).toBe(false);
-    expect(historyTab.textContent).toContain('History');
+    expect(historyTab.textContent).toContain('Commits');
     expect((view as any).historyView).toBeNull();
 
     getAction('select_content_tab')(null, historyTab);

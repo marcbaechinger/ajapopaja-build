@@ -1678,7 +1678,7 @@ export class PipelineDetailView extends View {
             <button id="tab-history" data-action-click="select_content_tab" data-content-tab="history" type="button"
               role="tab" aria-selected="false" aria-controls="history-view-mount"
               class="px-3 py-2 text-xs font-bold uppercase tracking-widest border-b-2 -mb-px transition-colors cursor-pointer border-transparent text-app-muted hover:text-app-text">
-              History
+              Commits
             </button>
           </div>
           <div id="selected-task-view" role="tabpanel" aria-labelledby="tab-task-editor" class="mt-6">
