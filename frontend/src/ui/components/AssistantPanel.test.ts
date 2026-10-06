@@ -91,7 +91,6 @@ describe('AssistantPanel', () => {
     }
 
     it.each([
-      ['/pr', 'Show me the project structure of pipeline PIPELINE_ID'],
       ['/gl', 'Show me the commit hashes and message of the last 5 commits in pipeline PIPELINE_ID'],
       ['/i', 'Show 5 most recent issues of pipeline PIPELINE_ID'],
       ['/gd', 'Drop the top commit (that has not been pushed to the remote) of pipeline PIPELINE_ID'],
@@ -140,6 +139,7 @@ describe('AssistantPanel', () => {
         // Interactive-only commands are not offered to the assistant.
         expect(document.body.textContent).not.toContain('/backlog');
         expect(document.body.textContent).not.toContain('/pipelines');
+        expect(document.body.textContent).not.toContain('/pr');
         expect(mockContext.assistantService.sendMessage).not.toHaveBeenCalled();
         expect(input.value).toBe('');
       }
@@ -147,9 +147,11 @@ describe('AssistantPanel', () => {
 
     it('substitutes the current pipeline id into the template', () => {
       window.location.hash = '#/pipeline/abc123';
-      const input = submitInput('/pr');
+      const input = submitInput('/gl');
 
-      expect(input.value).toBe('Show me the project structure of pipeline abc123');
+      expect(input.value).toBe(
+        'Show me the commit hashes and message of the last 5 commits in pipeline abc123'
+      );
     });
 
     it('sends a normal message that is not a slash command', () => {

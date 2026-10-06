@@ -115,11 +115,13 @@ describe('InteractivePromptView', () => {
     expect(options()).toHaveLength(0);
   });
 
-  it('substitutes the pipeline id resolved through getPipelineId', () => {
-    mount({ getPipelineId: () => 'xyz' });
+  it('expands the interactive-only /pr pull-request template', () => {
+    mount();
     type('/pr');
     key('Enter');
-    expect(inputEl().value).toBe('Show me the project structure of pipeline xyz');
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(inputEl().value).toBe('Make a pull request with the ajaopopaja skill.');
   });
 
   it('expands the interactive-only /pipelines template', () => {
@@ -147,6 +149,7 @@ describe('InteractivePromptView', () => {
     const text = root.textContent ?? '';
     expect(text).not.toContain('/backlog');
     expect(text).not.toContain('/pipelines');
+    expect(text).not.toContain('/pr');
   });
 
   it('executes an action command and clears the input', () => {

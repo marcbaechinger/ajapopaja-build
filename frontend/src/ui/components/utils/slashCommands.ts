@@ -115,6 +115,13 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     command: '/pr',
+    description: 'Make a pull request with the ajaopopaja skill',
+    type: 'prompt',
+    contexts: ['interactive'],
+    template: 'Make a pull request with the ajaopopaja skill.',
+  },
+  {
+    command: '/ps',
     description: 'Show the project structure of the pipeline',
     type: 'prompt',
     template: 'Show me the project structure of pipeline PIPELINE_ID',

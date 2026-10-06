@@ -72,8 +72,10 @@ describe('slashCommands', () => {
 
       expect(interactive).toContain('/backlog');
       expect(interactive).toContain('/pipelines');
+      expect(interactive).toContain('/pr');
       expect(assistant).not.toContain('/backlog');
       expect(assistant).not.toContain('/pipelines');
+      expect(assistant).not.toContain('/pr');
     });
 
     it('narrows the matches by the typed query', () => {
@@ -104,6 +106,13 @@ describe('slashCommands', () => {
       expect(findCommand('/backlog', 'assistant')).toBeUndefined();
       expect(findCommand('/pipelines', 'interactive')?.type).toBe('prompt');
       expect(findCommand('/pipelines', 'assistant')).toBeUndefined();
+    });
+
+    it('expands /pr to the pull-request prompt for the interactive host only', () => {
+      const command = findCommand('/pr', 'interactive');
+      expect(command?.type).toBe('prompt');
+      expect(command?.template).toBe('Make a pull request with the ajaopopaja skill.');
+      expect(findCommand('/pr', 'assistant')).toBeUndefined();
     });
 
     it('does not match a prefix', () => {
