@@ -313,5 +313,57 @@ describe('TaskItem', () => {
       const actions = container.querySelector('.task-header-actions')!;
       expect(actions.querySelector('select[data-action-change="change_task_status"]')).not.toBeNull();
     });
+
+    it('moves Mark as Failed and Cancel Progress into the header action bar for INPROGRESS tasks', () => {
+      const container = parse(TaskItem.render({ ...mockTask, status: TaskStatus.INPROGRESS } as any));
+      const actions = container.querySelector('.task-header-actions')!;
+
+      const failBtn = actions.querySelector('[data-action-click="fail_task"]')!;
+      const cancelBtn = actions.querySelector('[data-action-click="cancel_progress"]')!;
+      expect(failBtn).not.toBeNull();
+      expect(failBtn.textContent).toContain('Mark as Failed');
+      expect(cancelBtn).not.toBeNull();
+      expect(cancelBtn.textContent).toContain('Cancel Progress');
+
+      // They must not be rendered again in the body action row.
+      const body = container.querySelector('.task-body')!;
+      expect(body.querySelector('[data-action-click="fail_task"]')).toBeNull();
+      expect(body.querySelector('[data-action-click="cancel_progress"]')).toBeNull();
+    });
+
+    it('moves Mark as Failed (but not Cancel Progress) into the header action bar for IMPLEMENTED tasks', () => {
+      const container = parse(TaskItem.render({ ...mockTask, status: TaskStatus.IMPLEMENTED } as any));
+      const actions = container.querySelector('.task-header-actions')!;
+
+      const failBtn = actions.querySelector('[data-action-click="fail_task"]')!;
+      expect(failBtn).not.toBeNull();
+      expect(failBtn.textContent).toContain('Mark as Failed');
+      expect(actions.querySelector('[data-action-click="cancel_progress"]')).toBeNull();
+
+      const body = container.querySelector('.task-body')!;
+      expect(body.querySelector('[data-action-click="fail_task"]')).toBeNull();
+    });
+
+    it.each([
+      [TaskStatus.CREATED, false, false],
+      [TaskStatus.SCHEDULED, false, false],
+      [TaskStatus.PROPOSED, false, false],
+      [TaskStatus.INPROGRESS, true, true],
+      [TaskStatus.IMPLEMENTED, true, false],
+      [TaskStatus.SUBMITTED, false, false],
+      [TaskStatus.PULL_REQUEST_AVAILABLE, false, false],
+      [TaskStatus.FAILED, false, false],
+      [TaskStatus.DISCARDED, false, false],
+    ])('keeps fail/cancel-progress header buttons state-correct for %s', (status, hasFail, hasCancel) => {
+      const container = parse(TaskItem.render({ ...mockTask, status } as any));
+      const actions = container.querySelector('.task-header-actions')!;
+      const body = container.querySelector('.task-body')!;
+
+      expect(actions.querySelector('[data-action-click="fail_task"]') !== null).toBe(hasFail);
+      expect(actions.querySelector('[data-action-click="cancel_progress"]') !== null).toBe(hasCancel);
+      // These actions are only ever rendered in the header, never the body.
+      expect(body.querySelector('[data-action-click="fail_task"]')).toBeNull();
+      expect(body.querySelector('[data-action-click="cancel_progress"]')).toBeNull();
+    });
   });
 });

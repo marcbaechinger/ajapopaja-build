@@ -110,8 +110,9 @@ export class TaskItem {
     const titleEditAttributes: Record<string, string> = isEditableTitle ? { "data-action-click": "edit_title" } : {};
 
     // Shared styling for the primary actions in the header toolbar so the
-    // buttons (Delete / Schedule Execution / Cancel Schedule / Send to
-    // CoderBot) share the same height and are perfectly aligned.
+    // buttons (Delete / Schedule Execution / Cancel Schedule / Mark as Failed
+    // / Cancel Progress / Send to CoderBot) share the same height and are
+    // perfectly aligned.
     const headerButtonBase =
       'inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg transition-all cursor-pointer';
 
@@ -204,6 +205,18 @@ export class TaskItem {
                   <span>Cancel Schedule</span>
                 </button>
               ` : ''}
+              ${canFail ? `
+                <button data-action-click="fail_task" data-version="${task.version}"
+                        class="${headerButtonBase} text-red-400 hover:text-red-300 bg-app-surface hover:bg-red-500/20 border border-app-border">
+                  <span>Mark as Failed</span>
+                </button>
+              ` : ''}
+              ${isInProgress ? `
+                <button data-action-click="cancel_progress" data-version="${task.version}"
+                        class="${headerButtonBase} bg-slate-700 hover:bg-slate-600 text-slate-200 shadow-lg">
+                  <span>Cancel Progress</span>
+                </button>
+              ` : ''}
             ` : ''}
             ${canTriggerExecution ? `
               <button data-action-click="trigger_coderbot" data-task-id="${taskId}"
@@ -265,8 +278,8 @@ export class TaskItem {
               ` : ''}
             </div>
 
-            <div class="flex gap-2">
-              ${isProposed ? `
+            ${isProposed ? `
+              <div class="flex gap-2">
                 <button data-action-click="reject_design" data-version="${task.version}" 
                         class="text-xs bg-slate-700 hover:bg-red-900/40 text-slate-300 hover:text-red-400 border border-app-border px-4 py-1.5 rounded-lg transition-all cursor-pointer font-bold">
                   Reject Design
@@ -275,21 +288,8 @@ export class TaskItem {
                         class="text-xs bg-green-600 hover:bg-green-500 text-white px-5 py-1.5 rounded-lg transition-all shadow-lg shadow-green-900/20 cursor-pointer font-black uppercase tracking-tight">
                   Accept Design
                 </button>
-              ` : `
-                ${canFail ? `
-                  <button data-action-click="fail_task" data-version="${task.version}" 
-                          class="text-xs text-red-400 hover:text-red-300 px-3 py-1 rounded transition-all cursor-pointer">
-                    Mark as Failed
-                  </button>
-                ` : ''}
-                ${isInProgress ? `
-                  <button data-action-click="cancel_progress" data-version="${task.version}" 
-                          class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1 rounded transition-all shadow-lg cursor-pointer">
-                    Cancel Progress
-                  </button>
-                ` : ''}
-              `}
-            </div>
+              </div>
+            ` : ''}
           </div>
           ${task.description ? `<p class="text-sm text-app-text/70">${task.description}</p>` : ''}
           
