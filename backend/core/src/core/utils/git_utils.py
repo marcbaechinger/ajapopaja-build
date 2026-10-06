@@ -458,6 +458,7 @@ async def get_commit_diff(pipeline_id: str, commit_hash: str) -> Dict:
         "commit_hash": commit.hexsha,
         "patch": patch,
         "subject": commit.summary,
+        "message": commit.message,
         "author": commit.author.name,
         "created_at": commit.committed_datetime.isoformat(),
     }
@@ -547,15 +548,16 @@ def get_git_status_details(repo: git.Repo) -> Dict:
     return result
 
 
-def get_git_log(repo: git.Repo, limit: int = 50) -> list:
+def get_git_log(repo: git.Repo, limit: int = 50, offset: int = 0) -> list:
     """Return compact commit entries for the repository's current branch.
 
     Each entry carries the abbreviated and full hash, author name/email, the
-    commit date and the subject line. A repository without commits (unborn
-    HEAD) yields an empty list rather than raising.
+    commit date and the subject line. ``offset`` skips that many commits from
+    the tip, enabling pagination. A repository without commits (unborn HEAD)
+    yields an empty list rather than raising.
     """
     try:
-        commits = list(repo.iter_commits("HEAD", max_count=limit))
+        commits = list(repo.iter_commits("HEAD", max_count=limit, skip=offset))
     except Exception:
         return []
 
@@ -570,6 +572,18 @@ def get_git_log(repo: git.Repo, limit: int = 50) -> list:
         }
         for commit in commits
     ]
+
+
+def get_git_log_total(repo: git.Repo) -> int:
+    """Return the total number of commits reachable from HEAD.
+
+    Uses ``git rev-list --count HEAD`` which is cheap even on large histories.
+    An unborn HEAD (or any git failure) yields ``0`` rather than raising.
+    """
+    try:
+        return int(repo.git.rev_list("--count", "HEAD"))
+    except Exception:
+        return 0
 
 
 # Git porcelain status codes mapped to the small status vocabulary the UI
@@ -715,7 +729,15 @@ async def get_pipeline_git_status(pipeline_id: str) -> Dict:
     return get_git_status_details(repo)
 
 
-async def get_pipeline_git_log(pipeline_id: str, limit: int = 50) -> list:
+async def get_pipeline_git_log(
+    pipeline_id: str, limit: int = 50, offset: int = 0
+) -> list:
     """Read-only git log for a pipeline repo."""
     _, repo = await get_pipeline_repo_readonly(pipeline_id)
-    return get_git_log(repo, limit)
+    return get_git_log(repo, limit, offset)
+
+
+async def get_pipeline_git_log_total(pipeline_id: str) -> int:
+    """Read-only total commit count for a pipeline repo."""
+    _, repo = await get_pipeline_repo_readonly(pipeline_id)
+    return get_git_log_total(repo)

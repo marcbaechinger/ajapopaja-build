@@ -817,6 +817,20 @@ describe('PipelineClient git endpoints', () => {
       const url = new URL((fetch as any).mock.calls[0][0]);
       expect(url.pathname).toBe('/pipelines/pipe-1/git-log');
       expect(url.searchParams.get('limit')).toBe('25');
+      expect(url.searchParams.get('offset')).toBe('0');
+    });
+
+    it('should send an explicit offset for pagination', async () => {
+      (fetch as any).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ commits: [], total: 60 }),
+      });
+
+      await client.getGitLog('pipe-1', 25, 50);
+
+      const url = new URL((fetch as any).mock.calls[0][0]);
+      expect(url.searchParams.get('limit')).toBe('25');
+      expect(url.searchParams.get('offset')).toBe('50');
     });
 
     it('should default the limit to 50', async () => {
@@ -829,6 +843,7 @@ describe('PipelineClient git endpoints', () => {
 
       const url = new URL((fetch as any).mock.calls[0][0]);
       expect(url.searchParams.get('limit')).toBe('50');
+      expect(url.searchParams.get('offset')).toBe('0');
     });
 
     it('should authenticate with the Authorization header', async () => {

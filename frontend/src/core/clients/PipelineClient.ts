@@ -125,9 +125,9 @@ export class PipelineClient extends BaseClient {
     return await response.json();
   }
 
-  async getGitLog(pipelineId: string, limit: number = 50): Promise<GitLogResponse> {
+  async getGitLog(pipelineId: string, limit: number = 50, offset: number = 0): Promise<GitLogResponse> {
     const response = await this.fetch(
-      `${this.baseUrl}/pipelines/${pipelineId}/git-log?limit=${limit}`
+      `${this.baseUrl}/pipelines/${pipelineId}/git-log?limit=${limit}&offset=${offset}`
     );
     return await response.json();
   }

@@ -623,6 +623,7 @@ async def test_get_commit_diff_endpoint(async_client, init_mock_db):
         "commit_hash": "abcdef123456",
         "patch": "diff --git a/a.txt b/a.txt\n",
         "subject": "Add a.txt",
+        "message": "Add a.txt\n\nLonger body.",
         "author": "Alice",
         "created_at": "2026-01-01T00:00:00+00:00",
     }
@@ -714,7 +715,7 @@ async def test_get_pipeline_git_status_endpoint_not_found(async_client, init_moc
 
 @pytest.mark.asyncio
 async def test_get_pipeline_git_log_endpoint(async_client, init_mock_db):
-    """GET /api/pipelines/{id}/git-log returns compact commit entries."""
+    """GET /api/pipelines/{id}/git-log returns compact commit entries and total."""
     commits = [
         {
             "hash": "abcdef1234567890",
@@ -725,17 +726,69 @@ async def test_get_pipeline_git_log_endpoint(async_client, init_mock_db):
             "subject": "Add feature",
         }
     ]
-    with patch(
-        "api.routes.pipeline.git_utils.get_pipeline_git_log",
-        new_callable=AsyncMock,
-        return_value=commits,
-    ) as mock_log:
+    with (
+        patch(
+            "api.routes.pipeline.git_utils.get_pipeline_git_log",
+            new_callable=AsyncMock,
+            return_value=commits,
+        ) as mock_log,
+        patch(
+            "api.routes.pipeline.git_utils.get_pipeline_git_log_total",
+            new_callable=AsyncMock,
+            return_value=42,
+        ),
+    ):
         response = await async_client.get("/api/pipelines/p1/git-log?limit=10")
         assert response.status_code == status.HTTP_200_OK
         body = response.json()
         assert body["commits"] == commits
+        assert body["total"] == 42
         assert body["error"] is None
-        mock_log.assert_awaited_once_with("p1", 10)
+        mock_log.assert_awaited_once_with("p1", 10, 0)
+
+
+@pytest.mark.asyncio
+async def test_get_pipeline_git_log_forwards_offset(async_client, init_mock_db):
+    """limit and offset are forwarded to git_utils and total is returned."""
+    with (
+        patch(
+            "api.routes.pipeline.git_utils.get_pipeline_git_log",
+            new_callable=AsyncMock,
+            return_value=[],
+        ) as mock_log,
+        patch(
+            "api.routes.pipeline.git_utils.get_pipeline_git_log_total",
+            new_callable=AsyncMock,
+            return_value=60,
+        ),
+    ):
+        response = await async_client.get(
+            "/api/pipelines/p1/git-log?limit=25&offset=25"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        body = response.json()
+        assert body["total"] == 60
+        mock_log.assert_awaited_once_with("p1", 25, 25)
+
+
+@pytest.mark.asyncio
+async def test_get_pipeline_git_log_endpoint_defaults(async_client, init_mock_db):
+    """The endpoint defaults to limit=50, offset=0."""
+    with (
+        patch(
+            "api.routes.pipeline.git_utils.get_pipeline_git_log",
+            new_callable=AsyncMock,
+            return_value=[],
+        ) as mock_log,
+        patch(
+            "api.routes.pipeline.git_utils.get_pipeline_git_log_total",
+            new_callable=AsyncMock,
+            return_value=0,
+        ),
+    ):
+        response = await async_client.get("/api/pipelines/p1/git-log")
+        assert response.status_code == status.HTTP_200_OK
+        mock_log.assert_awaited_once_with("p1", 50, 0)
 
 
 @pytest.mark.asyncio

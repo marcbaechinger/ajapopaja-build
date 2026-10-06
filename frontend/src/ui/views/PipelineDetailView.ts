@@ -20,7 +20,7 @@ import { AppContext } from '../../core/AppContext.ts';
 import { Pipeline, TaskStatus, Task, type GitStatusDetails } from '../../core/domain.ts';
 import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
 import { TaskItem } from '../components/TaskItem.ts';
-import { HistoryDialog } from '../components/HistoryDialog.ts';
+import { HistoryView } from '../components/HistoryView.ts';
 import { StatsDialog } from '../components/StatsDialog.ts';
 import { DesignDocDialog } from '../components/DesignDocDialog.ts';
 import { DesignDocDiffDialog } from '../components/DesignDocDiffDialog.ts';
@@ -82,6 +82,9 @@ export class PipelineDetailView extends View {
   private contentTab: ContentTab = 'task-editor';
   private interactiveCodingView: InteractiveCodingView | null = null;
   private fileBrowseView: FileBrowseView | null = null;
+  // Lazily mounted History tab (repository log + status). Kept mounted across
+  // tab switches so its page/expanded/diff state survives.
+  private historyView: HistoryView | null = null;
   // Explicit file-browser path from the route, consumed once when the File
   // Browser is lazily mounted. `null` = use the persisted last path.
   private pendingFbPath: string | null = null;
@@ -166,10 +169,10 @@ export class PipelineDetailView extends View {
         return;
       }
 
-      // 'h' key for history dialog
+      // 'h' key opens the History tab
       if (e.key === 'h' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
-        new HistoryDialog(this.pipelineId, this.context.pipelineClient).show();
+        this.setContentTab('history', { hash: 'push' });
       }
 
       // 's' key for stats dialog
@@ -716,7 +719,7 @@ export class PipelineDetailView extends View {
       // The Coding Agent tab is only selectable while a session is attached to
       // this pipeline.
       if (tab === 'coding-agent' && !this.isInteractiveSessionMine()) return;
-      if (tab !== 'task-editor' && tab !== 'coding-agent' && tab !== 'file-browser') {
+      if (tab !== 'task-editor' && tab !== 'coding-agent' && tab !== 'file-browser' && tab !== 'history') {
         return;
       }
       this.setContentTab(tab, { hash: 'push' });
@@ -875,7 +878,7 @@ export class PipelineDetailView extends View {
     });
 
     this.context.actionRegistry.register('open_history', () => {
-      new HistoryDialog(this.pipelineId, this.context.pipelineClient).show();
+      this.setContentTab('history', { hash: 'push' });
     });
 
     this.context.actionRegistry.register('create_task', async (_e, el) => {
@@ -1677,7 +1680,7 @@ export class PipelineDetailView extends View {
           <div id="col-prep">
             <div id="pull-request-section">${PullRequestSection.render(this.pullRequests)}</div>
           </div>
-          <!-- Three tabs over three pre-rendered DOM fragments. The tab list is
+          <!-- Four tabs over four pre-rendered DOM fragments. The tab list is
                always visible; the Coding Agent tab is hidden while no session
                is attached to this pipeline. "Task editor" is the default. -->
           <div id="content-tablist" role="tablist" aria-label="Pipeline content"
@@ -1697,12 +1700,18 @@ export class PipelineDetailView extends View {
               class="px-3 py-2 text-xs font-bold uppercase tracking-widest border-b-2 -mb-px transition-colors cursor-pointer border-transparent text-app-muted hover:text-app-text">
               File Browser
             </button>
+            <button id="tab-history" data-action-click="select_content_tab" data-content-tab="history" type="button"
+              role="tab" aria-selected="false" aria-controls="history-view-mount"
+              class="px-3 py-2 text-xs font-bold uppercase tracking-widest border-b-2 -mb-px transition-colors cursor-pointer border-transparent text-app-muted hover:text-app-text">
+              History
+            </button>
           </div>
           <div id="selected-task-view" role="tabpanel" aria-labelledby="tab-task-editor" class="mt-6">
             <p class="text-app-muted/60 text-xs italic text-center border border-dashed border-app-border/40 rounded-xl py-6 px-3">Select a task from the backlog to open it here.</p>
           </div>
           <div id="interactive-coding-view-mount" role="tabpanel" aria-labelledby="tab-coding-agent" class="mt-6 hidden"></div>
           <div id="file-browser-view-mount" role="tabpanel" aria-labelledby="tab-file-browser" class="mt-6 hidden"></div>
+          <div id="history-view-mount" role="tabpanel" aria-labelledby="tab-history" class="mt-6 hidden"></div>
         </div>
       </div>
     `;
@@ -1919,6 +1928,10 @@ export class PipelineDetailView extends View {
     if (this.fileBrowseView) {
       this.fileBrowseView.destroy();
       this.fileBrowseView = null;
+    }
+    if (this.historyView) {
+      this.historyView.destroy();
+      this.historyView = null;
     }
     this.pendingFbPath = null;
     this.unsubs.forEach(unsub => unsub());
@@ -2266,12 +2279,31 @@ export class PipelineDetailView extends View {
   }
 
   /**
-   * Shows/hides the session controls and the three content fragments (TaskItem,
-   * InteractiveCodingView, FileBrowseView) and keeps every tab button's
-   * active/disabled state in sync. Switching tabs only toggles the visibility of
-   * pre-rendered DOM fragments (no re-render, no teardown), so in-progress edits
-   * and the file browser's state survive switching back and forth. The File
-   * Browser is lazily mounted on first activation.
+   * Lazily mounts the HistoryView the first time the History tab is selected,
+   * then keeps it mounted so its page/expanded/diff state survives tab switches.
+   */
+  private mountHistoryView() {
+    if (this.historyView || !this.container) return;
+    const mount = this.container.querySelector(
+      '#history-view-mount'
+    ) as HTMLElement | null;
+    if (!mount) return;
+    this.historyView = new HistoryView(mount, {
+      pipelineId: this.pipelineId,
+      client: this.context.pipelineClient,
+      actionRegistry: this.context.actionRegistry,
+    });
+    this.historyView.render();
+  }
+
+  /**
+   * Shows/hides the session controls and the four content fragments (TaskItem,
+   * InteractiveCodingView, FileBrowseView, HistoryView) and keeps every tab
+   * button's active/disabled state in sync. Switching tabs only toggles the
+   * visibility of pre-rendered DOM fragments (no re-render, no teardown), so
+   * in-progress edits and the file browser's/history's state survive switching
+   * back and forth. The File Browser and History are lazily mounted on first
+   * activation.
    */
   private updateContentTabs() {
     if (!this.container) return;
@@ -2282,9 +2314,11 @@ export class PipelineDetailView extends View {
     const selected = this.container.querySelector('#selected-task-view') as HTMLElement | null;
     const mount = this.container.querySelector('#interactive-coding-view-mount') as HTMLElement | null;
     const fileMount = this.container.querySelector('#file-browser-view-mount') as HTMLElement | null;
+    const historyMount = this.container.querySelector('#history-view-mount') as HTMLElement | null;
     const taskTab = this.container.querySelector('#tab-task-editor') as HTMLElement | null;
     const codingTab = this.container.querySelector('#tab-coding-agent') as HTMLElement | null;
     const fileTab = this.container.querySelector('#tab-file-browser') as HTMLElement | null;
+    const historyTab = this.container.querySelector('#tab-history') as HTMLElement | null;
 
     const isRemote = !!this.pipeline?.repo_uri;
     const mine =
@@ -2320,13 +2354,18 @@ export class PipelineDetailView extends View {
     const showTaskEditor = this.contentTab === 'task-editor';
     const showInteractive = this.contentTab === 'coding-agent' && mine;
     const showFileBrowser = this.contentTab === 'file-browser';
+    const showHistory = this.contentTab === 'history';
 
     selected?.classList.toggle('hidden', !showTaskEditor);
     mount?.classList.toggle('hidden', !showInteractive);
     fileMount?.classList.toggle('hidden', !showFileBrowser);
+    historyMount?.classList.toggle('hidden', !showHistory);
 
     if (showFileBrowser) {
       this.mountFileBrowseView();
+    }
+    if (showHistory) {
+      this.mountHistoryView();
     }
 
     const setTabActive = (el: HTMLElement | null, active: boolean) => {
@@ -2340,6 +2379,7 @@ export class PipelineDetailView extends View {
     setTabActive(taskTab, showTaskEditor);
     setTabActive(codingTab, showInteractive);
     setTabActive(fileTab, showFileBrowser);
+    setTabActive(historyTab, showHistory);
 
     this.renderPipelineSessionList(isRemote ? resumable : []);
   }

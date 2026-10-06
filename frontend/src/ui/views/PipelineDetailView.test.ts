@@ -1331,6 +1331,9 @@ describe('PipelineDetailView Interactive Session', () => {
           repo_uri: 'https://github.com/example/repo.git',
         }),
         getGitStatus: vi.fn().mockResolvedValue({ staged: 0, unstaged: 0, untracked: 0 }),
+        getGitLog: vi.fn().mockResolvedValue({ commits: [], total: 0 }),
+        getCommitDiff: vi.fn().mockResolvedValue({ patch: '' }),
+        pull: vi.fn().mockResolvedValue({ status: 'ok', message: 'ok' }),
       },
       taskClient: {
         listByPipeline: vi.fn().mockResolvedValue([]),
@@ -1967,6 +1970,105 @@ describe('PipelineDetailView Interactive Session', () => {
 
     const selected = container.querySelector('#selected-task-view') as HTMLElement;
     expect(selected.innerHTML).toContain('Select a task from the backlog');
+  });
+
+  it('shows the History tab and lazily mounts it while keeping it across switches', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await view.loadPipeline();
+    await flush();
+
+    const tablist = container.querySelector('#content-tablist') as HTMLElement;
+    const historyTab = container.querySelector('#tab-history') as HTMLElement;
+    expect(tablist.classList.contains('hidden')).toBe(false);
+    expect(historyTab.textContent).toContain('History');
+    expect((view as any).historyView).toBeNull();
+
+    getAction('select_content_tab')(null, historyTab);
+    await flush();
+
+    expect((view as any).contentTab).toBe('history');
+    const historyMount = container.querySelector('#history-view-mount') as HTMLElement;
+    expect(historyMount.classList.contains('hidden')).toBe(false);
+    expect((view as any).historyView).not.toBeNull();
+    expect(mockContext.pipelineClient.getGitStatus).toHaveBeenCalledWith('p1');
+    expect(mockContext.pipelineClient.getGitLog).toHaveBeenCalledWith('p1', 25, 0);
+    const selected = container.querySelector('#selected-task-view') as HTMLElement;
+    expect(selected.classList.contains('hidden')).toBe(true);
+    expect(historyTab.getAttribute('aria-selected')).toBe('true');
+
+    const historyView = (view as any).historyView;
+
+    // Switching away and back reuses the same mounted fragment (no remount).
+    const taskTab = container.querySelector('#tab-task-editor') as HTMLElement;
+    getAction('select_content_tab')(null, taskTab);
+    expect(historyMount.classList.contains('hidden')).toBe(true);
+
+    getAction('select_content_tab')(null, historyTab);
+    expect(container.querySelector('#history-view-mount')).toBe(historyMount);
+    expect((view as any).historyView).toBe(historyView);
+    expect(historyMount.classList.contains('hidden')).toBe(false);
+  });
+
+  it('open_history activates the History tab and pushes the canonical hash', async () => {
+    window.location.hash = '';
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await flush();
+
+    getAction('open_history')();
+
+    expect((view as any).contentTab).toBe('history');
+    expect(window.location.hash).toBe('#/pipeline/p1/tab/history');
+    expect(
+      container.querySelector('#tab-history')!.getAttribute('aria-selected')
+    ).toBe('true');
+  });
+
+  it('the h shortcut activates the History tab', async () => {
+    window.location.hash = '';
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await flush();
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'h' }));
+
+    expect((view as any).contentTab).toBe('history');
+    expect(window.location.hash).toBe('#/pipeline/p1/tab/history');
+  });
+
+  it('deep-links the History tab from the sub-route', async () => {
+    window.location.hash = '';
+    const view = new PipelineDetailView(mockContext, { id: 'p1', rest: 'tab/history' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await flush();
+
+    expect((view as any).contentTab).toBe('history');
+    const historyMount = container.querySelector('#history-view-mount') as HTMLElement;
+    expect(historyMount.classList.contains('hidden')).toBe(false);
+    expect(window.location.hash).toBe('#/pipeline/p1/tab/history');
+  });
+
+  it('unmount destroys the mounted HistoryView', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await flush();
+
+    getAction('select_content_tab')(null, container.querySelector('#tab-history') as HTMLElement);
+    await flush();
+    const historyView = (view as any).historyView;
+    expect(historyView).not.toBeNull();
+    const destroySpy = vi.spyOn(historyView, 'destroy');
+
+    view.unmount();
+
+    expect(destroySpy).toHaveBeenCalled();
+    expect((view as any).historyView).toBeNull();
   });
 });
 

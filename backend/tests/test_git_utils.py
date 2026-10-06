@@ -656,6 +656,7 @@ async def test_get_commit_diff_success(tmp_path):
 
     assert result["commit_hash"] == head
     assert result["subject"] == "Add file"
+    assert result["message"].startswith("Add file")
     assert result["author"] == "Test User"
     assert result["created_at"]
     assert "file.txt" in result["patch"]
@@ -784,6 +785,50 @@ def test_get_git_log_empty_repository(tmp_path):
     assert git_utils.get_git_log(repo) == []
 
 
+def test_get_git_log_honours_offset(tmp_path):
+    origin = _make_origin(tmp_path)
+    ws = tmp_path / "workspace"
+    _git(tmp_path, ["clone", str(origin), str(ws)])
+    (ws / "next.txt").write_text("next\n")
+    _git(ws, ["add", "."])
+    _git(ws, ["commit", "-m", "Add next file"])
+    (ws / "third.txt").write_text("third\n")
+    _git(ws, ["add", "."])
+    _git(ws, ["commit", "-m", "Add third file"])
+    repo = git.Repo(str(ws))
+
+    first_page = git_utils.get_git_log(repo, limit=2, offset=0)
+    second_page = git_utils.get_git_log(repo, limit=2, offset=2)
+
+    assert [entry["subject"] for entry in first_page] == [
+        "Add third file",
+        "Add next file",
+    ]
+    assert [entry["subject"] for entry in second_page] == ["Initial commit"]
+
+
+def test_get_git_log_total_counts_commits(tmp_path):
+    origin = _make_origin(tmp_path)
+    ws = tmp_path / "workspace"
+    _git(tmp_path, ["clone", str(origin), str(ws)])
+    (ws / "next.txt").write_text("next\n")
+    _git(ws, ["add", "."])
+    _git(ws, ["commit", "-m", "Add next file"])
+    repo = git.Repo(str(ws))
+
+    assert git_utils.get_git_log_total(repo) == 2
+    assert len(git_utils.get_git_log(repo, limit=100)) == 2
+
+
+def test_get_git_log_total_unborn_head_returns_zero(tmp_path):
+    ws = tmp_path / "empty"
+    ws.mkdir()
+    _git(ws, ["init", "-b", "main"])
+    repo = git.Repo(str(ws))
+
+    assert git_utils.get_git_log_total(repo) == 0
+
+
 @pytest.mark.asyncio
 async def test_get_pipeline_repo_readonly_missing_repository(tmp_path):
     pipeline = MagicMock()
@@ -819,6 +864,9 @@ async def test_get_pipeline_git_status_and_log(tmp_path):
         entries = await git_utils.get_pipeline_git_log("p1", limit=5)
         assert entries
         assert entries[0]["subject"] == "Initial commit"
+
+        total = await git_utils.get_pipeline_git_log_total("p1")
+        assert total == 1
 
     # The wrapper must not modify the repository.
     assert not repo.is_dirty(untracked_files=True)

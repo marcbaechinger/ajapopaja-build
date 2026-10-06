@@ -285,6 +285,7 @@ export class CommitDiff {
   commit_hash: string = '';
   patch: string = '';
   subject?: string | null;
+  message?: string | null;
   author?: string | null;
   created_at?: string | null;
 
@@ -293,6 +294,7 @@ export class CommitDiff {
     if (json.commit_hash !== undefined) this.commit_hash = String(json.commit_hash);
     if (json.patch !== undefined) this.patch = String(json.patch);
     if (json.subject !== undefined) this.subject = json.subject;
+    if (json.message !== undefined) this.message = json.message;
     if (json.author !== undefined) this.author = json.author;
     if (json.created_at !== undefined) this.created_at = json.created_at;
   }
@@ -341,6 +343,8 @@ export interface GitLogEntry {
 /** Response wrapper for the Pipeline git-log endpoint. */
 export interface GitLogResponse {
   commits: GitLogEntry[];
+  /** Total number of commits on the branch, across all pages. */
+  total: number;
   error?: string | null;
 }
 

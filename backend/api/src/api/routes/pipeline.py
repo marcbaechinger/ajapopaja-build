@@ -283,6 +283,7 @@ class CommitDiff(BaseModel):
     commit_hash: str
     patch: str
     subject: Optional[str] = None
+    message: Optional[str] = None
     author: Optional[str] = None
     created_at: Optional[str] = None
 
@@ -299,6 +300,7 @@ async def get_commit_diff(
 
 class GitLogResponse(BaseModel):
     commits: List[GitLogEntry] = Field(default_factory=list)
+    total: int = 0
     error: Optional[str] = None
 
 
@@ -325,16 +327,20 @@ async def get_pipeline_git_status(
 async def get_pipeline_git_log(
     pipeline_id: str,
     limit: int = 50,
+    offset: int = 0,
     current_user: User = Depends(get_current_user),
 ):
     """Return the pipeline repository's compact Git log (read-only).
 
-    A repository without commits yields an empty list. Git failures are
-    reported through the ``error`` field.
+    ``limit``/``offset`` page through the history; ``total`` reports the total
+    number of commits on the branch so the client can render pagination. A
+    repository without commits yields an empty list and ``total=0``. Git
+    failures are reported through the ``error`` field.
     """
     try:
-        commits = await git_utils.get_pipeline_git_log(pipeline_id, limit)
-        return GitLogResponse(commits=commits)
+        commits = await git_utils.get_pipeline_git_log(pipeline_id, limit, offset)
+        total = await git_utils.get_pipeline_git_log_total(pipeline_id)
+        return GitLogResponse(commits=commits, total=total)
     except EntityNotFoundError:
         raise
     except Exception as e:
