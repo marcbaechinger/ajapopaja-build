@@ -16,7 +16,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { FileBrowseView } from './FileBrowseView.ts';
-import { DirectoryListing, FileContent } from '../../core/domain.ts';
+import { DirectoryListing, FileContent, FileSearchResponse } from '../../core/domain.ts';
 import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
 
 function listing(path: string, names: Array<[string, boolean]>): DirectoryListing {
@@ -559,5 +559,110 @@ describe('FileBrowseView route wiring', () => {
     // Refresh is not reported either.
     await v.refresh();
     expect(onNavigate.mock.calls.length).toBe(before);
+  });
+});
+
+describe('FileBrowseView file search', () => {
+  let root: HTMLElement;
+  let registry: FakeRegistry;
+  let client: any;
+  let view: FileBrowseView | null = null;
+
+  const flushAsync = async () => {
+    for (let i = 0; i < 8; i += 1) await Promise.resolve();
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    document.body.innerHTML = '';
+    root = document.createElement('div');
+    document.body.appendChild(root);
+    window.localStorage.clear();
+    LocalStorageManager.resetInstances();
+
+    registry = new FakeRegistry();
+    client = {
+      listDirectory: vi.fn((_pipeline: string, path: string) =>
+        Promise.resolve(listing(path, [['App.ts', false]]))
+      ),
+      readFile: vi.fn((_pipeline: string, path: string) =>
+        Promise.resolve(new FileContent({ name: 'App.ts', path, size: 4, content: 'app\n' }))
+      ),
+      getMeta: vi.fn(),
+      searchFiles: vi.fn().mockResolvedValue(
+        new FileSearchResponse({
+          query: 'App',
+          results: [{ path: 'src/App.ts', name: 'App.ts', is_dir: false }],
+          truncated: false,
+          index_ready: true,
+        })
+      ),
+    };
+  });
+
+  afterEach(() => {
+    view?.destroy();
+    view = null;
+    vi.useRealTimers();
+  });
+
+  const build = () => {
+    view = new FileBrowseView(root, {
+      pipelineId: 'p1',
+      client,
+      actionRegistry: registry as any,
+    });
+    return view;
+  };
+
+  it('renders the search input in the header, left of the refresh button, with a delimiter', async () => {
+    build().render();
+    await flushAsync();
+
+    const searchMount = root.querySelector('#file-browser-search-mount') as HTMLElement;
+    const refresh = root.querySelector('#file-browser-refresh-btn') as HTMLElement;
+    expect(searchMount).not.toBeNull();
+    expect(refresh).not.toBeNull();
+
+    // The delimiter sits between the search control group and refresh.
+    const delimiter = refresh.previousElementSibling as HTMLElement;
+    expect(delimiter.tagName).toBe('SPAN');
+    expect(delimiter.className).toContain('w-px');
+    expect(searchMount.compareDocumentPosition(refresh) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    // The search field itself is compact (fixed height).
+    const input = searchMount.querySelector('input') as HTMLInputElement;
+    expect(input).not.toBeNull();
+    expect(input.className).toContain('h-7');
+  });
+
+  it('searches the backend and navigates to the selected file', async () => {
+    client.getMeta.mockResolvedValue({ isDir: false });
+    build().render();
+    await flushAsync();
+
+    const input = root.querySelector('#file-browser-search-mount input') as HTMLInputElement;
+    input.value = 'App';
+    input.dispatchEvent(new Event('input'));
+    await vi.advanceTimersByTimeAsync(150);
+    await flushAsync();
+
+    expect(client.searchFiles).toHaveBeenCalledWith('p1', 'App', expect.any(AbortSignal));
+
+    const option = root.querySelector('[data-role="search-result"]') as HTMLElement;
+    expect(option).not.toBeNull();
+    option.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    await flushAsync();
+
+    expect(client.getMeta).toHaveBeenCalledWith('p1', 'src/App.ts');
+    expect(client.readFile).toHaveBeenCalledWith('p1', 'src/App.ts');
+  });
+
+  it('destroys the mounted search input with the view', async () => {
+    build().render();
+    await flushAsync();
+    view!.destroy();
+    expect(root.innerHTML).toBe('');
+    view = null;
   });
 });

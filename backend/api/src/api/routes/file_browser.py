@@ -26,9 +26,16 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from api.auth import get_current_user
 from core.exceptions import EntityNotFoundError
-from core.models.models import DirectoryListing, FileContent, FileEntry, User
+from core.models.models import (
+    DirectoryListing,
+    FileContent,
+    FileEntry,
+    FileSearchResponse,
+    User,
+)
 from core.queries import pipeline as pipeline_queries
 from core.services.file_browser import FileBrowserService, PathEscapeError
+from core.services.file_search import FileSearchService
 
 logger = logging.getLogger(__name__)
 
@@ -95,3 +102,15 @@ async def get_file_meta(
     """Return metadata and git status for a single entry (refresh)."""
     pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
     return await _handle(FileBrowserService.get_meta(pipeline, path))
+
+
+@router.get("/search", response_model=FileSearchResponse)
+async def search_files(
+    pipeline_id: str,
+    q: str = Query(..., min_length=1, max_length=200),
+    limit: int = Query(20, ge=1, le=50),
+    current_user: User = Depends(get_current_user),
+):
+    """Search filenames (and pathnames) in the pipeline repository."""
+    pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
+    return await _handle(FileSearchService.search(pipeline, q, limit))

@@ -160,4 +160,50 @@ describe('FileBrowserClient', () => {
 
     await expect(client.readFile('p1', 'missing.txt')).rejects.toThrow('Path not found');
   });
+
+  it('builds the search URL with an encoded query and maps the response', async () => {
+    (fetch as any).mockResolvedValue(
+      jsonResponse({
+        query: 'File Browse',
+        results: [
+          { path: 'src/ui/FileBrowseView.ts', name: 'FileBrowseView.ts', is_dir: false },
+          { path: 'src/ui', name: 'ui', is_dir: true },
+        ],
+        truncated: true,
+        index_ready: true,
+      })
+    );
+
+    const result = await client.searchFiles('p1', 'File Browse');
+
+    expect((fetch as any).mock.calls[0][0]).toBe(
+      'http://test/api/pipelines/p1/files/search?q=File+Browse'
+    );
+    expect(result.query).toBe('File Browse');
+    expect(result.truncated).toBe(true);
+    expect(result.indexReady).toBe(true);
+    expect(result.results[0].path).toBe('src/ui/FileBrowseView.ts');
+    expect(result.results[0].isDir).toBe(false);
+    expect(result.results[1].isDir).toBe(true);
+  });
+
+  it('forwards an abort signal to the search request', async () => {
+    (fetch as any).mockResolvedValue(jsonResponse({ query: 'x', results: [] }));
+    const controller = new AbortController();
+
+    await client.searchFiles('p1', 'x', controller.signal);
+
+    const options = (fetch as any).mock.calls[0][1];
+    expect(options.signal).toBe(controller.signal);
+  });
+
+  it('adds an explicit result limit to the search URL', async () => {
+    (fetch as any).mockResolvedValue(jsonResponse({ query: 'x', results: [] }));
+
+    await client.searchFiles('p1', 'x', undefined, 5);
+
+    expect((fetch as any).mock.calls[0][0]).toBe(
+      'http://test/api/pipelines/p1/files/search?q=x&limit=5'
+    );
+  });
 });

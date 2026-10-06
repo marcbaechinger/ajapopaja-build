@@ -21,7 +21,9 @@ from fastapi import status
 
 from api.auth import get_current_user
 from api.main import app
+from core.services import file_search
 from core.services.file_browser import MAX_TEXT_BYTES
+from core.services.file_search import FileSearchIndexManager
 
 RUN_GIT_ENV = {
     "GIT_AUTHOR_NAME": "Test User",
@@ -49,6 +51,16 @@ def mock_auth():
     app.dependency_overrides[get_current_user] = lambda: mock_user
     yield
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(autouse=True)
+def reset_search_manager():
+    """Keep each route test on a fresh, isolated search index cache."""
+    manager = FileSearchIndexManager()
+    original = file_search.get_index_manager()
+    file_search.set_index_manager(manager)
+    yield
+    file_search.set_index_manager(original)
 
 
 def _make_repo(tmp_path):
@@ -331,3 +343,71 @@ async def test_listing_without_git_repo_still_renders(async_client, tmp_path):
     data = response.json()
     assert [e["name"] for e in data["entries"]] == ["a.txt"]
     assert data["entries"][0]["git_status"] is None
+
+
+@pytest.mark.asyncio
+async def test_search_endpoint_returns_ranked_relative_results(async_client, tmp_path):
+    repo = _make_repo(tmp_path)
+    (repo / "src" / "ui").mkdir(parents=True)
+    (repo / "src" / "ui" / "FileBrowseView.ts").write_text("x\n")
+    with _patch_pipeline(repo):
+        response = await async_client.get(
+            "/api/pipelines/p1/files/search", params={"q": "FileBrowse"}
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert data["query"] == "FileBrowse"
+    assert data["index_ready"] is True
+    paths = [r["path"] for r in data["results"]]
+    assert "src/ui/FileBrowseView.ts" in paths
+    for result in data["results"]:
+        assert not result["path"].startswith("/")
+        assert str(repo) not in result["path"]
+
+
+@pytest.mark.asyncio
+async def test_search_endpoint_requires_a_query(async_client, tmp_path):
+    repo = _make_repo(tmp_path)
+    with _patch_pipeline(repo):
+        response = await async_client.get("/api/pipelines/p1/files/search")
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_search_endpoint_no_match_returns_empty(async_client, tmp_path):
+    repo = _make_repo(tmp_path)
+    with _patch_pipeline(repo):
+        response = await async_client.get(
+            "/api/pipelines/p1/files/search", params={"q": "does-not-exist"}
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["results"] == []
+
+
+@pytest.mark.asyncio
+async def test_search_endpoint_missing_workspace_returns_404(async_client, tmp_path):
+    pipeline = MagicMock()
+    pipeline.id = "p1"
+    pipeline.workspace_abs_path = tmp_path / "does-not-exist"
+    with patch(
+        "api.routes.file_browser.pipeline_queries.get_pipeline_by_id",
+        new_callable=AsyncMock,
+        return_value=pipeline,
+    ):
+        response = await async_client.get(
+            "/api/pipelines/p1/files/search", params={"q": "a"}
+        )
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+@pytest.mark.asyncio
+async def test_search_endpoint_requires_authentication(async_client, tmp_path):
+    repo = _make_repo(tmp_path)
+    app.dependency_overrides.clear()
+    with _patch_pipeline(repo):
+        response = await async_client.get(
+            "/api/pipelines/p1/files/search", params={"q": "a"}
+        )
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED

@@ -16,7 +16,7 @@
 
 import { BaseClient } from './BaseClient.ts';
 import { AuthService } from '../AuthService.ts';
-import { DirectoryListing, FileContent, FileEntry } from '../domain.ts';
+import { DirectoryListing, FileContent, FileEntry, FileSearchResponse } from '../domain.ts';
 
 /**
  * HTTP client for the pipeline file-browser endpoints.
@@ -55,5 +55,24 @@ export class FileBrowserClient extends BaseClient {
       `${this.baseUrl}/pipelines/${pipelineId}/files/meta?${params.toString()}`
     );
     return new FileEntry(await response.json());
+  }
+
+  /**
+   * Search the pipeline repository for filenames/paths. The optional abort
+   * signal cancels a superseded as-you-type request.
+   */
+  async searchFiles(
+    pipelineId: string,
+    query: string,
+    signal?: AbortSignal,
+    limit?: number
+  ): Promise<FileSearchResponse> {
+    const params = new URLSearchParams({ q: query });
+    if (limit !== undefined) params.set('limit', String(limit));
+    const response = await this.fetch(
+      `${this.baseUrl}/pipelines/${pipelineId}/files/search?${params.toString()}`,
+      { signal }
+    );
+    return new FileSearchResponse(await response.json());
   }
 }

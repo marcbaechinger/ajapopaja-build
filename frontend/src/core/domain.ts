@@ -437,6 +437,38 @@ export class FileContent {
   }
 }
 
+/** A single hit of a repository path search (repo-relative POSIX path). */
+export class FileSearchResult {
+  path: string = '';
+  name: string = '';
+  isDir: boolean = false;
+
+  constructor(json: any) {
+    if (!json) return;
+    if (json.path !== undefined) this.path = String(json.path);
+    if (json.name !== undefined) this.name = String(json.name);
+    if (json.is_dir !== undefined) this.isDir = Boolean(json.is_dir);
+  }
+}
+
+/** Result of searching a pipeline repository for filenames/paths. */
+export class FileSearchResponse {
+  query: string = '';
+  results: FileSearchResult[] = [];
+  truncated: boolean = false;
+  indexReady: boolean = true;
+
+  constructor(json: any) {
+    if (!json) return;
+    if (json.query !== undefined) this.query = String(json.query);
+    if (Array.isArray(json.results)) {
+      this.results = json.results.map((entry: any) => new FileSearchResult(entry));
+    }
+    if (json.truncated !== undefined) this.truncated = Boolean(json.truncated);
+    if (json.index_ready !== undefined) this.indexReady = Boolean(json.index_ready);
+  }
+}
+
 export const NotificationType = {
   MESSAGE: "message",
   CONFIRMATION: "confirmation",

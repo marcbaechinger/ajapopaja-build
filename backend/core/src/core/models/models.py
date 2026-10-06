@@ -414,6 +414,33 @@ class FileContent(BaseModel):
     content: Optional[str] = None
 
 
+class FileSearchResult(BaseModel):
+    """A single hit of a repository path search.
+
+    ``path`` is always a repository-relative POSIX path; absolute paths are
+    never exposed to the client.
+    """
+
+    path: str
+    name: str
+    is_dir: bool = False
+
+
+class FileSearchResponse(BaseModel):
+    """Result of searching a pipeline repository for filenames/paths.
+
+    ``index_ready`` is ``False`` only while the very first index build is in
+    flight; the endpoint normally waits for the index, so it is effectively
+    always ``True`` in responses. ``truncated`` is set when the index or the
+    result set hit a configured cap.
+    """
+
+    query: str
+    results: List[FileSearchResult] = Field(default_factory=list)
+    truncated: bool = False
+    index_ready: bool = True
+
+
 class User(Document):
     username: str
     hashed_password: str

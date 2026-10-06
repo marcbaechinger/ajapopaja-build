@@ -23,6 +23,7 @@ import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
 import type { FileBrowserClient } from '../../core/clients/FileBrowserClient.ts';
 import { DirectoryView } from './DirectoryView.ts';
 import { FileView } from './FileView.ts';
+import { FileSearchInputView } from './FileSearchInputView.ts';
 import { Icon } from './Icon.ts';
 import { escapeHtml } from './utils/fileBrowser.ts';
 
@@ -77,6 +78,7 @@ export class FileBrowseView {
   private error: string | null = null;
   private requestId: number = 0;
   private destroyed: boolean = false;
+  private searchInput: FileSearchInputView | null = null;
 
   constructor(root: HTMLElement, options: FileBrowseViewOptions) {
     this.root = root;
@@ -93,6 +95,7 @@ export class FileBrowseView {
 
   render(): void {
     this.root.innerHTML = this.shell();
+    this.mountSearchInput();
     this.registerActions();
     this.restoreState();
     this.renderBreadcrumb();
@@ -102,6 +105,8 @@ export class FileBrowseView {
 
   destroy(): void {
     this.destroyed = true;
+    this.searchInput?.destroy();
+    this.searchInput = null;
     this.root.innerHTML = '';
   }
 
@@ -203,6 +208,8 @@ export class FileBrowseView {
           <nav id="file-browser-breadcrumb" aria-label="Current path"
             class="flex items-center gap-1 min-w-0 flex-1 flex-wrap"></nav>
           <div class="flex items-center gap-1 shrink-0">
+            <div id="file-browser-search-mount" class="shrink-0"></div>
+            <span class="w-px h-4 bg-app-border" aria-hidden="true"></span>
             <button id="file-browser-refresh-btn" type="button"
               data-action-click="file_browser_refresh"
               class="p-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center justify-center cursor-pointer"
@@ -226,6 +233,25 @@ export class FileBrowseView {
         </div>
       </div>
     `;
+  }
+
+  /**
+   * Mounts the compact file search into the header. The client search is
+   * bridged here so the reusable input only depends on a callback.
+   */
+  private mountSearchInput(): void {
+    const mount = this.root.querySelector<HTMLElement>('#file-browser-search-mount');
+    if (!mount) return;
+    this.searchInput?.destroy();
+    this.searchInput = new FileSearchInputView(mount, {
+      search: (query, signal) =>
+        this.client.searchFiles(this.pipelineId, query, signal),
+      onSelect: (result) => {
+        if (this.destroyed) return;
+        void this.navigateTo(result.path);
+      },
+    });
+    this.searchInput.render();
   }
 
   private registerActions(): void {

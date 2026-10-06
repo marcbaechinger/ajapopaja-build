@@ -89,7 +89,13 @@ class FileBrowserService:
     """Stateless helpers to browse a pipeline repository read-only."""
 
     @staticmethod
-    def _resolve_root(pipeline: Pipeline) -> Path:
+    def resolve_root(pipeline: Pipeline) -> Path:
+        """Resolve and return the pipeline's workspace root.
+
+        Public so other read-only services (e.g. file search) share the exact
+        same root resolution and error behaviour. Raises
+        ``EntityNotFoundError`` when the workspace is missing.
+        """
         root = pipeline.workspace_abs_path
         if not root:
             raise EntityNotFoundError(
@@ -99,6 +105,9 @@ class FileBrowserService:
         if not root.is_dir():
             raise EntityNotFoundError("Pipeline workspace not found")
         return root
+
+    # Backwards-compatible alias for the historic private helper.
+    _resolve_root = resolve_root
 
     @staticmethod
     def _resolve_path(
@@ -111,7 +120,7 @@ class FileBrowserService:
         ``FileNotFoundError`` for excluded (``.git``) paths and
         :class:`PathEscapeError` for paths escaping the root (e.g. symlinks).
         """
-        root = FileBrowserService._resolve_root(pipeline)
+        root = FileBrowserService.resolve_root(pipeline)
 
         raw = (rel_path or "").strip()
         if raw in ("", ".", "/"):
