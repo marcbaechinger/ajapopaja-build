@@ -365,6 +365,9 @@ export class DiffView {
       } data-role="file" data-file-index="${index}" data-file-path="${escapeHtml(file.path)}">
         <summary class="diff-view-file-header sticky top-0 z-10 flex items-center gap-2 px-4 py-2 bg-app-bg/95 backdrop-blur cursor-pointer select-none list-none hover:bg-app-surface/60 transition-colors" data-role="file-toggle">
           <span class="text-app-muted shrink-0" data-role="file-chevron">${chevron}</span>
+          <button type="button" data-action-click="copy_file_path" data-path="${escapeHtml(file.path)}"
+            class="shrink-0 p-1 rounded text-app-muted hover:text-app-text hover:bg-app-surface/60 transition-colors cursor-pointer"
+            title="Copy path" aria-label="Copy path">${Icon.render('copy', { size: 14 })}</button>
           <span class="diff-view-file-path font-mono text-xs text-app-text truncate" data-role="file-path">${escapeHtml(
             file.path
           )}</span>
@@ -443,6 +446,13 @@ export class DiffView {
     const summaries = this.root.querySelectorAll<HTMLElement>('summary[data-role]');
     summaries.forEach((summary) => {
       const handler: EventListener = (event) => {
+        // Interactive children (e.g. the copy-path button) must not toggle the
+        // section. Prevent the native <details> toggle and let the global
+        // action registry handle the click.
+        if ((event.target as HTMLElement).closest('[data-action-click]')) {
+          event.preventDefault();
+          return;
+        }
         event.preventDefault();
         const details = summary.closest('details') as HTMLDetailsElement | null;
         if (!details) return;

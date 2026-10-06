@@ -37,6 +37,7 @@ import { InteractiveCodingService } from './InteractiveCodingService.ts';
 import { DevProcessService } from './DevProcessService.ts';
 import { NotificationService } from './NotificationService.ts';
 import { SearchDialog } from '../ui/components/SearchDialog';
+import { FileView } from '../ui/components/FileView';
 import { AssistantPanel } from '../ui/components/AssistantPanel';
 import { SessionManagerPanel, registerSessionGenerateTitleAction } from '../ui/components/SessionManagerPanel';
 import { SessionManagerButton } from '../ui/components/SessionManagerButton';
@@ -176,6 +177,10 @@ export class AppContext {
   }
 
   private initGlobalActions() {
+    // The diff/file views share a single "copy path" action so any file header
+    // can write its repository-relative path to the clipboard.
+    FileView.registerActions(this.actionRegistry);
+
     this.actionRegistry.register('toggle_theme', () => {
       const newTheme = this.state.theme === 'light' ? 'dark' : 'light';
       this.state.theme = newTheme;

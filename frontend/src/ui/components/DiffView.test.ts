@@ -14,8 +14,10 @@
  * limitations under the License.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { DiffView } from './DiffView.ts';
+import { FileView } from './FileView.ts';
+import { ActionRegistry } from '../../core/ActionRegistry.ts';
 
 const SIMPLE_PATCH = `diff --git a/src/foo.ts b/src/foo.ts
 index 1234567..89abcde 100644
@@ -50,6 +52,10 @@ describe('DiffView', () => {
     document.body.innerHTML = '';
     mount = document.createElement('div');
     document.body.appendChild(mount);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('renders one file section per diff --git entry with path and stats', () => {
@@ -214,6 +220,106 @@ describe('DiffView', () => {
     expect(note).not.toBeNull();
     expect(note?.textContent).toContain('Binary file');
     expect(mount.querySelector('[data-role="diff-pre"]')).toBeNull();
+  });
+
+  it('renders a copy-path button immediately before the file path for every file', () => {
+    const view = new DiffView(mount, { patch: SIMPLE_PATCH });
+    view.render();
+
+    const files = Array.from(mount.querySelectorAll('[data-role="file"]')) as HTMLElement[];
+    expect(files.length).toBe(2);
+
+    files.forEach((file, index) => {
+      const path = file.querySelector('[data-role="file-path"]') as HTMLElement;
+      const button = path.previousElementSibling as HTMLElement;
+      expect(button?.tagName).toBe('BUTTON');
+      expect(button.getAttribute('data-action-click')).toBe('copy_file_path');
+      expect(button.getAttribute('data-path')).toBe(index === 0 ? 'src/foo.ts' : 'src/bar.ts');
+    });
+  });
+
+  it('renders the copy-path button with the required attributes, icon and classes', () => {
+    const view = new DiffView(mount, { patch: SIMPLE_PATCH });
+    view.render();
+
+    const button = mount.querySelector(
+      '[data-role="file"] [data-action-click="copy_file_path"]'
+    ) as HTMLButtonElement;
+    expect(button).not.toBeNull();
+    expect(button.getAttribute('type')).toBe('button');
+    expect(button.getAttribute('data-action-click')).toBe('copy_file_path');
+    expect(button.getAttribute('data-path')).toBe('src/foo.ts');
+    expect(button.getAttribute('title')).toBe('Copy path');
+    expect(button.getAttribute('aria-label')).toBe('Copy path');
+    expect(button.className).toBe(
+      'shrink-0 p-1 rounded text-app-muted hover:text-app-text hover:bg-app-surface/60 transition-colors cursor-pointer'
+    );
+    expect(button.querySelector('svg use')?.getAttribute('href')).toBe('/icons.svg#copy-icon');
+  });
+
+  it('copies the exact file path to the clipboard and restores the icon after 1.5s', async () => {
+    vi.useFakeTimers();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+
+    // Register the shared action exactly as the app does via FileView.
+    const registry = new ActionRegistry();
+    FileView.registerActions(registry);
+
+    const view = new DiffView(mount, { patch: SIMPLE_PATCH });
+    view.render();
+
+    const buttons = mount.querySelectorAll(
+      '[data-action-click="copy_file_path"]'
+    ) as NodeListOf<HTMLButtonElement>;
+    const button = buttons[0];
+    expect(button.querySelector('svg use')?.getAttribute('href')).toBe('/icons.svg#copy-icon');
+
+    await registry.execute('copy_file_path', new Event('click'), button);
+    expect(writeText).toHaveBeenCalledWith('src/foo.ts');
+    // Feedback swaps the icon for a check mark.
+    expect(button.querySelector('svg use')?.getAttribute('href')).toBe('/icons.svg#check-icon');
+
+    vi.advanceTimersByTime(1500);
+    expect(button.querySelector('svg use')?.getAttribute('href')).toBe('/icons.svg#copy-icon');
+  });
+
+  it('does not change the file header layout classes when adding the copy button', () => {
+    const view = new DiffView(mount, { patch: SIMPLE_PATCH });
+    view.render();
+
+    const summary = mount.querySelector('[data-role="file-toggle"]') as HTMLElement;
+    // The header keeps its own vertical rhythm; the button is a small flex
+    // child (p-1 + 14px icon) that fits within the existing py-2 header.
+    expect(summary.className).toContain('py-2');
+    expect(summary.className).toContain('items-center');
+    expect(summary.className).toContain('gap-2');
+
+    const button = summary.querySelector('[data-action-click="copy_file_path"]') as HTMLElement;
+    expect(button.className).toContain('p-1');
+    expect(button.className).toContain('shrink-0');
+
+    const svg = button.querySelector('svg') as SVGElement;
+    expect(svg.getAttribute('class')).toContain('w-3.5');
+    expect(svg.getAttribute('class')).toContain('h-3.5');
+  });
+
+  it('does not toggle the file section when the copy-path button is clicked', () => {
+    const view = new DiffView(mount, { patch: SIMPLE_PATCH });
+    view.render();
+
+    const file = mount.querySelector('[data-role="file"]') as HTMLDetailsElement;
+    const button = file.querySelector(
+      '[data-action-click="copy_file_path"]'
+    ) as HTMLButtonElement;
+    expect(file.open).toBe(true);
+
+    button.click();
+
+    expect(file.open).toBe(true);
   });
 
   it('removes its DOM and listeners from the mount on destroy', () => {
