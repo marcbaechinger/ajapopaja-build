@@ -231,4 +231,70 @@ describe('TaskItem', () => {
       expect(html).not.toContain('data-action-click="open_review_dialog"');
     });
   });
+
+  describe('header layout', () => {
+    const parse = (html: string) => {
+      const container = document.createElement('div');
+      container.innerHTML = html;
+      return container;
+    };
+
+    it('renders the status badge to the left of the title', () => {
+      const container = parse(TaskItem.render(mockTask as any));
+      const titleView = container.querySelector('.title-container .title-view')!;
+      const badge = titleView.querySelector('.status-badge')!;
+      const title = titleView.querySelector('span.font-medium')!;
+
+      // The status badge must come before the title in document order.
+      expect(badge.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(badge.textContent).toContain(TaskStatus.CREATED);
+    });
+
+    it('moves Delete and Schedule Execution into the header action bar for CREATED tasks', () => {
+      const container = parse(TaskItem.render(mockTask as any));
+      const actions = container.querySelector('.task-header-actions')!;
+      expect(actions).not.toBeNull();
+
+      const deleteBtn = actions.querySelector('[data-action-click="delete_task"]')!;
+      const scheduleBtn = actions.querySelector('[data-action-click="schedule_task"]')!;
+      expect(deleteBtn).not.toBeNull();
+      expect(deleteBtn.textContent).toContain('Delete');
+      expect(scheduleBtn).not.toBeNull();
+      expect(scheduleBtn.textContent).toContain('Schedule Execution');
+
+      // They must not be rendered again in the body action row.
+      const body = container.querySelector('.task-body')!;
+      expect(body.querySelector('[data-action-click="delete_task"]')).toBeNull();
+      expect(body.querySelector('[data-action-click="schedule_task"]')).toBeNull();
+    });
+
+    it('renders Send to CoderBot with the lightning icon for CREATED and SCHEDULED tasks', () => {
+      for (const status of [TaskStatus.CREATED, TaskStatus.SCHEDULED]) {
+        const container = parse(TaskItem.render({ ...mockTask, status } as any));
+        const actions = container.querySelector('.task-header-actions')!;
+        const sendBtn = actions.querySelector('[data-action-click="trigger_coderbot"]')!;
+        expect(sendBtn).not.toBeNull();
+        expect(sendBtn.textContent).toContain('Send to CoderBot');
+        expect(sendBtn.querySelector('svg')).not.toBeNull();
+
+        // The icon trigger is no longer rendered in the metadata row.
+        const metaRow = container.querySelector('.title-container [data-task-id]')!;
+        expect(metaRow.querySelector('[data-action-click="trigger_coderbot"]')).toBeNull();
+      }
+    });
+
+    it('does not render header actions for PROPOSED tasks', () => {
+      const container = parse(TaskItem.render({ ...mockTask, status: TaskStatus.PROPOSED } as any));
+      const actions = container.querySelector('.task-header-actions')!;
+      expect(actions.querySelector('[data-action-click="delete_task"]')).toBeNull();
+      expect(actions.querySelector('[data-action-click="schedule_task"]')).toBeNull();
+      expect(actions.querySelector('[data-action-click="trigger_coderbot"]')).toBeNull();
+    });
+
+    it('renders the status selector in the header action bar when enabled', () => {
+      const container = parse(TaskItem.render(mockTask as any, true, false, false, true));
+      const actions = container.querySelector('.task-header-actions')!;
+      expect(actions.querySelector('select[data-action-change="change_task_status"]')).not.toBeNull();
+    });
+  });
 });

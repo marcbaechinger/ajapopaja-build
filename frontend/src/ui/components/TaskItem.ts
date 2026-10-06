@@ -97,24 +97,39 @@ export class TaskItem {
     // covers other UI (quickfix, Order display) which remain scoped to IMPLEMENTED only.
     const canTriggerBots = ([TaskStatus.IMPLEMENTED, TaskStatus.SUBMITTED] as any[]).includes(task.status);
 
+    // "Send to CoderBot" is the primary execution trigger. It is available for
+    // tasks that can still be executed manually: freshly created (not yet
+    // scheduled) and scheduled (already queued) tasks.
+    const canTriggerExecution = canSchedule || canUnschedule;
+
     const isEditableTitle = ([TaskStatus.CREATED, TaskStatus.PROPOSED] as any[]).includes(task.status);
 
     const specHtml = renderSpecSection(task, isSpecExpanded);
     const designDocHtml = renderDesignDocSection(task, isProposed);
 
     const titleEditAttributes: Record<string, string> = isEditableTitle ? { "data-action-click": "edit_title" } : {};
+
+    // Shared styling for the primary actions in the header toolbar so all
+    // three buttons (Delete / Schedule Execution / Send to CoderBot) share the
+    // same height and are perfectly aligned.
+    const headerButtonBase =
+      'inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg transition-all cursor-pointer';
+
     return `
       <div class="bg-app-bg p-4 rounded-lg border border-app-border flex flex-col gap-3 transition-all hover:border-app-accent-1/30 ${isSystem ? 'border-l-4 border-l-red-500' : ''} ${isProposed ? 'border-purple-500/50 shadow-lg shadow-purple-500/10' : ''}" 
            data-view-type="task" data-view-id="${taskId}">
-        <div class="flex justify-between items-start cursor-pointer group/header" data-action-click="toggle_task_collapse">
-          <div class="flex items-center gap-3">
-            <div class="p-1 text-app-muted group-hover/header:text-app-text transition-all">
+        <div class="task-header flex justify-between items-start gap-3 cursor-pointer group/header" data-action-click="toggle_task_collapse">
+          <div class="flex items-start gap-3 min-w-0 flex-1">
+            <div class="p-1 mt-1 text-app-muted group-hover/header:text-app-text transition-all flex-shrink-0">
               ${Icon.render('chevronRight', { size: 16, className: `transform transition-transform ${isCollapsed ? '' : 'rotate-90'}` })}
             </div>
-            <div class="title-container flex flex-col" data-task-id="${taskId}" data-version="${task.version}">
-              <div class="title-view flex items-center gap-2 ${isEditableTitle ? 'cursor-pointer group/title' : ''}" ${isEditableTitle ? 'data-action-click="edit_title"' : ''}>
-                <span class="font-medium text-app-text text-lg">${task.title}</span>
-                ${isEditableTitle ? Icon.render('edit', { size: 12, dataAttrs: titleEditAttributes, className: 'text-app-muted opacity-0 group-hover/title:opacity-100 transition-opacity' }) : ''}
+            <div class="title-container flex flex-col min-w-0 flex-1" data-task-id="${taskId}" data-version="${task.version}">
+              <div class="title-view flex items-center gap-2 min-w-0 ${isEditableTitle ? 'cursor-pointer group/title' : ''}" ${isEditableTitle ? 'data-action-click="edit_title"' : ''}>
+                <span class="status-badge flex-shrink-0 text-xs px-2 py-1 rounded font-bold uppercase tracking-wide whitespace-nowrap ${statusColors[task.status] || 'bg-slate-600'}" data-action-click="none">
+                  ${task.status}
+                </span>
+                <span class="font-medium text-app-text text-lg truncate">${task.title}</span>
+                ${isEditableTitle ? Icon.render('edit', { size: 12, dataAttrs: titleEditAttributes, className: 'flex-shrink-0 text-app-muted opacity-0 group-hover/title:opacity-100 transition-opacity' }) : ''}
               </div>
               ${isEditableTitle ? `
                 <div class="title-edit hidden flex flex-col gap-2 mt-1" data-action-click="none">
@@ -126,7 +141,7 @@ export class TaskItem {
                   </div>
                 </div>
               ` : ''}
-              <div class="flex items-center gap-2 mt-1" data-task-id="${taskId}">
+              <div class="flex items-center gap-2 mt-1 flex-wrap" data-task-id="${taskId}">
                 <span class="text-[10px] text-app-muted uppercase font-bold tracking-widest bg-app-surface px-2 py-0.5 rounded border border-app-border">${taskId}</span>
                 <button data-action-click="copy_task_id" class="p-1 hover:bg-app-surface text-app-muted hover:text-app-accent-2 rounded transition-all cursor-pointer group/copy" title="Copy Task ID">
                    ${Icon.render('copy', { size: 12, className: 'group-hover/copy:scale-110 transition-transform' })}
@@ -139,16 +154,6 @@ export class TaskItem {
                 ${isImplemented && task.commit_hash ? `
                   <button data-action-click="open_quickfix" data-task-id="${taskId}" class="p-1 hover:bg-app-surface text-app-muted hover:text-app-accent-2 rounded transition-all cursor-pointer group/quickfix" title="Open Quickfix in Neovim">
                      ${Icon.render('quickfix', { size: 14, className: 'group-hover/quickfix:scale-110 transition-transform' })}
-                  </button>
-                ` : ''}
-                ${canUnschedule ? `
-                  <button data-action-click="trigger_coderbot" data-task-id="${taskId}" class="p-1 hover:bg-app-surface text-app-muted hover:text-green-500 rounded transition-all cursor-pointer group/coderbot" title="Trigger CoderBot">
-                     ${Icon.render('lightning', { size: 12, className: 'group-hover/coderbot:scale-110 transition-transform' })}
-                  </button>
-                ` : ''}
-                ${task.status === TaskStatus.CREATED ? `
-                  <button data-action-click="trigger_coderbot" data-task-id="${taskId}" class="p-1 hover:bg-app-surface text-app-muted hover:text-green-500 rounded transition-all cursor-pointer group/coderbot" title="Trigger CoderBot">
-                     ${Icon.render('lightning', { size: 12, className: 'group-hover/coderbot:scale-110 transition-transform' })}
                   </button>
                 ` : ''}
                 ${task.status === TaskStatus.PULL_REQUEST_AVAILABLE ? `
@@ -179,13 +184,32 @@ export class TaskItem {
               </div>
             </div>
           </div>
-          <div class="flex items-center gap-2" data-action-click="none">
-            <span class="text-xs px-2 py-1 rounded font-bold uppercase ${statusColors[task.status] || 'bg-slate-600'}">
-              ${task.status}
-            </span>
+          <div class="task-header-actions flex items-center justify-end gap-2 flex-shrink-0" data-action-click="none">
+            ${!isProposed ? `
+              <button data-action-click="delete_task"
+                      class="${headerButtonBase} text-app-muted hover:text-red-400 bg-app-surface hover:bg-red-500/20 border border-app-border"
+                      title="Delete Task">
+                ${Icon.render('trash', { size: 14 })}
+                <span>Delete</span>
+              </button>
+              ${canSchedule ? `
+                <button data-action-click="schedule_task" data-version="${task.version}"
+                        class="${headerButtonBase} bg-app-accent-1 hover:brightness-110 text-white shadow-lg">
+                  <span>Schedule Execution</span>
+                </button>
+              ` : ''}
+            ` : ''}
+            ${canTriggerExecution ? `
+              <button data-action-click="trigger_coderbot" data-task-id="${taskId}"
+                      class="${headerButtonBase} bg-green-600 hover:bg-green-500 text-white shadow-lg shadow-green-900/20 group/coderbot"
+                      title="Send to CoderBot">
+                ${Icon.render('lightning', { size: 14, className: 'group-hover/coderbot:scale-110 transition-transform' })}
+                <span>Send to CoderBot</span>
+              </button>
+            ` : ''}
             ${showStatusSelector ? `
               <select data-action-change="change_task_status" data-task-id="${taskId}" data-version="${task.version}"
-                      class="bg-app-surface border border-app-border text-[10px] font-bold uppercase tracking-widest text-app-text px-2 py-1 rounded outline-none focus:ring-1 focus:ring-app-accent-1 cursor-pointer">
+                      class="bg-app-surface border border-app-border text-[10px] font-bold uppercase tracking-widest text-app-text px-2 py-1.5 rounded-lg outline-none focus:ring-1 focus:ring-app-accent-1 cursor-pointer">
                 ${Object.values(TaskStatus).map(s => `
                   <option value="${s}" ${task.status === s ? 'selected' : ''}>${s}</option>
                 `).join('')}
@@ -246,20 +270,10 @@ export class TaskItem {
                   Accept Design
                 </button>
               ` : `
-                <button data-action-click="delete_task" 
-                        class="p-1.5 hover:bg-red-500/20 text-app-muted hover:text-red-400 rounded transition-all cursor-pointer" title="Delete Task">
-                  ${Icon.render('trash', { size: 16 })}
-                </button>
                 ${canFail ? `
                   <button data-action-click="fail_task" data-version="${task.version}" 
                           class="text-xs text-red-400 hover:text-red-300 px-3 py-1 rounded transition-all cursor-pointer">
                     Mark as Failed
-                  </button>
-                ` : ''}
-                ${canSchedule ? `
-                  <button data-action-click="schedule_task" data-version="${task.version}" 
-                          class="text-xs bg-app-accent-1 hover:brightness-110 text-white px-3 py-1 rounded transition-all shadow-lg cursor-pointer">
-                    Schedule Execution
                   </button>
                 ` : ''}
                 ${canUnschedule ? `
