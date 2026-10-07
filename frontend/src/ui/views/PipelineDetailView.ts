@@ -15,7 +15,8 @@
  */
 
 import { View } from '../../core/Navigator.ts';
-import { PipelineRoute, type ContentTab } from '../../core/PipelineRoute.ts';
+import { type ContentTab } from '../../core/PipelineRoute.ts';
+import { PipelineSubRoute } from './pipeline/PipelineSubRoute.ts';
 import { AppContext } from '../../core/AppContext.ts';
 import { Pipeline, TaskStatus, Task, type GitStatusDetails } from '../../core/domain.ts';
 import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
@@ -56,6 +57,7 @@ export class PipelineDetailView extends View {
   private pipelineId: string;
   private context: AppContext;
   private readonly ctx: PipelineDetailCtx;
+  private readonly subRoute: PipelineSubRoute;
   private unsubs: (() => void)[] = [];
   //
   // Mutable pipeline state now lives in `ctx.state`; the private getters/setters
@@ -171,6 +173,7 @@ export class PipelineDetailView extends View {
     super();
     this.context = context;
     this.pipelineId = params.id;
+    this.subRoute = new PipelineSubRoute(this.pipelineId);
     this.ctx = createPipelineDetailCtx({
       context,
       pipelineId: this.pipelineId,
@@ -186,7 +189,7 @@ export class PipelineDetailView extends View {
     // Parse the sub-route once so the very first render already reflects a
     // deep link (no flash of the wrong tab). The Coding-Agent guard is applied
     // later, once the session state is known.
-    const route = PipelineRoute.parse(params.rest);
+    const route = this.subRoute.parse(params.rest);
     this.contentTab = route.tab;
     this.pendingFbPath = route.fbPath;
     this.pendingTaskId = route.taskId;
@@ -2418,7 +2421,7 @@ export class PipelineDetailView extends View {
   }
 
   private applyRoute(params: Record<string, string>): void {
-    const { tab, fbPath, taskId } = PipelineRoute.parse(params.rest);
+    const { tab, fbPath, taskId } = this.subRoute.parse(params.rest);
 
     if (tab === 'file-browser' && fbPath !== null) {
       // Only a lazy first mount consumes the explicit path; when the view is
@@ -2477,14 +2480,8 @@ export class PipelineDetailView extends View {
     fbPath: string | null = this.currentFbPath(),
     taskId: string | null = this.currentTaskId()
   ): void {
-    if (mode === 'none') return;
-    const hash = PipelineRoute.build(this.pipelineId, this.contentTab, fbPath, taskId);
-    if (window.location.hash === hash) return;
-    if (mode === 'push') {
-      window.location.hash = hash;
-    } else {
-      history.replaceState(null, '', hash);
-    }
+    const hash = this.subRoute.build(this.contentTab, fbPath, taskId);
+    this.subRoute.write(mode, hash);
   }
 
   /** Current file-browser path from the mounted view, or `null` when not relevant. */
@@ -2510,20 +2507,14 @@ export class PipelineDetailView extends View {
    * is filled in. `replaceState` keeps Back pointing at the previous page.
    */
   private canonicaliseRoute(): void {
-    const canonical = PipelineRoute.build(
-      this.pipelineId,
+    const canonical = this.subRoute.build(
       this.contentTab,
       this.currentFbPath(),
       // Tasks are not loaded yet, so fall back to the deep-linked uid to avoid
       // stripping it before `refreshTasks()` can consume it.
       this.currentTaskId() ?? this.pendingTaskId
     );
-    if (window.location.hash === canonical) return;
-    try {
-      history.replaceState(null, '', canonical);
-    } catch {
-      /* a hash-only URL must never break the view */
-    }
+    this.subRoute.canonicalise(canonical);
   }
 
   /**
