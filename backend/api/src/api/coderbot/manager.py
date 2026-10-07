@@ -28,8 +28,10 @@ from core.models.models import (
     Pipeline,
     PullRequest,
     Task,
+    TaskStatus,
 )
 from core.queries import pipeline as pipeline_queries
+from core.queries import task as task_queries
 from core.services.model_resolver import resolve_model
 from core.utils import git_utils
 
@@ -200,6 +202,39 @@ class CoderBotManager:
         if self._worker_task is None or self._worker_task.done():
             self._worker_task = asyncio.create_task(self._process_queue())
 
+    async def _mark_task_in_progress(self, task: Task) -> None:
+        """Transition a task to INPROGRESS as soon as it is accepted into the queue.
+
+        A queued task must no longer be shown in the backlog just because another
+        session is still running. Only SCHEDULED and CREATED tasks are transitioned
+        (matching the guard in CoderBotSession.run); any other status is left
+        untouched so re-triggering a PULL_REQUEST_AVAILABLE/FAILED task cannot raise.
+        Failures are non-fatal: the enqueue proceeds and CoderBotSession.run() still
+        performs the transition when the session actually starts.
+        """
+        if task.status not in (TaskStatus.SCHEDULED, TaskStatus.CREATED):
+            return
+        try:
+            updated_task = await task_queries.transition_task(
+                str(task.id),
+                TaskStatus.INPROGRESS,
+                actor="coderbot",
+                task=task,
+            )
+        except Exception:
+            logger.warning(
+                "Failed to mark task %s INPROGRESS on enqueue",
+                task.id,
+                exc_info=True,
+            )
+            return
+        await ws_manager.broadcast(
+            WSMessage(
+                type="TASK_STATUS_UPDATED",
+                payload=updated_task.model_dump(mode="json"),
+            )
+        )
+
     async def process_task(self, task: Task):
         """Enqueues a new CoderBotSession for the given task.
 
@@ -221,6 +256,13 @@ class CoderBotManager:
         )
         await record.insert()
         pi_session_store.write_meta(record)
+
+        # Mark the task INPROGRESS now so a queued task is no longer shown in the
+        # backlog. This MUST run before the session is enqueued: if the worker is
+        # between sessions it could otherwise pick the session up and run() would
+        # transition first, making our later call an illegal INPROGRESS->INPROGRESS
+        # transition.
+        await self._mark_task_in_progress(task)
 
         session = CoderBotSession(
             pipeline_id=str(task.pipeline_id),

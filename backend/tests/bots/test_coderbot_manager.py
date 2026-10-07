@@ -26,12 +26,14 @@ from api.coderbot.manager import (
     InteractiveSessionNotSupportedError,
     NoActiveInteractiveSessionError,
 )
+from api.websocket_manager import WSMessage
 from core import config
 from core.models.models import (
     PiSession,
     PiSessionKind,
     PiSessionStatus,
     Task,
+    TaskStatus,
 )
 
 
@@ -186,6 +188,157 @@ async def test_manager_process_task_seeds_label_with_task_title(init_mock_db):
     stored = await PiSession.find_one(PiSession.uid == record.uid)
     assert stored is not None
     assert stored.label == "Implement the widget"
+
+
+@pytest.mark.asyncio
+async def test_manager_process_task_marks_scheduled_task_in_progress(init_mock_db):
+    """A queued SCHEDULED task is transitioned to INPROGRESS at enqueue time."""
+    manager = CoderBotManager()
+
+    task = Task(title="Queued task", pipeline_id="p1", status=TaskStatus.SCHEDULED)
+    await task.insert()
+
+    with (
+        patch("api.coderbot.manager.CoderBotSession"),
+        patch.object(manager, "_ensure_worker_running"),
+        patch(
+            "api.coderbot.manager.ws_manager.broadcast", new_callable=AsyncMock
+        ) as mock_broadcast,
+    ):
+        await manager.process_task(task)
+
+    updated = await Task.get(str(task.id))
+    assert updated.status == TaskStatus.INPROGRESS
+    transitions = [(t.from_status, t.to_status, t.by) for t in updated.history]
+    assert (TaskStatus.SCHEDULED, TaskStatus.INPROGRESS, "coderbot") in transitions
+
+    status_msgs = [
+        c
+        for c in mock_broadcast.await_args_list
+        if isinstance(c.args[0], WSMessage) and c.args[0].type == "TASK_STATUS_UPDATED"
+    ]
+    assert len(status_msgs) == 1
+    payload = status_msgs[0].args[0].payload
+    assert payload["id"] == str(task.id)
+    assert payload["status"] == TaskStatus.INPROGRESS
+
+
+@pytest.mark.asyncio
+async def test_manager_process_task_marks_created_task_in_progress(init_mock_db):
+    """A queued CREATED task is also transitioned to INPROGRESS at enqueue time."""
+    manager = CoderBotManager()
+
+    task = Task(title="New task", pipeline_id="p1", status=TaskStatus.CREATED)
+    await task.insert()
+
+    with (
+        patch("api.coderbot.manager.CoderBotSession"),
+        patch.object(manager, "_ensure_worker_running"),
+        patch(
+            "api.coderbot.manager.ws_manager.broadcast", new_callable=AsyncMock
+        ) as mock_broadcast,
+    ):
+        await manager.process_task(task)
+
+    updated = await Task.get(str(task.id))
+    assert updated.status == TaskStatus.INPROGRESS
+    transitions = [(t.from_status, t.to_status, t.by) for t in updated.history]
+    assert (TaskStatus.CREATED, TaskStatus.INPROGRESS, "coderbot") in transitions
+
+    status_msgs = [
+        c
+        for c in mock_broadcast.await_args_list
+        if isinstance(c.args[0], WSMessage) and c.args[0].type == "TASK_STATUS_UPDATED"
+    ]
+    assert len(status_msgs) == 1
+    assert status_msgs[0].args[0].payload["status"] == TaskStatus.INPROGRESS
+
+
+@pytest.mark.asyncio
+async def test_manager_process_task_skips_transition_for_non_queueable_status(
+    init_mock_db,
+):
+    """A task already INPROGRESS is neither transitioned nor broadcast, but queued."""
+    manager = CoderBotManager()
+
+    task = Task(title="Running task", pipeline_id="p1", status=TaskStatus.INPROGRESS)
+    await task.insert()
+
+    with (
+        patch("api.coderbot.manager.CoderBotSession"),
+        patch.object(manager, "_ensure_worker_running"),
+        patch(
+            "api.coderbot.manager.task_queries.transition_task",
+            new_callable=AsyncMock,
+        ) as mock_transition,
+        patch(
+            "api.coderbot.manager.ws_manager.broadcast", new_callable=AsyncMock
+        ) as mock_broadcast,
+    ):
+        await manager.process_task(task)
+
+    mock_transition.assert_not_called()
+    mock_broadcast.assert_not_awaited()
+    assert manager._queue.qsize() == 1
+
+    updated = await Task.get(str(task.id))
+    assert updated.status == TaskStatus.INPROGRESS
+
+
+@pytest.mark.asyncio
+async def test_manager_process_task_transitions_before_enqueue(init_mock_db):
+    """The INPROGRESS transition must happen before the session is enqueued."""
+    manager = CoderBotManager()
+
+    task = Task(title="Ordered task", pipeline_id="p1", status=TaskStatus.SCHEDULED)
+    await task.insert()
+
+    observed_statuses = []
+    original_put = manager._queue.put
+
+    async def recording_put(session):
+        observed_statuses.append(task.status)
+        await original_put(session)
+
+    with (
+        patch("api.coderbot.manager.CoderBotSession"),
+        patch.object(manager, "_ensure_worker_running"),
+        patch.object(manager._queue, "put", side_effect=recording_put),
+        patch("api.coderbot.manager.ws_manager.broadcast", new_callable=AsyncMock),
+    ):
+        await manager.process_task(task)
+
+    assert observed_statuses == [TaskStatus.INPROGRESS]
+
+
+@pytest.mark.asyncio
+async def test_manager_process_task_enqueues_when_transition_fails(init_mock_db):
+    """A failed enqueue-time transition must not prevent enqueueing the session."""
+    manager = CoderBotManager()
+
+    task = Task(title="Resilient task", pipeline_id="p1", status=TaskStatus.SCHEDULED)
+    await task.insert()
+
+    with (
+        patch("api.coderbot.manager.CoderBotSession"),
+        patch.object(manager, "_ensure_worker_running"),
+        patch(
+            "api.coderbot.manager.task_queries.transition_task",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("db unavailable"),
+        ),
+        patch(
+            "api.coderbot.manager.ws_manager.broadcast", new_callable=AsyncMock
+        ) as mock_broadcast,
+    ):
+        await manager.process_task(task)
+
+    assert manager._queue.qsize() == 1
+    mock_broadcast.assert_not_awaited()
+
+    # The task is left untouched; CoderBotSession.run() will retry the transition.
+    updated = await Task.get(str(task.id))
+    assert updated.status == TaskStatus.SCHEDULED
 
 
 @pytest.mark.asyncio
