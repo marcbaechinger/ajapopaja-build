@@ -136,7 +136,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
   private pipeline: Pipeline;
   private pipelineId?: string;
   private activeTab: RepoTab;
-  private activeCmdTab: CommandsTab = 'test';
+  private activeCmdTab: CommandsTab = 'models';
 
   // Dev-server control state (edit mode only). Tracks whether the pipeline's
   // long-running dev process is running so the button can start or stop it.
@@ -489,11 +489,11 @@ export class PipelineEditDialog extends BaseDialog<void> {
   private renderCommandsTabArea(): string {
     return `
       <div class="flex gap-1 border-b border-app-border">
+        <button type="button" data-cmd-tab="models" class="${this.cmdTabClass('models')}">Models</button>
         <button type="button" data-cmd-tab="build" class="${this.cmdTabClass('build')}">Build</button>
         <button type="button" data-cmd-tab="lint" class="${this.cmdTabClass('lint')}">Lint</button>
         <button type="button" data-cmd-tab="test" class="${this.cmdTabClass('test')}">Test</button>
         <button type="button" data-cmd-tab="serve" class="${this.cmdTabClass('serve')}">Serve</button>
-        <button type="button" data-cmd-tab="models" class="${this.cmdTabClass('models')}">Models</button>
       </div>
       <div id="commands-tab-content">
         ${this.renderActiveCommandTab()}

@@ -70,6 +70,11 @@ describe('PipelineEditDialog', () => {
     btn.click();
   };
 
+  const switchToCmdTab = (tab: 'test' | 'lint' | 'build' | 'serve' | 'models') => {
+    const btn = document.querySelector(`[data-cmd-tab="${tab}"]`) as HTMLButtonElement;
+    btn.click();
+  };
+
   it('should render the dialog with correct initial values', async () => {
     const dialog = new PipelineEditDialog(mockProps);
     // show() adds it to the body
@@ -220,6 +225,7 @@ describe('PipelineEditDialog', () => {
     const dialog = new PipelineEditDialog(mockProps);
     const showPromise = dialog.show();
 
+    switchToCmdTab('test');
     const textarea = document.querySelector('textarea[name="test_commands"]') as HTMLTextAreaElement;
     expect(textarea.value).toBe('make test\npytest -q');
 
@@ -231,6 +237,7 @@ describe('PipelineEditDialog', () => {
     const dialog = new PipelineEditDialog(mockProps);
     const showPromise = dialog.show();
 
+    switchToCmdTab('test');
     const textarea = document.querySelector('textarea[name="test_commands"]') as HTMLTextAreaElement;
     textarea.value = 'make test\n\ncd backend && uv run pytest';
 
@@ -249,6 +256,7 @@ describe('PipelineEditDialog', () => {
     const dialog = new PipelineEditDialog(mockProps);
     const showPromise = dialog.show();
 
+    switchToCmdTab('test');
     // textarea left empty
     const saveBtn = document.querySelector('#pipeline-edit-save') as HTMLButtonElement;
     saveBtn.click();
@@ -257,11 +265,6 @@ describe('PipelineEditDialog', () => {
     const updateCall = (mockProps.context.pipelineClient.update as any).mock.calls[0];
     expect(updateCall[2].test_commands).toEqual([]);
   });
-
-  const switchToCmdTab = (tab: 'test' | 'lint' | 'build' | 'serve' | 'models') => {
-    const btn = document.querySelector(`[data-cmd-tab="${tab}"]`) as HTMLButtonElement;
-    btn.click();
-  };
 
   it('should pre-fill the lint commands textarea from stored argv lists', async () => {
     mockProps.pipeline!.lint_commands = [
@@ -396,6 +399,7 @@ describe('PipelineEditDialog', () => {
     const dialog = new PipelineEditDialog(mockProps);
     const showPromise = dialog.show();
 
+    switchToCmdTab('test');
     // The serve textarea is not rendered from the test tab; the stored value
     // must still be parsed from the pipeline and sent on save.
     const saveBtn = document.querySelector('#pipeline-edit-save') as HTMLButtonElement;
@@ -475,6 +479,7 @@ describe('PipelineEditDialog', () => {
     const dialog = new PipelineEditDialog(mockProps);
     const showPromise = dialog.show();
 
+    switchToCmdTab('test');
     // The build textarea is not rendered from the test tab; the stored value
     // must still be parsed from the pipeline and sent on save.
     const saveBtn = document.querySelector('#pipeline-edit-save') as HTMLButtonElement;
@@ -508,6 +513,7 @@ describe('PipelineEditDialog', () => {
     const dialog = new PipelineEditDialog(mockProps);
     const showPromise = dialog.show();
 
+    switchToCmdTab('test');
     const textarea = document.querySelector('textarea[name="test_commands"]') as HTMLTextAreaElement;
     textarea.value = 'make test';
 
@@ -525,6 +531,7 @@ describe('PipelineEditDialog', () => {
     const dialog = new PipelineEditDialog(mockProps);
     const showPromise = dialog.show();
 
+    switchToCmdTab('test');
     const textarea = document.querySelector('textarea[name="test_commands"]') as HTMLTextAreaElement;
     textarea.value = 'make test';
 
@@ -692,6 +699,7 @@ describe('PipelineEditDialog', () => {
       const dialog = new PipelineEditDialog(props);
       const showPromise = dialog.show();
 
+      switchToCmdTab('test');
       const nameInput = document.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
       nameInput.value = 'New Pipe';
       const textarea = document.querySelector('textarea[name="test_commands"]') as HTMLTextAreaElement;
@@ -1072,14 +1080,21 @@ describe('PipelineEditDialog', () => {
       const dialog = new PipelineEditDialog(mockProps);
       const showPromise = dialog.show();
 
+      const cmdTabs = Array.from(document.querySelectorAll('[data-cmd-tab]')).map(
+        (el) => (el as HTMLElement).dataset.cmdTab
+      );
+      expect(cmdTabs).toEqual(['models', 'build', 'lint', 'test', 'serve']);
+
       const modelsTab = document.querySelector('[data-cmd-tab="models"]') as HTMLButtonElement;
       expect(modelsTab).not.toBeNull();
       expect(modelsTab.textContent).toContain('Models');
+      // Models is selected by default, so its model selects are rendered.
+      expect(modelsTab.className).toContain('text-app-accent-1');
+      expect(document.querySelector('select[name="archbot_model"]')).not.toBeNull();
 
       // The model selects only live inside the Models tab.
+      switchToCmdTab('test');
       expect(document.querySelector('select[name="archbot_model"]')).toBeNull();
-      switchToCmdTab('models');
-      expect(document.querySelector('select[name="archbot_model"]')).not.toBeNull();
 
       clickCancel();
       await showPromise;
