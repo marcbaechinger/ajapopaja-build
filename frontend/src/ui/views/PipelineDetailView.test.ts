@@ -573,6 +573,7 @@ describe('PipelineDetailView save_spec focus', () => {
   let mockContext: any;
   let container: HTMLElement;
   let tasksHandler: ((payload: any) => void) | undefined;
+  let getClientRectsSpy: ReturnType<typeof vi.spyOn>;
 
   const getAction = (name: string) =>
     mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === name)![1];
@@ -599,6 +600,12 @@ describe('PipelineDetailView save_spec focus', () => {
     LocalStorageManager.resetInstances();
     vi.clearAllMocks();
     tasksHandler = undefined;
+    // jsdom has no layout engine, so every element reports zero client rects.
+    // Stub the rects so the Schedule Execution button looks rendered/visible
+    // (as it would in a real browser) and can receive focus.
+    getClientRectsSpy = vi
+      .spyOn(Element.prototype, 'getClientRects')
+      .mockReturnValue([{}] as unknown as DOMRectList);
 
     mockContext = {
       actionRegistry: { register: vi.fn() },
@@ -632,6 +639,10 @@ describe('PipelineDetailView save_spec focus', () => {
       getItem: vi.fn(() => null),
       setItem: vi.fn(),
     });
+  });
+
+  afterEach(() => {
+    getClientRectsSpy.mockRestore();
   });
 
   const mountAndSelect = async () => {

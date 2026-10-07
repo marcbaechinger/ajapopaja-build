@@ -165,6 +165,12 @@ describe('TaskItem', () => {
       return el;
     };
 
+    // jsdom performs no layout, so getClientRects() always returns an empty
+    // list. Stub it to make a button look rendered/visible in these tests.
+    const makeVisible = (el: HTMLElement) => {
+      el.getClientRects = () => [{}] as unknown as DOMRectList;
+    };
+
     afterEach(() => {
       document.body.innerHTML = '';
     });
@@ -172,9 +178,49 @@ describe('TaskItem', () => {
     it('focuses the Schedule Execution button for a CREATED task', () => {
       const el = mount(TaskItem.render(mockTask as any));
       const scheduleBtn = el.querySelector<HTMLElement>('[data-action-click="schedule_task"]')!;
+      makeVisible(scheduleBtn);
 
       expect(TaskItem.focusScheduleExecution(el)).toBe(true);
       expect(document.activeElement).toBe(scheduleBtn);
+    });
+
+    it('returns false and does not focus a disabled Schedule Execution button', () => {
+      const el = mount(TaskItem.render(mockTask as any));
+      const scheduleBtn = el.querySelector<HTMLButtonElement>('[data-action-click="schedule_task"]')!;
+      makeVisible(scheduleBtn);
+      scheduleBtn.disabled = true;
+      const other = document.createElement('input');
+      document.body.appendChild(other);
+      other.focus();
+
+      expect(TaskItem.focusScheduleExecution(el)).toBe(false);
+      expect(document.activeElement).toBe(other);
+      expect(document.activeElement).not.toBe(scheduleBtn);
+    });
+
+    it('returns false for a hidden Schedule Execution button (no client rects)', () => {
+      const el = mount(TaskItem.render(mockTask as any));
+      const scheduleBtn = el.querySelector<HTMLElement>('[data-action-click="schedule_task"]')!;
+      scheduleBtn.getClientRects = () => [] as unknown as DOMRectList;
+      const other = document.createElement('input');
+      document.body.appendChild(other);
+      other.focus();
+
+      expect(TaskItem.focusScheduleExecution(el)).toBe(false);
+      expect(document.activeElement).toBe(other);
+    });
+
+    it('returns false for a Schedule Execution button hidden via aria-hidden', () => {
+      const el = mount(TaskItem.render(mockTask as any));
+      const scheduleBtn = el.querySelector<HTMLElement>('[data-action-click="schedule_task"]')!;
+      makeVisible(scheduleBtn);
+      scheduleBtn.setAttribute('aria-hidden', 'true');
+      const other = document.createElement('input');
+      document.body.appendChild(other);
+      other.focus();
+
+      expect(TaskItem.focusScheduleExecution(el)).toBe(false);
+      expect(document.activeElement).toBe(other);
     });
 
     it('is a no-op when the card has no Schedule Execution button', () => {

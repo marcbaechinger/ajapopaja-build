@@ -73,12 +73,20 @@ export class TaskItem {
    * Returns ``true`` when a schedule button was found and focused. It is a
    * no-op (returning ``false``) for cards that have no such button (e.g.
    * SCHEDULED / PROPOSED / completed tasks) or for non-TaskItem elements.
+   *
+   * A matched button that cannot actually receive focus is also ignored:
+   * - disabled buttons (``disabled`` attribute / property), and
+   * - buttons that are not rendered / hidden (no client rects or
+   *   ``aria-hidden="true"``).
    */
   static focusScheduleExecution(element: Element | null | undefined): boolean {
-    const button = element?.querySelector<HTMLElement>(
+    const button = element?.querySelector<HTMLButtonElement>(
       '[data-action-click="schedule_task"]'
     );
     if (!button) return false;
+    if (button.hasAttribute('disabled') || button.disabled) return false;
+    if (button.getAttribute('aria-hidden') === 'true') return false;
+    if (button.getClientRects().length === 0) return false;
     button.focus();
     return true;
   }
