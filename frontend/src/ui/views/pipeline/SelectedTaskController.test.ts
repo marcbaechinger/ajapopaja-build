@@ -282,6 +282,39 @@ describe('SelectedTaskController (selection + spec edit, via PipelineDetailView)
 
     expect(selectedView.innerHTML).toContain('data-version="2"');
   });
+
+  it('should not re-render the selected TaskView when an unrelated task updates over WS', async () => {
+    let tasksHandler: ((payload: any) => void) | undefined;
+    mockContext.dataManager.on = vi.fn((query: string, cb: any) => {
+      if (query.startsWith('pipeline:tasks:')) tasksHandler = cb;
+      return () => {};
+    });
+    mockContext.taskClient.listByPipeline.mockResolvedValue([
+      { id: 'c1', title: 'Selected Task', spec: 'v1', status: TaskStatus.CREATED, deleted: false, version: 1, order: 0, type: 'manual', want_design_doc: false },
+      { id: 'c2', title: 'Other Task', spec: 'other', status: TaskStatus.INPROGRESS, deleted: false, version: 1, order: 10, type: 'manual', want_design_doc: false },
+    ]);
+
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+    container.innerHTML = view.render() as string;
+    await view.refreshTasks();
+
+    // select c1 so it is rendered in #selected-task-view
+    const selectAction = mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === 'select_task')![1];
+    const el = document.createElement('div');
+    el.setAttribute('data-view-id', 'c1');
+    selectAction(new Event('click'), el);
+
+    const selectedView = container.querySelector('#selected-task-view') as HTMLElement;
+    const before = selectedView.innerHTML;
+    expect(before).toContain('Selected Task');
+
+    // An unrelated task (c2) changes status over WS. Re-rendering the selected
+    // TaskItem here would discard any open Specification/Design-Doc editor.
+    tasksHandler!({ id: 'c2', title: 'Other Task', spec: 'other', status: TaskStatus.PULL_REQUEST_AVAILABLE, deleted: false, version: 2, order: 10, type: 'manual', want_design_doc: false });
+
+    expect(selectedView.innerHTML).toBe(before);
+  });
 });
 
 /**

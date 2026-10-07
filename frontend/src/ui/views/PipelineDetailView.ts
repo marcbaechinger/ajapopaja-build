@@ -284,7 +284,11 @@ export class PipelineDetailView extends View {
 
   private registerActions() {
     registerPullRequestActions(this.ctx, {
-      refreshPullRequests: () => this.realtime?.fetchPullRequests(),
+      // Accepting/rejecting/submitting a PR only changes the pull-request
+      // section. Use the targeted refresh so the rest of the page (notably the
+      // selected TaskItem with its open Specification/Design-Doc editors) is not
+      // re-rendered by a full task refresh.
+      refreshPullRequests: () => this.realtime?.refreshPullRequests(),
       updateEngineSlot: () => this.updateEnginePiSlot(),
     });
 

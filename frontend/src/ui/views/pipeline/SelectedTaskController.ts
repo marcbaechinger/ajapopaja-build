@@ -44,8 +44,10 @@ export class SelectedTaskController {
 
   /**
    * Incoming task update: upserts the local cache and either refreshes the
-   * title in place (title-only change) or repaints the backlog, the selected
-   * task view and the execution engine.
+   * title in place (title-only change) or repaints the backlog, the execution
+   * engine and, only when the updated task is the selected one, the selected
+   * task view. Unrelated updates never touch `#selected-task-view`, so an open
+   * Specification/Design-Doc editor there is preserved.
    */
   update(task: Task): void {
     const { ctx } = this.deps;
@@ -75,7 +77,12 @@ export class SelectedTaskController {
     }
 
     ctx.refresh.backlog();
-    this.refreshSelected();
+    // Only the selected task lives in #selected-task-view. Re-rendering it for
+    // an unrelated task update would discard any open Specification/Design-Doc
+    // editor in the selected task, so leave that fragment untouched.
+    if (ctx.state.selectedTask?.id === taskId) {
+      this.refreshSelected();
+    }
     ctx.refresh.executionEngine();
   }
 

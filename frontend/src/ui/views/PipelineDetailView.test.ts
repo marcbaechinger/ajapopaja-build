@@ -69,6 +69,14 @@ vi.mock('../components/InteractiveCodingView.ts', () => ({
   }),
 }));
 
+// The inline accept action confirms before calling the client. Keep the dialog
+// out of the way so the test can drive the action deterministically.
+vi.mock('../components/ConfirmationDialog.ts', () => ({
+  ConfirmationDialog: vi.fn(function ConfirmationDialog() {
+    return { show: vi.fn().mockResolvedValue(true) };
+  }),
+}));
+
 describe('PipelineDetailView Layout', () => {
   let mockContext: any;
   let container: HTMLElement;
@@ -108,6 +116,7 @@ describe('PipelineDetailView Layout', () => {
       },
       pullRequestClient: {
         getPullRequestsByPipeline: vi.fn().mockResolvedValue([]),
+        acceptPullRequest: vi.fn().mockResolvedValue({}),
       },
       systemClient: {
         isOllamaAvailable: vi.fn().mockResolvedValue(true),
@@ -255,6 +264,57 @@ describe('PipelineDetailView Layout', () => {
     // moving back to CREATED must remove the task from the ExecutionEngineView
     tasksHandler!({ id: 's1', title: 'Sched', status: TaskStatus.CREATED, deleted: false, version: 2, order: 0, type: 'manual', want_design_doc: false });
     expect(engine!.querySelectorAll('[data-view-id="s1"]').length).toBe(0);
+  });
+
+  it('accepting a pull request repaints only the PR section, preserving the selected TaskItem', async () => {
+    const selectedTask: any = {
+      id: 't1',
+      title: 'Selected Task',
+      spec: 'a spec being edited',
+      status: TaskStatus.PULL_REQUEST_AVAILABLE,
+      deleted: false,
+      version: 1,
+      order: 0,
+      type: 'manual',
+      want_design_doc: false,
+      history: [],
+    };
+    mockContext.taskClient.listByPipeline.mockResolvedValue([selectedTask]);
+
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+    container.innerHTML = view.render() as string;
+    await view.refreshTasks();
+    // Let the fire-and-forget loadPipeline -> fetchPullRequests chain settle.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // Select the task so it is rendered in #selected-task-view.
+    const selectAction = mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === 'select_task')![1];
+    const selectEl = document.createElement('div');
+    selectEl.setAttribute('data-view-id', 't1');
+    selectAction(new Event('click'), selectEl);
+
+    const selectedView = container.querySelector('#selected-task-view') as HTMLElement;
+    const before = selectedView.innerHTML;
+    expect(before).toContain('Selected Task');
+
+    const listCallsBefore = mockContext.taskClient.listByPipeline.mock.calls.length;
+    const prCallsBefore = mockContext.pullRequestClient.getPullRequestsByPipeline.mock.calls.length;
+
+    const acceptAction = mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === 'accept_pr')![1];
+    const button = document.createElement('button');
+    button.setAttribute('data-pr-id', 'pr1');
+    button.setAttribute('data-task-id', 't1');
+    await acceptAction(new Event('click'), button);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // The PR was accepted and the section was refreshed in place...
+    expect(mockContext.pullRequestClient.acceptPullRequest).toHaveBeenCalledWith('pr1');
+    expect(mockContext.pullRequestClient.getPullRequestsByPipeline.mock.calls.length).toBe(prCallsBefore + 1);
+    // ...without a full task refresh re-rendering the selected TaskItem (which
+    // would discard any open Specification/Design-Doc editor).
+    expect(mockContext.taskClient.listByPipeline.mock.calls.length).toBe(listCallsBefore);
+    expect(selectedView.innerHTML).toBe(before);
   });
 });
 

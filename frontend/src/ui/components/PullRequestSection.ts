@@ -52,7 +52,7 @@ export class PullRequestSection {
 
   private static renderPr(pr: PullRequest): string {
     return `
-      <div class="bg-app-surface border border-app-border rounded-2xl p-4 shadow-sm group hover:border-app-accent-2/40 transition-all duration-300" data-pr-card>
+      <div class="bg-app-surface border border-app-border rounded-2xl p-4 shadow-sm group hover:border-app-accent-2/40 transition-all duration-300" data-pr-card data-pr-id="${pr.id}">
         <div class="flex justify-between items-start gap-4">
           <div class="flex-grow min-w-0">
             <h4 class="font-bold text-app-text mb-1 truncate">${pr.subject}</h4>

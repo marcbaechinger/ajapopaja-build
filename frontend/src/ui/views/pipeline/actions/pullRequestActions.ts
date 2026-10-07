@@ -21,9 +21,11 @@ import type { PipelineDetailCtx } from '../PipelineDetailCtx.ts';
 
 export interface PullRequestActionsDeps {
   /**
-   * Re-fetch the pull requests and repaint the PR section. Today this is the
-   * shell's `fetchPullRequests()`; once P6 lands it is
-   * `realtime.fetchPullRequests()`.
+   * Re-fetch the pull requests and repaint only the dedicated
+   * `#pull-request-section` container. The shell binds this to
+   * `PipelineRealtimeController.refreshPullRequests()` so accepting, submitting
+   * or rejecting a PR never triggers a full task refresh (which would re-render
+   * the selected TaskItem and discard any open Specification/Design-Doc editor).
    */
   refreshPullRequests(): void;
   /** Re-sync the compact engine Pi slot after starting an iteration (P3). */
