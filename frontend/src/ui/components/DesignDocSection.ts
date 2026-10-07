@@ -86,7 +86,7 @@ export function renderDesignDocSection(task: Task, isProposed: boolean): string 
       
       <div class="design-doc-edit hidden flex flex-col gap-2">
         <span class="font-bold text-app-accent-2 mb-1">Editing Design Document</span>
-        <textarea class="w-full bg-app-bg border border-app-border rounded p-2 text-app-text outline-none focus:ring-1 focus:ring-app-accent-2 min-h-[120px]" 
+        <textarea class="w-full resize-y bg-app-bg border border-app-border rounded p-2 text-app-text outline-none focus:ring-1 focus:ring-app-accent-2 min-h-[120px]" 
                   placeholder="Describe the implementation details...">${task.design_doc || ''}</textarea>
         <div class="flex gap-2 justify-between items-center">
           <button data-action-click="toggle_edit_design_doc_expand" class="text-[10px] text-app-accent-2 hover:underline cursor-pointer">

@@ -292,7 +292,12 @@ body {
 
 /* Design Doc Editor Expand/Collapse and Resize */
 .design-doc-edit .CodeMirror {
-  @apply !resize-y !overflow-hidden !h-auto;
+  /* `resize-y` shows the native vertical resize handle. The height must NOT be
+   * `!important`: browsers implement the drag by setting an inline height, and
+   * an `!important` `height: auto` would win over that inline style and keep
+   * the editor locked at its auto height. Plain `h-auto` still hugs the content
+   * by default while letting the user's drag override it. */
+  @apply !resize-y !overflow-hidden h-auto;
 }
 
 .design-doc-edit .CodeMirror:not(.expanded-editor) .CodeMirror-scroll {
