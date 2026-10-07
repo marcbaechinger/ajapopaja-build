@@ -48,6 +48,7 @@ import { PipelineHeaderView, type DocbotState, type ReviewbotState, type Archbot
 import { renderSpecProposalResult, getTaskSpecProposalUpdater } from '../components/SpecSection.ts';
 import type { SpecProposal } from '../../core/clients/SpecBotClient.ts';
 import { createPipelineDetailCtx, type DevProcessState, type PipelineDetailCtx } from './pipeline/PipelineDetailCtx.ts';
+import { PipelineDetailLayout } from './pipeline/PipelineDetailLayout.ts';
 import EasyMDE from 'easymde';
 import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
 
@@ -1650,20 +1651,7 @@ export class PipelineDetailView extends View {
 
   private renderHeader(): string {
     if (!this.pipeline) {
-      return `
-        <header class="flex justify-between items-center bg-app-surface px-4 py-2 border-b border-app-border shrink-0">
-          <div class="flex gap-4 items-center">
-            <button onclick="window.location.hash = '#'" class="p-2 hover:bg-app-bg rounded-xl transition-all text-app-muted hover:text-app-accent-1 border border-transparent hover:border-app-border group cursor-pointer" title="Back to Dashboard">
-              <svg class="w-5 h-5 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-              </svg>
-            </button>
-            <div class="min-w-[400px]">
-              <h2 class="text-2xl font-black text-app-accent-1 tracking-tight">Loading...</h2>
-            </div>
-          </div>
-        </header>
-      `;
+      return PipelineDetailLayout.renderLoadingHeader();
     }
     return PipelineHeaderView.render({
       pipeline: this.pipeline,
@@ -1684,132 +1672,28 @@ export class PipelineDetailView extends View {
   }
 
   private renderPrepColumn(): string {
-    return `
-      <div class="flex flex-col gap-8 min-w-0 lg:min-w-[350px]">
-        <div class="p-2 flex flex-col">
-          <div id="pipeline-session-list" class="mt-3 hidden flex flex-col gap-2"></div>
-          <!-- Pull requests awaiting review sit between the session list and
-               the content tabs. #pull-request-section is updated in place by
-               fetchPullRequests/refreshPullRequests; when nothing is awaiting
-               review it stays empty and consumes no vertical space. -->
-          <div id="col-prep">
-            <div id="pull-request-section">${PullRequestSection.render(this.pullRequests)}</div>
-          </div>
-          <!-- Four tabs over four pre-rendered DOM fragments. The tab list is
-               always visible; the Coding Agent tab shows its "No active
-               session" state (with a Start action for remote pipelines) while
-               no session is attached. "Task editor" is the default. -->
-          <div id="content-tablist" role="tablist" aria-label="Pipeline content"
-            class="mt-6 flex items-center gap-1 border-b border-app-border/40">
-            <button id="tab-task-editor" data-action-click="select_content_tab" data-content-tab="task-editor" type="button"
-              role="tab" aria-selected="true" aria-controls="selected-task-view"
-              class="px-3 py-2 text-xs font-bold uppercase tracking-widest border-b-2 -mb-px transition-colors cursor-pointer border-app-accent-1 text-app-accent-1">
-              Task editor
-            </button>
-            <button id="tab-coding-agent" data-action-click="select_content_tab" data-content-tab="coding-agent" type="button"
-              role="tab" aria-selected="false" aria-controls="interactive-coding-view-mount"
-              class="px-3 py-2 text-xs font-bold uppercase tracking-widest border-b-2 -mb-px transition-colors cursor-pointer border-transparent text-app-muted hover:text-app-text">
-              Coding Agent
-            </button>
-            <button id="tab-file-browser" data-action-click="select_content_tab" data-content-tab="file-browser" type="button"
-              role="tab" aria-selected="false" aria-controls="file-browser-view-mount"
-              class="px-3 py-2 text-xs font-bold uppercase tracking-widest border-b-2 -mb-px transition-colors cursor-pointer border-transparent text-app-muted hover:text-app-text">
-              File Browser
-            </button>
-            <button id="tab-history" data-action-click="select_content_tab" data-content-tab="history" type="button"
-              role="tab" aria-selected="false" aria-controls="history-view-mount"
-              class="px-3 py-2 text-xs font-bold uppercase tracking-widest border-b-2 -mb-px transition-colors cursor-pointer border-transparent text-app-muted hover:text-app-text">
-              Commits
-            </button>
-          </div>
-          <div id="selected-task-view" role="tabpanel" aria-labelledby="tab-task-editor" class="mt-6">
-            <p class="text-app-muted/60 text-xs italic text-center border border-dashed border-app-border/40 rounded-xl py-6 px-3">Select a task from the backlog to open it here.</p>
-          </div>
-          <div id="interactive-coding-view-mount" role="tabpanel" aria-labelledby="tab-coding-agent" class="mt-6 hidden"></div>
-          <div id="file-browser-view-mount" role="tabpanel" aria-labelledby="tab-file-browser" class="mt-6 hidden"></div>
-          <div id="history-view-mount" role="tabpanel" aria-labelledby="tab-history" class="mt-6 hidden"></div>
-        </div>
-      </div>
-    `;
+    return PipelineDetailLayout.renderPrepColumn({
+      pullRequestSectionHtml: PullRequestSection.render(this.pullRequests),
+    });
   }
 
 
-
-  /** Chevron icon for the backlog sidebar toggle (points the way it will move). */
-  private sidebarToggleIcon(): string {
-    const points = this.sidebarCollapsed ? '9 18 15 12 9 6' : '15 18 9 12 15 6';
-    return `<svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="${points}"></polyline></svg>`;
-  }
 
   /**
    * Applies the persisted backlog-sidebar collapse state to the mounted DOM.
-   * The sidebar is fully hidden to reclaim its width; the toggle rail next to
-   * it stays visible so it can be expanded again.
+   * Delegates to `PipelineDetailLayout` so the layout owns the toggle markup.
    */
   private applySidebarState(): void {
     if (!this.container) return;
-    const sidebar = this.container.querySelector<HTMLElement>('#backlog-sidebar');
-    sidebar?.classList.toggle('hidden', this.sidebarCollapsed);
-
-    const button = this.container.querySelector<HTMLElement>('#backlog-sidebar-toggle');
-    if (button) {
-      button.setAttribute('aria-pressed', String(this.sidebarCollapsed));
-      button.setAttribute(
-        'title',
-        this.sidebarCollapsed ? 'Expand backlog sidebar' : 'Collapse backlog sidebar'
-      );
-      button.innerHTML = this.sidebarToggleIcon();
-    }
+    PipelineDetailLayout.applySidebarState(this.container, this.sidebarCollapsed);
   }
 
   render() {
-    const backlogHidden = this.sidebarCollapsed ? ' hidden' : '';
-    return `
-      <div class="h-screen flex flex-col overflow-hidden bg-app-bg">
-        <div id="pipeline-header-container" class="flex-none shrink-0 border-b border-app-border/60">
-          ${this.renderHeader()}
-        </div>
-
-        <div class="flex flex-1 min-h-0">
-          <!-- Sidebar toggle rail: always visible so the backlog sidebar can be
-               collapsed to reclaim horizontal space and expanded again. -->
-          <div class="w-9 flex-none shrink-0 flex flex-col items-center py-2 bg-app-surface/30 border-r border-app-border/60">
-            <button id="backlog-sidebar-toggle" type="button"
-              data-action-click="toggle_backlog_sidebar"
-              class="p-1.5 rounded-lg text-app-muted hover:text-app-accent-1 hover:bg-app-bg transition-colors cursor-pointer"
-              aria-pressed="${this.sidebarCollapsed}" aria-controls="backlog-sidebar"
-              title="${this.sidebarCollapsed ? 'Expand backlog sidebar' : 'Collapse backlog sidebar'}">
-              ${this.sidebarToggleIcon()}
-            </button>
-          </div>
-
-          <!-- Left Sidebar: BacklogView (proposed designs + backlog) -->
-          <aside id="backlog-sidebar"
-            class="w-96 flex-none shrink-0 border-r border-app-border/60 bg-app-surface/30 overflow-y-auto${backlogHidden}">
-            <div id="backlog-view" class="min-h-full">
-              <p class="text-app-muted/40 text-[10px] uppercase font-bold tracking-widest text-center py-6">Loading backlog...</p>
-            </div>
-          </aside>
-
-          <!-- Main Content Area (Preparation / PullRequests only; history moved to sidebar) -->
-          <main class="flex-[2] min-w-0 overflow-y-auto">
-            <!-- Top padding lives on the prep column's inner p-2 wrapper; keep
-                 the outer wrapper from adding a second top padding (p-4). -->
-            <div class="w-full px-4 pb-4">
-              ${this.renderPrepColumn()}
-            </div>
-          </main>
-
-          <!-- Right Sidebar: ExecutionEngineView + PipelineHistoryView (bottom) -->
-          <aside class="flex-1 min-w-[660px] shrink-0 border-l border-app-border/60 bg-app-surface/30 flex flex-col overflow-hidden">
-            <div id="execution-engine-view" class="flex-1 min-h-0 flex flex-col overflow-hidden">
-              <p class="text-app-muted/40 text-[10px] uppercase font-bold tracking-widest text-center py-6">Loading execution engine...</p>
-            </div>
-          </aside>
-        </div>
-      </div>
-      <div id="docbot-dialog-container"></div>
-    `;
+    return PipelineDetailLayout.renderShell({
+      headerHtml: this.renderHeader(),
+      sidebarCollapsed: this.sidebarCollapsed,
+      prepColumnHtml: this.renderPrepColumn(),
+    });
   }
 
   mount(container: HTMLElement) {
