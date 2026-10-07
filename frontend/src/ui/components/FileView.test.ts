@@ -52,6 +52,17 @@ describe('FileView', () => {
     expect(code.querySelector('.hljs-tag')).not.toBeNull();
   });
 
+  it('falls back to the path extension when the name carries none', () => {
+    // highlightAuto leaves a bare Markdown heading as plain text, so only the
+    // path-derived `.md` mapping can produce the section highlight.
+    const host = renderIntoDom(
+      file({ name: 'readme', path: 'docs/readme.md', content: '## Heading\n' })
+    );
+
+    const code = host.querySelector('code.hljs')!;
+    expect(code.querySelector('.hljs-section')).not.toBeNull();
+  });
+
   it('escapes content when no language can be determined', () => {
     const host = renderIntoDom(
       file({ name: 'notes.unknownext', path: 'notes.unknownext', content: '<script>alert(1)</script>' })

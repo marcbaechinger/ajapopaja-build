@@ -171,14 +171,21 @@ const MAX_AUTO_HIGHLIGHT_LENGTH = 20_000;
 
 /** Resolve the highlight.js language for a file from its name/extension. */
 function detectLanguage(file: FileContent): string | null {
-  const path = (file.name || file.path || '').toLowerCase();
-  const base = path.split('/').pop() ?? path;
-  const byName = FILENAME_LANGUAGE[base];
-  if (byName) return byName;
-  const dot = base.lastIndexOf('.');
-  if (dot > 0) {
-    const extension = base.slice(dot + 1);
-    return EXTENSION_LANGUAGE[extension] ?? null;
+  // Prefer the file name, then fall back to the repository-relative path. The
+  // backend normally supplies the basename in `name`, but a search hit (or a
+  // test double) may only carry the extension on `path`.
+  const candidates = [file.name, file.path].filter(
+    (value): value is string => typeof value === 'string' && value.length > 0
+  );
+  for (const candidate of candidates) {
+    const base = candidate.toLowerCase().split('/').pop() ?? '';
+    const byName = FILENAME_LANGUAGE[base];
+    if (byName) return byName;
+    const dot = base.lastIndexOf('.');
+    if (dot > 0) {
+      const language = EXTENSION_LANGUAGE[base.slice(dot + 1)];
+      if (language) return language;
+    }
   }
   return null;
 }

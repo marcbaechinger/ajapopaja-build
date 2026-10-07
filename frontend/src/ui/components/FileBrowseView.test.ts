@@ -495,6 +495,18 @@ describe('FileBrowseView route wiring', () => {
     expect(client.readFile).toHaveBeenCalledWith('p1', 'src/App.ts');
   });
 
+  it('updates the breadcrumb to the file directory for a file deep link', async () => {
+    client.getMeta.mockResolvedValue({ isDir: false });
+
+    const v = build();
+    v.render();
+    await flush();
+    await v.navigateTo('src/App.ts');
+
+    expect(v.getCurrentPath()).toEqual({ dir: 'src', file: 'src/App.ts' });
+    expect(root.querySelector('#file-browser-breadcrumb')!.textContent).toContain('src');
+  });
+
   it('defaults to a directory when getMeta is missing or rejects', async () => {
     const missing = build();
     await missing.navigateTo('src');
@@ -656,6 +668,34 @@ describe('FileBrowseView file search', () => {
 
     expect(client.getMeta).toHaveBeenCalledWith('p1', 'src/App.ts');
     expect(client.readFile).toHaveBeenCalledWith('p1', 'src/App.ts');
+  });
+
+  it('adjusts the breadcrumb and stored path to the file directory when selecting a search result', async () => {
+    client.getMeta.mockResolvedValue({ isDir: false });
+    build().render();
+    await flushAsync();
+
+    await view!.loadDirectory('design');
+    await flushAsync();
+    expect(root.querySelector('#file-browser-breadcrumb')!.textContent).toContain('design');
+
+    const input = root.querySelector('#file-browser-search-mount input') as HTMLInputElement;
+    input.value = 'App';
+    input.dispatchEvent(new Event('input'));
+    await vi.advanceTimersByTimeAsync(150);
+    await flushAsync();
+
+    const option = root.querySelector('[data-role="search-result"]') as HTMLElement;
+    option.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    await flushAsync();
+
+    expect(client.readFile).toHaveBeenCalledWith('p1', 'src/App.ts');
+    expect(view!.getCurrentPath()).toEqual({ dir: 'src', file: 'src/App.ts' });
+    const breadcrumb = root.querySelector('#file-browser-breadcrumb') as HTMLElement;
+    expect(breadcrumb.textContent).toContain('src');
+    expect(breadcrumb.textContent).not.toContain('design');
+    // The file's directory is persisted so a re-mount restores it.
+    expect(JSON.parse(window.localStorage.getItem('file-browser:lastPath:p1')!)).toBe('src');
   });
 
   it('destroys the mounted search input with the view', async () => {

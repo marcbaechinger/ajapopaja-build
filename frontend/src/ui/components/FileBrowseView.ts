@@ -161,6 +161,10 @@ export class FileBrowseView {
     this.loading = true;
     this.error = null;
     this.selectedFile = null;
+    // A file can be opened from anywhere (directory listing, search result or
+    // route deep link). Make its containing directory the current one so the
+    // breadcrumb and the persisted `lastPath` point at where the file lives.
+    this.setCurrentDirectory(this.parentDirectory(path));
     if (!opts.silent) this.onNavigate?.({ dir: this.currentDir, file: path });
     this.renderMain();
 
@@ -371,6 +375,27 @@ export class FileBrowseView {
   }
 
   // --- state --------------------------------------------------------------
+
+  /**
+   * Repository-relative path of the directory containing `path` (`''` for a
+   * file at the repository root).
+   */
+  private parentDirectory(path: string): string {
+    const index = path.lastIndexOf('/');
+    return index === -1 ? '' : path.slice(0, index);
+  }
+
+  /**
+   * Point the breadcrumb and the persisted `lastPath` at `dir` when it
+   * changed. Keeps {@link openFile} from leaving the breadcrumb pointing at a
+   * directory the opened file is not in (e.g. a file picked from search).
+   */
+  private setCurrentDirectory(dir: string): void {
+    if (dir === this.currentDir) return;
+    this.currentDir = dir;
+    this.storage.put(`lastPath:${this.pipelineId}`, dir);
+    this.renderBreadcrumb();
+  }
 
   private restoreState(): void {
     if (this.initialPath !== null && this.initialPath !== undefined) {
