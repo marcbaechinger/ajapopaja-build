@@ -29,11 +29,8 @@ import { BacklogView } from '../components/BacklogView.ts';
 import { ExecutionEngineView } from '../components/ExecutionEngineView.ts';
 import { PipelineHistoryView } from '../components/PipelineHistoryView.ts';
 import { PullRequestSection } from '../components/PullRequestSection.ts';
-import { PipelineEditDialog } from '../components/PipelineEditDialog.ts';
-import { DiffDialog } from '../components/DiffDialog.ts';
 import { InteractiveCodingView } from '../components/InteractiveCodingView.ts';
 import { FileBrowseView } from '../components/FileBrowseView.ts';
-import { DevServerDialog } from '../components/DevServerDialog.ts';
 import { PipelineHeaderView, type DocbotState, type ReviewbotState, type ArchbotState, type SpecAgentState } from '../components/PipelineHeaderView.ts';
 import { renderSpecProposalResult, getTaskSpecProposalUpdater } from '../components/SpecSection.ts';
 import type { SpecProposal } from '../../core/clients/SpecBotClient.ts';
@@ -43,6 +40,7 @@ import { ExecutionEngineController } from './pipeline/ExecutionEngineController.
 import { PipelineSessionListController } from './pipeline/PipelineSessionListController.ts';
 import { registerPullRequestActions } from './pipeline/actions/pullRequestActions.ts';
 import { registerBotActions, openCoderBotDialog } from './pipeline/actions/botActions.ts';
+import { registerMiscActions } from './pipeline/actions/miscActions.ts';
 import EasyMDE from 'easymde';
 import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
 
@@ -584,18 +582,13 @@ export class PipelineDetailView extends View {
       persistPendingReviews: () => this.savePendingReviews(),
     });
 
-    this.context.actionRegistry.register('edit_pipeline', async () => {
-      if (!this.pipeline) return;
-      const dialog = new PipelineEditDialog({
-        mode: 'edit',
-        pipeline: this.pipeline,
-        pipelineId: this.pipelineId,
-        context: this.context
-      });
-      await dialog.show();
-      // After dialog closes, we might want to refresh the header if it was updated
-      // The dialog itself calls update on the client, and we'll get a websocket update 
-      // or we can refresh manually if needed.
+    registerMiscActions(this.ctx, {
+      getHost: () => this.container,
+      setContentTab: (tab, opts) => this.setContentTab(tab, opts),
+      setHistoryPage: (page) => this.setHistoryPage(page),
+      applySidebarState: () => this.applySidebarState(),
+      persistSidebarCollapsed: (collapsed) =>
+        this.storage.put(`sidebar_collapsed:${this.pipelineId}`, collapsed),
     });
 
     this.context.actionRegistry.register('start_interactive_session', () =>
@@ -632,92 +625,6 @@ export class PipelineDetailView extends View {
       this.syncInteractiveSession();
     });
 
-    // Collapse/expand the left backlog sidebar (proposed designs + backlog) to
-    // reclaim horizontal space on demand. The chosen state is persisted per
-    // pipeline and restored on the next visit.
-    this.context.actionRegistry.register('toggle_backlog_sidebar', () => {
-      this.sidebarCollapsed = !this.sidebarCollapsed;
-      this.storage.put(`sidebar_collapsed:${this.pipelineId}`, this.sidebarCollapsed);
-      this.applySidebarState();
-    });
-
-    this.context.actionRegistry.register('copy_pipeline_id', async (_e, el) => {
-      try {
-        await navigator.clipboard.writeText(this.pipelineId);
-        const originalHtml = el.innerHTML;
-        el.innerHTML = `<svg class="w-3 h-3 text-green-500 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`;
-        setTimeout(() => {
-          el.innerHTML = originalHtml;
-        }, 2000);
-      } catch (err) {
-        console.error('Failed to copy pipeline ID:', err);
-      }
-    });
-
-    this.context.actionRegistry.register('copy_task_id', async (_e, el) => {
-      const taskId = el.closest('[data-task-id]')?.getAttribute('data-task-id');
-      if (!taskId) return;
-      try {
-        await navigator.clipboard.writeText(taskId);
-        const originalHtml = el.innerHTML;
-        el.innerHTML = `<svg class="w-3 h-3 text-green-500 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`;
-        setTimeout(() => {
-          el.innerHTML = originalHtml;
-        }, 2000);
-      } catch (err) {
-        console.error('Failed to copy task ID:', err);
-      }
-    });
-
-    this.context.actionRegistry.register('open_dev_server_dialog', () => {
-      new DevServerDialog(this.context, this.pipelineId).show();
-    });
-
-    this.context.actionRegistry.register('open_stats', () => {
-      new StatsDialog(this.allLoadedTasks, this.pipelineId, this.context.pipelineClient).show();
-    });
-
-    this.context.actionRegistry.register('open_history', () => {
-      this.setContentTab('history', { hash: 'push' });
-    });
-
-    this.context.actionRegistry.register('create_task', async (_e, el) => {
-      const form = el as HTMLFormElement;
-      const titleInput = form.querySelector('input[name="task_title"]') as HTMLInputElement;
-      const title = titleInput.value.trim();
-      if (!title) return;
-
-      try {
-        const created = await this.context.taskClient.create(this.pipelineId, title);
-        // The header (and with it the form) may have been re-rendered by a
-        // WebSocket update while the request was in flight, so clear the input
-        // that is currently mounted rather than the (possibly detached) node we
-        // captured before the await.
-        titleInput.value = '';
-        const liveInput = this.container?.querySelector<HTMLInputElement>('input[name="task_title"]');
-        if (liveInput) liveInput.value = '';
-
-        // Make the newly created task the selected task so it is shown in the main
-        // content area immediately. Add it to the local cache so the detail view can
-        // render it even before the WebSocket TASK_CREATED notification arrives.
-        this.selectedTask = created;
-        const existingIndex = this.allLoadedTasks.findIndex(t => t.id === created.id);
-        if (existingIndex === -1) {
-          this.allLoadedTasks.push(created);
-        } else {
-          this.allLoadedTasks[existingIndex] = created;
-        }
-        this.pendingSpecEditTaskId = created.id ?? null;
-        // Selecting a task must be visible to the user, so make sure the Task
-        // editor tab is the active one in the main content area.
-        this.setContentTab('task-editor', { hash: 'push' });
-        this.refreshBacklog();
-        this.refreshSelectedTask();
-      } catch (error) {
-        alert('Failed to create task');
-      }
-    });
-
     this.context.actionRegistry.register('select_task', (_e, el) => {
       const taskId = (el.closest('[data-view-id]') as HTMLElement | null)?.getAttribute('data-view-id') || el.getAttribute('data-view-id') || el.getAttribute('data-task-id');
       if (!taskId) return;
@@ -729,14 +636,6 @@ export class PipelineDetailView extends View {
       this.setContentTab('task-editor', { hash: 'push' });
       this.refreshBacklog();
       this.refreshSelectedTask();
-    });
-
-    this.context.actionRegistry.register('prev_history_page', () => {
-      this.setHistoryPage(this.historyPage - 1);
-    });
-
-    this.context.actionRegistry.register('next_history_page', () => {
-      this.setHistoryPage(this.historyPage + 1);
     });
 
     this.context.actionRegistry.register('toggle_task_collapse', (_e, el) => {
@@ -1192,39 +1091,6 @@ export class PipelineDetailView extends View {
       } catch (error) {
         alert('Failed to delete task');
       }
-    });
-
-    this.context.actionRegistry.register('open_quickfix', async (_e, el) => {
-      const taskId = el.dataset.taskId;
-      if (!taskId) return;
-
-      const btn = el as HTMLElement;
-      btn.classList.add('animate-pulse', 'text-app-accent-2');
-
-      try {
-        await this.context.editorClient.quickfix(taskId);
-        setTimeout(() => btn.classList.remove('animate-pulse', 'text-app-accent-2'), 1000);
-      } catch (err) {
-        console.error('Failed to open quickfix:', err);
-        btn.classList.remove('animate-pulse', 'text-app-accent-2');
-        btn.classList.add('text-red-500');
-        setTimeout(() => btn.classList.remove('text-red-500'), 2000);
-      }
-    });
-
-    this.context.actionRegistry.register('open_diff_view', async (_e, el) => {
-      const commitHash = el.dataset.commitHash;
-      if (!commitHash) return;
-
-      const taskId = el.closest('[data-task-id]')?.getAttribute('data-task-id');
-      const task = this.allLoadedTasks.find(t => t.id === taskId);
-
-      new DiffDialog({
-        context: this.context,
-        pipelineId: this.pipelineId,
-        commitHash,
-        title: task?.title,
-      }).show();
     });
   }
 

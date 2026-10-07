@@ -18,8 +18,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { PipelineDetailView } from './PipelineDetailView.ts';
 import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
 import { TaskStatus } from '../../core/domain.ts';
-import { DevServerDialog } from '../components/DevServerDialog.ts';
-import { DiffDialog } from '../components/DiffDialog.ts';
 import { InteractiveCodingView } from '../components/InteractiveCodingView.ts';
 import { setTaskSpecProposalUpdater } from '../components/SpecSection.ts';
 
@@ -164,29 +162,6 @@ describe('PipelineDetailView Layout', () => {
     expect(backlog).not.toBeNull();
     expect(backlog!.innerHTML).toContain('Proposed Task');
     expect(backlog!.innerHTML).toContain('Created Task');
-  });
-
-  it('should collapse and expand the backlog sidebar and persist the state', async () => {
-    mockContext.taskClient.listByPipeline.mockResolvedValue([]);
-    const view = new PipelineDetailView(mockContext, { id: 'p1' });
-    container.innerHTML = view.render() as string;
-    view.mount(container);
-    await view.refreshTasks();
-
-    const sidebar = container.querySelector('#backlog-sidebar') as HTMLElement;
-    expect(sidebar).not.toBeNull();
-    expect(sidebar.classList.contains('hidden')).toBe(false);
-
-    const toggle = mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === 'toggle_backlog_sidebar')![1];
-    expect(toggle).toBeDefined();
-
-    toggle(new Event('click'), container.querySelector('#backlog-sidebar-toggle') as HTMLElement);
-    expect(sidebar.classList.contains('hidden')).toBe(true);
-    expect(storage['pipeline:sidebar_collapsed:p1']).toBe('true');
-
-    toggle(new Event('click'), container.querySelector('#backlog-sidebar-toggle') as HTMLElement);
-    expect(sidebar.classList.contains('hidden')).toBe(false);
-    expect(storage['pipeline:sidebar_collapsed:p1']).toBe('false');
   });
 
   it('should restore a collapsed backlog sidebar from persisted state', () => {
@@ -910,103 +885,10 @@ describe('PipelineDetailView Pull Request Insert', () => {
 });
 
 
-describe('PipelineDetailView Commit Diff', () => {
-  let mockContext: any;
-  let container: HTMLElement;
-
-  const getAction = (name: string) =>
-    mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === name)![1];
-
-  beforeEach(() => {
-    document.body.innerHTML = '';
-    container = document.createElement('div');
-    document.body.appendChild(container);
-    LocalStorageManager.resetInstances();
-    vi.clearAllMocks();
-
-    mockContext = {
-      actionRegistry: { register: vi.fn() },
-      wsClient: { on: vi.fn().mockReturnValue(() => {}) },
-      dataManager: {
-        on: vi.fn().mockReturnValue(() => {}),
-        updateTask: vi.fn(),
-        updatePipeline: vi.fn(),
-      },
-      authService: {
-        getUser: vi.fn().mockReturnValue({ username: 'testuser' }),
-        getAccessToken: vi.fn().mockReturnValue('token'),
-      },
-      pipelineClient: {
-        get: vi.fn().mockResolvedValue({ id: 'p1', name: 'Pipe 1' }),
-        getGitStatus: vi.fn().mockResolvedValue({ staged: 0, unstaged: 0, untracked: 0 }),
-        getCommitDiff: vi.fn().mockResolvedValue({}),
-      },
-      taskClient: {
-        listByPipeline: vi.fn().mockResolvedValue([]),
-        listCompletedByPipeline: vi.fn().mockResolvedValue({ tasks: [], total_count: 0 }),
-      },
-      pullRequestClient: { getPullRequestsByPipeline: vi.fn().mockResolvedValue([]) },
-      systemClient: {
-        isOllamaAvailable: vi.fn().mockResolvedValue(true),
-      },
-      // The legacy Neovim client is still referenced by other actions; the diff
-      // handler must no longer call it.
-      editorClient: { diffViewOpen: vi.fn() },
-    };
-
-    vi.stubGlobal('localStorage', {
-      getItem: vi.fn(() => null),
-      setItem: vi.fn(),
-    });
-  });
-
-  it('opens a DiffDialog with the task commit hash instead of calling the editor client', async () => {
-    const view = new PipelineDetailView(mockContext, { id: 'p1' });
-    view.mount(container);
-    (view as any).allLoadedTasks = [
-      { id: 't1', title: 'Task One', commit_hash: 'abcdef123456' },
-    ];
-
-    const action = getAction('open_diff_view');
-    const el = document.createElement('button');
-    el.setAttribute('data-commit-hash', 'abcdef123456');
-    el.setAttribute('data-task-id', 't1');
-
-    await action(null, el);
-
-    expect(DiffDialog).toHaveBeenCalledTimes(1);
-    expect(DiffDialog).toHaveBeenCalledWith(
-      expect.objectContaining({
-        pipelineId: 'p1',
-        commitHash: 'abcdef123456',
-        title: 'Task One',
-      })
-    );
-    const dialog = (DiffDialog as any).mock.results[0].value;
-    expect(dialog.show).toHaveBeenCalled();
-    expect(mockContext.editorClient.diffViewOpen).not.toHaveBeenCalled();
-  });
-
-  it('does nothing when the element has no commit hash', async () => {
-    const view = new PipelineDetailView(mockContext, { id: 'p1' });
-    view.mount(container);
-
-    const action = getAction('open_diff_view');
-    const el = document.createElement('button');
-
-    await action(null, el);
-
-    expect(DiffDialog).not.toHaveBeenCalled();
-  });
-});
-
 describe('PipelineDetailView Dev Server', () => {
   let mockContext: any;
   let container: HTMLElement;
   let dataManagerHandlers: Record<string, Function> = {};
-
-  const getAction = (name: string) =>
-    mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === name)![1];
 
   beforeEach(() => {
     document.body.innerHTML = '';
@@ -1081,17 +963,6 @@ describe('PipelineDetailView Dev Server', () => {
 
     dataManagerHandlers['ws:DEV_PROCESS_EXITED:p1']({ pipeline_id: 'p1', exit_code: 0 });
     expect((view as any).devProcessState).toEqual({ running: false, pid: null, port: null });
-  });
-
-  it('opens the DevServerDialog from the open_dev_server_dialog action', () => {
-    const view = new PipelineDetailView(mockContext, { id: 'p1' });
-    view.mount(container);
-
-    const action = getAction('open_dev_server_dialog');
-    action(null, document.createElement('button'));
-
-    expect(DevServerDialog).toHaveBeenCalledTimes(1);
-    expect(DevServerDialog).toHaveBeenCalledWith(mockContext, 'p1');
   });
 });
 
@@ -1731,22 +1602,6 @@ describe('PipelineDetailView Interactive Session', () => {
     expect(container.querySelector('#history-view-mount')).toBe(historyMount);
     expect((view as any).historyView).toBe(historyView);
     expect(historyMount.classList.contains('hidden')).toBe(false);
-  });
-
-  it('open_history activates the History tab and pushes the canonical hash', async () => {
-    window.location.hash = '';
-    const view = new PipelineDetailView(mockContext, { id: 'p1' });
-    container.innerHTML = view.render() as string;
-    view.mount(container);
-    await flush();
-
-    getAction('open_history')();
-
-    expect((view as any).contentTab).toBe('history');
-    expect(window.location.hash).toBe('#/pipeline/p1/tab/history');
-    expect(
-      container.querySelector('#tab-history')!.getAttribute('aria-selected')
-    ).toBe('true');
   });
 
   it('the h shortcut activates the History tab', async () => {
