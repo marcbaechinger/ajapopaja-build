@@ -125,6 +125,35 @@ describe('SessionManagerPanel', () => {
     expect(body.textContent).not.toContain('Paused one');
   });
 
+  it('highlights the selected filter chip', () => {
+    const { context } = makeContext([
+      makeSession('u1', { status: 'paused' }),
+      makeSession('u2', { status: 'completed' }),
+    ]);
+    const panel = new SessionManagerPanel(context as any);
+    panel.open();
+
+    const chipFor = (filter: string) =>
+      panel['container'].querySelector(`[data-session-filter="${filter}"]`) as HTMLElement;
+
+    // Initially "all" is the selected chip.
+    expect(chipFor('all').classList.contains('bg-app-accent-2')).toBe(true);
+    expect(chipFor('completed').classList.contains('bg-app-accent-2')).toBe(false);
+
+    chipFor('completed').click();
+
+    // The highlight must follow the newly selected filter.
+    expect(chipFor('completed').classList.contains('bg-app-accent-2')).toBe(true);
+    expect(chipFor('completed').classList.contains('text-white')).toBe(true);
+    expect(chipFor('completed').classList.contains('border-app-accent-2')).toBe(true);
+    expect(chipFor('all').classList.contains('bg-app-accent-2')).toBe(false);
+    expect(chipFor('all').classList.contains('text-app-muted')).toBe(true);
+
+    chipFor('failed').click();
+    expect(chipFor('failed').classList.contains('bg-app-accent-2')).toBe(true);
+    expect(chipFor('completed').classList.contains('bg-app-accent-2')).toBe(false);
+  });
+
   it('shows an empty state', () => {
     const { context } = makeContext([]);
     const panel = new SessionManagerPanel(context as any);

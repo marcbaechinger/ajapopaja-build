@@ -263,6 +263,7 @@ export class SessionManagerPanel {
     this.container.querySelectorAll<HTMLElement>('[data-session-filter]').forEach((btn) => {
       btn.addEventListener('click', () => {
         this.filter = (btn.dataset.sessionFilter as SessionFilter) ?? 'all';
+        this.renderFilters();
         this.renderBody();
       });
     });
@@ -423,6 +424,7 @@ export class SessionManagerPanel {
       btn.classList.toggle('bg-app-accent-2', active);
       btn.classList.toggle('text-white', active);
       btn.classList.toggle('border-app-accent-2', active);
+      btn.classList.toggle('border-app-border', !active);
       btn.classList.toggle('text-app-muted', !active);
     });
     const search = this.container.querySelector('#session-manager-search') as HTMLInputElement | null;
