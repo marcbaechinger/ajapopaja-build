@@ -234,6 +234,26 @@ describe('InteractivePromptView', () => {
     expect(sendEl().disabled).toBe(false);
   });
 
+  it('focuses the textarea when re-enabled after being disabled', () => {
+    const view = mount();
+
+    view.setDisabled(true);
+    expect(document.activeElement).not.toBe(inputEl());
+
+    view.setDisabled(false);
+    expect(document.activeElement).toBe(inputEl());
+  });
+
+  it('does not steal focus when setDisabled(false) is called while already enabled', () => {
+    const view = mount();
+    const other = document.createElement('input');
+    document.body.appendChild(other);
+    other.focus();
+
+    view.setDisabled(false);
+    expect(document.activeElement).toBe(other);
+  });
+
   it('updates the placeholder and exposes the value', () => {
     const view = mount();
     view.setPlaceholder('Waiting…');

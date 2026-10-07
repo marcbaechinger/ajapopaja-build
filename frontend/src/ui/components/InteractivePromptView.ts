@@ -52,6 +52,7 @@ export class InteractivePromptView {
   private sendBtn: HTMLButtonElement | null = null;
   private menu: SlashCommandMenu | null = null;
   private destroyed = false;
+  private disabled = false;
 
   constructor(root: HTMLElement, options: InteractivePromptViewOptions) {
     this.root = root;
@@ -90,13 +91,21 @@ export class InteractivePromptView {
 
   /** Disables/enables the textarea and Send button and closes any open menu. */
   setDisabled(disabled: boolean): void {
+    const wasDisabled = this.disabled;
+    this.disabled = disabled;
     if (this.textarea) this.textarea.disabled = disabled;
     if (this.sendBtn) {
       this.sendBtn.disabled = disabled;
       this.sendBtn.classList.toggle('opacity-50', disabled);
       this.sendBtn.classList.toggle('cursor-not-allowed', disabled);
     }
-    if (disabled) this.closeMenu();
+    if (disabled) {
+      this.closeMenu();
+    } else if (wasDisabled) {
+      // Re-enabled after the agent finished its turn: restore focus so the
+      // user can keep typing without clicking into the textarea first.
+      this.focus();
+    }
   }
 
   setPlaceholder(text: string): void {
