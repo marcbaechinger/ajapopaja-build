@@ -124,6 +124,7 @@ describe('registerMiscActions', () => {
   it('registers all miscellaneous actions', () => {
     expect([...registry.keys()].sort()).toEqual(
       [
+        'copy_commit_hash',
         'copy_pipeline_id',
         'copy_task_id',
         'create_task',
@@ -216,6 +217,44 @@ describe('registerMiscActions', () => {
       await getAction('copy_task_id')(noEvent, el);
 
       expect(clipboardWrite).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('copy_commit_hash', () => {
+    it('writes the commit hash to the clipboard and reverts the icon', async () => {
+      vi.useFakeTimers();
+      const el = document.createElement('button');
+      el.setAttribute('data-commit-hash', 'abcdef123456');
+      el.innerHTML = 'ORIGINAL';
+
+      await getAction('copy_commit_hash')(noEvent, el);
+
+      expect(clipboardWrite).toHaveBeenCalledWith('abcdef123456');
+      expect(el.innerHTML).toContain('text-green-500');
+
+      vi.advanceTimersByTime(2000);
+      expect(el.innerHTML).toBe('ORIGINAL');
+    });
+
+    it('is a no-op without a commit hash', async () => {
+      const el = document.createElement('button');
+
+      await getAction('copy_commit_hash')(noEvent, el);
+
+      expect(clipboardWrite).not.toHaveBeenCalled();
+    });
+
+    it('logs and leaves the icon untouched when the clipboard write fails', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      clipboardWrite.mockRejectedValueOnce(new Error('denied'));
+      const el = document.createElement('button');
+      el.setAttribute('data-commit-hash', 'abcdef123456');
+      el.innerHTML = 'ORIGINAL';
+
+      await getAction('copy_commit_hash')(noEvent, el);
+
+      expect(errorSpy).toHaveBeenCalledWith('Failed to copy commit hash:', expect.any(Error));
+      expect(el.innerHTML).toBe('ORIGINAL');
     });
   });
 

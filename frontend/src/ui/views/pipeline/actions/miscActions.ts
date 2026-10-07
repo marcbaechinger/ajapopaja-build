@@ -38,9 +38,9 @@ export interface MiscActionsDeps {
 /**
  * Registers the miscellaneous pipeline/dialog/navigation actions on the shared
  * action registry: `edit_pipeline`, `copy_pipeline_id`, `copy_task_id`,
- * `open_stats`, `open_history`, `open_dev_server_dialog`, `open_quickfix`,
- * `open_diff_view`, `create_task`, `prev_history_page`, `next_history_page`
- * and `toggle_backlog_sidebar`.
+ * `copy_commit_hash`, `open_stats`, `open_history`, `open_dev_server_dialog`,
+ * `open_quickfix`, `open_diff_view`, `create_task`, `prev_history_page`,
+ * `next_history_page` and `toggle_backlog_sidebar`.
  *
  * The handlers were extracted verbatim from `PipelineDetailView`. All mutable
  * state comes from `ctx.state` and every repaint goes through `ctx.refresh`;
@@ -97,6 +97,21 @@ export function registerMiscActions(ctx: PipelineDetailCtx, deps: MiscActionsDep
       }, 2000);
     } catch (err) {
       console.error('Failed to copy task ID:', err);
+    }
+  });
+
+  actionRegistry.register('copy_commit_hash', async (_e, el) => {
+    const commitHash = el.dataset.commitHash;
+    if (!commitHash) return;
+    try {
+      await navigator.clipboard.writeText(commitHash);
+      const originalHtml = el.innerHTML;
+      el.innerHTML = `<svg class="w-3 h-3 text-green-500 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`;
+      setTimeout(() => {
+        el.innerHTML = originalHtml;
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to copy commit hash:', err);
     }
   });
 

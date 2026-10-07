@@ -385,6 +385,23 @@ describe('TaskItem', () => {
     expect(html).toContain('title="View Commit Diff"');
   });
 
+  it('should render a Copy Commit Hash button next to the commit hash', () => {
+    const implementedTask = {
+      ...mockTask,
+      status: TaskStatus.IMPLEMENTED,
+      commit_hash: 'abcdef123'
+    };
+    const html = TaskItem.render(implementedTask as any);
+    expect(html).toContain('data-action-click="copy_commit_hash"');
+    expect(html).toContain('data-commit-hash="abcdef123"');
+    expect(html).toContain('title="Copy Commit Hash"');
+  });
+
+  it('should not render a Copy Commit Hash button without a commit hash', () => {
+    const html = TaskItem.render(mockTask as any);
+    expect(html).not.toContain('data-action-click="copy_commit_hash"');
+  });
+
   it('should render the implementation duration for newer processed states', () => {
     const history = [
       { from_status: TaskStatus.CREATED, to_status: TaskStatus.INPROGRESS, timestamp: '2026-04-12T10:00:00Z', by: 'user' },

@@ -406,6 +406,11 @@ ${TaskItem.renderHeader(task, isCollapsed, showStatusSelector)}
                           title="View Commit Diff">
                     ${task.commit_hash.substring(0, 7)}
                   </button>
+                  <button data-action-click="copy_commit_hash" data-commit-hash="${task.commit_hash}"
+                          class="p-1 hover:bg-app-surface text-app-muted hover:text-app-accent-2 rounded transition-all cursor-pointer group/copy-commit"
+                          title="Copy Commit Hash">
+                    ${Icon.render('copy', { size: 12, className: 'group-hover/copy-commit:scale-110 transition-transform' })}
+                  </button>
                   ${isProcessedStatus(task.status) && calculateDuration(task) ? `
                     <div class="text-[10px] text-app-muted flex items-center gap-1" title="Implementation Duration">
                       ${Icon.render('clock', { size: 12 })}
