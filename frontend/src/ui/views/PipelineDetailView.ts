@@ -43,9 +43,10 @@ import { SessionListItemView } from '../components/SessionListItemView.ts';
 import type { PiSessionSummary } from '../../core/InteractiveCodingService.ts';
 import { DevServerDialog } from '../components/DevServerDialog.ts';
 import { PiView } from '../components/PiView.ts';
-import { PipelineHeaderView, type DocbotState, type ReviewbotState, type SpecAgentState } from '../components/PipelineHeaderView.ts';
+import { PipelineHeaderView, type DocbotState, type ReviewbotState, type ArchbotState, type SpecAgentState } from '../components/PipelineHeaderView.ts';
 import { renderSpecProposalResult, getTaskSpecProposalUpdater } from '../components/SpecSection.ts';
 import type { SpecProposal } from '../../core/clients/SpecBotClient.ts';
+import { createPipelineDetailCtx, type DevProcessState, type PipelineDetailCtx } from './pipeline/PipelineDetailCtx.ts';
 import EasyMDE from 'easymde';
 import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
 
@@ -53,26 +54,42 @@ export class PipelineDetailView extends View {
   private storage = LocalStorageManager.getInstance('pipeline');
   private container: HTMLElement | null = null;
   private pipelineId: string;
-  private pipeline: Pipeline | null = null;
   private context: AppContext;
+  private readonly ctx: PipelineDetailCtx;
   private unsubs: (() => void)[] = [];
-  private activeEditors: Map<string, EasyMDE> = new Map();
-  private allLoadedTasks: Task[] = [];
-  private collapsedTasks: Set<string> = new Set();
-  private collapsedSpecs: Set<string> = new Set();
+  //
+  // Mutable pipeline state now lives in `ctx.state`; the private getters/setters
+  // below keep the existing `this.<field>` call sites working while routing every
+  // read/write through the shared context that the extracted controllers consume.
+  //
+  private get activeEditors(): Map<string, EasyMDE> { return this.ctx.state.activeEditors; }
+  private set activeEditors(value: Map<string, EasyMDE>) { this.ctx.state.activeEditors = value; }
+  private get allLoadedTasks(): Task[] { return this.ctx.state.allLoadedTasks; }
+  private set allLoadedTasks(value: Task[]) { this.ctx.state.allLoadedTasks = value; }
+  private get collapsedTasks(): Set<string> { return this.ctx.state.collapsedTasks; }
+  private set collapsedTasks(value: Set<string>) { this.ctx.state.collapsedTasks = value; }
+  private get collapsedSpecs(): Set<string> { return this.ctx.state.collapsedSpecs; }
+  private set collapsedSpecs(value: Set<string>) { this.ctx.state.collapsedSpecs = value; }
   private isFirstLoad: boolean = true;
   private keydownHandler: ((e: KeyboardEvent) => void) | null = null;
-  private gitStatus: GitStatusDetails | undefined = undefined;
+  private get gitStatus(): GitStatusDetails | undefined { return this.ctx.state.gitStatus; }
+  private set gitStatus(value: GitStatusDetails | undefined) { this.ctx.state.gitStatus = value; }
   private gitStatusRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   private gitStatusRefreshInProgress: boolean = false;
   private gitStatusRefreshPending: boolean = false;
-  private pendingReviews: string[] = [];
-  private historyPage: number = 0;
-  private selectedTask: Task | null = null;
+  private get pendingReviews(): string[] { return this.ctx.state.pendingReviews; }
+  private set pendingReviews(value: string[]) { this.ctx.state.pendingReviews = value; }
+  private get historyPage(): number { return this.ctx.state.historyPage; }
+  private set historyPage(value: number) { this.ctx.state.historyPage = value; }
+  private get selectedTask(): Task | null { return this.ctx.state.selectedTask; }
+  private set selectedTask(value: Task | null) { this.ctx.state.selectedTask = value; }
+  private get pipeline(): Pipeline | null { return this.ctx.state.pipeline; }
+  private set pipeline(value: Pipeline | null) { this.ctx.state.pipeline = value; }
   // When a task is created via the Quick Add panel, keep its Specification open in
   // edit mode (even across WS-driven re-renders) until the user saves, cancels, or
   // selects a different task.
-  private pendingSpecEditTaskId: string | null = null;
+  private get pendingSpecEditTaskId(): string | null { return this.ctx.state.pendingSpecEditTaskId; }
+  private set pendingSpecEditTaskId(value: string | null) { this.ctx.state.pendingSpecEditTaskId = value; }
   /**
    * One-shot marker for the "focus the Schedule Execution button" hand-off.
    *
@@ -82,14 +99,16 @@ export class PipelineDetailView extends View {
    * replaced the card, so the freshly rendered "Schedule Execution" button
    * regains focus without the user having to re-find it.
    */
-  private pendingScheduleFocusTaskId: string | null = null;
+  private get pendingScheduleFocusTaskId(): string | null { return this.ctx.state.pendingScheduleFocusTaskId; }
+  private set pendingScheduleFocusTaskId(value: string | null) { this.ctx.state.pendingScheduleFocusTaskId = value; }
   private enginePiView: PiView | null = null;
   private enginePiMountedKey: string | null = null;
 
   // Which content tab is active in the prep column. The tab list is always
   // visible; the Coding Agent tab is always selectable and shows its empty
   // state while no session is attached to this pipeline.
-  private contentTab: ContentTab = 'task-editor';
+  private get contentTab(): ContentTab { return this.ctx.state.contentTab; }
+  private set contentTab(value: ContentTab) { this.ctx.state.contentTab = value; }
   private interactiveCodingView: InteractiveCodingView | null = null;
   // Whether the mounted InteractiveCodingView was created with a Start action
   // (i.e. the pipeline's `repo_uri` was known and remote). Tracked so the view is
@@ -102,15 +121,18 @@ export class PipelineDetailView extends View {
   private historyView: HistoryView | null = null;
   // Explicit file-browser path from the route, consumed once when the File
   // Browser is lazily mounted. `null` = use the persisted last path.
-  private pendingFbPath: string | null = null;
+  private get pendingFbPath(): string | null { return this.ctx.state.pendingFbPath; }
+  private set pendingFbPath(value: string | null) { this.ctx.state.pendingFbPath = value; }
   // Deep-linked task uid, consumed once by `refreshTasks()` (the task list is
   // not loaded yet when the route is first applied). `null` = no explicit task.
-  private pendingTaskId: string | null = null;
+  private get pendingTaskId(): string | null { return this.ctx.state.pendingTaskId; }
+  private set pendingTaskId(value: string | null) { this.ctx.state.pendingTaskId = value; }
   private sessionListClickHandler: ((e: Event) => void) | null = null;
 
   // Whether the left backlog sidebar (proposed designs + backlog) is collapsed.
   // Persisted per pipeline so the chosen layout survives reloads.
-  private sidebarCollapsed: boolean = false;
+  private get sidebarCollapsed(): boolean { return this.ctx.state.sidebarCollapsed; }
+  private set sidebarCollapsed(value: boolean) { this.ctx.state.sidebarCollapsed = value; }
 
   private loadPendingReviews() {
     this.pendingReviews = this.storage.get<string[]>(`pending_reviews:${this.pipelineId}`, []) || [];
@@ -120,42 +142,47 @@ export class PipelineDetailView extends View {
     this.storage.put(`pending_reviews:${this.pipelineId}`, this.pendingReviews);
   }
 
-  private docbotState: DocbotState = {
-    status: 'none',
-    taskId: null,
-  };
+  private get docbotState(): DocbotState { return this.ctx.state.docbotState; }
+  private set docbotState(value: DocbotState) { this.ctx.state.docbotState = value; }
 
-  private reviewbotState: ReviewbotState = {
-    status: 'none',
-    taskId: null,
-  };
+  private get reviewbotState(): ReviewbotState { return this.ctx.state.reviewbotState; }
+  private set reviewbotState(value: ReviewbotState) { this.ctx.state.reviewbotState = value; }
 
-  private archbotState: { status: 'none' | 'inProgress', taskId: string | null } = {
-    status: 'none',
-    taskId: null,
-  };
+  private get archbotState(): ArchbotState { return this.ctx.state.archbotState; }
+  private set archbotState(value: ArchbotState) { this.ctx.state.archbotState = value; }
 
-  private specagentState: SpecAgentState = {
-    status: 'none',
-    taskId: null,
-  };
+  private get specagentState(): SpecAgentState { return this.ctx.state.specagentState; }
+  private set specagentState(value: SpecAgentState) { this.ctx.state.specagentState = value; }
 
   // Outstanding SpecAgent proposals for this pipeline, reconciled from the
   // durable backend cache and kept in sync with live SPECAGENT_SPEC_READY
   // events. Drives the header badge and the inline injection.
-  private pendingSpecProposals: SpecProposal[] = [];
+  private get pendingSpecProposals(): SpecProposal[] { return this.ctx.state.pendingSpecProposals; }
+  private set pendingSpecProposals(value: SpecProposal[]) { this.ctx.state.pendingSpecProposals = value; }
 
-  private devProcessState:
-    | { running: boolean; pid: number | null; port: number | null }
-    | undefined = undefined;
+  private get devProcessState(): DevProcessState | undefined { return this.ctx.state.devProcessState; }
+  private set devProcessState(value: DevProcessState | undefined) { this.ctx.state.devProcessState = value; }
 
-  private pullRequests: any[] = [];
+  private get pullRequests(): any[] { return this.ctx.state.pullRequests; }
+  private set pullRequests(value: any[]) { this.ctx.state.pullRequests = value; }
 
 
   constructor(context: AppContext, params: Record<string, string>) {
     super();
     this.context = context;
     this.pipelineId = params.id;
+    this.ctx = createPipelineDetailCtx({
+      context,
+      pipelineId: this.pipelineId,
+      refresh: {
+        header: () => this.updateHeader(),
+        backlog: () => this.refreshBacklog(),
+        selectedTask: () => this.refreshSelectedTask(),
+        executionEngine: () => this.refreshExecutionEngine(),
+        sessionList: () => this.refreshPipelineSessionList(),
+        specProposals: () => this.renderPendingSpecProposals(),
+      },
+    });
     // Parse the sub-route once so the very first render already reflects a
     // deep link (no flash of the wrong tab). The Coding-Agent guard is applied
     // later, once the session state is known.
@@ -324,7 +351,8 @@ export class PipelineDetailView extends View {
     });
   }
 
-  private docbotPreviewData: any = null;
+  private get docbotPreviewData(): any { return this.ctx.state.docbotPreviewData; }
+  private set docbotPreviewData(value: any) { this.ctx.state.docbotPreviewData = value; }
 
   private async fetchPullRequests() {
     try {
