@@ -193,15 +193,15 @@ describe('TaskItem', () => {
     }
   });
 
-  it('should render status history entries on a single line with a right margin', () => {
+  it('should render status history entries on a single line with a left margin', () => {
     const history = [
       { from_status: TaskStatus.CREATED, to_status: TaskStatus.INPROGRESS, timestamp: '2026-04-12T10:00:00Z', by: 'user' },
     ];
     const task = { ...mockTask, history };
     const html = TaskItem.render(task as any, true, true);
 
-    // The list is inset from the right so it aligns with the "Status History" label.
-    expect(html).toContain('space-y-2 mt-2 mr-6');
+    // The list is inset from the left so it aligns with the "Status History" label.
+    expect(html).toContain('space-y-2 mt-2 ml-6');
     // Each transition is forced onto a single line (no break before AM/PM).
     expect(html).toContain('text-[10px] whitespace-nowrap');
   });
