@@ -1,0 +1,116 @@
+/**
+ * Copyright 2026 Marc Baechinger
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+import { ConfirmationDialog } from '../../../components/ConfirmationDialog.ts';
+import { IteratePullRequestDialog } from '../../../components/IteratePullRequestDialog.ts';
+import { PullRequestDialog } from '../../../components/PullRequestDialog.ts';
+import type { PipelineDetailCtx } from '../PipelineDetailCtx.ts';
+
+export interface PullRequestActionsDeps {
+  /**
+   * Re-fetch the pull requests and repaint the PR section. Today this is the
+   * shell's `fetchPullRequests()`; once P6 lands it is
+   * `realtime.fetchPullRequests()`.
+   */
+  refreshPullRequests(): void;
+  /** Re-sync the compact engine Pi slot after starting an iteration (P3). */
+  updateEngineSlot(): void;
+}
+
+/**
+ * Registers the pull-request actions on the shared action registry:
+ * `open_pr_dialog`, `accept_pr`, `iterate_pr` and `toggle_pr_summary`.
+ *
+ * The handlers were extracted verbatim from `PipelineDetailView`; the view
+ * state they need (`pipelineId`) comes from `ctx`, while the two shell
+ * callbacks they invoke are injected through `deps`.
+ */
+export function registerPullRequestActions(
+  ctx: PipelineDetailCtx,
+  deps: PullRequestActionsDeps,
+): void {
+  const { actionRegistry } = ctx.context;
+
+  actionRegistry.register('open_pr_dialog', async (_e, el) => {
+    const taskId = el.getAttribute('data-task-id');
+    const prId = el.getAttribute('data-pr-id');
+    if (!taskId) return;
+
+    const dialog = new PullRequestDialog({
+      taskId,
+      prId: prId || undefined,
+      pipelineId: ctx.pipelineId,
+      context: ctx.context,
+      onAccept: () => {
+        deps.refreshPullRequests();
+      },
+      onReject: () => {
+        deps.refreshPullRequests();
+      }
+    });
+    await dialog.show();
+  });
+
+  actionRegistry.register('accept_pr', async (_e, el) => {
+    const prId = el.getAttribute('data-pr-id');
+    if (!prId) return;
+
+    const confirmed = await new ConfirmationDialog(
+      'Accept Pull Request',
+      'This pull request will be applied and committed to the pipeline workspace. Continue?',
+      'Accept & Apply'
+    ).show();
+    if (!confirmed) return;
+
+    const btn = el as HTMLButtonElement;
+    btn.disabled = true;
+    btn.textContent = 'Applying...';
+    try {
+      await ctx.context.pullRequestClient.acceptPullRequest(prId);
+      deps.refreshPullRequests();
+    } catch (error: any) {
+      console.error('Accept PR error:', error);
+      alert(`Failed to accept Pull Request: ${error.message}`);
+      btn.disabled = false;
+      btn.textContent = 'Accept';
+    }
+  });
+
+  actionRegistry.register('iterate_pr', async (_e, el) => {
+    const prId = el.getAttribute('data-pr-id');
+    if (!prId) return;
+
+    const dialog = new IteratePullRequestDialog();
+    const comments = await dialog.show();
+    if (!comments) return;
+
+    try {
+      await ctx.context.pullRequestClient.iteratePullRequest(prId, comments);
+      deps.updateEngineSlot();
+    } catch (error: any) {
+      console.error('Iterate PR error:', error);
+      alert(`Failed to start iteration: ${error.message}`);
+    }
+  });
+
+  actionRegistry.register('toggle_pr_summary', (_e, el) => {
+    const body = el.closest('[data-pr-card]')?.querySelector('.pr-summary');
+    const icon = el.querySelector('svg.transform');
+    if (!body) return;
+    const isHidden = body.classList.toggle('hidden');
+    if (icon) icon.classList.toggle('rotate-90', !isHidden);
+  });
+}

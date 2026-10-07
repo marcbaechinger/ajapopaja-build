@@ -34,9 +34,7 @@ import type { DocBotDialogProps } from '../components/DocBotDialog.ts';
 import { PipelineEditDialog } from '../components/PipelineEditDialog.ts';
 import { ReviewDialog } from '../components/ReviewDialog.ts';
 import { UpdateDesignDialog } from '../components/UpdateDesignDialog.ts';
-import { PullRequestDialog } from '../components/PullRequestDialog.ts';
 import { DiffDialog } from '../components/DiffDialog.ts';
-import { IteratePullRequestDialog } from '../components/IteratePullRequestDialog.ts';
 import { CoderBotDialog } from '../components/CoderBotDialog.ts';
 import { InteractiveCodingView } from '../components/InteractiveCodingView.ts';
 import { FileBrowseView } from '../components/FileBrowseView.ts';
@@ -48,6 +46,7 @@ import { createPipelineDetailCtx, type DevProcessState, type PipelineDetailCtx }
 import { PipelineDetailLayout } from './pipeline/PipelineDetailLayout.ts';
 import { ExecutionEngineController } from './pipeline/ExecutionEngineController.ts';
 import { PipelineSessionListController } from './pipeline/PipelineSessionListController.ts';
+import { registerPullRequestActions } from './pipeline/actions/pullRequestActions.ts';
 import EasyMDE from 'easymde';
 import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
 
@@ -607,6 +606,11 @@ export class PipelineDetailView extends View {
   }
 
   private registerActions() {
+    registerPullRequestActions(this.ctx, {
+      refreshPullRequests: () => this.fetchPullRequests(),
+      updateEngineSlot: () => this.updateEnginePiSlot(),
+    });
+
     this.context.actionRegistry.register('edit_pipeline', async () => {
       if (!this.pipeline) return;
       const dialog = new PipelineEditDialog({
@@ -788,68 +792,6 @@ export class PipelineDetailView extends View {
       await dialog.show();
     });
 
-    this.context.actionRegistry.register('open_pr_dialog', async (_e, el) => {
-      const taskId = el.getAttribute('data-task-id');
-      const prId = el.getAttribute('data-pr-id');
-      if (!taskId) return;
-
-      const dialog = new PullRequestDialog({
-        taskId,
-        prId: prId || undefined,
-        pipelineId: this.pipelineId,
-        context: this.context,
-        onAccept: () => {
-          this.fetchPullRequests();
-        },
-        onReject: () => {
-          this.fetchPullRequests();
-        }
-      });
-      await dialog.show();
-    });
-
-    this.context.actionRegistry.register('accept_pr', async (_e, el) => {
-      const prId = el.getAttribute('data-pr-id');
-      if (!prId) return;
-
-      const confirmed = await new ConfirmationDialog(
-        'Accept Pull Request',
-        'This pull request will be applied and committed to the pipeline workspace. Continue?',
-        'Accept & Apply'
-      ).show();
-      if (!confirmed) return;
-
-      const btn = el as HTMLButtonElement;
-      btn.disabled = true;
-      btn.textContent = 'Applying...';
-      try {
-        await this.context.pullRequestClient.acceptPullRequest(prId);
-        this.fetchPullRequests();
-      } catch (error: any) {
-        console.error('Accept PR error:', error);
-        alert(`Failed to accept Pull Request: ${error.message}`);
-        btn.disabled = false;
-        btn.textContent = 'Accept';
-      }
-    });
-
-    this.context.actionRegistry.register('iterate_pr', async (_e, el) => {
-      const prId = el.getAttribute('data-pr-id');
-      if (!prId) return;
-
-      const dialog = new IteratePullRequestDialog();
-      const comments = await dialog.show();
-      if (!comments) return;
-
-      try {
-        await this.context.pullRequestClient.iteratePullRequest(prId, comments);
-        this.updateEnginePiSlot();
-      } catch (error: any) {
-        console.error('Iterate PR error:', error);
-        alert(`Failed to start iteration: ${error.message}`);
-      }
-    });
-
     this.context.actionRegistry.register('copy_pipeline_id', async (_e, el) => {
       try {
         await navigator.clipboard.writeText(this.pipelineId);
@@ -951,14 +893,6 @@ export class PipelineDetailView extends View {
 
     this.context.actionRegistry.register('next_history_page', () => {
       this.setHistoryPage(this.historyPage + 1);
-    });
-
-    this.context.actionRegistry.register('toggle_pr_summary', (_e, el) => {
-      const body = el.closest('[data-pr-card]')?.querySelector('.pr-summary');
-      const icon = el.querySelector('svg.transform');
-      if (!body) return;
-      const isHidden = body.classList.toggle('hidden');
-      if (icon) icon.classList.toggle('rotate-90', !isHidden);
     });
 
     this.context.actionRegistry.register('toggle_task_collapse', (_e, el) => {

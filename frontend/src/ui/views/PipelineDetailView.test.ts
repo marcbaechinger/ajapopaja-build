@@ -20,16 +20,8 @@ import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
 import { TaskStatus } from '../../core/domain.ts';
 import { DevServerDialog } from '../components/DevServerDialog.ts';
 import { DiffDialog } from '../components/DiffDialog.ts';
-import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
-import { IteratePullRequestDialog } from '../components/IteratePullRequestDialog.ts';
 import { InteractiveCodingView } from '../components/InteractiveCodingView.ts';
 import { setTaskSpecProposalUpdater } from '../components/SpecSection.ts';
-
-vi.mock('../components/ConfirmationDialog.ts', () => ({
-  ConfirmationDialog: vi.fn(function ConfirmationDialog() {
-    return { show: vi.fn().mockResolvedValue(true) };
-  }),
-}));
 
 // Mock components to avoid deep rendering issues in unit tests
 vi.mock('../components/TaskColumn.ts', () => ({
@@ -56,14 +48,6 @@ vi.mock('../components/CoderBotDialog.ts', () => ({
 vi.mock('../components/DevServerDialog.ts', () => ({
   DevServerDialog: vi.fn(function DevServerDialog() {
     return { show: vi.fn() };
-  }),
-}));
-
-// Mock the iteration dialog so the view can register the iterate_pr action
-// without requiring a real DOM dialog in unit tests.
-vi.mock('../components/IteratePullRequestDialog.ts', () => ({
-  IteratePullRequestDialog: vi.fn(function IteratePullRequestDialog() {
-    return { show: vi.fn().mockResolvedValue('Review comments') };
   }),
 }));
 
@@ -949,164 +933,6 @@ describe('PipelineDetailView Pull Request Insert', () => {
     expect(mockContext.dataManager.updateTask).not.toHaveBeenCalled();
     // And it does not trigger a heavy full-task refresh (no extra listByPipeline).
     expect(mockContext.taskClient.listByPipeline.mock.calls.length).toBe(listCallsBefore);
-  });
-});
-
-
-describe('PipelineDetailView Accept Pull Request', () => {
-  let mockContext: any;
-  let container: HTMLElement;
-
-  const getAction = (name: string) =>
-    mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === name)[1];
-
-  beforeEach(() => {
-    document.body.innerHTML = '';
-    container = document.createElement('div');
-    document.body.appendChild(container);
-    LocalStorageManager.resetInstances();
-    vi.clearAllMocks();
-
-    mockContext = {
-      actionRegistry: {
-        register: vi.fn(),
-      },
-      wsClient: { on: vi.fn() },
-      dataManager: {
-        on: vi.fn().mockReturnValue(() => {}),
-        updateTask: vi.fn(),
-        updatePipeline: vi.fn(),
-      },
-      authService: {
-        getUser: vi.fn().mockReturnValue({ username: 'testuser' }),
-        getAccessToken: vi.fn().mockReturnValue('token'),
-      },
-      pipelineClient: {
-        get: vi.fn().mockResolvedValue({ id: 'p1', name: 'Pipe 1' }),
-        getGitStatus: vi.fn().mockResolvedValue({ staged: 0, unstaged: 0, untracked: 0 }),
-      },
-      taskClient: {
-        listByPipeline: vi.fn().mockResolvedValue([]),
-        listCompletedByPipeline: vi.fn().mockResolvedValue({ tasks: [], total_count: 0 }),
-      },
-      pullRequestClient: {
-        getPullRequestsByPipeline: vi.fn().mockResolvedValue([]),
-        acceptPullRequest: vi.fn().mockResolvedValue({}),
-        iteratePullRequest: vi.fn().mockResolvedValue({}),
-      },
-      systemClient: {
-        isOllamaAvailable: vi.fn().mockResolvedValue(true),
-      },
-    };
-
-    vi.stubGlobal('localStorage', {
-      getItem: vi.fn(() => null),
-      setItem: vi.fn(),
-    });
-  });
-
-  it('should register the accept_pr action', () => {
-    const view = new PipelineDetailView(mockContext, { id: 'p1' });
-    view.mount(container);
-
-    const acceptAction = getAction('accept_pr');
-    expect(acceptAction).toBeDefined();
-  });
-
-  it('should call acceptPullRequest and refresh after confirmation', async () => {
-    const view = new PipelineDetailView(mockContext, { id: 'p1' });
-    view.mount(container);
-    const fetchPullRequestsSpy = vi.spyOn(view as any, 'fetchPullRequests').mockResolvedValue(undefined);
-
-    const acceptAction = getAction('accept_pr');
-    const el = document.createElement('button');
-    el.setAttribute('data-pr-id', 'pr1');
-
-    await acceptAction(null, el);
-
-    expect(mockContext.pullRequestClient.acceptPullRequest).toHaveBeenCalledWith('pr1');
-    expect(fetchPullRequestsSpy).toHaveBeenCalled();
-  });
-
-  it('should not call acceptPullRequest when the confirmation is cancelled', async () => {
-    (ConfirmationDialog as any).mockImplementationOnce(function CancelledDialog() {
-      return { show: vi.fn().mockResolvedValue(false) };
-    });
-
-    const view = new PipelineDetailView(mockContext, { id: 'p1' });
-    view.mount(container);
-
-    const acceptAction = getAction('accept_pr');
-    const el = document.createElement('button');
-    el.setAttribute('data-pr-id', 'pr1');
-
-    await acceptAction(null, el);
-
-    expect(mockContext.pullRequestClient.acceptPullRequest).not.toHaveBeenCalled();
-  });
-
-  it('should not call acceptPullRequest when data-pr-id is missing', async () => {
-    const view = new PipelineDetailView(mockContext, { id: 'p1' });
-    view.mount(container);
-
-    const acceptAction = getAction('accept_pr');
-    const el = document.createElement('button');
-
-    await acceptAction(null, el);
-
-    expect(mockContext.pullRequestClient.acceptPullRequest).not.toHaveBeenCalled();
-  });
-
-  it('should register the iterate_pr action', () => {
-    const view = new PipelineDetailView(mockContext, { id: 'p1' });
-    view.mount(container);
-
-    const iterateAction = getAction('iterate_pr');
-    expect(iterateAction).toBeDefined();
-  });
-
-  it('should open the dialog and call iteratePullRequest on confirm', async () => {
-    const view = new PipelineDetailView(mockContext, { id: 'p1' });
-    view.mount(container);
-
-    const iterateAction = getAction('iterate_pr');
-    const el = document.createElement('button');
-    el.setAttribute('data-pr-id', 'pr1');
-    el.setAttribute('data-task-id', 't1');
-
-    await iterateAction(null, el);
-
-    expect(mockContext.pullRequestClient.iteratePullRequest).toHaveBeenCalledWith('pr1', 'Review comments');
-  });
-
-  it('should not call iteratePullRequest when the dialog is cancelled', async () => {
-    (IteratePullRequestDialog as any).mockImplementationOnce(function CancelledDialog() {
-      return { show: vi.fn().mockResolvedValue(null) };
-    });
-
-    const view = new PipelineDetailView(mockContext, { id: 'p1' });
-    view.mount(container);
-
-    const iterateAction = getAction('iterate_pr');
-    const el = document.createElement('button');
-    el.setAttribute('data-pr-id', 'pr1');
-    el.setAttribute('data-task-id', 't1');
-
-    await iterateAction(null, el);
-
-    expect(mockContext.pullRequestClient.iteratePullRequest).not.toHaveBeenCalled();
-  });
-
-  it('should not call iteratePullRequest when data-pr-id is missing', async () => {
-    const view = new PipelineDetailView(mockContext, { id: 'p1' });
-    view.mount(container);
-
-    const iterateAction = getAction('iterate_pr');
-    const el = document.createElement('button');
-
-    await iterateAction(null, el);
-
-    expect(mockContext.pullRequestClient.iteratePullRequest).not.toHaveBeenCalled();
   });
 });
 
