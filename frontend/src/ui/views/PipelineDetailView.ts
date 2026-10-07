@@ -20,7 +20,6 @@ import { PipelineSubRoute } from './pipeline/PipelineSubRoute.ts';
 import { AppContext } from '../../core/AppContext.ts';
 import { Pipeline, TaskStatus, Task, type GitStatusDetails } from '../../core/domain.ts';
 import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
-import { TaskItem } from '../components/TaskItem.ts';
 import { HistoryView } from '../components/HistoryView.ts';
 import { StatsDialog } from '../components/StatsDialog.ts';
 import { DesignDocDialog } from '../components/DesignDocDialog.ts';
@@ -38,6 +37,7 @@ import { PipelineDetailLayout } from './pipeline/PipelineDetailLayout.ts';
 import { ExecutionEngineController } from './pipeline/ExecutionEngineController.ts';
 import { PipelineSessionListController } from './pipeline/PipelineSessionListController.ts';
 import { PipelineRealtimeController } from './pipeline/PipelineRealtimeController.ts';
+import { SelectedTaskController } from './pipeline/SelectedTaskController.ts';
 import { registerPullRequestActions } from './pipeline/actions/pullRequestActions.ts';
 import { registerBotActions, openCoderBotDialog } from './pipeline/actions/botActions.ts';
 import { registerMiscActions } from './pipeline/actions/miscActions.ts';
@@ -99,6 +99,7 @@ export class PipelineDetailView extends View {
   private engine: ExecutionEngineController | null = null;
   private sessionList: PipelineSessionListController | null = null;
   private realtime: PipelineRealtimeController | null = null;
+  private selectedTaskCtrl: SelectedTaskController | null = null;
 
   // Which content tab is active in the prep column. The tab list is always
   // visible; the Coding Agent tab is always selectable and shows its empty
@@ -1126,6 +1127,7 @@ export class PipelineDetailView extends View {
     this.engine = null;
     this.realtime?.stop();
     this.realtime = null;
+    this.selectedTaskCtrl = null;
     this.sessionList?.teardown();
     this.sessionList = null;
     this.teardownInteractiveCodingView();
@@ -1147,184 +1149,28 @@ export class PipelineDetailView extends View {
     }
   }
 
-  /**
-   * Returns whether an incoming task update is a pure title change (i.e. every
-   * field other than title / version / updated_at is unchanged), so callers can
-   * avoid re-rendering the whole view and preserve unrelated unsaved edits.
-   */
-  private isTitleOnlyChange(prev: Task, next: Task): boolean {
-    if (prev.title === next.title) {
-      return false;
-    }
-    const comparable = (t: Task) => {
-      const { title, version, updated_at, ...rest } = t as any;
-      return rest;
-    };
-    const onlyTitle = JSON.stringify(comparable(prev)) === JSON.stringify(comparable(next));
-    return onlyTitle;
+  private updateSingleTask(task: Task): void {
+    this.ensureSelectedTask().update(task);
   }
 
-  /**
-   * Updates only the title-related DOM for a task in place across every
-   * rendered instance (TaskItem, backlog / engine sidebar rows, history feed),
-   * skipping the heavy full-view refreshes that would discard unrelated edits.
-   */
-  private updateTitleOnly(task: Task) {
-    const taskId = task.id ?? '';
-    if (!taskId || !this.container) return;
-
-    if (this.selectedTask?.id === taskId) {
-      this.selectedTask = task;
-    }
-
-    // Full TaskItem cards (e.g. the selected task view): switch the edit form
-    // back to the rendered title and refresh the version, without a re-render.
-    this.container
-      .querySelectorAll<HTMLElement>(`[data-view-id="${taskId}"]`)
-      .forEach((el) => TaskItem.updateTitleInPlace(el, task));
-
-    // Compact sidebar/history rows (BacklogTaskView, ExecutionEngineItemView,
-    // HistoryItemView): refresh the rendered title text and optimistic-concurrency
-    // version in place so later saves use the current version.
-    const version = task.version ?? 1;
-    this.container
-      .querySelectorAll<HTMLElement>(`[data-task-id="${taskId}"]`)
-      .forEach((el) => {
-        const titleEl = el.querySelector<HTMLElement>('span.font-bold.text-app-text, span.font-medium.text-app-text');
-        if (titleEl) titleEl.textContent = task.title;
-        el.querySelectorAll<HTMLElement>('[data-version]').forEach(v => {
-          v.setAttribute('data-version', String(version));
-        });
-      });
+  private refreshSelectedTask(): void {
+    this.ensureSelectedTask().refreshSelected();
   }
 
-  private updateSingleTask(task: Task) {
-    const taskId = task.id ?? '';
-    if (!taskId) return;
-
-    // Update local cache, capturing the previous state so we can detect a
-    // title-only change (which must not trigger a full re-render).
-    const index = this.allLoadedTasks.findIndex(t => t.id === taskId);
-    const prev = index !== -1 ? this.allLoadedTasks[index] : null;
-    if (index !== -1) {
-      this.allLoadedTasks[index] = task;
-    } else {
-      this.allLoadedTasks.push(task);
-    }
-    this.updateHeader();
-
-    // A title-only update must not re-render the TaskItem / views, otherwise
-    // unrelated unsaved text edits (e.g. an open Specification editor) get
-    // wiped. Update just the title DOM in place instead.
-    if (prev) {
-      const onlyTitle = this.isTitleOnlyChange(prev, task);
-      if (onlyTitle) {
-        this.updateTitleOnly(task);
-        return;
-      }
-    }
-
-    this.refreshBacklog();
-    this.refreshSelectedTask();
-    this.refreshExecutionEngine();
-  }
-
-  /**
-   * Applies the pending "focus the Schedule Execution button" request to a
-   * rendered task card.
-   *
-   * Focus is only handed over when the pending marker belongs to `taskId`, so
-   * a re-render of an unrelated card cannot steal the focus. The marker is
-   * always cleared afterwards so it cannot leak to a later render.
-   */
   private applyPendingScheduleFocus(taskElement: Element | null, taskId: string): void {
-    if (this.pendingScheduleFocusTaskId === taskId) {
-      TaskItem.focusScheduleExecution(taskElement);
-    }
-    this.pendingScheduleFocusTaskId = null;
+    this.ensureSelectedTask().applyPendingScheduleFocus(taskElement, taskId);
   }
 
-  private refreshSelectedTask() {
-    if (!this.container) return;
-    const viewEl = this.container.querySelector('#selected-task-view');
-    if (!viewEl) return;
-
-    const hint = `<p class="text-app-muted/60 text-xs italic text-center border border-dashed border-app-border/40 rounded-xl py-6 px-3">Select a task from the backlog to open it here.</p>`;
-
-    if (!this.selectedTask) {
-      viewEl.innerHTML = hint;
-      return;
-    }
-
-    // Re-derive from the freshest cache so status edits are reflected immediately.
-    const fresh = this.allLoadedTasks.find(t => t.id === this.selectedTask!.id);
-    if (!fresh || fresh.deleted) {
-      this.selectedTask = null;
-      viewEl.innerHTML = hint;
-      return;
-    }
-
-    this.selectedTask = fresh;
-    viewEl.innerHTML = TaskItem.render(fresh, false, false, false, false, !this.collapsedSpecs.has(fresh.id!));
-
-    // A just-saved Specification hands focus to the task's "Schedule Execution"
-    // button. The WS-driven re-render above replaces the card, so re-apply it
-    // here (the helper clears the pending marker).
-    this.applyPendingScheduleFocus(viewEl, fresh.id!);
-
-    // Keep the Specification in edit mode for a newly created task even if a
-    // WebSocket re-render happens right after creation.
-    if (this.pendingSpecEditTaskId && fresh.id === this.pendingSpecEditTaskId) {
-      this.enterSpecEditMode();
-    }
-
-    // Re-inject any outstanding proposal for the task that is now shown.
-    this.renderPendingSpecProposals();
+  private focusSpecAfterTitleSave(titleContainer: HTMLElement): void {
+    this.ensureSelectedTask().focusSpecAfterTitleSave(titleContainer);
   }
 
-  /**
-   * Transitions the just-saved title from edit mode back to view mode and then
-   * focuses the task's Specification textarea (opening it for editing) so the
-   * user can continue seamlessly by specifying the task, without the previous
-   * collapse/expand action interfering.
-   */
-  private focusSpecAfterTitleSave(titleContainer: HTMLElement) {
-    if (!this.container) return;
-
-    // 1) Switch the title edit form back to the rendered title view.
-    titleContainer.querySelector('.title-edit')?.classList.add('hidden');
-    titleContainer.querySelector('.title-view')?.classList.remove('hidden');
-
-    // 2) Locate the task card owning this title and open its Specification.
-    const taskId = titleContainer.closest('[data-view-id]')?.getAttribute('data-view-id');
-    if (!taskId) return;
-    const taskEl = this.container.querySelector(`[data-view-id="${taskId}"]`) as HTMLElement | null;
-    if (!taskEl) return;
-    const specContainer = taskEl.querySelector('.spec-container') as HTMLElement | null;
-    if (!specContainer) return;
-
-    specContainer.querySelector('.spec-view')?.classList.add('hidden');
-    specContainer.querySelector('[data-action-click="toggle_spec_expand"]')?.classList.add('hidden');
-    specContainer.querySelector('.spec-edit')?.classList.remove('hidden');
-    const textarea = specContainer.querySelector('textarea') as HTMLTextAreaElement | null;
-    if (textarea) textarea.focus();
-  }
-
-  /**
-   * Switches the selected task's Specification section into edit mode and moves
-   * the cursor into the textarea so the user can keep writing the spec in one flow.
-   */
-  private enterSpecEditMode() {
-    if (!this.container) return;
-    const viewEl = this.container.querySelector('#selected-task-view');
-    if (!viewEl) return;
-    const specContainer = viewEl.querySelector('.spec-container') as HTMLElement | null;
-    if (!specContainer) return;
-    specContainer.querySelector('.spec-view')?.classList.add('hidden');
-    specContainer.querySelector('[data-action-click="toggle_spec_expand"]')?.classList.add('hidden');
-    specContainer.querySelector('.spec-edit')?.classList.remove('hidden');
-    const textarea = specContainer.querySelector('textarea') as HTMLTextAreaElement | null;
-    if (textarea) textarea.focus();
+  private ensureSelectedTask(): SelectedTaskController {
+    this.selectedTaskCtrl ??= new SelectedTaskController({
+      ctx: this.ctx,
+      getHost: () => this.container,
+    });
+    return this.selectedTaskCtrl;
   }
 
   private ensureEngine(): ExecutionEngineController {
