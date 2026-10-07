@@ -73,6 +73,11 @@ export class PipelineDetailView extends View {
   // edit mode (even across WS-driven re-renders) until the user saves, cancels, or
   // selects a different task.
   private pendingSpecEditTaskId: string | null = null;
+  // After a Specification is saved, the task's "Schedule Execution" button should
+  // receive focus so the user can save and schedule in one flow. Remembering the
+  // task id lets `refreshSelectedTask` re-apply focus after a WS-driven re-render
+  // (which replaces the card and would otherwise drop it).
+  private pendingScheduleFocusTaskId: string | null = null;
   private enginePiView: PiView | null = null;
   private enginePiMountedKey: string | null = null;
 
@@ -1023,12 +1028,25 @@ export class PipelineDetailView extends View {
       const newSpec = textarea.value.trim();
       const wantDesignDoc = wantDesignCheck.checked;
 
+      // Saving the specification should hand focus to the primary follow-up
+      // action of a CREATED task ("Schedule Execution") so the user can save
+      // and schedule in one flow. The task id is remembered so the focus is
+      // re-applied after the WS-driven re-render that follows the update.
+      const taskEl = container.closest('[data-view-id]') as HTMLElement | null;
+      if (taskEl?.closest('#selected-task-view')) {
+        this.pendingScheduleFocusTaskId = taskId;
+      }
+
       try {
         await this.context.taskClient.updateDetails(taskId, version, { spec: newSpec, want_design_doc: wantDesignDoc });
         // Keep the spec expanded after saving the changes.
         this.collapsedSpecs.delete(taskId);
+        // Apply focus immediately too, so it also works when no WS re-render
+        // arrives (e.g. when saved from the search dialog).
+        TaskItem.focusScheduleExecution(taskEl);
         // WS will refresh
       } catch (error) {
+        this.pendingScheduleFocusTaskId = null;
         alert('Failed to save specification');
       }
     });
@@ -2002,6 +2020,14 @@ export class PipelineDetailView extends View {
 
     this.selectedTask = fresh;
     viewEl.innerHTML = TaskItem.render(fresh, false, false, false, false, !this.collapsedSpecs.has(fresh.id!));
+
+    // A just-saved Specification hands focus to the task's "Schedule Execution"
+    // button. The WS-driven re-render above replaces the card, so re-apply it
+    // here (and clear the pending marker).
+    if (this.pendingScheduleFocusTaskId === fresh.id) {
+      TaskItem.focusScheduleExecution(viewEl);
+      this.pendingScheduleFocusTaskId = null;
+    }
 
     // Keep the Specification in edit mode for a newly created task even if a
     // WebSocket re-render happens right after creation.

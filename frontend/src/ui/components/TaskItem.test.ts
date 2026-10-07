@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { TaskItem } from './TaskItem.ts';
 import { TaskStatus } from '../../core/domain.ts';
 
@@ -157,8 +157,43 @@ describe('TaskItem', () => {
     expect(container.querySelectorAll<HTMLElement>('[data-version]').length).toBeGreaterThan(1);
   });
 
+  describe('focusScheduleExecution', () => {
+    const mount = (html: string) => {
+      const el = document.createElement('div');
+      el.innerHTML = html;
+      document.body.appendChild(el);
+      return el;
+    };
+
+    afterEach(() => {
+      document.body.innerHTML = '';
+    });
+
+    it('focuses the Schedule Execution button for a CREATED task', () => {
+      const el = mount(TaskItem.render(mockTask as any));
+      const scheduleBtn = el.querySelector<HTMLElement>('[data-action-click="schedule_task"]')!;
+
+      expect(TaskItem.focusScheduleExecution(el)).toBe(true);
+      expect(document.activeElement).toBe(scheduleBtn);
+    });
+
+    it('is a no-op when the card has no Schedule Execution button', () => {
+      const el = mount(TaskItem.render({ ...mockTask, status: TaskStatus.SCHEDULED } as any));
+      const other = document.createElement('input');
+      document.body.appendChild(other);
+      other.focus();
+
+      expect(TaskItem.focusScheduleExecution(el)).toBe(false);
+      expect(document.activeElement).toBe(other);
+    });
+
+    it('is a no-op for a null element', () => {
+      expect(TaskItem.focusScheduleExecution(null)).toBe(false);
+    });
+  });
+
   it('should render quickfix button for implemented tasks with commit hash', () => {
-    const implementedTask = { 
+    const implementedTask = {
       ...mockTask, 
       status: TaskStatus.IMPLEMENTED,
       commit_hash: 'abcdef123'

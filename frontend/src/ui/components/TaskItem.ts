@@ -63,6 +63,26 @@ export class TaskItem {
     view?.classList.remove('hidden');
   }
 
+  /**
+   * Moves focus onto the "Schedule Execution" button of a rendered TaskItem.
+   *
+   * It is used right after saving a task's Specification so the user can save
+   * the spec and schedule the task for execution in one flow, without having
+   * to hunt for the button again.
+   *
+   * Returns ``true`` when a schedule button was found and focused. It is a
+   * no-op (returning ``false``) for cards that have no such button (e.g.
+   * SCHEDULED / PROPOSED / completed tasks) or for non-TaskItem elements.
+   */
+  static focusScheduleExecution(element: Element | null | undefined): boolean {
+    const button = element?.querySelector<HTMLElement>(
+      '[data-action-click="schedule_task"]'
+    );
+    if (!button) return false;
+    button.focus();
+    return true;
+  }
+
   static render(
     task: Task,
     showOrdering: boolean = true,

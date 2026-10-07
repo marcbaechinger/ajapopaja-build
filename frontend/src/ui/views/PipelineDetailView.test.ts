@@ -569,6 +569,129 @@ describe('PipelineDetailView save_title no-op', () => {
   });
 });
 
+describe('PipelineDetailView save_spec focus', () => {
+  let mockContext: any;
+  let container: HTMLElement;
+  let tasksHandler: ((payload: any) => void) | undefined;
+
+  const getAction = (name: string) =>
+    mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === name)![1];
+
+  const createdTask = () => ({
+    id: 'c1',
+    title: 'Spec Task',
+    spec: 'old spec',
+    status: TaskStatus.CREATED,
+    deleted: false,
+    version: 1,
+    order: 0,
+    type: 'manual',
+    want_design_doc: false,
+    pipeline_id: 'p1',
+    created_at: '2026-01-01T00:00:00Z',
+    history: [],
+  });
+
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    LocalStorageManager.resetInstances();
+    vi.clearAllMocks();
+    tasksHandler = undefined;
+
+    mockContext = {
+      actionRegistry: { register: vi.fn() },
+      wsClient: { on: vi.fn().mockReturnValue(() => {}) },
+      dataManager: {
+        on: vi.fn((query: string, cb: any) => {
+          if (query.startsWith('pipeline:tasks:')) tasksHandler = cb;
+          return () => {};
+        }),
+        updateTask: vi.fn(),
+        updatePipeline: vi.fn(),
+      },
+      authService: {
+        getUser: vi.fn().mockReturnValue({ username: 'testuser' }),
+        getAccessToken: vi.fn().mockReturnValue('token'),
+      },
+      pipelineClient: {
+        get: vi.fn().mockResolvedValue({ id: 'p1', name: 'Pipe 1' }),
+        getGitStatus: vi.fn().mockResolvedValue({ staged: 0, unstaged: 0, untracked: 0 }),
+      },
+      taskClient: {
+        listByPipeline: vi.fn().mockResolvedValue([createdTask()]),
+        listCompletedByPipeline: vi.fn().mockResolvedValue({ tasks: [], total_count: 0 }),
+        updateDetails: vi.fn().mockResolvedValue({ ...createdTask(), spec: 'new spec', version: 2 }),
+      },
+      pullRequestClient: { getPullRequestsByPipeline: vi.fn().mockResolvedValue([]) },
+      systemClient: { isOllamaAvailable: vi.fn().mockResolvedValue(true) },
+    };
+
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn(() => null),
+      setItem: vi.fn(),
+    });
+  });
+
+  const mountAndSelect = async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+    container.innerHTML = view.render() as string;
+    await view.refreshTasks();
+
+    const selectAction = getAction('select_task');
+    const el = document.createElement('div');
+    el.setAttribute('data-view-id', 'c1');
+    selectAction(new Event('click'), el);
+
+    const selectedView = container.querySelector('#selected-task-view') as HTMLElement;
+    return { view, selectedView };
+  };
+
+  it('focuses the Schedule Execution button after saving a specification', async () => {
+    const { selectedView } = await mountAndSelect();
+
+    const specContainer = selectedView.querySelector('.spec-container') as HTMLElement;
+    expect(specContainer).not.toBeNull();
+    const textarea = specContainer.querySelector('textarea') as HTMLTextAreaElement;
+    textarea.value = 'new spec';
+    const saveBtn = specContainer.querySelector('[data-action-click="save_spec"]') as HTMLElement;
+
+    await getAction('save_spec')(new Event('click'), saveBtn);
+
+    expect(mockContext.taskClient.updateDetails).toHaveBeenCalledWith('c1', 1, {
+      spec: 'new spec',
+      want_design_doc: false,
+    });
+    expect(document.activeElement).toBe(
+      selectedView.querySelector('[data-action-click="schedule_task"]')
+    );
+  });
+
+  it('re-applies focus when a WS re-render replaces the card after saving', async () => {
+    const { view, selectedView } = await mountAndSelect();
+
+    const specContainer = selectedView.querySelector('.spec-container') as HTMLElement;
+    const textarea = specContainer.querySelector('textarea') as HTMLTextAreaElement;
+    textarea.value = 'new spec';
+    const saveBtn = specContainer.querySelector('[data-action-click="save_spec"]') as HTMLElement;
+
+    await getAction('save_spec')(new Event('click'), saveBtn);
+
+    // The WS-driven TASK_UPDATED arrives and re-renders the selected card.
+    tasksHandler!({ ...createdTask(), spec: 'new spec', version: 2 });
+
+    const scheduleBtn = container.querySelector(
+      '#selected-task-view [data-action-click="schedule_task"]'
+    );
+    expect(scheduleBtn).not.toBeNull();
+    expect(document.activeElement).toBe(scheduleBtn);
+    // The pending marker is consumed once focus has been handed over.
+    expect((view as any).pendingScheduleFocusTaskId).toBeNull();
+  });
+});
+
 describe('PipelineDetailView Review Notifications', () => {
   let mockContext: any;
   let container: HTMLElement;
