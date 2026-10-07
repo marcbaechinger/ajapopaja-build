@@ -259,7 +259,6 @@ export class TaskItem {
                       class="${headerButtonBase} text-app-muted hover:text-red-400 bg-app-surface hover:bg-red-500/20 border border-app-border"
                       title="Delete Task">
                 ${Icon.render('trash', { size: 14 })}
-                <span>Delete</span>
               </button>
               ${canSchedule ? `
                 <button data-action-click="schedule_task" data-version="${task.version}"

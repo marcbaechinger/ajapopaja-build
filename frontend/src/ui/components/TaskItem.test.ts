@@ -383,7 +383,9 @@ describe('TaskItem', () => {
       const deleteBtn = actions.querySelector('[data-action-click="delete_task"]')!;
       const scheduleBtn = actions.querySelector('[data-action-click="schedule_task"]')!;
       expect(deleteBtn).not.toBeNull();
-      expect(deleteBtn.textContent).toContain('Delete');
+      // The delete button is icon-only (no "Delete" text label).
+      expect(deleteBtn.querySelector('svg')).not.toBeNull();
+      expect(deleteBtn.textContent?.trim()).toBe('');
       expect(scheduleBtn).not.toBeNull();
       expect(scheduleBtn.textContent).toContain('Schedule Execution');
 
@@ -401,7 +403,9 @@ describe('TaskItem', () => {
       const deleteBtn = actions.querySelector('[data-action-click="delete_task"]')!;
       const unscheduleBtn = actions.querySelector('[data-action-click="unschedule_task"]')!;
       expect(deleteBtn).not.toBeNull();
-      expect(deleteBtn.textContent).toContain('Delete');
+      // The delete button is icon-only (no "Delete" text label).
+      expect(deleteBtn.querySelector('svg')).not.toBeNull();
+      expect(deleteBtn.textContent?.trim()).toBe('');
       expect(unscheduleBtn).not.toBeNull();
       expect(unscheduleBtn.textContent).toContain('Cancel Schedule');
 
