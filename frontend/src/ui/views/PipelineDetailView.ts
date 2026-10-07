@@ -40,8 +40,6 @@ import { IteratePullRequestDialog } from '../components/IteratePullRequestDialog
 import { CoderBotDialog } from '../components/CoderBotDialog.ts';
 import { InteractiveCodingView } from '../components/InteractiveCodingView.ts';
 import { FileBrowseView } from '../components/FileBrowseView.ts';
-import { SessionListItemView } from '../components/SessionListItemView.ts';
-import type { PiSessionSummary } from '../../core/InteractiveCodingService.ts';
 import { DevServerDialog } from '../components/DevServerDialog.ts';
 import { PipelineHeaderView, type DocbotState, type ReviewbotState, type ArchbotState, type SpecAgentState } from '../components/PipelineHeaderView.ts';
 import { renderSpecProposalResult, getTaskSpecProposalUpdater } from '../components/SpecSection.ts';
@@ -49,6 +47,7 @@ import type { SpecProposal } from '../../core/clients/SpecBotClient.ts';
 import { createPipelineDetailCtx, type DevProcessState, type PipelineDetailCtx } from './pipeline/PipelineDetailCtx.ts';
 import { PipelineDetailLayout } from './pipeline/PipelineDetailLayout.ts';
 import { ExecutionEngineController } from './pipeline/ExecutionEngineController.ts';
+import { PipelineSessionListController } from './pipeline/PipelineSessionListController.ts';
 import EasyMDE from 'easymde';
 import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
 
@@ -105,6 +104,7 @@ export class PipelineDetailView extends View {
   private get pendingScheduleFocusTaskId(): string | null { return this.ctx.state.pendingScheduleFocusTaskId; }
   private set pendingScheduleFocusTaskId(value: string | null) { this.ctx.state.pendingScheduleFocusTaskId = value; }
   private engine: ExecutionEngineController | null = null;
+  private sessionList: PipelineSessionListController | null = null;
 
   // Which content tab is active in the prep column. The tab list is always
   // visible; the Coding Agent tab is always selectable and shows its empty
@@ -129,7 +129,6 @@ export class PipelineDetailView extends View {
   // not loaded yet when the route is first applied). `null` = no explicit task.
   private get pendingTaskId(): string | null { return this.ctx.state.pendingTaskId; }
   private set pendingTaskId(value: string | null) { this.ctx.state.pendingTaskId = value; }
-  private sessionListClickHandler: ((e: Event) => void) | null = null;
 
   // Whether the left backlog sidebar (proposed designs + backlog) is collapsed.
   // Persisted per pipeline so the chosen layout survives reloads.
@@ -182,7 +181,7 @@ export class PipelineDetailView extends View {
         backlog: () => this.refreshBacklog(),
         selectedTask: () => this.refreshSelectedTask(),
         executionEngine: () => this.refreshExecutionEngine(),
-        sessionList: () => this.refreshPipelineSessionList(),
+        sessionList: () => this.sessionList?.refresh(),
         specProposals: () => this.renderPendingSpecProposals(),
       },
     });
@@ -731,7 +730,7 @@ export class PipelineDetailView extends View {
     this.context.actionRegistry.register('resume_interactive_session', async (_e, el) => {
       const uid = el.getAttribute('data-session-uid');
       if (!uid) return;
-      await this.switchToSession(uid);
+      await this.sessionList?.switchToSession(uid);
     });
 
     this.context.actionRegistry.register('open_pipeline_sessions', () => {
@@ -1725,7 +1724,7 @@ export class PipelineDetailView extends View {
     // session list, so tabs/editor/file-browser DOM stay untouched.
     const sessionsUnsub =
       this.context.interactiveCodingService?.onSessionsChange?.(() =>
-        this.refreshPipelineSessionList()
+        this.sessionList?.refresh()
       );
     if (sessionsUnsub) this.unsubs.push(sessionsUnsub);
 
@@ -1745,61 +1744,18 @@ export class PipelineDetailView extends View {
     });
 
     // Inline per-pipeline session rows use `data-session-action` so they never
-    // collide with the global action registry.
-    this.sessionListClickHandler = (e: Event) => this.handleSessionListClick(e);
-    this.container.addEventListener('click', this.sessionListClickHandler);
+    // collide with the global action registry. The controller owns the list
+    // render + row click lifecycle on `#pipeline-session-list`.
+    this.sessionList = new PipelineSessionListController({
+      ctx: this.ctx,
+      host: this.container!,
+      onOpenCodingAgent: () => {
+        this.setContentTab('coding-agent', { hash: 'push' });
+        this.syncInteractiveSession();
+      },
+      onSessionsChanged: () => this.syncInteractiveSession(),
+    });
     void this.context.interactiveCodingService?.refreshSessions?.({ kind: 'interactive' });
-  }
-
-  private handleSessionListClick(event: Event): void {
-    const target = (event.target as HTMLElement)?.closest?.('[data-session-action]') as HTMLElement | null;
-    if (!target) return;
-    if (!this.container?.contains(target)) return;
-    const action = target.getAttribute('data-session-action');
-    const uid = target.getAttribute('data-session-uid') ?? '';
-    const service = this.context.interactiveCodingService;
-    if (!service) return;
-
-    if (action === 'switch' && uid) {
-      void this.switchToSession(uid);
-    } else if (action === 'pause') {
-      void service.pauseSession?.();
-    } else if (action === 'open') {
-      const session = service.getSession?.(uid);
-      if (session?.pipeline_id) window.location.hash = `#/pipeline/${session.pipeline_id}`;
-    } else if (action === 'discard' && uid) {
-      void new ConfirmationDialog(
-        'Discard session',
-        'Discard this session? This deletes the retained workspace and Pi conversation.',
-        'Discard'
-      )
-        .show()
-        .then((confirmed) => {
-          if (confirmed) service.discardSession?.(uid).then(() => this.syncInteractiveSession());
-        });
-    }
-  }
-
-  /** Switch to a session, confirming when the current agent is mid-turn. */
-  private async switchToSession(uid: string): Promise<void> {
-    const service = this.context.interactiveCodingService;
-    if (!service?.switchSession) return;
-    try {
-      if (service.isBusy?.()) {
-        const confirmed = await new ConfirmationDialog(
-          'Switch session?',
-          'The current session is still working. Switching will interrupt it and pause the session.',
-          'Switch & interrupt'
-        ).show();
-        if (!confirmed) return;
-      }
-      await service.switchSession(uid);
-      this.setContentTab('coding-agent', { hash: 'push' });
-      this.syncInteractiveSession();
-    } catch (error) {
-      console.error('Switch interactive session error:', error);
-      alert('Failed to switch the interactive session');
-    }
   }
 
   private async checkOllama() {
@@ -1815,10 +1771,8 @@ export class PipelineDetailView extends View {
     this.activeEditors.clear();
     this.engine?.teardown();
     this.engine = null;
-    if (this.sessionListClickHandler && this.container) {
-      this.container.removeEventListener('click', this.sessionListClickHandler);
-    }
-    this.sessionListClickHandler = null;
+    this.sessionList?.teardown();
+    this.sessionList = null;
     this.teardownInteractiveCodingView();
     if (this.fileBrowseView) {
       this.fileBrowseView.destroy();
@@ -2188,9 +2142,6 @@ export class PipelineDetailView extends View {
     const fileTab = this.container.querySelector('#tab-file-browser') as HTMLElement | null;
     const historyTab = this.container.querySelector('#tab-history') as HTMLElement | null;
 
-    const isRemote = !!this.pipeline?.repo_uri;
-    const resumable = this.pipelineResumableSessions();
-
     const showTaskEditor = this.contentTab === 'task-editor';
     const showInteractive = this.contentTab === 'coding-agent';
     const showFileBrowser = this.contentTab === 'file-browser';
@@ -2224,7 +2175,7 @@ export class PipelineDetailView extends View {
     setTabActive(fileTab, showFileBrowser);
     setTabActive(historyTab, showHistory);
 
-    this.renderPipelineSessionList(isRemote ? resumable : []);
+    this.sessionList?.refresh();
   }
 
   // --- pipeline sub-route (tab + file-browser path) -----------------------
@@ -2335,56 +2286,6 @@ export class PipelineDetailView extends View {
       this.currentTaskId() ?? this.pendingTaskId
     );
     this.subRoute.canonicalise(canonical);
-  }
-
-  /**
-   * Re-render ONLY the inline per-pipeline session list. Used by the live
-   * `onSessionsChange` path so a cache update never disturbs the tabs, editors,
-   * file browser, backlog or execution-engine DOM.
-   */
-  private refreshPipelineSessionList(): void {
-    if (!this.container?.querySelector('#pipeline-session-list')) return;
-    const isRemote = !!this.pipeline?.repo_uri;
-    this.renderPipelineSessionList(isRemote ? this.pipelineResumableSessions() : []);
-  }
-
-  /** Resumable (paused/completed/failed) sessions belonging to this pipeline. */
-  private pipelineResumableSessions(): PiSessionSummary[] {
-    const service = this.context.interactiveCodingService;
-    if (!service?.getSessions) return [];
-    try {
-      return service
-        .getSessions()
-        .filter(
-          (s) =>
-            s.pipeline_id === this.pipelineId &&
-            (s.status === 'paused' || s.status === 'completed' || s.status === 'failed')
-        );
-    } catch {
-      return [];
-    }
-  }
-
-  /** Render the inline list of resumable sessions for this pipeline. */
-  private renderPipelineSessionList(sessions: PiSessionSummary[]) {
-    const list = this.container?.querySelector('#pipeline-session-list') as HTMLElement | null;
-    if (!list) return;
-    if (sessions.length === 0) {
-      list.innerHTML = '';
-      list.classList.add('hidden');
-      return;
-    }
-    list.classList.remove('hidden');
-    list.innerHTML = sessions
-      .map((session) =>
-        SessionListItemView.render(session, {
-          pipelineName: this.pipeline?.name ?? null,
-          showDiscard: true,
-          showOpenPipeline: false,
-          showGenerateTitle: false,
-        })
-      )
-      .join('');
   }
 
   private refreshBacklog() {
