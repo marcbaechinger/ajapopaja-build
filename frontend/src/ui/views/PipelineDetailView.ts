@@ -43,7 +43,7 @@ import { SessionListItemView } from '../components/SessionListItemView.ts';
 import type { PiSessionSummary } from '../../core/InteractiveCodingService.ts';
 import { DevServerDialog } from '../components/DevServerDialog.ts';
 import { PiView } from '../components/PiView.ts';
-import { PipelineHeaderView, type DocbotState, type ReviewbotState, type CoderbotState, type SpecAgentState } from '../components/PipelineHeaderView.ts';
+import { PipelineHeaderView, type DocbotState, type ReviewbotState, type SpecAgentState } from '../components/PipelineHeaderView.ts';
 import { renderSpecProposalResult, getTaskSpecProposalUpdater } from '../components/SpecSection.ts';
 import type { SpecProposal } from '../../core/clients/SpecBotClient.ts';
 import EasyMDE from 'easymde';
@@ -134,11 +134,6 @@ export class PipelineDetailView extends View {
   // durable backend cache and kept in sync with live SPECAGENT_SPEC_READY
   // events. Drives the header badge and the inline injection.
   private pendingSpecProposals: SpecProposal[] = [];
-
-  private coderbotState: CoderbotState = {
-    status: 'none',
-    taskId: null,
-  };
 
   private devProcessState:
     | { running: boolean; pid: number | null; port: number | null }
@@ -273,8 +268,6 @@ export class PipelineDetailView extends View {
         // inline controls. The notification framework carries the primary path.
         void this.fetchSpecProposal(p.task_id);
       },
-      'CODERBOT_STARTED': (p) => { this.coderbotState = { status: 'inProgress', taskId: p.task_id }; },
-      'CODERBOT_COMPLETED': (p) => { this.coderbotState = { status: 'completed', taskId: p.task_id }; },
       'INTERACTIVE_STARTED': (p) => {
         if (p?.pipeline_id && p.pipeline_id !== this.pipelineId) return;
         // Re-attach to the freshly started session, then switch into the
@@ -675,7 +668,6 @@ export class PipelineDetailView extends View {
 
       try {
         await this.context.coderBotClient.triggerCoderBot(taskId);
-        this.coderbotState = { status: 'inProgress', taskId };
         // Optimistically reflect the INPROGRESS status so the card moves to the
         // In Progress column immediately, even if the broadcast is delayed.
         const task = this.allLoadedTasks.find(t => t.id === taskId);
@@ -809,16 +801,12 @@ export class PipelineDetailView extends View {
       const comments = await dialog.show();
       if (!comments) return;
 
-      this.coderbotState = { status: 'inProgress', taskId: el.getAttribute('data-task-id') };
-      this.updateHeader();
       try {
         await this.context.pullRequestClient.iteratePullRequest(prId, comments);
         this.updateEnginePiSlot();
       } catch (error: any) {
         console.error('Iterate PR error:', error);
         alert(`Failed to start iteration: ${error.message}`);
-        this.coderbotState = { status: 'none', taskId: null };
-        this.updateHeader();
       }
     });
 
@@ -857,11 +845,6 @@ export class PipelineDetailView extends View {
 
     this.context.actionRegistry.register('open_dev_server_dialog', () => {
       new DevServerDialog(this.context, this.pipelineId).show();
-    });
-
-    this.context.actionRegistry.register('dismiss_coderbot_banner', () => {
-      this.coderbotState = { status: 'none', taskId: null };
-      this.updateHeader();
     });
 
     this.context.actionRegistry.register('open_stats', () => {
@@ -1630,7 +1613,6 @@ export class PipelineDetailView extends View {
       reviewbotState: this.reviewbotState,
       archbotState: this.archbotState,
       specagentState: this.specagentState,
-      coderbotState: this.coderbotState,
       devProcessState: this.devProcessState,
       user: this.context.authService.getUser(),
       allTasks: this.allLoadedTasks,

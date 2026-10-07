@@ -46,11 +46,6 @@ export interface SpecAgentState {
   taskId: string | null;
 }
 
-export interface CoderbotState {
-  status: 'none' | 'inProgress' | 'completed';
-  taskId: string | null;
-}
-
 export interface DevProcessState {
   running: boolean;
   pid: number | null;
@@ -64,7 +59,6 @@ export interface PipelineHeaderViewProps {
   reviewbotState: ReviewbotState;
   archbotState?: ArchbotState;
   specagentState?: SpecAgentState;
-  coderbotState?: CoderbotState;
   devProcessState?: DevProcessState;
   user: any;
   allTasks: Task[];
@@ -75,7 +69,7 @@ export interface PipelineHeaderViewProps {
 
 export class PipelineHeaderView {
   static render(props: PipelineHeaderViewProps): string {
-    const { pipeline, pipelineId, docbotState, reviewbotState, archbotState, specagentState, coderbotState, devProcessState, user, allTasks, gitStatus, pendingReviews, pendingSpecProposals } = props;
+    const { pipeline, pipelineId, docbotState, reviewbotState, archbotState, specagentState, devProcessState, user, allTasks, gitStatus, pendingReviews, pendingSpecProposals } = props;
 
     let docbotBannerHtml = '';
     if (docbotState.status === 'inProgress') {
@@ -150,31 +144,6 @@ export class PipelineHeaderView {
       `;
     }
 
-    let coderbotBannerHtml = '';
-    if (coderbotState && coderbotState.status === 'inProgress') {
-      coderbotBannerHtml = `
-        <div class="inline-flex bg-green-500/10 border border-green-500/30 text-green-400 rounded-full px-3 py-1 text-[10px] shadow-sm items-center gap-2">
-          <span class="relative flex h-2 w-2">
-            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-            <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-          </span>
-          <span class="font-bold tracking-wide uppercase">CoderBot Implementing...</span>
-          <button data-action-click="open_coderbot_dialog" class="font-black underline hover:text-green-300 transition-colors cursor-pointer ml-1">Log</button>
-        </div>
-      `;
-    } else if (coderbotState && coderbotState.status === 'completed') {
-      coderbotBannerHtml = `
-        <div class="inline-flex bg-green-500/10 border border-green-500/30 text-green-500 rounded-full px-3 py-1 text-[10px] shadow-sm items-center gap-2">
-          <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-          <span class="font-bold uppercase tracking-wider">CoderBot Done</span>
-          <button data-action-click="open_coderbot_dialog" class="font-black underline hover:text-green-400 transition-colors cursor-pointer ml-1">Review Log</button>
-          <button data-action-click="dismiss_coderbot_banner" class="ml-1 text-green-700 hover:text-green-500 transition-colors cursor-pointer">
-            ${Icon.render('close', { size: 12 })}
-          </button>
-        </div>
-      `;
-    }
-
     let devServerBannerHtml = '';
     if (devProcessState?.running) {
       devServerBannerHtml = `
@@ -213,7 +182,6 @@ export class PipelineHeaderView {
                 ${reviewbotBannerHtml}
                 ${archbotBannerHtml}
                 ${specagentBannerHtml}
-                ${coderbotBannerHtml}
                 ${devServerBannerHtml}
                 ${SpecProposalBadge.render(pendingSpecProposals, allTasks)}
                 ${ReviewNotificationBadge.render(pendingReviews, allTasks)}

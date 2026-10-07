@@ -887,7 +887,6 @@ describe('PipelineDetailView CoderBot Dialog', () => {
     expect((view as any).enginePiView).not.toBeNull();
 
     // Optimistic state updated alongside enabling the inline PiView
-    expect((view as any).coderbotState).toEqual({ status: 'inProgress', taskId: 't1' });
     const task = (view as any).allLoadedTasks.find((t: any) => t.id === 't1');
     expect(task).toBeTruthy();
     expect(task.status).toEqual('inprogress');
