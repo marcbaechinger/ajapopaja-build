@@ -422,12 +422,12 @@ describe('SelectedTaskController (save_spec focus, via PipelineDetailView)', () 
     expect(scheduleBtn).not.toBeNull();
     expect(document.activeElement).toBe(scheduleBtn);
     // The pending marker is consumed once focus has been handed over.
-    expect((view as any).pendingScheduleFocusTaskId).toBeNull();
+    expect((view as any).ctx.state.pendingScheduleFocusTaskId).toBeNull();
   });
 
   it('does not leak the pending focus marker to a different task id', () => {
     const view = new PipelineDetailView(mockContext, { id: 'p1' });
-    (view as any).pendingScheduleFocusTaskId = 'c1';
+    (view as any).ctx.state.pendingScheduleFocusTaskId = 'c1';
 
     // Render a different task's card with its own Schedule Execution button.
     const otherCard = document.createElement('div');
@@ -442,7 +442,7 @@ describe('SelectedTaskController (save_spec focus, via PipelineDetailView)', () 
     // Focus must not be handed to the unrelated card, and the marker must not
     // survive for a later render.
     expect(document.activeElement).not.toBe(otherButton);
-    expect((view as any).pendingScheduleFocusTaskId).toBeNull();
+    expect((view as any).ctx.state.pendingScheduleFocusTaskId).toBeNull();
   });
 });
 

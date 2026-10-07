@@ -39,6 +39,7 @@ import { ContentTabsController } from './pipeline/ContentTabsController.ts';
 import { registerPullRequestActions } from './pipeline/actions/pullRequestActions.ts';
 import { registerBotActions, openCoderBotDialog } from './pipeline/actions/botActions.ts';
 import { registerMiscActions } from './pipeline/actions/miscActions.ts';
+import { registerTaskSpecActions } from './pipeline/actions/taskSpecActions.ts';
 import EasyMDE from 'easymde';
 import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
 
@@ -61,8 +62,6 @@ export class PipelineDetailView extends View {
   private set allLoadedTasks(value: Task[]) { this.ctx.state.allLoadedTasks = value; }
   private get collapsedTasks(): Set<string> { return this.ctx.state.collapsedTasks; }
   private set collapsedTasks(value: Set<string>) { this.ctx.state.collapsedTasks = value; }
-  private get collapsedSpecs(): Set<string> { return this.ctx.state.collapsedSpecs; }
-  private set collapsedSpecs(value: Set<string>) { this.ctx.state.collapsedSpecs = value; }
   private isFirstLoad: boolean = true;
   private keydownHandler: ((e: KeyboardEvent) => void) | null = null;
   private get gitStatus(): GitStatusDetails | undefined { return this.ctx.state.gitStatus; }
@@ -83,17 +82,6 @@ export class PipelineDetailView extends View {
   // selects a different task.
   private get pendingSpecEditTaskId(): string | null { return this.ctx.state.pendingSpecEditTaskId; }
   private set pendingSpecEditTaskId(value: string | null) { this.ctx.state.pendingSpecEditTaskId = value; }
-  /**
-   * One-shot marker for the "focus the Schedule Execution button" hand-off.
-   *
-   * Set by the `save_spec` action handler, and only when the saved spec belongs
-   * to the selected task card (`#selected-task-view`). It is consumed and
-   * cleared by `refreshSelectedTask()` after the WebSocket-driven re-render has
-   * replaced the card, so the freshly rendered "Schedule Execution" button
-   * regains focus without the user having to re-find it.
-   */
-  private get pendingScheduleFocusTaskId(): string | null { return this.ctx.state.pendingScheduleFocusTaskId; }
-  private set pendingScheduleFocusTaskId(value: string | null) { this.ctx.state.pendingScheduleFocusTaskId = value; }
   private engine: ExecutionEngineController | null = null;
   private sessionList: PipelineSessionListController | null = null;
   private realtime: PipelineRealtimeController | null = null;
@@ -318,6 +306,13 @@ export class PipelineDetailView extends View {
         this.storage.put(`sidebar_collapsed:${this.pipelineId}`, collapsed),
     });
 
+    registerTaskSpecActions(this.ctx, {
+      focusSpecAfterTitleSave: (c) => this.focusSpecAfterTitleSave(c),
+      markSpecEditPending: (id) => this.markSpecEditPending(id),
+      markScheduleFocusPending: (id) => this.markScheduleFocusPending(id),
+      applyPendingScheduleFocus: (el, id) => this.applyPendingScheduleFocus(el, id),
+    });
+
     this.context.actionRegistry.register('start_interactive_session', () =>
       this.startInteractiveSession()
     );
@@ -378,140 +373,6 @@ export class PipelineDetailView extends View {
 
       if (isHidden) this.collapsedTasks.add(taskId);
       else this.collapsedTasks.delete(taskId);
-    });
-
-    this.context.actionRegistry.register('edit_title', async (_e, el) => {
-      const container = el.closest('.title-container') as HTMLElement;
-      if (!container) return;
-      container.querySelector('.title-view')?.classList.add('hidden');
-      container.querySelector('.title-edit')?.classList.remove('hidden');
-      const input = container.querySelector('input');
-      input?.focus();
-      input?.select();
-    });
-
-    this.context.actionRegistry.register('cancel_title_edit', async (_e, el) => {
-      const container = el.closest('.title-container') as HTMLElement;
-      if (!container) return;
-      container.querySelector('.title-view')?.classList.remove('hidden');
-      container.querySelector('.title-edit')?.classList.add('hidden');
-    });
-
-    this.context.actionRegistry.register('save_title', async (_e, el) => {
-      const container = el.closest('.title-container') as HTMLElement;
-      if (!container) return;
-      const taskId = container.getAttribute('data-task-id');
-      const version = parseInt(container.getAttribute('data-version') || '1');
-      const input = container.querySelector('input');
-      if (!taskId || !input) return;
-
-      const newTitle = input.value.trim();
-      if (!newTitle) return;
-
-      // No-op when the title is unchanged: pressing Enter (or clicking Save)
-      // without editing the text must not trigger an update. Saving anyway would
-      // bump ``updated_at`` on the server, which surfaces as a task update where
-      // ``prev.title === next.title`` and therefore falls through to a full
-      // TaskItem re-render, discarding any unrelated unsaved edits (e.g. an
-      // open Specification or Design Doc). Swallow the event so it does not
-      // propagate further while still leaving no-op as intended.
-      const currentTitle = container.querySelector<HTMLElement>('.title-view span.font-medium')?.textContent?.trim() ?? '';
-      if (newTitle === currentTitle) {
-        _e.preventDefault?.();
-        _e.stopPropagation?.();
-        return;
-      }
-
-      try {
-        await this.context.taskClient.updateDetails(taskId, version, { title: newTitle });
-        // After a successful save, leave title edit mode and move the cursor
-        // into the Specification textarea so the user can keep describing the
-        // task seamlessly.
-        this.focusSpecAfterTitleSave(container);
-        // WS will refresh
-      } catch (error) {
-        alert('Failed to save title');
-      }
-    });
-
-    this.context.actionRegistry.register('edit_spec', async (_e, el) => {
-      const container = el.closest('.spec-container') as HTMLElement;
-      if (!container) return;
-      container.querySelector('.spec-view')?.classList.add('hidden');
-      container.querySelector('[data-action-click="toggle_spec_expand"]')?.classList.add('hidden');
-      container.querySelector('.spec-edit')?.classList.remove('hidden');
-      const textarea = container.querySelector('textarea');
-      textarea?.focus();
-    });
-
-    this.context.actionRegistry.register('cancel_spec_edit', async (_e, el) => {
-      const container = el.closest('.spec-container') as HTMLElement;
-      if (!container) return;
-      const taskId = container.getAttribute('data-task-id');
-      if (taskId && this.pendingSpecEditTaskId === taskId) this.pendingSpecEditTaskId = null;
-      container.querySelector('.spec-view')?.classList.remove('hidden');
-      container.querySelector('[data-action-click="toggle_spec_expand"]')?.classList.remove('hidden');
-      container.querySelector('.spec-edit')?.classList.add('hidden');
-    });
-
-    this.context.actionRegistry.register('save_spec', async (_e, el) => {
-      const container = el.closest('.spec-container') as HTMLElement;
-      if (!container) return;
-      const taskId = container.getAttribute('data-task-id');
-      if (taskId && this.pendingSpecEditTaskId === taskId) this.pendingSpecEditTaskId = null;
-      const version = parseInt(container.getAttribute('data-version') || '1');
-      const textarea = container.querySelector('textarea');
-      const wantDesignCheck = container.querySelector('input[type="checkbox"]') as HTMLInputElement;
-      if (!taskId || !textarea) return;
-
-      const newSpec = textarea.value.trim();
-      const wantDesignDoc = wantDesignCheck.checked;
-
-      // Saving the specification should hand focus to the primary follow-up
-      // action of a CREATED task ("Schedule Execution") so the user can save
-      // and schedule in one flow. The task id is remembered so the focus is
-      // re-applied after the WS-driven re-render that follows the update.
-      const taskEl = container.closest('[data-view-id]') as HTMLElement | null;
-      const refocusAfterRender = !!taskEl?.closest('#selected-task-view');
-      this.pendingScheduleFocusTaskId = taskId;
-
-      try {
-        await this.context.taskClient.updateDetails(taskId, version, { spec: newSpec, want_design_doc: wantDesignDoc });
-        // Keep the spec expanded after saving the changes.
-        this.collapsedSpecs.delete(taskId);
-        // Apply focus immediately too, so it also works when no WS re-render
-        // arrives (e.g. when saved from the search dialog). The helper consumes
-        // the marker, so re-arm it for the selected task: the WS-driven
-        // re-render replaces the card and `refreshSelectedTask` then re-applies
-        // the focus to the freshly rendered button.
-        this.applyPendingScheduleFocus(taskEl, taskId);
-        if (refocusAfterRender) {
-          this.pendingScheduleFocusTaskId = taskId;
-        }
-        // WS will refresh
-      } catch (error) {
-        this.pendingScheduleFocusTaskId = null;
-        alert('Failed to save specification');
-      }
-    });
-
-    this.context.actionRegistry.register('toggle_spec_expand', async (_e, el) => {
-      const container = el.closest('.spec-container') as HTMLElement;
-      if (!container) return;
-      const taskId = container.getAttribute('data-task-id');
-      if (!taskId) return;
-
-      const display = container.querySelector('.spec-display');
-      if (!display) return;
-
-      const isExpanded = display.classList.toggle('expanded');
-      el.textContent = isExpanded ? 'Show Less' : 'Show More';
-
-      if (isExpanded) {
-        this.collapsedSpecs.delete(taskId);
-      } else {
-        this.collapsedSpecs.add(taskId);
-      }
     });
 
     this.context.actionRegistry.register('view_design_doc', async (_e, el) => {
@@ -1144,6 +1005,14 @@ export class PipelineDetailView extends View {
 
   private focusSpecAfterTitleSave(titleContainer: HTMLElement): void {
     this.ensureSelectedTask().focusSpecAfterTitleSave(titleContainer);
+  }
+
+  private markSpecEditPending(taskId: string | null): void {
+    this.ensureSelectedTask().markSpecEditPending(taskId);
+  }
+
+  private markScheduleFocusPending(taskId: string | null): void {
+    this.ensureSelectedTask().markScheduleFocusPending(taskId);
   }
 
   private ensureSelectedTask(): SelectedTaskController {
