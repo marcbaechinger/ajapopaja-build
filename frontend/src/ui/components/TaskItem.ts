@@ -91,9 +91,10 @@ export class TaskItem {
    * programmatic focus move is apparent in addition to the regular keyboard
    * focus ring.
    *
-   * Returns ``true`` when a schedule button was found and focused. It is a
-   * no-op (returning ``false``) for cards that have no such button (e.g.
-   * SCHEDULED / PROPOSED / completed tasks) or for non-TaskItem elements.
+   * @returns ``true`` only when a focusable schedule button was found and
+   *   focused; otherwise ``false``. It is a no-op for cards that have no such
+   *   button (e.g. SCHEDULED / PROPOSED / completed tasks) or for non-TaskItem
+   *   elements.
    *
    * A matched button that cannot actually receive focus is also ignored:
    * - disabled buttons (``disabled`` attribute / property), and

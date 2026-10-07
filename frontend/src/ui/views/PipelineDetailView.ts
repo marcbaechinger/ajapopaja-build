@@ -73,10 +73,15 @@ export class PipelineDetailView extends View {
   // edit mode (even across WS-driven re-renders) until the user saves, cancels, or
   // selects a different task.
   private pendingSpecEditTaskId: string | null = null;
-  // After a Specification is saved, the task's "Schedule Execution" button should
-  // receive focus so the user can save and schedule in one flow. Remembering the
-  // task id lets `refreshSelectedTask` re-apply focus after a WS-driven re-render
-  // (which replaces the card and would otherwise drop it).
+  /**
+   * One-shot marker for the "focus the Schedule Execution button" hand-off.
+   *
+   * Set by the `save_spec` action handler, and only when the saved spec belongs
+   * to the selected task card (`#selected-task-view`). It is consumed and
+   * cleared by `refreshSelectedTask()` after the WebSocket-driven re-render has
+   * replaced the card, so the freshly rendered "Schedule Execution" button
+   * regains focus without the user having to re-find it.
+   */
   private pendingScheduleFocusTaskId: string | null = null;
   private enginePiView: PiView | null = null;
   private enginePiMountedKey: string | null = null;
