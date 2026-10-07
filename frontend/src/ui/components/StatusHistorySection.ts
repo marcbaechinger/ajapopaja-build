@@ -32,10 +32,10 @@ export function renderStatusHistorySection(task: Task, expandHistory: boolean): 
         ${Icon.render('chevronRight', { size: 12, className: 'transition-transform group-open/history:rotate-90' })}
         Status History
       </summary>
-      <div class="space-y-2 mt-2">
+      <div class="space-y-2 mt-2 mr-6">
         ${task.history.map(t => `
-          <div class="flex items-center gap-2 text-[10px]">
-            <span class="text-app-muted w-24">${new Date(t.timestamp).toLocaleString()}</span>
+          <div class="flex items-center gap-2 text-[10px] whitespace-nowrap">
+            <span class="text-app-muted min-w-24 flex-shrink-0">${new Date(t.timestamp).toLocaleString()}</span>
             <span class="px-1.5 py-0.5 rounded bg-app-surface border border-app-border font-mono text-app-accent-1">${t.to_status}</span>
             <span class="text-app-muted">by</span>
             <span class="font-bold text-app-text/80 italic">${t.by}</span>
