@@ -1033,17 +1033,22 @@ export class PipelineDetailView extends View {
       // and schedule in one flow. The task id is remembered so the focus is
       // re-applied after the WS-driven re-render that follows the update.
       const taskEl = container.closest('[data-view-id]') as HTMLElement | null;
-      if (taskEl?.closest('#selected-task-view')) {
-        this.pendingScheduleFocusTaskId = taskId;
-      }
+      const refocusAfterRender = !!taskEl?.closest('#selected-task-view');
+      this.pendingScheduleFocusTaskId = taskId;
 
       try {
         await this.context.taskClient.updateDetails(taskId, version, { spec: newSpec, want_design_doc: wantDesignDoc });
         // Keep the spec expanded after saving the changes.
         this.collapsedSpecs.delete(taskId);
         // Apply focus immediately too, so it also works when no WS re-render
-        // arrives (e.g. when saved from the search dialog).
-        TaskItem.focusScheduleExecution(taskEl);
+        // arrives (e.g. when saved from the search dialog). The helper consumes
+        // the marker, so re-arm it for the selected task: the WS-driven
+        // re-render replaces the card and `refreshSelectedTask` then re-applies
+        // the focus to the freshly rendered button.
+        this.applyPendingScheduleFocus(taskEl, taskId);
+        if (refocusAfterRender) {
+          this.pendingScheduleFocusTaskId = taskId;
+        }
         // WS will refresh
       } catch (error) {
         this.pendingScheduleFocusTaskId = null;
@@ -1998,6 +2003,21 @@ export class PipelineDetailView extends View {
     this.refreshExecutionEngine();
   }
 
+  /**
+   * Applies the pending "focus the Schedule Execution button" request to a
+   * rendered task card.
+   *
+   * Focus is only handed over when the pending marker belongs to `taskId`, so
+   * a re-render of an unrelated card cannot steal the focus. The marker is
+   * always cleared afterwards so it cannot leak to a later render.
+   */
+  private applyPendingScheduleFocus(taskElement: Element | null, taskId: string): void {
+    if (this.pendingScheduleFocusTaskId === taskId) {
+      TaskItem.focusScheduleExecution(taskElement);
+    }
+    this.pendingScheduleFocusTaskId = null;
+  }
+
   private refreshSelectedTask() {
     if (!this.container) return;
     const viewEl = this.container.querySelector('#selected-task-view');
@@ -2023,11 +2043,8 @@ export class PipelineDetailView extends View {
 
     // A just-saved Specification hands focus to the task's "Schedule Execution"
     // button. The WS-driven re-render above replaces the card, so re-apply it
-    // here (and clear the pending marker).
-    if (this.pendingScheduleFocusTaskId === fresh.id) {
-      TaskItem.focusScheduleExecution(viewEl);
-      this.pendingScheduleFocusTaskId = null;
-    }
+    // here (the helper clears the pending marker).
+    this.applyPendingScheduleFocus(viewEl, fresh.id!);
 
     // Keep the Specification in edit mode for a newly created task even if a
     // WebSocket re-render happens right after creation.

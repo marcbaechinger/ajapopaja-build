@@ -701,6 +701,26 @@ describe('PipelineDetailView save_spec focus', () => {
     // The pending marker is consumed once focus has been handed over.
     expect((view as any).pendingScheduleFocusTaskId).toBeNull();
   });
+
+  it('does not leak the pending focus marker to a different task id', () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    (view as any).pendingScheduleFocusTaskId = 'c1';
+
+    // Render a different task's card with its own Schedule Execution button.
+    const otherCard = document.createElement('div');
+    otherCard.setAttribute('data-view-id', 'c2');
+    const otherButton = document.createElement('button');
+    otherButton.setAttribute('data-action-click', 'schedule_task');
+    otherCard.appendChild(otherButton);
+    document.body.appendChild(otherCard);
+
+    (view as any).applyPendingScheduleFocus(otherCard, 'c2');
+
+    // Focus must not be handed to the unrelated card, and the marker must not
+    // survive for a later render.
+    expect(document.activeElement).not.toBe(otherButton);
+    expect((view as any).pendingScheduleFocusTaskId).toBeNull();
+  });
 });
 
 describe('PipelineDetailView Review Notifications', () => {
