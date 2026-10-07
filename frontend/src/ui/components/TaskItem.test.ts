@@ -184,6 +184,37 @@ describe('TaskItem', () => {
       expect(document.activeElement).toBe(scheduleBtn);
     });
 
+    it('highlights the Schedule Execution button on programmatic focus and clears it on blur', () => {
+      const el = mount(TaskItem.render(mockTask as any));
+      const scheduleBtn = el.querySelector<HTMLElement>('[data-action-click="schedule_task"]')!;
+      makeVisible(scheduleBtn);
+
+      expect(TaskItem.focusScheduleExecution(el)).toBe(true);
+      // A programmatic .focus() may not paint a :focus-visible ring, so the
+      // button gets an explicit highlight class instead.
+      for (const cls of TaskItem.PROGRAMMATIC_FOCUS_CLASSES) {
+        expect(scheduleBtn.classList.contains(cls)).toBe(true);
+      }
+
+      // The highlight is short-lived: it goes away as soon as focus leaves.
+      scheduleBtn.blur();
+      for (const cls of TaskItem.PROGRAMMATIC_FOCUS_CLASSES) {
+        expect(scheduleBtn.classList.contains(cls)).toBe(false);
+      }
+    });
+
+    it('does not highlight a disabled Schedule Execution button', () => {
+      const el = mount(TaskItem.render(mockTask as any));
+      const scheduleBtn = el.querySelector<HTMLElement>('[data-action-click="schedule_task"]')!;
+      makeVisible(scheduleBtn);
+      scheduleBtn.setAttribute('disabled', '');
+
+      expect(TaskItem.focusScheduleExecution(el)).toBe(false);
+      for (const cls of TaskItem.PROGRAMMATIC_FOCUS_CLASSES) {
+        expect(scheduleBtn.classList.contains(cls)).toBe(false);
+      }
+    });
+
     it('returns false and does not focus a disabled Schedule Execution button', () => {
       const el = mount(TaskItem.render(mockTask as any));
       const scheduleBtn = el.querySelector<HTMLButtonElement>('[data-action-click="schedule_task"]')!;

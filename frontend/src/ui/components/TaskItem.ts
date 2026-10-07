@@ -64,11 +64,32 @@ export class TaskItem {
   }
 
   /**
+   * Tailwind classes applied to the "Schedule Execution" button while it is
+   * focused programmatically (e.g. right after saving a Specification).
+   *
+   * Browsers only paint the ``:focus-visible`` ring for keyboard-driven focus,
+   * so a bare programmatic ``.focus()`` can leave the user unable to tell where
+   * focus went. This explicit, short-lived highlight makes the move visible;
+   * it is removed again on ``blur`` so keyboard users keep the normal ring.
+   */
+  static readonly PROGRAMMATIC_FOCUS_CLASSES = [
+    'ring-2',
+    'ring-app-accent-1',
+    'ring-offset-2',
+    'ring-offset-app-bg',
+  ] as const;
+
+  /**
    * Moves focus onto the "Schedule Execution" button of a rendered TaskItem.
    *
    * It is used right after saving a task's Specification so the user can save
    * the spec and schedule the task for execution in one flow, without having
    * to hunt for the button again.
+   *
+   * The button also receives a visible focus highlight (see
+   * ``PROGRAMMATIC_FOCUS_CLASSES``) that is cleared on ``blur``, so the
+   * programmatic focus move is apparent in addition to the regular keyboard
+   * focus ring.
    *
    * Returns ``true`` when a schedule button was found and focused. It is a
    * no-op (returning ``false``) for cards that have no such button (e.g.
@@ -88,7 +109,25 @@ export class TaskItem {
     if (button.getAttribute('aria-hidden') === 'true') return false;
     if (button.getClientRects().length === 0) return false;
     button.focus();
+    this.highlightProgrammaticFocus(button);
     return true;
+  }
+
+  /**
+   * Applies the programmatic-focus highlight to a button and clears it again
+   * the next time the button loses focus. Kept separate from
+   * ``focusScheduleExecution`` so tests can assert the highlight lifecycle in
+   * isolation.
+   */
+  private static highlightProgrammaticFocus(button: HTMLButtonElement): void {
+    button.classList.add(...TaskItem.PROGRAMMATIC_FOCUS_CLASSES);
+    button.addEventListener(
+      'blur',
+      () => {
+        button.classList.remove(...TaskItem.PROGRAMMATIC_FOCUS_CLASSES);
+      },
+      { once: true }
+    );
   }
 
   static render(
