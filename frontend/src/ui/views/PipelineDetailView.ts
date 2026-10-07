@@ -20,15 +20,12 @@ import { PipelineSubRoute } from './pipeline/PipelineSubRoute.ts';
 import { AppContext } from '../../core/AppContext.ts';
 import { Pipeline, TaskStatus, Task, type GitStatusDetails } from '../../core/domain.ts';
 import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
-import { HistoryView } from '../components/HistoryView.ts';
 import { StatsDialog } from '../components/StatsDialog.ts';
 import { DesignDocDialog } from '../components/DesignDocDialog.ts';
 import { DesignDocDiffDialog } from '../components/DesignDocDiffDialog.ts';
 import { BacklogView } from '../components/BacklogView.ts';
 import { PipelineHistoryView } from '../components/PipelineHistoryView.ts';
 import { PullRequestSection } from '../components/PullRequestSection.ts';
-import { InteractiveCodingView } from '../components/InteractiveCodingView.ts';
-import { FileBrowseView } from '../components/FileBrowseView.ts';
 import { PipelineHeaderView, type DocbotState, type ReviewbotState, type ArchbotState, type SpecAgentState } from '../components/PipelineHeaderView.ts';
 import { renderSpecProposalResult, getTaskSpecProposalUpdater } from '../components/SpecSection.ts';
 import type { SpecProposal } from '../../core/clients/SpecBotClient.ts';
@@ -38,6 +35,7 @@ import { ExecutionEngineController } from './pipeline/ExecutionEngineController.
 import { PipelineSessionListController } from './pipeline/PipelineSessionListController.ts';
 import { PipelineRealtimeController } from './pipeline/PipelineRealtimeController.ts';
 import { SelectedTaskController } from './pipeline/SelectedTaskController.ts';
+import { ContentTabsController } from './pipeline/ContentTabsController.ts';
 import { registerPullRequestActions } from './pipeline/actions/pullRequestActions.ts';
 import { registerBotActions, openCoderBotDialog } from './pipeline/actions/botActions.ts';
 import { registerMiscActions } from './pipeline/actions/miscActions.ts';
@@ -100,22 +98,13 @@ export class PipelineDetailView extends View {
   private sessionList: PipelineSessionListController | null = null;
   private realtime: PipelineRealtimeController | null = null;
   private selectedTaskCtrl: SelectedTaskController | null = null;
+  private contentTabs: ContentTabsController | null = null;
 
   // Which content tab is active in the prep column. The tab list is always
   // visible; the Coding Agent tab is always selectable and shows its empty
   // state while no session is attached to this pipeline.
   private get contentTab(): ContentTab { return this.ctx.state.contentTab; }
   private set contentTab(value: ContentTab) { this.ctx.state.contentTab = value; }
-  private interactiveCodingView: InteractiveCodingView | null = null;
-  // Whether the mounted InteractiveCodingView was created with a Start action
-  // (i.e. the pipeline's `repo_uri` was known and remote). Tracked so the view is
-  // rebuilt once after `loadPipeline()` resolves, when the capability becomes
-  // known for a deep-linked Coding Agent tab. `null` = no view mounted.
-  private interactiveViewAllowsStart: boolean | null = null;
-  private fileBrowseView: FileBrowseView | null = null;
-  // Lazily mounted History tab (repository log + status). Kept mounted across
-  // tab switches so its page/expanded/diff state survives.
-  private historyView: HistoryView | null = null;
   // Explicit file-browser path from the route, consumed once when the File
   // Browser is lazily mounted. `null` = use the persisted last path.
   private get pendingFbPath(): string | null { return this.ctx.state.pendingFbPath; }
@@ -340,7 +329,7 @@ export class PipelineDetailView extends View {
     });
 
     this.context.actionRegistry.register('open_pipeline_sessions', () => {
-      this.context.sessionManagerPanel?.open(this.pipelineId);
+      this.ensureContentTabs().openSessionManager();
     });
 
     // Tab selection. The Task editor, Coding Agent and File Browser are
@@ -1054,8 +1043,8 @@ export class PipelineDetailView extends View {
     // Reflect a deep-linked sub-route (tab / file-browser path) before the
     // async pipeline and session loads resolve, then canonicalise the hash so
     // a missing tab segment is rewritten without adding a history entry.
-    this.updateContentTabs();
-    this.canonicaliseRoute();
+    this.ensureContentTabs().refresh();
+    this.ensureContentTabs().canonicaliseRoute();
     this.loadPipeline();
     this.refreshTasks();
     this.checkOllama();
@@ -1130,16 +1119,8 @@ export class PipelineDetailView extends View {
     this.selectedTaskCtrl = null;
     this.sessionList?.teardown();
     this.sessionList = null;
-    this.teardownInteractiveCodingView();
-    if (this.fileBrowseView) {
-      this.fileBrowseView.destroy();
-      this.fileBrowseView = null;
-    }
-    if (this.historyView) {
-      this.historyView.destroy();
-      this.historyView = null;
-    }
-    this.pendingFbPath = null;
+    this.contentTabs?.teardown();
+    this.contentTabs = null;
     this.unsubs.forEach(unsub => unsub());
     this.unsubs = [];
     this.pendingSpecEditTaskId = null;
@@ -1173,6 +1154,15 @@ export class PipelineDetailView extends View {
     return this.selectedTaskCtrl;
   }
 
+  private ensureContentTabs(): ContentTabsController {
+    this.contentTabs ??= new ContentTabsController({
+      ctx: this.ctx,
+      getHost: () => this.container,
+      subRoute: this.subRoute,
+    });
+    return this.contentTabs;
+  }
+
   private ensureEngine(): ExecutionEngineController {
     this.engine ??= new ExecutionEngineController({
       ctx: this.ctx,
@@ -1204,44 +1194,7 @@ export class PipelineDetailView extends View {
    * empty state) and refreshes the tab visibility.
    */
   private syncInteractiveSession() {
-    if (!this.container) return;
-    this.mountInteractiveCodingView();
-    this.updateContentTabs();
-  }
-
-  /**
-   * Lazily mounts the one persistent InteractiveCodingView for the Coding Agent
-   * tab (mirroring {@link mountFileBrowseView}/{@link mountHistoryView}), then
-   * keeps it mounted so the log survives tab switches and the tab is always
-   * available. Recreates it when `repo_uri` becomes known after `loadPipeline()`
-   * so the empty-state Start action matches the pipeline's capabilities.
-   */
-  private mountInteractiveCodingView(): void {
-    if (!this.container) return;
-    const allowsStart = !!this.pipeline?.repo_uri;
-    if (this.interactiveCodingView && this.interactiveViewAllowsStart === allowsStart) return;
-    if (this.interactiveCodingView) this.teardownInteractiveCodingView();
-    const mount = this.container.querySelector(
-      '#interactive-coding-view-mount'
-    ) as HTMLElement | null;
-    if (!mount) return;
-    this.interactiveCodingView = new InteractiveCodingView(
-      this.context.interactiveCodingService,
-      mount,
-      {
-        pipelineId: this.pipelineId,
-        // Local pipelines expose no start affordance, so the empty state has no
-        // action button for them.
-        emptyStateAction: allowsStart
-          ? {
-              label: 'Start Interactive Session',
-              onClick: () => this.startInteractiveSession(),
-            }
-          : undefined,
-      }
-    );
-    this.interactiveViewAllowsStart = allowsStart;
-    this.interactiveCodingView.render();
+    this.ensureContentTabs().syncInteractiveSession();
   }
 
   /**
@@ -1250,133 +1203,7 @@ export class PipelineDetailView extends View {
    * empty-state button rendered inside the embedded PiView.
    */
   private async startInteractiveSession(): Promise<void> {
-    // Only remote pipelines (repo_uri set) support an interactive session; the
-    // empty-state button is not offered otherwise.
-    if (!this.pipeline?.repo_uri) return;
-
-    try {
-      await this.context.interactiveCodingService.startSession(this.pipelineId);
-      this.setContentTab('coding-agent', { hash: 'push' });
-      this.syncInteractiveSession();
-    } catch (error) {
-      console.error('Start interactive session error:', error);
-      alert('Failed to start interactive session');
-    }
-  }
-
-  private teardownInteractiveCodingView() {
-    if (this.interactiveCodingView) {
-      this.interactiveCodingView.destroy();
-      this.interactiveCodingView = null;
-    }
-    this.interactiveViewAllowsStart = null;
-  }
-
-  /**
-   * Lazily mounts the FileBrowseView the first time the File Browser tab is
-   * selected, then keeps it mounted so its state (current directory, selected
-   * file, scroll position) survives tab switches.
-   */
-  private mountFileBrowseView() {
-    if (this.fileBrowseView || !this.container) return;
-    const mount = this.container.querySelector(
-      '#file-browser-view-mount'
-    ) as HTMLElement | null;
-    if (!mount) return;
-    // Consume the route-supplied path once, on the lazy first mount, so a later
-    // re-mount never re-applies a stale deep link.
-    const initialPath = this.pendingFbPath;
-    this.pendingFbPath = null;
-    this.fileBrowseView = new FileBrowseView(mount, {
-      pipelineId: this.pipelineId,
-      client: this.context.fileBrowserClient,
-      actionRegistry: this.context.actionRegistry,
-      // Let the user drag the listing / file content area's bottom edge to
-      // tune its height within the detail view.
-      resizable: true,
-      initialPath,
-      // Fold user-driven file/directory navigation into the sub-route and push
-      // a history entry, so the browser Back button walks back through them.
-      onNavigate: ({ dir, file }) => {
-        this.writeRoute('push', file ?? dir);
-      },
-    });
-    this.fileBrowseView.render();
-  }
-
-  /**
-   * Lazily mounts the HistoryView the first time the History tab is selected,
-   * then keeps it mounted so its page/expanded/diff state survives tab switches.
-   */
-  private mountHistoryView() {
-    if (this.historyView || !this.container) return;
-    const mount = this.container.querySelector(
-      '#history-view-mount'
-    ) as HTMLElement | null;
-    if (!mount) return;
-    this.historyView = new HistoryView(mount, {
-      pipelineId: this.pipelineId,
-      client: this.context.pipelineClient,
-      actionRegistry: this.context.actionRegistry,
-    });
-    this.historyView.render();
-  }
-
-  /**
-   * Shows/hides the four content fragments (TaskItem, InteractiveCodingView,
-   * FileBrowseView, HistoryView) and keeps every tab button's active/disabled
-   * state in sync. Switching tabs only toggles the visibility of pre-rendered
-   * DOM fragments (no re-render, no teardown), so in-progress edits and the file
-   * browser's/history's state survive switching back and forth. The File Browser
-   * and History are lazily mounted on first activation; the Coding Agent view is
-   * kept mounted so the tab is always available, with the embedded PiView showing
-   * its empty state while no session is attached.
-   */
-  private updateContentTabs() {
-    if (!this.container) return;
-    const selected = this.container.querySelector('#selected-task-view') as HTMLElement | null;
-    const mount = this.container.querySelector('#interactive-coding-view-mount') as HTMLElement | null;
-    const fileMount = this.container.querySelector('#file-browser-view-mount') as HTMLElement | null;
-    const historyMount = this.container.querySelector('#history-view-mount') as HTMLElement | null;
-    const taskTab = this.container.querySelector('#tab-task-editor') as HTMLElement | null;
-    const codingTab = this.container.querySelector('#tab-coding-agent') as HTMLElement | null;
-    const fileTab = this.container.querySelector('#tab-file-browser') as HTMLElement | null;
-    const historyTab = this.container.querySelector('#tab-history') as HTMLElement | null;
-
-    const showTaskEditor = this.contentTab === 'task-editor';
-    const showInteractive = this.contentTab === 'coding-agent';
-    const showFileBrowser = this.contentTab === 'file-browser';
-    const showHistory = this.contentTab === 'history';
-
-    selected?.classList.toggle('hidden', !showTaskEditor);
-    mount?.classList.toggle('hidden', !showInteractive);
-    fileMount?.classList.toggle('hidden', !showFileBrowser);
-    historyMount?.classList.toggle('hidden', !showHistory);
-
-    if (showInteractive) {
-      this.mountInteractiveCodingView();
-    }
-    if (showFileBrowser) {
-      this.mountFileBrowseView();
-    }
-    if (showHistory) {
-      this.mountHistoryView();
-    }
-
-    const setTabActive = (el: HTMLElement | null, active: boolean) => {
-      if (!el) return;
-      el.classList.toggle('border-app-accent-1', active);
-      el.classList.toggle('text-app-accent-1', active);
-      el.classList.toggle('border-transparent', !active);
-      el.classList.toggle('text-app-muted', !active);
-      el.setAttribute('aria-selected', String(active));
-    };
-    setTabActive(taskTab, showTaskEditor);
-    setTabActive(codingTab, showInteractive);
-    setTabActive(fileTab, showFileBrowser);
-    setTabActive(historyTab, showHistory);
-
-    this.sessionList?.refresh();
+    await this.ensureContentTabs().startInteractiveSession();
   }
 
   // --- pipeline sub-route (tab + file-browser path) -----------------------
@@ -1388,45 +1215,8 @@ export class PipelineDetailView extends View {
    */
   update(params: Record<string, string>): boolean {
     if (params.id !== this.pipelineId) return false;
-    this.applyRoute(params);
+    this.ensureContentTabs().applyRoute(params);
     return true;
-  }
-
-  private applyRoute(params: Record<string, string>): void {
-    const { tab, fbPath, taskId } = this.subRoute.parse(params.rest);
-
-    if (tab === 'file-browser' && fbPath !== null) {
-      // Only a lazy first mount consumes the explicit path; when the view is
-      // already mounted we resolve the path directly below.
-      if (!this.fileBrowseView) this.pendingFbPath = fbPath;
-      this.setContentTab(tab, { hash: 'none' });
-      this.mountFileBrowseView(); // no-op when already mounted
-      const current = this.currentFbPath();
-      if (current !== fbPath) void this.fileBrowseView?.navigateTo(fbPath, { silent: true });
-      return;
-    }
-
-    this.setContentTab(tab, { hash: 'none' });
-    // The uid is meaningful only for the task editor; apply it in place so a
-    // Back/Forward or externally crafted hash never re-enters the router and
-    // only re-renders when the selected task actually changes.
-    if (tab === 'task-editor') this.applyTaskSelection(taskId);
-  }
-
-  /**
-   * Route -> selection. Resolves the uid against the loaded tasks and selects
-   * it, but is a no-op when the id already matches the current selection (and
-   * when both are absent), so unrelated hash changes never discard edits.
-   */
-  private applyTaskSelection(taskId: string | null): void {
-    const current = this.selectedTask?.id ?? null;
-    if (current === (taskId ?? null)) return;
-    this.pendingSpecEditTaskId = null;
-    this.selectedTask = taskId
-      ? this.allLoadedTasks.find(t => t.id === taskId) ?? null
-      : null;
-    this.refreshBacklog();
-    this.refreshSelectedTask();
   }
 
   /**
@@ -1437,56 +1227,7 @@ export class PipelineDetailView extends View {
     tab: ContentTab,
     opts: { hash?: 'push' | 'replace' | 'none' } = {}
   ): void {
-    this.contentTab = tab;
-    this.updateContentTabs();
-    this.writeRoute(opts.hash ?? 'none');
-  }
-
-  /**
-   * Pushes (user navigation) or replaces (canonicalisation) the pipeline
-   * sub-route. `replaceState` never fires `hashchange`, and the equality guard
-   * makes the `push` re-entry a no-op, so the route stays idempotent.
-   */
-  private writeRoute(
-    mode: 'push' | 'replace' | 'none',
-    fbPath: string | null = this.currentFbPath(),
-    taskId: string | null = this.currentTaskId()
-  ): void {
-    const hash = this.subRoute.build(this.contentTab, fbPath, taskId);
-    this.subRoute.write(mode, hash);
-  }
-
-  /** Current file-browser path from the mounted view, or `null` when not relevant. */
-  private currentFbPath(): string | null {
-    if (this.contentTab !== 'file-browser') return null;
-    const path = this.fileBrowseView?.getCurrentPath();
-    if (!path) return null;
-    if (path.file) return path.file;
-    return path.dir ? path.dir : null;
-  }
-
-  /**
-   * Route-side projection of the selection: the uid is only meaningful while
-   * the Task editor tab is active, mirroring `currentFbPath()`.
-   */
-  private currentTaskId(): string | null {
-    if (this.contentTab !== 'task-editor') return null;
-    return this.selectedTask?.id ?? null;
-  }
-
-  /**
-   * Canonicalises the hash once, after the first mount: a missing tab segment
-   * is filled in. `replaceState` keeps Back pointing at the previous page.
-   */
-  private canonicaliseRoute(): void {
-    const canonical = this.subRoute.build(
-      this.contentTab,
-      this.currentFbPath(),
-      // Tasks are not loaded yet, so fall back to the deep-linked uid to avoid
-      // stripping it before `refreshTasks()` can consume it.
-      this.currentTaskId() ?? this.pendingTaskId
-    );
-    this.subRoute.canonicalise(canonical);
+    this.ensureContentTabs().setTab(tab, opts);
   }
 
   private refreshBacklog() {
