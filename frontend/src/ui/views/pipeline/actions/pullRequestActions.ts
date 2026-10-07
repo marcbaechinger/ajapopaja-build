@@ -46,6 +46,27 @@ export function registerPullRequestActions(
 ): void {
   const { actionRegistry } = ctx.context;
 
+  /**
+   * Re-reads a task after a PR action mutated its status and pushes the fresh
+   * record through the DataManager, which fans it out to the pipeline's
+   * incremental task update path. For a status change that path patches only the
+   * TaskItem header, so the card visibly moves to its new state without
+   * re-rendering (and therefore without discarding) an open
+   * Specification/Design-Doc editor.
+   *
+   * Best-effort: a missing client/get or a failed fetch must not break the PR
+   * action itself.
+   */
+  const refreshTaskAfterMutation = async (taskId: string | null): Promise<void> => {
+    if (!taskId || typeof ctx.context.taskClient?.get !== 'function') return;
+    try {
+      const fresh = await ctx.context.taskClient.get(taskId);
+      if (fresh) ctx.context.dataManager.updateTask(fresh);
+    } catch (error) {
+      console.error('Failed to refresh task after PR action:', error);
+    }
+  };
+
   actionRegistry.register('open_pr_dialog', async (_e, el) => {
     const taskId = el.getAttribute('data-task-id');
     const prId = el.getAttribute('data-pr-id');
@@ -58,6 +79,7 @@ export function registerPullRequestActions(
       context: ctx.context,
       onAccept: () => {
         deps.refreshPullRequests();
+        void refreshTaskAfterMutation(taskId);
       },
       onReject: () => {
         deps.refreshPullRequests();
@@ -83,6 +105,7 @@ export function registerPullRequestActions(
     try {
       await ctx.context.pullRequestClient.acceptPullRequest(prId);
       deps.refreshPullRequests();
+      await refreshTaskAfterMutation(el.getAttribute('data-task-id'));
     } catch (error: any) {
       console.error('Accept PR error:', error);
       alert(`Failed to accept Pull Request: ${error.message}`);

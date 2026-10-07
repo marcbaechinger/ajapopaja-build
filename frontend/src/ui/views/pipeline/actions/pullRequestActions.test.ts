@@ -187,6 +187,42 @@ describe('registerPullRequestActions', () => {
       expect(acceptPullRequest).not.toHaveBeenCalled();
     });
 
+    it('refreshes the mutated task through the DataManager after accepting', async () => {
+      const fresh = { id: 't1', status: 'submitted' };
+      const get = vi.fn().mockResolvedValue(fresh);
+      const updateTask = vi.fn();
+      (ctx.context as any).taskClient = { get };
+      (ctx.context as any).dataManager = { updateTask };
+
+      const action = getAction('accept_pr');
+      const el = document.createElement('button');
+      el.setAttribute('data-pr-id', 'pr1');
+      el.setAttribute('data-task-id', 't1');
+
+      await action(noEvent, el);
+
+      // The task is re-read and pushed through the DataManager so the pipeline's
+      // incremental update path can patch the TaskItem header in place.
+      expect(get).toHaveBeenCalledWith('t1');
+      expect(updateTask).toHaveBeenCalledWith(fresh);
+    });
+
+    it('still accepts the PR when refreshing the mutated task fails', async () => {
+      const get = vi.fn().mockRejectedValue(new Error('offline'));
+      (ctx.context as any).taskClient = { get };
+      (ctx.context as any).dataManager = { updateTask: vi.fn() };
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const action = getAction('accept_pr');
+      const el = document.createElement('button');
+      el.setAttribute('data-pr-id', 'pr1');
+      el.setAttribute('data-task-id', 't1');
+
+      await expect(action(noEvent, el)).resolves.toBeUndefined();
+      expect(acceptPullRequest).toHaveBeenCalledWith('pr1');
+      expect(deps.refreshPullRequests).toHaveBeenCalled();
+    });
+
     it('restores the button and surfaces the error message when accept fails', async () => {
       const alertSpy = vi.fn();
       vi.stubGlobal('alert', alertSpy);

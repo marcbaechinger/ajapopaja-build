@@ -77,6 +77,50 @@ export class TaskItem {
   }
 
   /**
+   * Updates only the header (status badge, title view/edit form, metadata row
+   * and the action toolbar) of an already-rendered TaskItem in place, leaving
+   * the body — most importantly an open Specification / Design-Doc editor —
+   * wholly untouched.
+   *
+   * This is used for server-driven state changes (e.g. a task moving from
+   * INPROGRESS to PULL_REQUEST_AVAILABLE, or PULL_REQUEST_AVAILABLE to
+   * SUBMITTED) where the previously rendered card would otherwise be thrown away
+   * by a full re-render, wiping unrelated unsaved edits.
+   *
+   * The collapse state and the presence of the status selector are read back
+   * from the current DOM so the replacement header stays consistent with the
+   * card it belongs to. The optimistic-concurrency ``data-version`` is refreshed
+   * on every version-bearing element in the card so follow-up actions submit the
+   * current version.
+   *
+   * It is a no-op when ``element`` is not (or no longer) a TaskItem root that
+   * contains a ``.task-header``.
+   */
+  static updateHeaderInPlace(element: Element, task: Task): void {
+    const header = element.querySelector('.task-header');
+    if (!header) return;
+
+    const isCollapsed =
+      element.querySelector('.task-body')?.classList.contains('hidden') ?? false;
+    const showStatusSelector = !!header.querySelector(
+      'select[data-action-change="change_task_status"]'
+    );
+
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = TaskItem.renderHeader(task, isCollapsed, showStatusSelector);
+    const newHeader = wrapper.firstElementChild;
+    if (!newHeader) return;
+    header.replaceWith(newHeader);
+
+    // Keep optimistic-concurrency in sync across the whole card: the header
+    // buttons and the body's move / accept-reject controls all carry a version.
+    const version = task.version ?? 1;
+    element.querySelectorAll<HTMLElement>('[data-version]').forEach(el => {
+      el.setAttribute('data-version', String(version));
+    });
+  }
+
+  /**
    * Tailwind classes applied to the "Schedule Execution" button while it is
    * focused programmatically (e.g. right after saving a Specification).
    *
@@ -144,26 +188,30 @@ export class TaskItem {
     );
   }
 
-  static render(
+  private static readonly STATUS_COLORS: Record<string, string> = {
+    [TaskStatus.CREATED]: 'bg-slate-600 text-slate-300',
+    [TaskStatus.SCHEDULED]: 'bg-blue-600 text-white animate-pulse',
+    [TaskStatus.PROPOSED]: 'bg-purple-600 text-white',
+    [TaskStatus.INPROGRESS]: 'bg-amber-600 text-white',
+    [TaskStatus.IMPLEMENTED]: 'bg-green-600 text-white',
+    [TaskStatus.SUBMITTED]: 'bg-teal-600 text-white',
+    [TaskStatus.PULL_REQUEST_AVAILABLE]: 'bg-cyan-600 text-white',
+    [TaskStatus.FAILED]: 'bg-red-600 text-white',
+    [TaskStatus.DISCARDED]: 'bg-slate-800 text-slate-500',
+  };
+
+  /**
+   * Renders just the ``.task-header`` of a TaskItem. Shared by ``render`` (which
+   * embeds it in the full card) and ``updateHeaderInPlace`` (which swaps it into
+   * an existing card), so the two can never drift apart.
+   */
+  private static renderHeader(
     task: Task,
-    showOrdering: boolean = true,
-    expandHistory: boolean = false,
-    isCollapsed: boolean = false,
-    showStatusSelector: boolean = false,
-    isSpecExpanded: boolean = true
+    isCollapsed: boolean,
+    showStatusSelector: boolean
   ): string {
     const taskId = task.id;
-    const statusColors: Record<string, string> = {
-      [TaskStatus.CREATED]: 'bg-slate-600 text-slate-300',
-      [TaskStatus.SCHEDULED]: 'bg-blue-600 text-white animate-pulse',
-      [TaskStatus.PROPOSED]: 'bg-purple-600 text-white',
-      [TaskStatus.INPROGRESS]: 'bg-amber-600 text-white',
-      [TaskStatus.IMPLEMENTED]: 'bg-green-600 text-white',
-      [TaskStatus.SUBMITTED]: 'bg-teal-600 text-white',
-      [TaskStatus.PULL_REQUEST_AVAILABLE]: 'bg-cyan-600 text-white',
-      [TaskStatus.FAILED]: 'bg-red-600 text-white',
-      [TaskStatus.DISCARDED]: 'bg-slate-800 text-slate-500',
-    };
+    const statusColors = TaskItem.STATUS_COLORS;
 
     const isProposed = task.status === TaskStatus.PROPOSED;
     const canSchedule = task.status === TaskStatus.CREATED;
@@ -185,9 +233,6 @@ export class TaskItem {
 
     const isEditableTitle = ([TaskStatus.CREATED, TaskStatus.PROPOSED] as any[]).includes(task.status);
 
-    const specHtml = renderSpecSection(task, isSpecExpanded);
-    const designDocHtml = renderDesignDocSection(task, isProposed);
-
     const titleEditAttributes: Record<string, string> = isEditableTitle ? { "data-action-click": "edit_title" } : {};
 
     // Shared styling for the primary actions in the header toolbar so the
@@ -197,10 +242,7 @@ export class TaskItem {
     const headerButtonBase =
       'inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg transition-all cursor-pointer';
 
-    return `
-      <div class="bg-app-bg p-4 rounded-lg border border-app-border flex flex-col gap-3 transition-all hover:border-app-accent-1/30 ${isSystem ? 'border-l-4 border-l-red-500' : ''} ${isProposed ? 'border-purple-500/50 shadow-lg shadow-purple-500/10' : ''}" 
-           data-view-type="task" data-view-id="${taskId}">
-        <div class="task-header flex justify-between items-start gap-3 cursor-pointer group/header" data-action-click="toggle_task_collapse">
+    return `        <div class="task-header flex justify-between items-start gap-3 cursor-pointer group/header" data-action-click="toggle_task_collapse">
           <div class="flex items-start gap-3 min-w-0 flex-1">
             <div class="p-1 mt-1 text-app-muted group-hover/header:text-app-text transition-all flex-shrink-0">
               ${Icon.render('chevronRight', { size: 16, className: `transform transition-transform ${isCollapsed ? '' : 'rotate-90'}` })}
@@ -315,7 +357,29 @@ export class TaskItem {
               </select>
             ` : ''}
           </div>
-        </div>
+        </div>`;
+  }
+
+  static render(
+    task: Task,
+    showOrdering: boolean = true,
+    expandHistory: boolean = false,
+    isCollapsed: boolean = false,
+    showStatusSelector: boolean = false,
+    isSpecExpanded: boolean = true
+  ): string {
+    const taskId = task.id;
+    const isProposed = task.status === TaskStatus.PROPOSED;
+    const isSystem = task.type === 'system';
+    const isInProgress = task.status === TaskStatus.INPROGRESS;
+
+    const specHtml = renderSpecSection(task, isSpecExpanded);
+    const designDocHtml = renderDesignDocSection(task, isProposed);
+
+    return `
+      <div class="bg-app-bg p-4 rounded-lg border border-app-border flex flex-col gap-3 transition-all hover:border-app-accent-1/30 ${isSystem ? 'border-l-4 border-l-red-500' : ''} ${isProposed ? 'border-purple-500/50 shadow-lg shadow-purple-500/10' : ''}" 
+           data-view-type="task" data-view-id="${taskId}">
+${TaskItem.renderHeader(task, isCollapsed, showStatusSelector)}
         
         <div class="task-body flex flex-col gap-3 ${isCollapsed ? 'hidden' : ''}">
           <div class="flex justify-between items-center mt-2">

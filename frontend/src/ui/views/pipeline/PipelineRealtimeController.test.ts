@@ -19,6 +19,7 @@ import { PipelineRealtimeController } from './PipelineRealtimeController.ts';
 import { createPipelineDetailCtx, type PipelineDetailCtx } from './PipelineDetailCtx.ts';
 import { LocalStorageManager } from '../../../core/LocalStorageManager.ts';
 import { ExecutionEngineView } from '../../components/ExecutionEngineView.ts';
+import { TaskItem } from '../../components/TaskItem.ts';
 import { TaskStatus } from '../../../core/domain.ts';
 import type { AppContext } from '../../../core/AppContext.ts';
 
@@ -289,6 +290,43 @@ describe('PipelineRealtimeController', () => {
       ctrl.removeTaskFromInProgressOnPullRequest(undefined);
       ctrl.removeTaskFromInProgressOnPullRequest('missing');
       expect(removeSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('patches the rendered TaskItem header in place when a PR is created from INPROGRESS', () => {
+      host.innerHTML = `
+        <div id="selected-task-view"></div>
+        <div id="execution-engine-view"></div>
+      `;
+      const view = host.querySelector('#selected-task-view') as HTMLElement;
+      const task = {
+        id: 't1',
+        title: 'Task',
+        spec: 'a spec',
+        status: TaskStatus.INPROGRESS,
+        deleted: false,
+        version: 1,
+        order: 0,
+        type: 'manual',
+        want_design_doc: false,
+      } as any;
+      ctx.state.allLoadedTasks = [task];
+      view.innerHTML = TaskItem.render(task, false, false, false, false, true);
+
+      const card = view.querySelector('[data-view-id="t1"]')!;
+      const bodyBefore = card.querySelector('.task-body');
+      vi.spyOn(ExecutionEngineView, 'removeInProgressItem').mockReturnValue(true);
+
+      makeController().removeTaskFromInProgressOnPullRequest('t1');
+
+      // Only the header is replaced: the card and its body survive, while the
+      // status badge and action toolbar reflect the new state.
+      expect(view.querySelector('[data-view-id="t1"]')).toBe(card);
+      expect(card.querySelector('.task-body')).toBe(bodyBefore);
+      expect(card.querySelector('.status-badge')!.textContent).toContain(
+        TaskStatus.PULL_REQUEST_AVAILABLE
+      );
+      expect(card.querySelector('[data-action-click="open_pr_dialog"]')).not.toBeNull();
+      expect(task.status).toBe(TaskStatus.PULL_REQUEST_AVAILABLE);
     });
   });
 

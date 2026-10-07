@@ -185,6 +185,71 @@ describe('TaskItem', () => {
     expect(designTextarea.value).toBe('unsaved design draft');
   });
 
+  it('updateHeaderInPlace patches only the header and preserves an open Specification editor', () => {
+    const container = document.createElement('div');
+    container.innerHTML = TaskItem.render({ ...mockTask, status: TaskStatus.INPROGRESS, version: 1 } as any);
+
+    // Open the spec editor and type an unsaved draft.
+    const specView = container.querySelector<HTMLElement>('.spec-view')!;
+    const specEdit = container.querySelector<HTMLElement>('.spec-edit')!;
+    specView.classList.add('hidden');
+    specEdit.classList.remove('hidden');
+    const specTextarea = specEdit.querySelector('textarea') as HTMLTextAreaElement;
+    specTextarea.value = 'unsaved spec draft';
+
+    const card = container.querySelector('[data-view-id="1"]')!;
+    const bodyBefore = card.querySelector('.task-body');
+    const headerBefore = card.querySelector('.task-header');
+
+    TaskItem.updateHeaderInPlace(container, {
+      ...mockTask,
+      status: TaskStatus.PULL_REQUEST_AVAILABLE,
+      version: 3,
+    } as any);
+
+    // The card and its body are kept (only the header node is replaced), so the
+    // unsaved Specification editor survives the status change.
+    expect(container.querySelector('[data-view-id="1"]')).toBe(card);
+    expect(card.querySelector('.task-body')).toBe(bodyBefore);
+    expect(card.querySelector('.task-header')).not.toBe(headerBefore);
+    expect(specEdit.classList.contains('hidden')).toBe(false);
+    expect(specTextarea.value).toBe('unsaved spec draft');
+
+    // The header reflects the new state...
+    expect(card.querySelector('.status-badge')!.textContent).toContain(
+      TaskStatus.PULL_REQUEST_AVAILABLE
+    );
+    expect(card.querySelector('[data-action-click="open_pr_dialog"]')).not.toBeNull();
+    // ...and the optimistic-concurrency version is refreshed everywhere.
+    expect(card.querySelector('.title-container')!.getAttribute('data-version')).toBe('3');
+    expect(card.querySelector('.spec-container')!.getAttribute('data-version')).toBe('3');
+  });
+
+  it('updateHeaderInPlace preserves the collapsed state and status selector', () => {
+    const container = document.createElement('div');
+    container.innerHTML = TaskItem.render(mockTask as any, true, false, true, true);
+
+    TaskItem.updateHeaderInPlace(container, {
+      ...mockTask,
+      status: TaskStatus.SCHEDULED,
+      version: 2,
+    } as any);
+
+    // Collapsed body stays collapsed and the chevron is not rotated.
+    expect(container.querySelector('.task-body')!.classList.contains('hidden')).toBe(true);
+    expect(container.querySelector('.task-header .transform')!.className).not.toContain('rotate-90');
+    // The status selector is re-rendered and reflects the new value.
+    const select = container.querySelector('select[data-action-change="change_task_status"]') as HTMLSelectElement;
+    expect(select).not.toBeNull();
+    expect(select.value).toBe(TaskStatus.SCHEDULED);
+  });
+
+  it('updateHeaderInPlace is a no-op for an element without a task header', () => {
+    const el = document.createElement('div');
+    expect(() => TaskItem.updateHeaderInPlace(el, mockTask as any)).not.toThrow();
+    expect(el.innerHTML).toBe('');
+  });
+
   describe('focusScheduleExecution', () => {
     const mount = (html: string) => {
       const el = document.createElement('div');

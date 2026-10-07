@@ -561,6 +561,48 @@ describe('SelectedTaskController', () => {
       expect(ctx.state.selectedTask!.title).toBe('New');
     });
 
+    it('updates only the header in place for a status change and preserves the body/editor', () => {
+      ctx.state.selectedTask = makeTask({ status: TaskStatus.INPROGRESS });
+      ctx.state.allLoadedTasks = [makeTask({ status: TaskStatus.INPROGRESS })];
+      const viewEl = host.querySelector('#selected-task-view') as HTMLElement;
+      viewEl.innerHTML = TaskItem.render(
+        makeTask({ status: TaskStatus.INPROGRESS, version: 1 }),
+        false,
+        false,
+        false,
+        false,
+        true
+      );
+
+      // Open the Specification editor with an unsaved draft so we can prove the
+      // header-only patch does not wipe the body.
+      const specEdit = viewEl.querySelector<HTMLElement>('.spec-edit')!;
+      viewEl.querySelector<HTMLElement>('.spec-view')!.classList.add('hidden');
+      specEdit.classList.remove('hidden');
+      const textarea = specEdit.querySelector('textarea') as HTMLTextAreaElement;
+      textarea.value = 'unsaved spec draft';
+
+      const cardBefore = viewEl.querySelector('[data-view-id="c1"]');
+      const bodyBefore = cardBefore!.querySelector('.task-body');
+
+      controller.update(makeTask({ status: TaskStatus.PULL_REQUEST_AVAILABLE, version: 2 }));
+
+      // The sidebar sections are refreshed (the task may have moved), but the
+      // selected view is patched in place instead of being re-rendered.
+      expect(refresh.backlog).toHaveBeenCalledTimes(1);
+      expect(refresh.executionEngine).toHaveBeenCalledTimes(1);
+      expect(refresh.selectedTask).not.toHaveBeenCalled();
+      expect(host.querySelector('#selected-task-view')).toBe(viewEl);
+      expect(viewEl.querySelector('[data-view-id="c1"]')).toBe(cardBefore);
+      expect(cardBefore!.querySelector('.task-body')).toBe(bodyBefore);
+      expect(cardBefore!.querySelector('.status-badge')!.textContent).toContain(
+        TaskStatus.PULL_REQUEST_AVAILABLE
+      );
+      expect(specEdit.classList.contains('hidden')).toBe(false);
+      expect(textarea.value).toBe('unsaved spec draft');
+      expect(ctx.state.selectedTask!.status).toBe(TaskStatus.PULL_REQUEST_AVAILABLE);
+    });
+
     it('does a full repaint (backlog + selected view + engine) for a non-title change', () => {
       ctx.state.selectedTask = makeTask({ id: 'c1', spec: 'old' });
       ctx.state.allLoadedTasks = [makeTask({ id: 'c1', spec: 'old' })];

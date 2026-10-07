@@ -16,6 +16,7 @@
 
 import { ExecutionEngineView } from '../../components/ExecutionEngineView.ts';
 import { PullRequestSection } from '../../components/PullRequestSection.ts';
+import { TaskItem } from '../../components/TaskItem.ts';
 import { TaskStatus } from '../../../core/domain.ts';
 import type { Pipeline, Task } from '../../../core/domain.ts';
 import type { SpecProposal } from '../../../core/clients/SpecBotClient.ts';
@@ -270,7 +271,17 @@ export class PipelineRealtimeController {
 
     task.status = TaskStatus.PULL_REQUEST_AVAILABLE;
 
-    const engine = this.deps.getHost()?.querySelector('#execution-engine-view');
+    const host = this.deps.getHost();
+
+    // The task may be displayed as a full TaskItem (e.g. the selected task in
+    // the main content area). Patch only its header so the status badge and
+    // action toolbar reflect the new state without re-rendering the body and
+    // discarding an open Specification/Design-Doc editor.
+    host
+      ?.querySelectorAll<HTMLElement>(`[data-view-id="${taskId}"]`)
+      .forEach((el) => TaskItem.updateHeaderInPlace(el, task));
+
+    const engine = host?.querySelector('#execution-engine-view');
     if (engine) {
       ExecutionEngineView.removeInProgressItem(engine as HTMLElement, taskId);
     }

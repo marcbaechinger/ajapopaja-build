@@ -43,10 +43,18 @@ export class SelectedTaskController {
   }
 
   /**
-   * Incoming task update: upserts the local cache and either refreshes the
-   * title in place (title-only change) or repaints the backlog, the execution
-   * engine and, only when the updated task is the selected one, the selected
-   * task view. Unrelated updates never touch `#selected-task-view`, so an open
+   * Incoming task update: upserts the local cache and then repaints only the
+   * part of the UI that actually needs to change:
+   *
+   * - a title-only change patches the title in place,
+   * - a status-only change patches just the TaskItem header in place (so an open
+   *   Specification/Design-Doc editor in the body survives the server-driven
+   *   state transition) while the backlog / execution engine are refreshed
+   *   because the task may have moved between sections,
+   * - anything else repaints the backlog, the execution engine and, only when
+   *   the updated task is the selected one, the selected task view.
+   *
+   * Unrelated updates never touch `#selected-task-view`, so an open
    * Specification/Design-Doc editor there is preserved.
    */
   update(task: Task): void {
@@ -55,7 +63,7 @@ export class SelectedTaskController {
     if (!taskId) return;
 
     // Update local cache, capturing the previous state so we can detect a
-    // title-only change (which must not trigger a full re-render).
+    // title-/status-only change (which must not trigger a full re-render).
     const index = ctx.state.allLoadedTasks.findIndex(t => t.id === taskId);
     const prev = index !== -1 ? ctx.state.allLoadedTasks[index] : null;
     if (index !== -1) {
@@ -72,6 +80,18 @@ export class SelectedTaskController {
       const onlyTitle = this.isTitleOnlyChange(prev, task);
       if (onlyTitle) {
         this.updateTitleOnly(task);
+        return;
+      }
+
+      // A status transition only affects the card header (badge + action
+      // toolbar) from the card's perspective; the sidebar sections are still
+      // refreshed because the task may have moved between them. Patch the header
+      // in place instead of re-rendering the whole card, so an open
+      // Specification/Design-Doc editor in the body is not discarded.
+      if (this.isStatusChange(prev, task)) {
+        this.updateHeaderOnly(task);
+        ctx.refresh.backlog();
+        ctx.refresh.executionEngine();
         return;
       }
     }
@@ -197,6 +217,35 @@ export class SelectedTaskController {
     };
     const onlyTitle = JSON.stringify(comparable(prev)) === JSON.stringify(comparable(next));
     return onlyTitle;
+  }
+
+  /**
+   * Returns whether an incoming task update carries a status change. Such an
+   * update is reflected by patching only the TaskItem header in place (see
+   * {@link updateHeaderOnly}) so a server-driven state transition cannot wipe an
+   * open Specification/Design-Doc editor in the card body.
+   */
+  private isStatusChange(prev: Task, next: Task): boolean {
+    return prev.status !== next.status;
+  }
+
+  /**
+   * Patches only the header of every rendered TaskItem for the task in place,
+   * keeping the rest of each card (and therefore any open editor) untouched.
+   */
+  private updateHeaderOnly(task: Task): void {
+    const { ctx } = this.deps;
+    const host = this.deps.getHost();
+    const taskId = task.id ?? '';
+    if (!taskId || !host) return;
+
+    if (ctx.state.selectedTask?.id === taskId) {
+      ctx.state.selectedTask = task;
+    }
+
+    host
+      .querySelectorAll<HTMLElement>(`[data-view-id="${taskId}"]`)
+      .forEach((el) => TaskItem.updateHeaderInPlace(el, task));
   }
 
   /**
