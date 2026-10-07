@@ -228,27 +228,6 @@ describe('PipelineDetailView Layout', () => {
     expect(backlog.innerHTML).not.toContain('ring-app-accent-1/40');
   });
 
-  it('should update a task order via the update_task_order action', async () => {
-    mockContext.taskClient.listByPipeline.mockResolvedValue([]);
-    const view = new PipelineDetailView(mockContext, { id: 'p1' });
-    view.mount(container);
-    await view.refreshTasks();
-
-    const updateOrderAction = mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === 'update_task_order')![1];
-    const containerEl = document.createElement('div');
-    containerEl.setAttribute('data-view-id', 't1');
-    const input = document.createElement('input');
-    input.type = 'number';
-    input.value = '25';
-    input.setAttribute('data-task-id', 't1');
-    input.setAttribute('data-version', '3');
-    containerEl.appendChild(input);
-
-    await updateOrderAction(new Event('change'), input);
-
-    expect(mockContext.taskClient.updateDetails).toHaveBeenCalledWith('t1', 3, { order: 25 });
-  });
-
   it('should render scheduled tasks in the right ExecutionEngineView and remove them when unscheduled', async () => {
     let tasksHandler: ((payload: any) => void) | undefined;
     mockContext.dataManager.on = vi.fn((query: string, cb: any) => {

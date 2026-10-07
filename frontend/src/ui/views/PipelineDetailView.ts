@@ -19,7 +19,6 @@ import { type ContentTab } from '../../core/PipelineRoute.ts';
 import { PipelineSubRoute } from './pipeline/PipelineSubRoute.ts';
 import { AppContext } from '../../core/AppContext.ts';
 import { Pipeline, TaskStatus, Task, type GitStatusDetails } from '../../core/domain.ts';
-import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
 import { StatsDialog } from '../components/StatsDialog.ts';
 import { BacklogView } from '../components/BacklogView.ts';
 import { PipelineHistoryView } from '../components/PipelineHistoryView.ts';
@@ -39,6 +38,7 @@ import { registerBotActions, openCoderBotDialog } from './pipeline/actions/botAc
 import { registerMiscActions } from './pipeline/actions/miscActions.ts';
 import { registerTaskSpecActions } from './pipeline/actions/taskSpecActions.ts';
 import { registerTaskDesignDocActions } from './pipeline/actions/taskDesignDocActions.ts';
+import { registerTaskLifecycleActions } from './pipeline/actions/taskLifecycleActions.ts';
 import EasyMDE from 'easymde';
 import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
 
@@ -314,6 +314,10 @@ export class PipelineDetailView extends View {
 
     registerTaskDesignDocActions(this.ctx, {});
 
+    registerTaskLifecycleActions(this.ctx, {
+      setContentTab: (tab, opts) => this.setContentTab(tab, opts),
+    });
+
     this.context.actionRegistry.register('start_interactive_session', () =>
       this.startInteractiveSession()
     );
@@ -348,156 +352,6 @@ export class PipelineDetailView extends View {
       this.syncInteractiveSession();
     });
 
-    this.context.actionRegistry.register('select_task', (_e, el) => {
-      const taskId = (el.closest('[data-view-id]') as HTMLElement | null)?.getAttribute('data-view-id') || el.getAttribute('data-view-id') || el.getAttribute('data-task-id');
-      if (!taskId) return;
-      this.pendingSpecEditTaskId = null;
-      this.selectedTask = this.allLoadedTasks.find(t => t.id === taskId) || null;
-      // Selecting a task must surface it in the main content area: switch the
-      // active tab back to the Task editor so the selection is visible even
-      // when the Coding Agent or File Browser tab was active.
-      this.setContentTab('task-editor', { hash: 'push' });
-      this.refreshBacklog();
-      this.refreshSelectedTask();
-    });
-
-    this.context.actionRegistry.register('toggle_task_collapse', (_e, el) => {
-      const taskId = el.closest('[data-view-id]')?.getAttribute('data-view-id');
-      if (!taskId) return;
-
-      const body = el.closest('[data-view-id]')?.querySelector('.task-body');
-      const icon = el.querySelector('svg.transform');
-      if (!body || !icon) return;
-
-      const isHidden = body.classList.toggle('hidden');
-      icon.classList.toggle('rotate-90', !isHidden);
-
-      if (isHidden) this.collapsedTasks.add(taskId);
-      else this.collapsedTasks.delete(taskId);
-    });
-
-    this.context.actionRegistry.register('schedule_task', async (_e, el) => {
-      const taskId = el.closest('[data-view-id]')?.getAttribute('data-view-id');
-      const version = parseInt(el.getAttribute('data-version') || '1');
-      if (!taskId) return;
-
-      try {
-        await this.context.taskClient.updateStatus(taskId, TaskStatus.SCHEDULED, version);
-        // Refresh handled by WS
-      } catch (error) {
-        alert('Failed to schedule task');
-      }
-    });
-
-    this.context.actionRegistry.register('unschedule_task', async (_e, el) => {
-      const taskId = el.closest('[data-view-id]')?.getAttribute('data-view-id');
-      const version = parseInt(el.getAttribute('data-version') || '1');
-      if (!taskId) return;
-
-      try {
-        await this.context.taskClient.updateStatus(taskId, TaskStatus.CREATED, version);
-        // Refresh handled by WS
-      } catch (error) {
-        alert('Failed to unschedule task');
-      }
-    });
-
-    this.context.actionRegistry.register('cancel_progress', async (_e, el) => {
-      const taskId = el.closest('[data-view-id]')?.getAttribute('data-view-id');
-      const version = parseInt(el.getAttribute('data-version') || '1');
-      if (!taskId) return;
-
-      try {
-        await this.context.taskClient.updateStatus(taskId, TaskStatus.SCHEDULED, version);
-        // Refresh handled by WS
-      } catch (error) {
-        alert('Failed to cancel progress');
-      }
-    });
-
-    this.context.actionRegistry.register('move_task_up', async (_e, el) => {
-      const taskId = el.closest('[data-view-id]')?.getAttribute('data-view-id');
-      const version = parseInt(el.getAttribute('data-version') || '1');
-      const currentOrder = parseInt(el.getAttribute('data-order') || '0');
-      if (!taskId) return;
-
-      try {
-        await this.context.taskClient.updateDetails(taskId, version, { order: currentOrder - 1 });
-        // Refresh handled by WS
-      } catch (error) {
-        alert('Failed to move task');
-      }
-    });
-
-    this.context.actionRegistry.register('move_task_down', async (_e, el) => {
-      const taskId = el.closest('[data-view-id]')?.getAttribute('data-view-id');
-      const version = parseInt(el.getAttribute('data-version') || '1');
-      const currentOrder = parseInt(el.getAttribute('data-order') || '0');
-      if (!taskId) return;
-
-      try {
-        await this.context.taskClient.updateDetails(taskId, version, { order: currentOrder + 1 });
-        // Refresh handled by WS
-      } catch (error) {
-        alert('Failed to move task');
-      }
-    });
-
-    this.context.actionRegistry.register('update_task_order', async (_e, el) => {
-      const taskId = el.closest('[data-view-id]')?.getAttribute('data-view-id') || el.getAttribute('data-task-id');
-      const version = parseInt(el.getAttribute('data-version') || el.closest('[data-view-id]')?.getAttribute('data-version') || '1');
-      const input = el as HTMLInputElement;
-      const newOrder = parseInt(input.value, 10);
-      if (!taskId || Number.isNaN(newOrder)) return;
-
-      try {
-        await this.context.taskClient.updateDetails(taskId, version, { order: newOrder });
-        // Refresh handled by WS
-      } catch (error) {
-        alert('Failed to update order');
-      }
-    });
-
-    this.context.actionRegistry.register('fail_task', async (_e, el) => {
-      const taskId = el.closest('[data-view-id]')?.getAttribute('data-view-id');
-      const version = parseInt(el.getAttribute('data-version') || '1');
-      if (!taskId) return;
-
-      const confirmed = await new ConfirmationDialog(
-        'Mark Task as Failed',
-        'Are you sure you want to mark this task as FAILED? This may trigger an automated fix sequence.',
-        'Mark Failed'
-      ).show();
-
-      if (!confirmed) return;
-
-      try {
-        await this.context.taskClient.updateStatus(taskId, TaskStatus.FAILED, version);
-        // Refresh handled by WS
-      } catch (error) {
-        alert('Failed to update task');
-      }
-    });
-
-    this.context.actionRegistry.register('delete_task', async (_e, el) => {
-      const taskId = el.closest('[data-view-id]')?.getAttribute('data-view-id');
-      if (!taskId) return;
-
-      const confirmed = await new ConfirmationDialog(
-        'Delete Task',
-        'Are you sure you want to delete this task? This action cannot be undone.',
-        'Delete'
-      ).show();
-
-      if (!confirmed) return;
-
-      try {
-        await this.context.taskClient.delete(taskId);
-        // Refresh handled by WS
-      } catch (error) {
-        alert('Failed to delete task');
-      }
-    });
   }
 
   async loadPipeline() {
