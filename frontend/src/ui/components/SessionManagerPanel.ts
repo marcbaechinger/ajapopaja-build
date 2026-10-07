@@ -509,8 +509,15 @@ export class SessionManagerPanel {
       return;
     }
 
+    // Both toggles are visibility filters over the in-memory session cache.
+    // The service only *merges* fetched records (it never prunes), and batch
+    // (`coderbot`) sessions are also upserted live from websocket events, so
+    // filtering must happen here rather than relying on the backend `kind`
+    // query alone.
     const all = (service.getSessions?.() ?? []).filter(
-      (s) => this.showDiscarded || s.status !== 'discarded'
+      (s) =>
+        (this.showDiscarded || s.status !== 'discarded') &&
+        (this.showBatch || s.kind !== 'coderbot')
     );
     const scoped = this.pipelineId
       ? all.filter((s) => s.pipeline_id === this.pipelineId)

@@ -125,6 +125,34 @@ describe('SessionManagerPanel', () => {
     expect(body.textContent).not.toContain('Paused one');
   });
 
+  it('hides batch (coderbot) sessions unless the Batch toggle is checked', () => {
+    const { context } = makeContext([
+      makeSession('u1', { kind: 'interactive', label: 'Interactive one' }),
+      makeSession('u2', { kind: 'coderbot', status: 'completed', label: 'Batch one' }),
+    ]);
+    const panel = new SessionManagerPanel(context as any);
+    panel.open();
+
+    const body = panel['container'].querySelector('#session-manager-body') as HTMLElement;
+    const showBatch = panel['container'].querySelector(
+      '#session-manager-show-batch'
+    ) as HTMLInputElement;
+
+    // Batch sessions are hidden by default...
+    expect(body.textContent).toContain('Interactive one');
+    expect(body.textContent).not.toContain('Batch one');
+
+    // ...and appear once the toggle is enabled.
+    showBatch.checked = true;
+    showBatch.dispatchEvent(new Event('change'));
+    expect(body.textContent).toContain('Batch one');
+
+    // Unticking it hides them again.
+    showBatch.checked = false;
+    showBatch.dispatchEvent(new Event('change'));
+    expect(body.textContent).not.toContain('Batch one');
+  });
+
   it('highlights the selected filter chip', () => {
     const { context } = makeContext([
       makeSession('u1', { status: 'paused' }),
