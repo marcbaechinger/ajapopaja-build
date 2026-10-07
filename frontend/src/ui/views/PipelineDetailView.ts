@@ -26,7 +26,6 @@ import { StatsDialog } from '../components/StatsDialog.ts';
 import { DesignDocDialog } from '../components/DesignDocDialog.ts';
 import { DesignDocDiffDialog } from '../components/DesignDocDiffDialog.ts';
 import { BacklogView } from '../components/BacklogView.ts';
-import { ExecutionEngineView } from '../components/ExecutionEngineView.ts';
 import { PipelineHistoryView } from '../components/PipelineHistoryView.ts';
 import { PullRequestSection } from '../components/PullRequestSection.ts';
 import { InteractiveCodingView } from '../components/InteractiveCodingView.ts';
@@ -38,6 +37,7 @@ import { createPipelineDetailCtx, type DevProcessState, type PipelineDetailCtx }
 import { PipelineDetailLayout } from './pipeline/PipelineDetailLayout.ts';
 import { ExecutionEngineController } from './pipeline/ExecutionEngineController.ts';
 import { PipelineSessionListController } from './pipeline/PipelineSessionListController.ts';
+import { PipelineRealtimeController } from './pipeline/PipelineRealtimeController.ts';
 import { registerPullRequestActions } from './pipeline/actions/pullRequestActions.ts';
 import { registerBotActions, openCoderBotDialog } from './pipeline/actions/botActions.ts';
 import { registerMiscActions } from './pipeline/actions/miscActions.ts';
@@ -98,6 +98,7 @@ export class PipelineDetailView extends View {
   private set pendingScheduleFocusTaskId(value: string | null) { this.ctx.state.pendingScheduleFocusTaskId = value; }
   private engine: ExecutionEngineController | null = null;
   private sessionList: PipelineSessionListController | null = null;
+  private realtime: PipelineRealtimeController | null = null;
 
   // Which content tab is active in the prep column. The tab list is always
   // visible; the Coding Agent tab is always selectable and shows its empty
@@ -127,14 +128,6 @@ export class PipelineDetailView extends View {
   // Persisted per pipeline so the chosen layout survives reloads.
   private get sidebarCollapsed(): boolean { return this.ctx.state.sidebarCollapsed; }
   private set sidebarCollapsed(value: boolean) { this.ctx.state.sidebarCollapsed = value; }
-
-  private loadPendingReviews() {
-    this.pendingReviews = this.storage.get<string[]>(`pending_reviews:${this.pipelineId}`, []) || [];
-  }
-
-  private savePendingReviews() {
-    this.storage.put(`pending_reviews:${this.pipelineId}`, this.pendingReviews);
-  }
 
   private get docbotState(): DocbotState { return this.ctx.state.docbotState; }
   private set docbotState(value: DocbotState) { this.ctx.state.docbotState = value; }
@@ -187,9 +180,25 @@ export class PipelineDetailView extends View {
     this.pendingTaskId = route.taskId;
     this.sidebarCollapsed =
       this.storage.get<boolean>(`sidebar_collapsed:${this.pipelineId}`, false) === true;
-    this.loadPendingReviews();
     this.registerActions();
-    this.setupDataManagerSubscriptions();
+    this.realtime = new PipelineRealtimeController({
+      ctx: this.ctx,
+      getHost: () => this.container,
+      callbacks: {
+        refreshTasks: () => this.refreshTasks(),
+        // P7 will introduce `SelectedTaskController.update`; the shell method is
+        // the pre-P7 implementation of the same incremental update.
+        updateSingleTask: (task) => this.updateSingleTask(task),
+        scheduleRefreshGitStatus: () => this.scheduleRefreshGitStatus(),
+        openCodingAgent: () => {
+          this.setContentTab('coding-agent', { hash: 'push' });
+          this.syncInteractiveSession();
+        },
+        syncInteractiveSession: () => this.syncInteractiveSession(),
+      },
+    });
+    this.realtime.loadPendingReviews();
+    this.realtime.start();
     this.setupKeyboardShortcuts();
   }
 
@@ -213,278 +222,6 @@ export class PipelineDetailView extends View {
       }
     };
     document.addEventListener('keydown', this.keydownHandler);
-  }
-
-  private setupDataManagerSubscriptions() {
-    const dm = this.context.dataManager;
-
-    // Listen for pipeline metadata updates
-    this.unsubs.push(dm.on(`pipeline:${this.pipelineId}`, (pipeline: Pipeline) => {
-      this.pipeline = pipeline;
-      this.updateHeader();
-    }));
-
-    // Listen for task updates (created, updated, moved, deleted)
-    this.unsubs.push(dm.on(`pipeline:tasks:${this.pipelineId}`, (taskOrDeleted: any) => {
-      if (!taskOrDeleted) return;
-
-      if (taskOrDeleted.deleted) {
-        this.allLoadedTasks = this.allLoadedTasks.filter(t => t.id !== taskOrDeleted.id);
-        this.refreshBacklog();
-        this.refreshSelectedTask();
-        this.refreshExecutionEngine();
-      } else {
-        const task = taskOrDeleted as Task;
-        this.updateSingleTask(task);
-        if (task.status === TaskStatus.IMPLEMENTED) {
-          this.scheduleRefreshGitStatus();
-        }
-      }
-      this.updateHeader();
-    }));
-
-    // Listen for process and bot status updates via specific WS event queries
-    const eventHandlers: Record<string, (payload: any) => void> = {
-      'DOCBOT_STARTED': (p) => { this.docbotState = { status: 'inProgress', taskId: p.task_id }; },
-      'DOCBOT_COMPLETED': (p) => {
-        const result = p.result;
-        if (result?.status === 'no_update_needed') {
-          this.docbotState = { status: 'noUpdate', taskId: p.task_id, reason: result.reason };
-        } else if (result?.status === 'update_needed') {
-          if (this.docbotState.status !== 'ready') {
-            this.fetchDocBotPreview(p.task_id);
-          }
-        } else if (this.docbotState.status !== 'ready') {
-          this.docbotState = { status: 'none', taskId: null };
-        }
-      },
-      'DOCBOT_PREVIEW_READY': (p) => { this.fetchDocBotPreview(p.task_id); },
-      'REVIEWBOT_STARTED': (p) => { this.reviewbotState = { status: 'inProgress', taskId: p.task_id }; },
-      'REVIEWBOT_COMPLETED': () => { this.reviewbotState = { status: 'none', taskId: null }; },
-      'REVIEWBOT_REVIEW_READY': (p) => {
-        this.reviewbotState = { status: 'none', taskId: null };
-        const taskId = p.id || p._id || p.task_id;
-        if (taskId && !this.pendingReviews.includes(taskId)) {
-          this.pendingReviews.push(taskId);
-          this.savePendingReviews();
-        }
-      },
-
-      'ARCHBOT_STARTED': (p) => { this.archbotState = { status: 'inProgress', taskId: p.task_id }; },
-      'ARCHBOT_COMPLETED': () => { this.archbotState = { status: 'none', taskId: null }; },
-      'SPECAGENT_STARTED': (p) => {
-        console.log('[SpecAgent] (4) PipelineDetailView SPECAGENT_STARTED', p);
-        this.specagentState = { status: 'inProgress', taskId: p.task_id };
-      },
-      'SPECAGENT_COMPLETED': (p) => {
-        console.log('[SpecAgent] (4) PipelineDetailView SPECAGENT_COMPLETED', p);
-        this.specagentState = { status: 'none', taskId: null };
-      },
-      'SPECAGENT_SPEC_READY': (p) => {
-        console.log(
-          '[SpecAgent] (4) PipelineDetailView SPECAGENT_SPEC_READY',
-          p,
-          'view pipelineId=',
-          this.pipelineId
-        );
-        if (p?.pipeline_id && p.pipeline_id !== this.pipelineId) {
-          console.warn('[SpecAgent] (4) drop SPEC_READY: pipeline mismatch');
-          return;
-        }
-        if (!p?.task_id) {
-          console.warn('[SpecAgent] (4) drop SPEC_READY: missing task_id');
-          return;
-        }
-        // Always reconcile, even when the owning task card is not mounted: the
-        // proposal is surfaced through the header badge and (once selected) the
-        // inline controls. The notification framework carries the primary path.
-        void this.fetchSpecProposal(p.task_id);
-      },
-      'INTERACTIVE_STARTED': (p) => {
-        if (p?.pipeline_id && p.pipeline_id !== this.pipelineId) return;
-        // Re-attach to the freshly started session, then switch into the
-        // interactive view for this pipeline.
-        Promise.resolve(this.context.interactiveCodingService?.refreshSession?.()).then(() => {
-          this.setContentTab('coding-agent', { hash: 'push' });
-          this.syncInteractiveSession();
-        });
-      },
-      'INTERACTIVE_STOPPED': (p) => {
-        if (p?.pipeline_id && p.pipeline_id !== this.pipelineId) return;
-        // Keep the user on the Coding Agent tab: the always-mounted view now
-        // shows the ended log / empty state itself.
-        this.syncInteractiveSession();
-      },
-      'DEV_PROCESS_STARTED': (p) => {
-        this.devProcessState = {
-          running: true,
-          pid: typeof p?.pid === 'number' ? p.pid : null,
-          port: typeof p?.port === 'number' ? p.port : null,
-        };
-      },
-      'DEV_PROCESS_EXITED': () => {
-        this.devProcessState = { running: false, pid: null, port: null };
-      },
-      // Insert a newly created PR precisely into its container instead of
-      // re-running the full task refresh (which re-renders the whole prep column
-      // and re-publishes every task, cascading UI re-renders page-wide).
-      'PULL_REQUEST_CREATED': (p) => {
-        this.refreshPullRequests();
-        // The CoderBot also transitions the task IN_PROGRESS ->
-        // PULL_REQUEST_AVAILABLE, but only broadcasts the PR event (no task-status
-        // update). Detect it here and remove the task from the engine's In Progress
-        // list in place so the sidebar stays accurate without a full re-render.
-        this.removeTaskFromInProgressOnPullRequest(p?.task_id);
-      },
-    };
-
-    Object.entries(eventHandlers).forEach(([event, handler]) => {
-      this.unsubs.push(dm.on(`ws:${event}:${this.pipelineId}`, (payload) => {
-        handler(payload);
-        this.updateHeader();
-      }));
-    });
-  }
-
-  private get docbotPreviewData(): any { return this.ctx.state.docbotPreviewData; }
-  private set docbotPreviewData(value: any) { this.ctx.state.docbotPreviewData = value; }
-
-  private async fetchPullRequests() {
-    try {
-      this.pullRequests = await this.context.pullRequestClient.getPullRequestsByPipeline(this.pipelineId);
-      this.refreshTasks(); // PRs are rendered above the content tabs
-    } catch (error) {
-      console.error('Failed to fetch pull requests:', error);
-    }
-  }
-
-  /**
-   * Fetches the pull requests and refreshes only the dedicated pull-request
-   * container in the preparation column. This avoids re-rendering the whole
-   * prep column and, crucially, avoids re-publishing every task through the
-   * DataManager (which would fire updateSingleTask per task and cascade into
-   * full backlog/selection/engine re-renders). Used for the intrusive
-   * PULL_REQUEST_CREATED websocket insert.
-   */
-  private async refreshPullRequests() {
-    try {
-      const prs = await this.context.pullRequestClient.getPullRequestsByPipeline(this.pipelineId);
-      this.pullRequests = prs;
-      const sectionEl = this.container?.querySelector('#pull-request-section');
-      if (sectionEl) {
-        sectionEl.innerHTML = PullRequestSection.render(this.pullRequests);
-      }
-    } catch (error) {
-      console.error('Failed to fetch pull requests:', error);
-    }
-  }
-
-  /**
-   * When a CoderBot creates a pull request it also transitions the task
-   * IN_PROGRESS -> PULL_REQUEST_AVAILABLE, but that status change is only
-   * broadcast as a PULL_REQUEST_CREATED event (no task-status update flows
-   * through the DataManager). Reflect it in the local cache and remove the task
-   * from the ExecutionEngineView's In Progress list via a targeted, in-place DOM
-   * removal so the rest of the sidebar (PiView mount, queue, history) is not
-   * disturbed.
-   */
-  private removeTaskFromInProgressOnPullRequest(taskId?: string) {
-    if (!taskId) return;
-    const task = this.allLoadedTasks.find(t => t.id === taskId);
-    if (!task) return;
-    // Only act when the transition actually comes from IN_PROGRESS.
-    if (task.status !== TaskStatus.INPROGRESS) return;
-
-    task.status = TaskStatus.PULL_REQUEST_AVAILABLE;
-
-    const engine = this.container?.querySelector('#execution-engine-view');
-    if (engine) {
-      ExecutionEngineView.removeInProgressItem(engine as HTMLElement, taskId);
-    }
-  }
-
-  private async fetchDocBotPreview(taskId: string) {
-    try {
-      const response = await fetch(`/api/pipelines/${this.pipelineId}/docbot/preview/${taskId}`, {
-        headers: {
-          'Authorization': `Bearer ${this.context.authService.getAccessToken()}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        this.docbotPreviewData = data;
-        this.docbotState = {
-          status: 'ready',
-          taskId: data.task_id,
-        };
-        this.updateHeader();
-      }
-    } catch (error) {
-      console.error('Failed to fetch DocBot preview:', error);
-    }
-  }
-
-  private async fetchSpecProposal(taskId: string) {
-    if (!taskId || !this.context.specBotClient) {
-      console.warn('[SpecAgent] (5) fetchSpecProposal skipped', {
-        taskId,
-        hasClient: !!this.context.specBotClient,
-      });
-      return;
-    }
-    console.log(
-      `[SpecAgent] (5) fetchSpecProposal GET /pipelines/${this.pipelineId}/specagent/proposal/${taskId}`
-    );
-    try {
-      const proposal = await this.context.specBotClient.getProposal(this.pipelineId, taskId);
-      console.log('[SpecAgent] (5) fetchSpecProposal response', proposal);
-      if (!proposal) {
-        console.warn('[SpecAgent] (5) drop: proposal response was falsy');
-        return;
-      }
-      this.upsertPendingSpecProposal(proposal);
-      this.renderPendingSpecProposals();
-      this.updateHeader();
-    } catch (error) {
-      console.error('[SpecAgent] (5) fetchSpecProposal failed', error);
-    }
-  }
-
-  /**
-   * Reconciles outstanding proposals from the durable backend cache. Called on
-   * every full task refresh so a proposal that finished while the user was on
-   * another page (or before a reload) is re-surfaced when the pipeline opens.
-   */
-  private async fetchSpecProposals() {
-    const client = this.context.specBotClient;
-    if (!client?.getProposals) return;
-    try {
-      const proposals = await client.getProposals(this.pipelineId);
-      this.pendingSpecProposals = Array.isArray(proposals) ? proposals : [];
-      this.renderPendingSpecProposals();
-      this.updateHeader();
-    } catch (error) {
-      console.error('[SpecAgent] Failed to fetch pending proposals:', error);
-    }
-  }
-
-  private upsertPendingSpecProposal(proposal: SpecProposal) {
-    const index = this.pendingSpecProposals.findIndex(
-      (p) => p.task_id === proposal.task_id
-    );
-    if (index === -1) this.pendingSpecProposals.push(proposal);
-    else this.pendingSpecProposals[index] = proposal;
-  }
-
-  private removePendingSpecProposal(taskId: string) {
-    this.pendingSpecProposals = this.pendingSpecProposals.filter(
-      (p) => p.task_id !== taskId
-    );
-    // A task update can re-render the selected view while the accept is in
-    // flight, so re-run the injection pass to drop any stale controls.
-    this.renderPendingSpecProposals();
-    this.updateHeader();
   }
 
   /**
@@ -554,7 +291,7 @@ export class PipelineDetailView extends View {
           console.error('Failed to clear accepted SpecAgent proposal:', error);
         }
         resultEl!.innerHTML = '';
-        this.removePendingSpecProposal(proposal.task_id);
+        this.realtime?.removePendingSpecProposal(proposal.task_id);
       },
       onReject: async () => {
         try {
@@ -563,23 +300,23 @@ export class PipelineDetailView extends View {
           console.error('Failed to reject SpecAgent proposal:', error);
         }
         resultEl!.innerHTML = '';
-        this.removePendingSpecProposal(proposal.task_id);
+        this.realtime?.removePendingSpecProposal(proposal.task_id);
       },
     });
   }
 
   private registerActions() {
     registerPullRequestActions(this.ctx, {
-      refreshPullRequests: () => this.fetchPullRequests(),
+      refreshPullRequests: () => this.realtime?.fetchPullRequests(),
       updateEngineSlot: () => this.updateEnginePiSlot(),
     });
 
     registerBotActions(this.ctx, {
       getHost: () => this.container,
       setContentTab: (tab, opts) => this.setContentTab(tab, opts),
-      fetchSpecProposal: (taskId) => this.fetchSpecProposal(taskId),
+      fetchSpecProposal: (taskId) => this.realtime?.fetchSpecProposal(taskId),
       updateEngineSlot: () => this.updateEnginePiSlot(),
-      persistPendingReviews: () => this.savePendingReviews(),
+      persistPendingReviews: () => this.realtime?.persistPendingReviews(),
     });
 
     registerMiscActions(this.ctx, {
@@ -1100,7 +837,7 @@ export class PipelineDetailView extends View {
       if (this.pipeline) {
         this.context.dataManager.updatePipeline(this.pipeline);
       }
-      this.fetchPullRequests();
+      this.realtime?.fetchPullRequests();
       this.scheduleRefreshGitStatus();
       this.loadDevServerStatus();
       this.updateHeader();
@@ -1209,7 +946,7 @@ export class PipelineDetailView extends View {
       this.refreshExecutionEngine();
       // Reconcile outstanding SpecAgent proposals from the durable cache so a
       // proposal that finished while the user was elsewhere is re-surfaced.
-      void this.fetchSpecProposals();
+      void this.realtime?.fetchSpecProposals();
     } catch (error) {
       console.error('Error refreshing tasks:', error);
     }
@@ -1348,7 +1085,7 @@ export class PipelineDetailView extends View {
     // from another page, reconcile the proposals for this pipeline.
     const notificationsUnsub = this.context.notifications?.onActionResult?.((result) => {
       if (result?.action?.startsWith('specagent_')) {
-        void this.fetchSpecProposals();
+        void this.realtime?.fetchSpecProposals();
       }
     });
     if (notificationsUnsub) this.unsubs.push(notificationsUnsub);
@@ -1387,6 +1124,8 @@ export class PipelineDetailView extends View {
     this.activeEditors.clear();
     this.engine?.teardown();
     this.engine = null;
+    this.realtime?.stop();
+    this.realtime = null;
     this.sessionList?.teardown();
     this.sessionList = null;
     this.teardownInteractiveCodingView();
