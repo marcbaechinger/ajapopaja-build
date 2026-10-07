@@ -157,6 +157,34 @@ describe('TaskItem', () => {
     expect(container.querySelectorAll<HTMLElement>('[data-version]').length).toBeGreaterThan(1);
   });
 
+  it('updateTitleInPlace preserves an unsaved Design Doc editor and syncs the title input', () => {
+    const container = document.createElement('div');
+    container.innerHTML = TaskItem.render({ ...mockTask, title: 'Old Title', design_doc: '# Design' } as any);
+
+    // Open the design doc editor and type an unsaved draft.
+    const designView = container.querySelector<HTMLElement>('.design-doc-view')!;
+    const designEdit = container.querySelector<HTMLElement>('.design-doc-edit')!;
+    designView.classList.add('hidden');
+    designEdit.classList.remove('hidden');
+    const designTextarea = designEdit.querySelector('textarea') as HTMLTextAreaElement;
+    designTextarea.value = 'unsaved design draft';
+
+    // Enter title edit mode; the input still holds the old title.
+    const titleInput = container.querySelector<HTMLInputElement>('.title-edit input')!;
+    titleInput.value = 'Old Title';
+
+    TaskItem.updateTitleInPlace(container, { ...mockTask, title: 'New Title', version: 2 } as any);
+
+    // The header reflects the saved title, and the hidden edit input is kept in
+    // sync so re-entering edit mode cannot accidentally re-save a stale title.
+    expect(container.querySelector<HTMLElement>('.title-view span.font-medium')!.textContent).toBe('New Title');
+    expect(titleInput.value).toBe('New Title');
+
+    // The open Design Doc editor and its unsaved draft are untouched.
+    expect(designEdit.classList.contains('hidden')).toBe(false);
+    expect(designTextarea.value).toBe('unsaved design draft');
+  });
+
   describe('focusScheduleExecution', () => {
     const mount = (html: string) => {
       const el = document.createElement('div');

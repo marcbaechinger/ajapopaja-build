@@ -58,6 +58,19 @@ export class TaskItem {
     if (titleEl) {
       titleEl.textContent = task.title;
     }
+
+    // Keep the (hidden) edit input in sync with the saved title. The card is
+    // intentionally not re-rendered, so without this the input would keep the
+    // stale pre-save value. Re-entering title edit mode would then show (and
+    // re-save) the old title, which in turn falls through to a full re-render
+    // and discards unrelated unsaved edits such as an open Specification or
+    // Design Doc textarea. Updating the input here keeps the whole header
+    // self-consistent while leaving the rest of the card untouched.
+    const input = container.querySelector<HTMLInputElement>('.title-edit input');
+    if (input) {
+      input.value = task.title;
+    }
+
     // Switch the edit form back to the rendered title.
     container.querySelector('.title-edit')?.classList.add('hidden');
     view?.classList.remove('hidden');
