@@ -28,14 +28,9 @@ import { DesignDocDiffDialog } from '../components/DesignDocDiffDialog.ts';
 import { BacklogView } from '../components/BacklogView.ts';
 import { ExecutionEngineView } from '../components/ExecutionEngineView.ts';
 import { PipelineHistoryView } from '../components/PipelineHistoryView.ts';
-import { DocBotDialog } from '../components/DocBotDialog.ts';
 import { PullRequestSection } from '../components/PullRequestSection.ts';
-import type { DocBotDialogProps } from '../components/DocBotDialog.ts';
 import { PipelineEditDialog } from '../components/PipelineEditDialog.ts';
-import { ReviewDialog } from '../components/ReviewDialog.ts';
-import { UpdateDesignDialog } from '../components/UpdateDesignDialog.ts';
 import { DiffDialog } from '../components/DiffDialog.ts';
-import { CoderBotDialog } from '../components/CoderBotDialog.ts';
 import { InteractiveCodingView } from '../components/InteractiveCodingView.ts';
 import { FileBrowseView } from '../components/FileBrowseView.ts';
 import { DevServerDialog } from '../components/DevServerDialog.ts';
@@ -47,6 +42,7 @@ import { PipelineDetailLayout } from './pipeline/PipelineDetailLayout.ts';
 import { ExecutionEngineController } from './pipeline/ExecutionEngineController.ts';
 import { PipelineSessionListController } from './pipeline/PipelineSessionListController.ts';
 import { registerPullRequestActions } from './pipeline/actions/pullRequestActions.ts';
+import { registerBotActions, openCoderBotDialog } from './pipeline/actions/botActions.ts';
 import EasyMDE from 'easymde';
 import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
 
@@ -574,41 +570,18 @@ export class PipelineDetailView extends View {
     });
   }
 
-  private openDocBotDialog() {
-    const dialogContainer = this.container?.querySelector('#docbot-dialog-container') as HTMLElement;
-    if (!dialogContainer || !this.docbotState.taskId || !this.docbotPreviewData) return;
-
-    const props: DocBotDialogProps = {
-      taskId: this.docbotState.taskId,
-      pipelineId: this.pipelineId,
-      diff: this.docbotPreviewData.diff,
-      commitMsg: this.docbotPreviewData.commit_msg,
-      filename: this.docbotPreviewData.filename,
-      context: this.context,
-      onClose: () => {
-        dialogContainer.innerHTML = '';
-      },
-      onSuccess: () => {
-        this.docbotState = {
-          status: 'none',
-          taskId: null,
-        };
-        this.docbotPreviewData = null;
-        this.updateHeader();
-      }
-    };
-
-    new DocBotDialog(dialogContainer, props);
-  }
-
-  private openCoderBotDialog() {
-    new CoderBotDialog(this.context.coderBotService).show();
-  }
-
   private registerActions() {
     registerPullRequestActions(this.ctx, {
       refreshPullRequests: () => this.fetchPullRequests(),
       updateEngineSlot: () => this.updateEnginePiSlot(),
+    });
+
+    registerBotActions(this.ctx, {
+      getHost: () => this.container,
+      setContentTab: (tab, opts) => this.setContentTab(tab, opts),
+      fetchSpecProposal: (taskId) => this.fetchSpecProposal(taskId),
+      updateEngineSlot: () => this.updateEnginePiSlot(),
+      persistPendingReviews: () => this.savePendingReviews(),
     });
 
     this.context.actionRegistry.register('edit_pipeline', async () => {
@@ -623,108 +596,6 @@ export class PipelineDetailView extends View {
       // After dialog closes, we might want to refresh the header if it was updated
       // The dialog itself calls update on the client, and we'll get a websocket update 
       // or we can refresh manually if needed.
-    });
-
-    this.context.actionRegistry.register('trigger_reviewbot', async (_e, el) => {
-      const taskId = el.getAttribute('data-task-id');
-      if (!taskId) return;
-
-      try {
-        await this.context.reviewBotClient.trigger(this.pipelineId, taskId);
-
-        this.reviewbotState = { status: 'inProgress', taskId };
-        this.updateHeader();
-      } catch (error) {
-        console.error('Trigger ReviewBot error:', error);
-        alert('Failed to trigger ReviewBot');
-      }
-    });
-
-    this.context.actionRegistry.register('trigger_archbot', async (_e, el) => {
-      const taskId = el.getAttribute('data-task-id');
-      if (!taskId) return;
-
-      try {
-        await this.context.archBotClient.trigger(this.pipelineId, taskId);
-        this.archbotState = { status: 'inProgress', taskId };
-        this.updateHeader();
-      } catch (error) {
-        console.error('Trigger ArchBot error:', error);
-        alert('Failed to trigger ArchitectureBot');
-      }
-    });
-
-    this.context.actionRegistry.register('trigger_specagent', async (_e, el) => {
-      const taskId = el.getAttribute('data-task-id');
-      console.log('[SpecAgent] (0) action trigger_specagent (PipelineDetailView handler)', {
-        taskId,
-        pipelineId: this.pipelineId,
-      });
-      if (!taskId) return;
-
-      try {
-        await this.context.specBotClient.trigger(this.pipelineId, taskId);
-        console.log('[SpecAgent] (0) trigger request sent', { taskId });
-        this.specagentState = { status: 'inProgress', taskId };
-        this.updateHeader();
-      } catch (error) {
-        console.error('[SpecAgent] (0) trigger failed', error);
-        alert('Failed to trigger the specification bot');
-      }
-    });
-
-    // Header-badge entry point: select the task that owns an outstanding
-    // proposal and surface it inline in the Task editor tab.
-    this.context.actionRegistry.register('open_spec_proposal', async (_e, el) => {
-      const taskId = el.getAttribute('data-task-id');
-      if (!taskId) return;
-      this.pendingSpecEditTaskId = null;
-      this.selectedTask = this.allLoadedTasks.find(t => t.id === taskId) || null;
-      this.setContentTab('task-editor', { hash: 'push' });
-      this.refreshBacklog();
-      this.refreshSelectedTask();
-      if (!this.pendingSpecProposals.some(p => p.task_id === taskId)) {
-        void this.fetchSpecProposal(taskId);
-      }
-    });
-
-    this.context.actionRegistry.register('update_design', async (_e, el) => {
-      const taskId = el.getAttribute('data-task-id');
-      if (!taskId) return;
-
-      const dialog = new UpdateDesignDialog();
-      const comments = await dialog.show();
-      if (!comments) return;
-
-      try {
-        await this.context.archBotClient.iterate(this.pipelineId, taskId, comments);
-        this.archbotState = { status: 'inProgress', taskId };
-        this.updateHeader();
-      } catch (error) {
-        console.error('Update Design error:', error);
-        alert('Failed to update design document');
-      }
-    });
-
-    this.context.actionRegistry.register('trigger_coderbot', async (_e, el) => {
-      const taskId = el.getAttribute('data-task-id');
-      if (!taskId) return;
-
-      try {
-        await this.context.coderBotClient.triggerCoderBot(taskId);
-        // Optimistically reflect the INPROGRESS status so the card moves to the
-        // In Progress column immediately, even if the broadcast is delayed.
-        const task = this.allLoadedTasks.find(t => t.id === taskId);
-        if (task && task.status !== TaskStatus.INPROGRESS) {
-          task.status = TaskStatus.INPROGRESS;
-          this.context.dataManager.updateTask(task); // -> pipeline:tasks notify -> updateSingleTask
-        }
-        this.updateHeader();
-        this.updateEnginePiSlot();
-      } catch (error) {
-        console.error('Trigger CoderBot error:', error);
-        alert('Failed to trigger CoderBot');
-      }
     });
 
     this.context.actionRegistry.register('start_interactive_session', () =>
@@ -770,28 +641,6 @@ export class PipelineDetailView extends View {
       this.applySidebarState();
     });
 
-    this.context.actionRegistry.register('open_review_dialog', async (_e, el) => {
-      const taskId = el.getAttribute('data-task-id');
-      if (!taskId) return;
-
-      this.pendingReviews = this.pendingReviews.filter(id => id !== taskId);
-      this.savePendingReviews();
-      this.updateHeader();
-
-      const task = this.allLoadedTasks.find(t => t.id === taskId);
-      if (!task) return;
-
-      const dialog = new ReviewDialog({
-        task,
-        pipelineId: this.pipelineId,
-        context: this.context,
-        onDelete: () => {
-          // Task will be updated via websocket
-        }
-      });
-      await dialog.show();
-    });
-
     this.context.actionRegistry.register('copy_pipeline_id', async (_e, el) => {
       try {
         await navigator.clipboard.writeText(this.pipelineId);
@@ -818,11 +667,6 @@ export class PipelineDetailView extends View {
       } catch (err) {
         console.error('Failed to copy task ID:', err);
       }
-    });
-
-    this.context.actionRegistry.register('open_coderbot_dialog', (e) => {
-      e.preventDefault();
-      this.openCoderBotDialog();
     });
 
     this.context.actionRegistry.register('open_dev_server_dialog', () => {
@@ -1350,25 +1194,6 @@ export class PipelineDetailView extends View {
       }
     });
 
-    this.context.actionRegistry.register('trigger_docbot', async (_e, el) => {
-      const taskId = el.dataset.taskId;
-      if (!taskId) return;
-
-      const btn = el as HTMLElement;
-      btn.classList.add('animate-pulse', 'text-green-500');
-
-      try {
-        await this.context.docBotClient.triggerDocBot(this.pipelineId, taskId);
-        // Remove pulse after a short delay
-        setTimeout(() => btn.classList.remove('animate-pulse', 'text-green-500'), 1000);
-      } catch (err) {
-        console.error('Failed to trigger DocBot:', err);
-        btn.classList.remove('animate-pulse', 'text-green-500');
-        btn.classList.add('text-red-500');
-        setTimeout(() => btn.classList.remove('text-red-500'), 2000);
-      }
-    });
-
     this.context.actionRegistry.register('open_quickfix', async (_e, el) => {
       const taskId = el.dataset.taskId;
       if (!taskId) return;
@@ -1400,15 +1225,6 @@ export class PipelineDetailView extends View {
         commitHash,
         title: task?.title,
       }).show();
-    });
-    this.context.actionRegistry.register('open_docbot_dialog', () => {
-      this.openDocBotDialog();
-    });
-
-    this.context.actionRegistry.register('dismiss_docbot_banner', () => {
-      this.docbotState = { status: 'none', taskId: null };
-      this.docbotPreviewData = null;
-      this.updateHeader();
     });
   }
 
@@ -1910,7 +1726,7 @@ export class PipelineDetailView extends View {
     this.engine ??= new ExecutionEngineController({
       ctx: this.ctx,
       host: this.container!,
-      onOpenCoderBotDialog: () => this.openCoderBotDialog(),
+      onOpenCoderBotDialog: () => openCoderBotDialog(this.ctx),
     });
     return this.engine;
   }

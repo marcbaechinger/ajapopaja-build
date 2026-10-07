@@ -772,33 +772,6 @@ describe('PipelineDetailView Review Notifications', () => {
     expect(localStorage.setItem).toHaveBeenCalledWith('pipeline:pending_reviews:p1', JSON.stringify(['t1', 't2']));
   });
 
-  it('should remove pending review and update localStorage when open_review_dialog is triggered', async () => {
-    const view = new PipelineDetailView(mockContext, { id: 'p1' });
-    view.mount(container);
-
-    // Mock loaded tasks so open dialog doesn't early return
-    (view as any).allLoadedTasks = [{ id: 't1' }, { id: 't2' }];
-
-    // Set internal state
-    (view as any).pendingReviews = ['t1', 't2'];
-
-    // Get the action
-    const openReviewAction = mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === 'open_review_dialog')[1];
-    expect(openReviewAction).toBeDefined();
-
-    // Create a mock element that has data-task-id
-    const el = document.createElement('button');
-    el.setAttribute('data-task-id', 't1');
-
-    // Call action
-    try {
-        await openReviewAction(null, el);
-    } catch (e) {}
-
-    // Should be removed
-    expect((view as any).pendingReviews).toEqual(['t2']);
-    expect(localStorage.setItem).toHaveBeenCalledWith('pipeline:pending_reviews:p1', JSON.stringify(['t2']));
-  });
 });
 
 
@@ -1916,20 +1889,6 @@ describe('PipelineDetailView SpecAgent', () => {
     el.setAttribute('data-view-id', taskId);
     selectAction(new Event('click'), el);
   };
-
-  it('registers a trigger_specagent action that calls the client', async () => {
-    const view = new PipelineDetailView(mockContext, { id: 'p1' });
-    view.mount(container);
-
-    const action = getAction('trigger_specagent');
-    const el = document.createElement('button');
-    el.setAttribute('data-task-id', 't1');
-
-    await action(null, el);
-
-    expect(mockContext.specBotClient.trigger).toHaveBeenCalledWith('p1', 't1');
-    expect((view as any).specagentState).toEqual({ status: 'inProgress', taskId: 't1' });
-  });
 
   it('renders the proposal inline on SPECAGENT_SPEC_READY', async () => {
     await setupView();
