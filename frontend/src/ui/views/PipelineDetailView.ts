@@ -43,12 +43,12 @@ import { FileBrowseView } from '../components/FileBrowseView.ts';
 import { SessionListItemView } from '../components/SessionListItemView.ts';
 import type { PiSessionSummary } from '../../core/InteractiveCodingService.ts';
 import { DevServerDialog } from '../components/DevServerDialog.ts';
-import { PiView } from '../components/PiView.ts';
 import { PipelineHeaderView, type DocbotState, type ReviewbotState, type ArchbotState, type SpecAgentState } from '../components/PipelineHeaderView.ts';
 import { renderSpecProposalResult, getTaskSpecProposalUpdater } from '../components/SpecSection.ts';
 import type { SpecProposal } from '../../core/clients/SpecBotClient.ts';
 import { createPipelineDetailCtx, type DevProcessState, type PipelineDetailCtx } from './pipeline/PipelineDetailCtx.ts';
 import { PipelineDetailLayout } from './pipeline/PipelineDetailLayout.ts';
+import { ExecutionEngineController } from './pipeline/ExecutionEngineController.ts';
 import EasyMDE from 'easymde';
 import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
 
@@ -104,8 +104,7 @@ export class PipelineDetailView extends View {
    */
   private get pendingScheduleFocusTaskId(): string | null { return this.ctx.state.pendingScheduleFocusTaskId; }
   private set pendingScheduleFocusTaskId(value: string | null) { this.ctx.state.pendingScheduleFocusTaskId = value; }
-  private enginePiView: PiView | null = null;
-  private enginePiMountedKey: string | null = null;
+  private engine: ExecutionEngineController | null = null;
 
   // Which content tab is active in the prep column. The tab list is always
   // visible; the Coding Agent tab is always selectable and shows its empty
@@ -1814,10 +1813,8 @@ export class PipelineDetailView extends View {
   unmount() {
     this.activeEditors.forEach(editor => editor.toTextArea());
     this.activeEditors.clear();
-    if (this.enginePiView) {
-      this.enginePiView.destroy();
-      this.enginePiView = null;
-    }
+    this.engine?.teardown();
+    this.engine = null;
     if (this.sessionListClickHandler && this.container) {
       this.container.removeEventListener('click', this.sessionListClickHandler);
     }
@@ -2021,85 +2018,24 @@ export class PipelineDetailView extends View {
     if (textarea) textarea.focus();
   }
 
+  private ensureEngine(): ExecutionEngineController {
+    this.engine ??= new ExecutionEngineController({
+      ctx: this.ctx,
+      host: this.container!,
+      onOpenCoderBotDialog: () => this.openCoderBotDialog(),
+    });
+    return this.engine;
+  }
+
   private refreshExecutionEngine() {
     if (!this.container) return;
-    const el = this.container.querySelector('#execution-engine-view');
-    if (!el) return;
-    const historyTasks = this.allLoadedTasks
-      .filter(t => !t.deleted && ([TaskStatus.IMPLEMENTED, TaskStatus.SUBMITTED, TaskStatus.DISCARDED] as any[]).includes(t.status))
-      .sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
-    el.innerHTML = ExecutionEngineView.render({
-      tasks: this.allLoadedTasks,
-      historyTasks,
-      historyPage: this.historyPage,
-    });
-    // Re-render the engine Pi slot based on the current CoderBot session.
-    this.updateEnginePiSlot();
+    this.ensureEngine().refresh();
   }
 
   /** Render the engine Pi slot based on the running session vs this pipeline. */
   private updateEnginePiSlot() {
     if (!this.container) return;
-    const mount = this.container.querySelector('#engine-piview-mount') as HTMLElement | null;
-    if (!mount) return;
-
-    const placeholder = `<p class="text-[10px] italic text-app-muted/50 text-center border border-dashed border-app-border/40 rounded-lg py-3">Start a CoderBot to see its output here.</p>`;
-    const session = this.context.coderBotService?.getCurrentSession?.() ?? null;
-
-    if (!session || !session.taskId) {
-      this.teardownEnginePiView();
-      mount.innerHTML = placeholder;
-      return;
-    }
-
-    if (session.pipelineId === this.pipelineId) {
-      // Session belongs to this pipeline: connect/resume the PiView. Re-mount
-      // when the mounted session changed OR the PiView DOM was wiped by an
-      // ExecutionEngineView re-render; otherwise reuse it and just reconnect.
-      const key = `${session.pipelineId}:${session.taskId}`;
-      const logRendered = !!mount.querySelector('#log-content-container');
-      if (!this.enginePiView || this.enginePiMountedKey !== key || !logRendered) {
-        this.mountCoderBotPiView(mount);
-        this.enginePiMountedKey = key;
-      } else {
-        this.context.coderBotService?.reconnect?.();
-      }
-      return;
-    }
-
-    this.teardownEnginePiView();
-    this.enginePiMountedKey = null;
-    if (session.active) {
-      mount.innerHTML = `
-        <p class="text-[10px] italic text-app-muted/70 text-center border border-dashed border-app-border/40 rounded-lg py-3">CoderBot is running for another pipeline.</p>
-        <a href="#/pipeline/${session.pipelineId}" class="block text-center text-[10px] font-bold uppercase tracking-widest text-app-accent-2 hover:underline cursor-pointer mt-1">Open pipeline</a>`;
-    } else {
-      mount.innerHTML = placeholder;
-    }
-  }
-
-  private teardownEnginePiView() {
-    if (this.enginePiView) {
-      this.enginePiView.destroy();
-      this.enginePiView = null;
-    }
-    this.enginePiMountedKey = null;
-  }
-
-  private mountCoderBotPiView(mount: HTMLElement) {
-    this.teardownEnginePiView();
-    mount.innerHTML = '';
-    // Defer the initial (potentially large, already-loaded) session history so
-    // the rest of the pipeline detail view paints first; the log then fills in on
-    // the next animation frame for a snappy page render.
-    this.enginePiView = new PiView(this.context.coderBotService, mount, {
-      logHeightClass: 'h-[38vh]',
-      deferInitialRender: true,
-      // Pop this compact sidebar log back out into the full CoderBot dialog.
-      onOpenDialog: () => this.openCoderBotDialog(),
-    });
-    this.enginePiView.render();
-    this.context.coderBotService?.reconnect?.();
+    this.ensureEngine().updateSlot();
   }
 
   private async refreshEnginePiSlot() {
