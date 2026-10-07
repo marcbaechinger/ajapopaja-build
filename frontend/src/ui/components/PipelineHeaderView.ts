@@ -171,7 +171,7 @@ export class PipelineHeaderView {
           <div class="flex flex-col min-w-0">
             <div class="flex items-center gap-3">
               <h2 id="pipeline-title" class="text-xl font-black text-app-accent-1 tracking-tight truncate">${pipeline.name}</h2>
-              <button data-action-click="edit_pipeline" class="p-1 hover:bg-app-bg text-app-muted hover:text-app-accent-1 rounded transition-all cursor-pointer" title="Edit Pipeline">
+              <button data-action-click="edit_pipeline" class="p-1 hover:bg-app-bg text-app-muted hover:text-app-accent-1 rounded transition-all cursor-pointer" title="Edit Pipeline (Ctrl/Cmd+Shift+P)">
                 ${Icon.render('edit', { size: 14 })}
               </button>
               <button data-action-click="open_health_check" class="p-1 hover:bg-app-bg rounded-lg transition-colors cursor-pointer text-app-muted hover:text-green-500" title="System Health">

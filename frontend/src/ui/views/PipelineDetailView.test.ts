@@ -17,8 +17,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { PipelineDetailView } from './PipelineDetailView.ts';
 import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
+import { ActionRegistry } from '../../core/ActionRegistry.ts';
 import { TaskStatus } from '../../core/domain.ts';
 import { setTaskSpecProposalUpdater } from '../components/SpecSection.ts';
+import { PipelineEditDialog } from '../components/PipelineEditDialog.ts';
 
 // Mock components to avoid deep rendering issues in unit tests
 vi.mock('../components/TaskColumn.ts', () => ({
@@ -74,6 +76,14 @@ vi.mock('../components/InteractiveCodingView.ts', () => ({
 vi.mock('../components/ConfirmationDialog.ts', () => ({
   ConfirmationDialog: vi.fn(function ConfirmationDialog() {
     return { show: vi.fn().mockResolvedValue(true) };
+  }),
+}));
+
+// The edit shortcut dispatches `edit_pipeline`, which constructs this dialog.
+// Mock it so the shortcut test can assert the dialog without any network I/O.
+vi.mock('../components/PipelineEditDialog.ts', () => ({
+  PipelineEditDialog: vi.fn(function PipelineEditDialog() {
+    return { show: vi.fn() };
   }),
 }));
 
@@ -713,5 +723,112 @@ describe('PipelineDetailView SpecAgent', () => {
     });
 
     expect(container.querySelector('#backlog-view .spec-proposal-result')).toBeNull();
+  });
+});
+
+describe('PipelineDetailView Keyboard Shortcuts', () => {
+  let mockContext: any;
+
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    LocalStorageManager.resetInstances();
+    vi.clearAllMocks();
+
+    mockContext = {
+      // Real registry so the `edit_pipeline` handler registered by
+      // registerMiscActions is actually invoked by the shortcut.
+      actionRegistry: new ActionRegistry(),
+      wsClient: { on: vi.fn().mockReturnValue(() => {}) },
+      dataManager: {
+        on: vi.fn().mockReturnValue(() => {}),
+        updateTask: vi.fn(),
+        updatePipeline: vi.fn(),
+      },
+      authService: {
+        getUser: vi.fn().mockReturnValue({ username: 'testuser' }),
+        getAccessToken: vi.fn().mockReturnValue('token'),
+      },
+      pipelineClient: {
+        get: vi.fn().mockResolvedValue({ id: 'p1', name: 'Pipe 1' }),
+        getGitStatus: vi.fn().mockResolvedValue({ staged: 0, unstaged: 0, untracked: 0 }),
+      },
+      taskClient: {
+        listByPipeline: vi.fn().mockResolvedValue([]),
+        listCompletedByPipeline: vi.fn().mockResolvedValue({ tasks: [], total_count: 0 }),
+      },
+      pullRequestClient: { getPullRequestsByPipeline: vi.fn().mockResolvedValue([]) },
+      systemClient: { isOllamaAvailable: vi.fn().mockResolvedValue(true) },
+    };
+
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn(() => null),
+      setItem: vi.fn(),
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // Invoke the view's own keydown handler directly instead of dispatching on
+  // `document`: earlier tests leave their (never unmounted) document listeners
+  // behind, and dispatching globally would execute those stale handlers too.
+  const keydown = (
+    view: PipelineDetailView,
+    init: KeyboardEventInit,
+    target: EventTarget = document,
+  ) => {
+    const event = {
+      altKey: false,
+      ctrlKey: false,
+      metaKey: false,
+      shiftKey: false,
+      type: 'keydown',
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+      target,
+      ...init,
+    } as unknown as KeyboardEvent;
+    (view as any).keydownHandler(event);
+  };
+
+  it('opens the pipeline edit dialog on Ctrl+Shift+P', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    (view as any).pipeline = { id: 'p1', name: 'Pipe 1' };
+
+    keydown(view, { key: 'p', ctrlKey: true, shiftKey: true });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(PipelineEditDialog).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: 'edit', pipelineId: 'p1' }),
+    );
+    expect((PipelineEditDialog as any).mock.results[0].value.show).toHaveBeenCalled();
+    view.unmount();
+  });
+
+  it('opens the pipeline edit dialog on Cmd+Shift+P', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    (view as any).pipeline = { id: 'p1', name: 'Pipe 1' };
+
+    keydown(view, { key: 'P', metaKey: true, shiftKey: true });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(PipelineEditDialog).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: 'edit', pipelineId: 'p1' }),
+    );
+    view.unmount();
+  });
+
+  it('does not open the dialog while the user is typing in an input', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    (view as any).pipeline = { id: 'p1', name: 'Pipe 1' };
+
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    keydown(view, { key: 'p', ctrlKey: true, shiftKey: true }, input);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(PipelineEditDialog).not.toHaveBeenCalled();
+    view.unmount();
   });
 });

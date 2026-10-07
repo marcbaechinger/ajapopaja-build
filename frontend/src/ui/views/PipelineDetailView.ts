@@ -186,6 +186,16 @@ export class PipelineDetailView extends View {
         return;
       }
 
+      // Ctrl/Cmd+Shift+P opens the edit dialog for the current pipeline. This
+      // mirrors the "Edit Pipeline" button in the header by dispatching the
+      // same `edit_pipeline` action, so there is a single place that constructs
+      // the dialog.
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        void this.context.actionRegistry.execute('edit_pipeline', e, document.body);
+        return;
+      }
+
       // 'h' key opens the History tab
       if (e.key === 'h' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
