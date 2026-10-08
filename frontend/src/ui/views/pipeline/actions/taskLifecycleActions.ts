@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { ConfirmationDialog } from '../../../components/ConfirmationDialog.ts';
+import { ConfirmationDialog } from '../../../components/dialogs/ConfirmationDialog.ts';
 import { TaskStatus } from '../../../../core/domain.ts';
 import type { ContentTab } from '../../../../core/PipelineRoute.ts';
 import type { HashWriteMode } from '../PipelineSubRoute.ts';

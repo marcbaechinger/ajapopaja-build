@@ -19,24 +19,24 @@ import { registerTaskDesignDocActions } from './taskDesignDocActions.ts';
 import { createPipelineDetailState } from '../PipelineDetailCtx.ts';
 import type { PipelineDetailCtx } from '../PipelineDetailCtx.ts';
 import type { ActionHandler } from '../../../../core/ActionRegistry.ts';
-import { ConfirmationDialog } from '../../../components/ConfirmationDialog.ts';
-import { DesignDocDialog } from '../../../components/DesignDocDialog.ts';
-import { DesignDocDiffDialog } from '../../../components/DesignDocDiffDialog.ts';
+import { ConfirmationDialog } from '../../../components/dialogs/ConfirmationDialog.ts';
+import { DesignDocDialog } from '../../../components/dialogs/DesignDocDialog.ts';
+import { DesignDocDiffDialog } from '../../../components/dialogs/DesignDocDiffDialog.ts';
 import EasyMDE from 'easymde';
 
-vi.mock('../../../components/ConfirmationDialog.ts', () => ({
+vi.mock('../../../components/dialogs/ConfirmationDialog.ts', () => ({
   ConfirmationDialog: vi.fn(function ConfirmationDialog() {
     return { show: vi.fn().mockResolvedValue(true) };
   }),
 }));
 
-vi.mock('../../../components/DesignDocDialog.ts', () => ({
+vi.mock('../../../components/dialogs/DesignDocDialog.ts', () => ({
   DesignDocDialog: vi.fn(function DesignDocDialog() {
     return { show: vi.fn().mockResolvedValue(undefined) };
   }),
 }));
 
-vi.mock('../../../components/DesignDocDiffDialog.ts', () => ({
+vi.mock('../../../components/dialogs/DesignDocDiffDialog.ts', () => ({
   DesignDocDiffDialog: vi.fn(function DesignDocDiffDialog() {
     return { show: vi.fn().mockResolvedValue(undefined) };
   }),

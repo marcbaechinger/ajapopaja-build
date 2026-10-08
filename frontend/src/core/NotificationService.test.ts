@@ -21,7 +21,7 @@ import {
   NOTIFICATION_ACTION,
   NOTIFICATION_ACTION_RESULT,
 } from './NotificationService.ts';
-import { NotificationToast } from '../ui/components/NotificationToast.ts';
+import { NotificationToast } from '../ui/components/common/NotificationToast.ts';
 import type { WSMessage } from './domain.ts';
 
 type Handler = (message: WSMessage) => void;

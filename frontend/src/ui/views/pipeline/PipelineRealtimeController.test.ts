@@ -18,8 +18,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { PipelineRealtimeController } from './PipelineRealtimeController.ts';
 import { createPipelineDetailCtx, type PipelineDetailCtx } from './PipelineDetailCtx.ts';
 import { LocalStorageManager } from '../../../core/LocalStorageManager.ts';
-import { ExecutionEngineView } from '../../components/ExecutionEngineView.ts';
-import { TaskItem } from '../../components/TaskItem.ts';
+import { ExecutionEngineView } from '../../components/pipeline/ExecutionEngineView.ts';
+import { TaskItem } from '../../components/pipeline/TaskItem.ts';
 import { TaskStatus } from '../../../core/domain.ts';
 import type { AppContext } from '../../../core/AppContext.ts';
 

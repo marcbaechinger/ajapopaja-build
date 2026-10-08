@@ -22,7 +22,7 @@ import { PiLogReducer } from './PiLogReducer.ts';
 import type { RenderBlock } from './PiLogReducer.ts';
 import { LocalStorageManager } from './LocalStorageManager.ts';
 import { parseTimestamp, sessionTimestamp } from '../ui/components/utils/relativeTime.ts';
-import type { PiSessionService } from '../ui/components/PiView.ts';
+import type { PiSessionService } from '../ui/components/session/PiView.ts';
 
 export type { PiSessionSummary };
 

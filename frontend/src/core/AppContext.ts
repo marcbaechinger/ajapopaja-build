@@ -36,14 +36,14 @@ import { CoderBotService } from './CoderBotService.ts';
 import { InteractiveCodingService } from './InteractiveCodingService.ts';
 import { DevProcessService } from './DevProcessService.ts';
 import { NotificationService } from './NotificationService.ts';
-import { SearchDialog } from '../ui/components/SearchDialog';
-import { FileView } from '../ui/components/FileView';
-import { AssistantPanel } from '../ui/components/AssistantPanel';
-import { SessionManagerPanel, registerSessionGenerateTitleAction } from '../ui/components/SessionManagerPanel';
-import { SessionManagerButton } from '../ui/components/SessionManagerButton';
-import { HealthCheckDialog } from '../ui/components/HealthCheckDialog';
-import { handleQuickPromptButtonClick } from '../ui/components/QuickPromptButton';
-import { setTaskSpecProposalUpdater } from '../ui/components/SpecSection';
+import { SearchDialog } from '../ui/components/dialogs/SearchDialog';
+import { FileView } from '../ui/components/files/FileView';
+import { AssistantPanel } from '../ui/components/session/AssistantPanel';
+import { SessionManagerPanel, registerSessionGenerateTitleAction } from '../ui/components/session/SessionManagerPanel';
+import { SessionManagerButton } from '../ui/components/session/SessionManagerButton';
+import { HealthCheckDialog } from '../ui/components/dialogs/HealthCheckDialog';
+import { handleQuickPromptButtonClick } from '../ui/components/common/QuickPromptButton';
+import { setTaskSpecProposalUpdater } from '../ui/components/pipeline/SpecSection';
 import { registerOnePromptHandlers } from './oneprompt';
 
 export interface AppState {

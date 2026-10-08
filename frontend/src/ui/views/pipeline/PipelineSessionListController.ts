@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-import { SessionListItemView } from '../../components/SessionListItemView.ts';
-import { ConfirmationDialog } from '../../components/ConfirmationDialog.ts';
+import { SessionListItemView } from '../../components/session/SessionListItemView.ts';
+import { ConfirmationDialog } from '../../components/dialogs/ConfirmationDialog.ts';
 import type { PiSessionSummary } from '../../../core/InteractiveCodingService.ts';
 import type { PipelineDetailCtx } from './PipelineDetailCtx.ts';
 

@@ -20,30 +20,30 @@ import type { MiscActionsDeps } from './miscActions.ts';
 import { createPipelineDetailState } from '../PipelineDetailCtx.ts';
 import type { PipelineDetailCtx } from '../PipelineDetailCtx.ts';
 import type { ActionHandler } from '../../../../core/ActionRegistry.ts';
-import { DevServerDialog } from '../../../components/DevServerDialog.ts';
-import { DiffDialog } from '../../../components/DiffDialog.ts';
-import { PipelineEditDialog } from '../../../components/PipelineEditDialog.ts';
-import { StatsDialog } from '../../../components/StatsDialog.ts';
+import { DevServerDialog } from '../../../components/dialogs/DevServerDialog.ts';
+import { DiffDialog } from '../../../components/dialogs/DiffDialog.ts';
+import { PipelineEditDialog } from '../../../components/dialogs/PipelineEditDialog.ts';
+import { StatsDialog } from '../../../components/dialogs/StatsDialog.ts';
 
-vi.mock('../../../components/DevServerDialog.ts', () => ({
+vi.mock('../../../components/dialogs/DevServerDialog.ts', () => ({
   DevServerDialog: vi.fn(function DevServerDialog() {
     return { show: vi.fn() };
   }),
 }));
 
-vi.mock('../../../components/DiffDialog.ts', () => ({
+vi.mock('../../../components/dialogs/DiffDialog.ts', () => ({
   DiffDialog: vi.fn(function DiffDialog() {
     return { show: vi.fn() };
   }),
 }));
 
-vi.mock('../../../components/PipelineEditDialog.ts', () => ({
+vi.mock('../../../components/dialogs/PipelineEditDialog.ts', () => ({
   PipelineEditDialog: vi.fn(function PipelineEditDialog() {
     return { show: vi.fn() };
   }),
 }));
 
-vi.mock('../../../components/StatsDialog.ts', () => ({
+vi.mock('../../../components/dialogs/StatsDialog.ts', () => ({
   StatsDialog: vi.fn(function StatsDialog() {
     return { show: vi.fn() };
   }),

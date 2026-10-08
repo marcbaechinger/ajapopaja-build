@@ -40,8 +40,8 @@ import {
 import type { NotificationAction, WSMessage } from './domain.ts';
 import type { WebSocketClient } from './WebSocketClient.ts';
 import type { AuthService } from './AuthService.ts';
-import { NotificationToast } from '../ui/components/NotificationToast.ts';
-import { NotificationDialog } from '../ui/components/NotificationDialog.ts';
+import { NotificationToast } from '../ui/components/common/NotificationToast.ts';
+import { NotificationDialog } from '../ui/components/dialogs/NotificationDialog.ts';
 
 // Message types (mirrors api/notifications/ws_handler.py).
 export const NOTIFICATION = 'NOTIFICATION';

@@ -16,13 +16,13 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { PipelineSessionListController } from './PipelineSessionListController.ts';
-import { SessionListItemView } from '../../components/SessionListItemView.ts';
-import { ConfirmationDialog } from '../../components/ConfirmationDialog.ts';
+import { SessionListItemView } from '../../components/session/SessionListItemView.ts';
+import { ConfirmationDialog } from '../../components/dialogs/ConfirmationDialog.ts';
 import { createPipelineDetailCtx } from './PipelineDetailCtx.ts';
 import type { PiSessionSummary } from '../../../core/InteractiveCodingService.ts';
 import type { AppContext } from '../../../core/AppContext.ts';
 
-vi.mock('../../components/ConfirmationDialog.ts', () => ({
+vi.mock('../../components/dialogs/ConfirmationDialog.ts', () => ({
   ConfirmationDialog: vi.fn(function ConfirmationDialog() {
     return { show: vi.fn().mockResolvedValue(true) };
   }),

@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-import { DevServerDialog } from '../../../components/DevServerDialog.ts';
-import { DiffDialog } from '../../../components/DiffDialog.ts';
-import { PipelineEditDialog } from '../../../components/PipelineEditDialog.ts';
-import { StatsDialog } from '../../../components/StatsDialog.ts';
+import { DevServerDialog } from '../../../components/dialogs/DevServerDialog.ts';
+import { DiffDialog } from '../../../components/dialogs/DiffDialog.ts';
+import { PipelineEditDialog } from '../../../components/dialogs/PipelineEditDialog.ts';
+import { StatsDialog } from '../../../components/dialogs/StatsDialog.ts';
 import type { ContentTab } from '../../../../core/PipelineRoute.ts';
 import type { HashWriteMode } from '../PipelineSubRoute.ts';
 import type { PipelineDetailCtx } from '../PipelineDetailCtx.ts';

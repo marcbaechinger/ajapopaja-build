@@ -16,8 +16,8 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ExecutionEngineController } from './ExecutionEngineController.ts';
-import { ExecutionEngineView } from '../../components/ExecutionEngineView.ts';
-import { PiView } from '../../components/PiView.ts';
+import { ExecutionEngineView } from '../../components/pipeline/ExecutionEngineView.ts';
+import { PiView } from '../../components/session/PiView.ts';
 import { createPipelineDetailCtx } from './PipelineDetailCtx.ts';
 import { TaskStatus } from '../../../core/domain.ts';
 import type { AppContext } from '../../../core/AppContext.ts';

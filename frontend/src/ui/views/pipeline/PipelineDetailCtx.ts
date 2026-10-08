@@ -24,7 +24,7 @@ import type {
   ReviewbotState,
   ArchbotState,
   SpecAgentState,
-} from '../../components/PipelineHeaderView.ts';
+} from '../../components/pipeline/PipelineHeaderView.ts';
 
 export interface DevProcessState {
   running: boolean;

@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-import { ConfirmationDialog } from '../../../components/ConfirmationDialog.ts';
-import { DesignDocDialog } from '../../../components/DesignDocDialog.ts';
-import { DesignDocDiffDialog } from '../../../components/DesignDocDiffDialog.ts';
+import { ConfirmationDialog } from '../../../components/dialogs/ConfirmationDialog.ts';
+import { DesignDocDialog } from '../../../components/dialogs/DesignDocDialog.ts';
+import { DesignDocDiffDialog } from '../../../components/dialogs/DesignDocDiffDialog.ts';
 import EasyMDE from 'easymde';
 import type { PipelineDetailCtx } from '../PipelineDetailCtx.ts';
 

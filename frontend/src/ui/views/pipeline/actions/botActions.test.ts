@@ -20,29 +20,29 @@ import type { BotActionsDeps } from './botActions.ts';
 import { createPipelineDetailState } from '../PipelineDetailCtx.ts';
 import type { PipelineDetailCtx } from '../PipelineDetailCtx.ts';
 import type { ActionHandler } from '../../../../core/ActionRegistry.ts';
-import { CoderBotDialog } from '../../../components/CoderBotDialog.ts';
-import { DocBotDialog } from '../../../components/DocBotDialog.ts';
-import { ReviewDialog } from '../../../components/ReviewDialog.ts';
-import { UpdateDesignDialog } from '../../../components/UpdateDesignDialog.ts';
+import { CoderBotDialog } from '../../../components/dialogs/CoderBotDialog.ts';
+import { DocBotDialog } from '../../../components/dialogs/DocBotDialog.ts';
+import { ReviewDialog } from '../../../components/dialogs/ReviewDialog.ts';
+import { UpdateDesignDialog } from '../../../components/dialogs/UpdateDesignDialog.ts';
 import { Task, TaskStatus } from '../../../../core/domain.ts';
 
-vi.mock('../../../components/CoderBotDialog.ts', () => ({
+vi.mock('../../../components/dialogs/CoderBotDialog.ts', () => ({
   CoderBotDialog: vi.fn(function CoderBotDialog() {
     return { show: vi.fn() };
   }),
 }));
 
-vi.mock('../../../components/DocBotDialog.ts', () => ({
+vi.mock('../../../components/dialogs/DocBotDialog.ts', () => ({
   DocBotDialog: vi.fn(function DocBotDialog() {}),
 }));
 
-vi.mock('../../../components/ReviewDialog.ts', () => ({
+vi.mock('../../../components/dialogs/ReviewDialog.ts', () => ({
   ReviewDialog: vi.fn(function ReviewDialog() {
     return { show: vi.fn() };
   }),
 }));
 
-vi.mock('../../../components/UpdateDesignDialog.ts', () => ({
+vi.mock('../../../components/dialogs/UpdateDesignDialog.ts', () => ({
   UpdateDesignDialog: vi.fn(function UpdateDesignDialog() {
     return { show: vi.fn().mockResolvedValue('comments') };
   }),

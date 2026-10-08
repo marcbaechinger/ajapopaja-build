@@ -20,42 +20,42 @@ import { SelectedTaskController } from './SelectedTaskController.ts';
 import { createPipelineDetailCtx, type PipelineDetailCtx, type PipelineDetailRefreshHooks } from './PipelineDetailCtx.ts';
 import { LocalStorageManager } from '../../../core/LocalStorageManager.ts';
 import { TaskStatus, type Task } from '../../../core/domain.ts';
-import { TaskItem } from '../../components/TaskItem.ts';
+import { TaskItem } from '../../components/pipeline/TaskItem.ts';
 import type { AppContext } from '../../../core/AppContext.ts';
 
 // Mock components to avoid deep rendering issues in the shell-backed integration
 // tests below (this file also drives the controller directly in its own suite).
-vi.mock('../../components/TaskColumn.ts', () => ({
+vi.mock('../../components/pipeline/TaskColumn.ts', () => ({
   TaskColumn: { render: () => '<div class="mock-column">Column</div>' },
 }));
-vi.mock('../../components/TaskForm.ts', () => ({
+vi.mock('../../components/pipeline/TaskForm.ts', () => ({
   TaskForm: { render: () => '<div class="mock-form">Form</div>' },
 }));
-vi.mock('../../components/PipelineHeaderView.ts', () => ({
+vi.mock('../../components/pipeline/PipelineHeaderView.ts', () => ({
   PipelineHeaderView: { render: () => '<div class="mock-header">Header</div>' },
 }));
-vi.mock('../../components/PipelineHistoryView.ts', () => ({
+vi.mock('../../components/pipeline/PipelineHistoryView.ts', () => ({
   PipelineHistoryView: { render: () => '<div class="mock-history">History</div>' },
 }));
-vi.mock('../../components/PaginationControl.ts', () => ({
+vi.mock('../../components/common/PaginationControl.ts', () => ({
   PaginationControl: { render: () => '<div class="mock-pagination">Pagination</div>' },
 }));
-vi.mock('../../components/CoderBotDialog.ts', () => ({
+vi.mock('../../components/dialogs/CoderBotDialog.ts', () => ({
   CoderBotDialog: vi.fn(function CoderBotDialog() {
     return { show: vi.fn() };
   }),
 }));
-vi.mock('../../components/DevServerDialog.ts', () => ({
+vi.mock('../../components/dialogs/DevServerDialog.ts', () => ({
   DevServerDialog: vi.fn(function DevServerDialog() {
     return { show: vi.fn() };
   }),
 }));
-vi.mock('../../components/DiffDialog.ts', () => ({
+vi.mock('../../components/dialogs/DiffDialog.ts', () => ({
   DiffDialog: vi.fn(function DiffDialog() {
     return { show: vi.fn() };
   }),
 }));
-vi.mock('../../components/InteractiveCodingView.ts', () => ({
+vi.mock('../../components/session/InteractiveCodingView.ts', () => ({
   InteractiveCodingView: vi.fn(function InteractiveCodingView() {
     return {
       render: vi.fn(),

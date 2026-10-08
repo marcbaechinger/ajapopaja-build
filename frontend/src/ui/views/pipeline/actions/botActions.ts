@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-import { CoderBotDialog } from '../../../components/CoderBotDialog.ts';
-import { DocBotDialog, type DocBotDialogProps } from '../../../components/DocBotDialog.ts';
-import { ReviewDialog } from '../../../components/ReviewDialog.ts';
-import { UpdateDesignDialog } from '../../../components/UpdateDesignDialog.ts';
+import { CoderBotDialog } from '../../../components/dialogs/CoderBotDialog.ts';
+import { DocBotDialog, type DocBotDialogProps } from '../../../components/dialogs/DocBotDialog.ts';
+import { ReviewDialog } from '../../../components/dialogs/ReviewDialog.ts';
+import { UpdateDesignDialog } from '../../../components/dialogs/UpdateDesignDialog.ts';
 import { TaskStatus } from '../../../../core/domain.ts';
 import type { ContentTab } from '../../../../core/PipelineRoute.ts';
 import type { HashWriteMode } from '../PipelineSubRoute.ts';

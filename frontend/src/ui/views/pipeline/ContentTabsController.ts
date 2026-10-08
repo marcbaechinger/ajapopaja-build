@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-import { FileBrowseView } from '../../components/FileBrowseView.ts';
-import { HistoryView } from '../../components/HistoryView.ts';
-import { InteractiveCodingView } from '../../components/InteractiveCodingView.ts';
+import { FileBrowseView } from '../../components/files/FileBrowseView.ts';
+import { HistoryView } from '../../components/pipeline/HistoryView.ts';
+import { InteractiveCodingView } from '../../components/session/InteractiveCodingView.ts';
 import type { ContentTab } from '../../../core/PipelineRoute.ts';
 import type { PipelineSubRoute, HashWriteMode } from './PipelineSubRoute.ts';
 import type { PipelineDetailCtx } from './PipelineDetailCtx.ts';

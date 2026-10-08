@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { TaskItem } from '../../components/TaskItem.ts';
+import { TaskItem } from '../../components/pipeline/TaskItem.ts';
 import type { Task } from '../../../core/domain.ts';
 import type { PipelineDetailCtx } from './PipelineDetailCtx.ts';
 

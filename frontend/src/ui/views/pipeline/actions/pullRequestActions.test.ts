@@ -19,23 +19,23 @@ import { registerPullRequestActions } from './pullRequestActions.ts';
 import type { PullRequestActionsDeps } from './pullRequestActions.ts';
 import type { PipelineDetailCtx } from '../PipelineDetailCtx.ts';
 import type { ActionHandler } from '../../../../core/ActionRegistry.ts';
-import { ConfirmationDialog } from '../../../components/ConfirmationDialog.ts';
-import { IteratePullRequestDialog } from '../../../components/IteratePullRequestDialog.ts';
-import { PullRequestDialog } from '../../../components/PullRequestDialog.ts';
+import { ConfirmationDialog } from '../../../components/dialogs/ConfirmationDialog.ts';
+import { IteratePullRequestDialog } from '../../../components/dialogs/IteratePullRequestDialog.ts';
+import { PullRequestDialog } from '../../../components/dialogs/PullRequestDialog.ts';
 
-vi.mock('../../../components/ConfirmationDialog.ts', () => ({
+vi.mock('../../../components/dialogs/ConfirmationDialog.ts', () => ({
   ConfirmationDialog: vi.fn(function ConfirmationDialog() {
     return { show: vi.fn().mockResolvedValue(true) };
   }),
 }));
 
-vi.mock('../../../components/IteratePullRequestDialog.ts', () => ({
+vi.mock('../../../components/dialogs/IteratePullRequestDialog.ts', () => ({
   IteratePullRequestDialog: vi.fn(function IteratePullRequestDialog() {
     return { show: vi.fn().mockResolvedValue('Review comments') };
   }),
 }));
 
-vi.mock('../../../components/PullRequestDialog.ts', () => ({
+vi.mock('../../../components/dialogs/PullRequestDialog.ts', () => ({
   PullRequestDialog: vi.fn(function PullRequestDialog() {
     return { show: vi.fn().mockResolvedValue(undefined) };
   }),

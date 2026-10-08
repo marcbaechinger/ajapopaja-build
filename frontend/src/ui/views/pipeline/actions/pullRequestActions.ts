@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-import { ConfirmationDialog } from '../../../components/ConfirmationDialog.ts';
-import { IteratePullRequestDialog } from '../../../components/IteratePullRequestDialog.ts';
-import { PullRequestDialog } from '../../../components/PullRequestDialog.ts';
+import { ConfirmationDialog } from '../../../components/dialogs/ConfirmationDialog.ts';
+import { IteratePullRequestDialog } from '../../../components/dialogs/IteratePullRequestDialog.ts';
+import { PullRequestDialog } from '../../../components/dialogs/PullRequestDialog.ts';
 import type { PipelineDetailCtx } from '../PipelineDetailCtx.ts';
 
 export interface PullRequestActionsDeps {

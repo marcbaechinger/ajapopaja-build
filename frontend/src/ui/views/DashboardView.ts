@@ -17,10 +17,10 @@
 import { View } from '../../core/Navigator.ts';
 import { AppContext } from '../../core/AppContext.ts';
 import { Pipeline, PipelineStatus, Task } from '../../core/domain.ts';
-import { ConfirmationDialog } from '../components/ConfirmationDialog.ts';
-import { PipelineEditDialog } from '../components/PipelineEditDialog.ts';
-import { PipelineItemView } from '../components/PipelineItemView.ts';
-import { SessionManagerButton } from '../components/SessionManagerButton.ts';
+import { ConfirmationDialog } from '../components/dialogs/ConfirmationDialog.ts';
+import { PipelineEditDialog } from '../components/dialogs/PipelineEditDialog.ts';
+import { PipelineItemView } from '../components/pipeline/PipelineItemView.ts';
+import { SessionManagerButton } from '../components/session/SessionManagerButton.ts';
 
 // Sort weight per pipeline status. Lower weight renders first.
 // Unknown/non-conforming statuses fall back to 3 (last).

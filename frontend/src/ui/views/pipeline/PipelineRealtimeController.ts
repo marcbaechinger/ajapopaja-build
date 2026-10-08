@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-import { ExecutionEngineView } from '../../components/ExecutionEngineView.ts';
-import { PullRequestSection } from '../../components/PullRequestSection.ts';
-import { TaskItem } from '../../components/TaskItem.ts';
+import { ExecutionEngineView } from '../../components/pipeline/ExecutionEngineView.ts';
+import { PullRequestSection } from '../../components/pipeline/PullRequestSection.ts';
+import { TaskItem } from '../../components/pipeline/TaskItem.ts';
 import { TaskStatus } from '../../../core/domain.ts';
 import type { Pipeline, Task } from '../../../core/domain.ts';
 import type { SpecProposal } from '../../../core/clients/SpecBotClient.ts';

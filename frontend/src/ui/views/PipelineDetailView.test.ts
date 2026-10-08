@@ -19,32 +19,32 @@ import { PipelineDetailView } from './PipelineDetailView.ts';
 import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
 import { ActionRegistry } from '../../core/ActionRegistry.ts';
 import { TaskStatus } from '../../core/domain.ts';
-import { setTaskSpecProposalUpdater } from '../components/SpecSection.ts';
-import { PipelineEditDialog } from '../components/PipelineEditDialog.ts';
+import { setTaskSpecProposalUpdater } from '../components/pipeline/SpecSection.ts';
+import { PipelineEditDialog } from '../components/dialogs/PipelineEditDialog.ts';
 
 // Mock components to avoid deep rendering issues in unit tests
-vi.mock('../components/TaskColumn.ts', () => ({
+vi.mock('../components/pipeline/TaskColumn.ts', () => ({
   TaskColumn: { render: () => '<div class="mock-column">Column</div>' }
 }));
-vi.mock('../components/TaskForm.ts', () => ({
+vi.mock('../components/pipeline/TaskForm.ts', () => ({
   TaskForm: { render: () => '<div class="mock-form">Form</div>' }
 }));
-vi.mock('../components/PipelineHeaderView.ts', () => ({
+vi.mock('../components/pipeline/PipelineHeaderView.ts', () => ({
   PipelineHeaderView: { render: () => '<div class="mock-header">Header</div>' }
 }));
-vi.mock('../components/PipelineHistoryView.ts', () => ({
+vi.mock('../components/pipeline/PipelineHistoryView.ts', () => ({
   PipelineHistoryView: { render: () => '<div class="mock-history">History</div>' }
 }));
-vi.mock('../components/PaginationControl.ts', () => ({
+vi.mock('../components/common/PaginationControl.ts', () => ({
   PaginationControl: { render: () => '<div class="mock-pagination">Pagination</div>' }
 }));
-vi.mock('../components/CoderBotDialog.ts', () => ({
+vi.mock('../components/dialogs/CoderBotDialog.ts', () => ({
   CoderBotDialog: vi.fn(function CoderBotDialog() {
     return { show: vi.fn() };
   }),
 }));
 
-vi.mock('../components/DevServerDialog.ts', () => ({
+vi.mock('../components/dialogs/DevServerDialog.ts', () => ({
   DevServerDialog: vi.fn(function DevServerDialog() {
     return { show: vi.fn() };
   }),
@@ -52,7 +52,7 @@ vi.mock('../components/DevServerDialog.ts', () => ({
 
 // Mock the diff dialog so triggering the action can be asserted without the
 // dialog's async network load.
-vi.mock('../components/DiffDialog.ts', () => ({
+vi.mock('../components/dialogs/DiffDialog.ts', () => ({
   DiffDialog: vi.fn(function DiffDialog() {
     return { show: vi.fn() };
   }),
@@ -60,7 +60,7 @@ vi.mock('../components/DiffDialog.ts', () => ({
 
 // Mock the interactive coding view so its inner PiView is not mounted in unit
 // tests; the host slot/toggle behaviour is what is under test here.
-vi.mock('../components/InteractiveCodingView.ts', () => ({
+vi.mock('../components/session/InteractiveCodingView.ts', () => ({
   InteractiveCodingView: vi.fn(function InteractiveCodingView() {
     return {
       render: vi.fn(),
@@ -73,7 +73,7 @@ vi.mock('../components/InteractiveCodingView.ts', () => ({
 
 // The inline accept action confirms before calling the client. Keep the dialog
 // out of the way so the test can drive the action deterministically.
-vi.mock('../components/ConfirmationDialog.ts', () => ({
+vi.mock('../components/dialogs/ConfirmationDialog.ts', () => ({
   ConfirmationDialog: vi.fn(function ConfirmationDialog() {
     return { show: vi.fn().mockResolvedValue(true) };
   }),
@@ -81,7 +81,7 @@ vi.mock('../components/ConfirmationDialog.ts', () => ({
 
 // The edit shortcut dispatches `edit_pipeline`, which constructs this dialog.
 // Mock it so the shortcut test can assert the dialog without any network I/O.
-vi.mock('../components/PipelineEditDialog.ts', () => ({
+vi.mock('../components/dialogs/PipelineEditDialog.ts', () => ({
   PipelineEditDialog: vi.fn(function PipelineEditDialog() {
     return { show: vi.fn() };
   }),

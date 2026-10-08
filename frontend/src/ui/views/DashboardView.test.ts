@@ -20,7 +20,7 @@ import { PipelineStatus, TaskStatus } from '../../core/domain.ts';
 
 // Mock components
 const mockShow = vi.fn().mockResolvedValue(true);
-vi.mock('../components/ConfirmationDialog.ts', () => {
+vi.mock('../components/dialogs/ConfirmationDialog.ts', () => {
   return {
     ConfirmationDialog: class {
       show = mockShow;
@@ -28,7 +28,7 @@ vi.mock('../components/ConfirmationDialog.ts', () => {
   };
 });
 
-vi.mock('../components/PipelineEditDialog.ts', () => {
+vi.mock('../components/dialogs/PipelineEditDialog.ts', () => {
   return {
     PipelineEditDialog: vi.fn().mockImplementation(function (this: any) {
       this.show = mockShow;
@@ -36,7 +36,7 @@ vi.mock('../components/PipelineEditDialog.ts', () => {
   };
 });
 
-vi.mock('../components/PipelineStatsView.ts', () => ({
+vi.mock('../components/pipeline/PipelineStatsView.ts', () => ({
   PipelineStatsView: {
     render: vi.fn().mockReturnValue('<div class="mock-stats">Stats</div>'),
     renderCompact: vi.fn().mockReturnValue('<div class="mock-stats">Compact Stats</div>'),
@@ -44,7 +44,7 @@ vi.mock('../components/PipelineStatsView.ts', () => ({
   }
 }));
 
-import { PipelineEditDialog } from '../components/PipelineEditDialog.ts';
+import { PipelineEditDialog } from '../components/dialogs/PipelineEditDialog.ts';
 
 describe('DashboardView', () => {
   let mockContext: any;
@@ -213,7 +213,7 @@ describe('DashboardView', () => {
   });
 
   it('should handle pipeline deletion with confirmation', async () => {
-    await import('../components/ConfirmationDialog.ts');
+    await import('../components/dialogs/ConfirmationDialog.ts');
     const view = new DashboardView(mockContext);
     container.innerHTML = view.render();
     view.mount(container);

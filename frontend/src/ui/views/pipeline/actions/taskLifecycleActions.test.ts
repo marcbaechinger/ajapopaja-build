@@ -20,10 +20,10 @@ import type { TaskLifecycleActionsDeps } from './taskLifecycleActions.ts';
 import { createPipelineDetailState } from '../PipelineDetailCtx.ts';
 import type { PipelineDetailCtx } from '../PipelineDetailCtx.ts';
 import type { ActionHandler } from '../../../../core/ActionRegistry.ts';
-import { ConfirmationDialog } from '../../../components/ConfirmationDialog.ts';
+import { ConfirmationDialog } from '../../../components/dialogs/ConfirmationDialog.ts';
 import { TaskStatus } from '../../../../core/domain.ts';
 
-vi.mock('../../../components/ConfirmationDialog.ts', () => ({
+vi.mock('../../../components/dialogs/ConfirmationDialog.ts', () => ({
   ConfirmationDialog: vi.fn(function ConfirmationDialog() {
     return { show: vi.fn().mockResolvedValue(true) };
   }),
