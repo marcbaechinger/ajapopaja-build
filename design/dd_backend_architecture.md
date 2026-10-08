@@ -4,6 +4,41 @@
 
 This document defines the architecture and design patterns for the Ajapopaja Build FastAPI backend. The goals are to ensure consistent routing, decouple database access from endpoint logic, and provide a robust, real‑time communication layer via WebSockets.
 
+### 1.1 Layered Architecture
+
+```mermaid
+flowchart TB
+    subgraph Transport["Transport"]
+        REST["REST routers<br/>/api/…"]
+        WSEndpoint["WebSocket<br/>/ws/{client_id}"]
+        MCPMount["MCP mount<br/>/mcp"]
+    end
+
+    subgraph ServiceLayer["Service / Manager layer"]
+        Bots["Bot managers<br/>CoderBot · DocBot · ArchBot · ReviewBot · SpecAgent"]
+        DevProcessManager["DevProcessManager"]
+        Notifications["NotificationManager"]
+        Assistant["Assistant session"]
+    end
+
+    subgraph DataLayer["Data layer"]
+        Queries["queries/<br/>pipeline · task · pi_session"]
+        Models["models.py<br/>Beanie documents + enums"]
+    end
+
+    MongoDB[("MongoDB")]
+
+    REST --> ServiceLayer
+    REST --> Queries
+    WSEndpoint --> ServiceLayer
+    MCPMount --> Queries
+    Bots --> Queries
+    DevProcessManager --> Queries
+    Queries --> Models
+    Models --> MongoDB
+    ServiceLayer --> Queries
+```
+
 ## 2. Router Design & Naming Conventions
 
 The API is organized into feature‑based routers (e.g., `PipelineRouter`, `TaskRouter`) to keep the codebase modular.
@@ -60,6 +95,14 @@ from core.queries import pipeline as pipeline_queries
 @router.get("/", response_model=List[Pipeline])
 async def list_pipelines():
     return await pipeline_queries.get_all_pipelines()
+```
+
+```mermaid
+flowchart LR
+    Client["HTTP client"] --> Router["Router<br/>validation · auth · response model"]
+    Router --> Query["Query module<br/>queries/pipeline.py · queries/task.py"]
+    Query --> Beanie["Beanie document<br/>models.py"]
+    Beanie --> MongoDB[("MongoDB")]
 ```
 
 ## 3.1 Dev Process Manager
@@ -139,6 +182,41 @@ All messages follow a common JSON structure:
 ### Message Registry (Server Side)
 
 Similar to the frontend, the server maintains a registry of handlers mapped to message `type`. This allows adding new real‑time features without modifying the core WebSocket loop.
+
+### Message Flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client (SPA)
+    participant API as FastAPI /ws/{client_id}
+    participant Auth as JWT decode
+    participant Reg as Handler registry
+    participant Bcast as ConnectionManager
+    participant DB as MongoDB
+
+    C->>API: connect /ws/{client_id}?token=JWT
+    API->>Auth: decode_token(token)
+    alt token valid
+        Auth-->>API: username (sub)
+        API->>Bcast: add_connection(ws, client_id, username)
+        API-->>C: connection accepted
+    else missing or invalid
+        API-->>C: close 4001 (policy violation)
+    end
+
+    par Client to server message
+        C->>API: {type, id, payload}
+        API->>Reg: dispatch by type
+        Reg->>DB: query / mutate
+        Reg-->>API: result
+        API-->>C: response message
+    and Server broadcast
+        DB-->>API: entity change
+        API->>Bcast: broadcast(type, payload)
+        Bcast-->>C: TASK_UPDATED / TASK_STATUS_UPDATED
+    end
+```
 
 ## 6. MCP Interface
 

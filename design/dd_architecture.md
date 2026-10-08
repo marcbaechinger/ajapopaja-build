@@ -46,6 +46,37 @@ The system is composed of five primary interconnected components:
         * Manage autonomous background workers (e.g., bot executors) directly from the API, enabling pipelines to run without requiring external terminal invocations.
         * The assistant interface is conditionally rendered based on Ollama availability; if the Ollama service is unreachable, the system degrades gracefully by hiding assistant controls and skipping DocBot background sessions. Health checks are performed on the `/system/health` endpoint and used by both the backend and frontend to determine availability.
 
+### 2.1 Component Overview
+
+```mermaid
+flowchart TB
+    subgraph Clients["Clients"]
+        Human["Human Manager"]
+        Agent["Coding AI Agent<br/>(Gemini / Claude / Pi)"]
+    end
+
+    subgraph Backend["Ajapopaja Backend"]
+        SPA["SPA Frontend<br/>Vanilla TS + Tailwind"]
+        API["FastAPI Server<br/>Management API"]
+        MCP["MCP Server<br/>Model Context Protocol"]
+        Assistant["Integrated AI Assistant<br/>+ Local Executors"]
+        Core["Shared Core Library<br/>models · queries · services · git utils"]
+        DB[("MongoDB<br/>pipelines · tasks · sessions")]
+    end
+
+    Ollama["Ollama<br/>(optional local LLM)"]
+
+    Human -->|HTTPS| SPA
+    SPA <-->|REST + WebSocket| API
+    Agent -->|MCP tools| MCP
+    API --> Assistant
+    API --> Core
+    MCP --> Core
+    Assistant --> Core
+    Core --> DB
+    Assistant -.->|health check| Ollama
+```
+
 ## 3. Component Interaction & Data Flow
 
 1. **Human Setup**: A user accesses the **SPA Frontend**, which communicates with the **FastAPI Server** to create a new Pipeline and populate it with Tasks in the **MongoDB**. Tasks are initially set to the `created` state.
@@ -59,6 +90,37 @@ The system is composed of five primary interconnected components:
     * Upon completion, the agent calls an MCP tool (e.g., `mark_task_implemented(task_id)`).
     * The MCP Server updates the task state in **MongoDB** to `implemented` (or `failed` if an error occurred).
 5. **Monitoring**: The user observes these state changes in real‑time via the **SPA Frontend**, which receives events from the **FastAPI Server** over a WebSocket connection.
+
+### 3.1 Workflow Sequence
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as Human Manager
+    participant SPA as SPA Frontend
+    participant API as FastAPI Server
+    participant DB as MongoDB
+    participant MCP as MCP Server
+    actor A as Coding AI Agent
+
+    U->>SPA: create pipeline and tasks
+    SPA->>API: POST /pipelines, POST /pipelines/{id}/tasks
+    API->>DB: persist tasks (status = created)
+    U->>SPA: approve pipeline
+    SPA->>API: PATCH /tasks/{id} (status = scheduled)
+    API->>DB: update task status
+    API-->>SPA: WebSocket TASK_UPDATED
+
+    A->>MCP: get_next_task()
+    MCP->>DB: find first scheduled, set inprogress
+    MCP-->>A: task details + context
+    A->>A: implement, test, commit
+    A->>MCP: mark_task_implemented(task_id)
+    MCP->>DB: set status = implemented (or failed)
+    MCP-->>API: broadcast change
+    API-->>SPA: WebSocket TASK_STATUS_UPDATED
+    SPA-->>U: live progress
+```
 
 ## 4. Shared Core Logic
 

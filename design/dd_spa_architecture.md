@@ -15,6 +15,48 @@ This document defines the architecture and design principles for the Ajapopaja B
 
 - **Domain Models**: `frontend/src/core/domain.ts`
 
+### 2.1 Module Map
+
+```mermaid
+flowchart TB
+    Main["main.ts<br/>bootstrap, routes, requireAuth"]
+
+    subgraph CoreLayer["core/"]
+        AppContext["AppContext<br/>global state + collaborators"]
+        Navigator["Navigator<br/>hash to View"]
+        ActionRegistry["ActionRegistry<br/>data-action-click delegation"]
+        DataManager["DataManager<br/>entity cache + listeners"]
+        WebSocketClient["WebSocketClient"]
+        AuthService["AuthService<br/>JWT + refresh"]
+        Domain["domain.ts<br/>Pipeline · Task · DesignDocHistory"]
+    end
+
+    subgraph ClientLayer["core/clients/"]
+        BaseClient["BaseClient<br/>auth header + 401 refresh"]
+        FeatureClients["PipelineClient · TaskClient<br/>DocBotClient · …"]
+    end
+
+    subgraph UILayer["ui/"]
+        Views["views/<br/>DashboardView · PipelineDetailView · LoginView"]
+        Components["components/<br/>TaskItem · PiView · dialogs · panels"]
+    end
+
+    Main --> AppContext
+    Main --> Navigator
+    AppContext --> Navigator
+    AppContext --> ActionRegistry
+    AppContext --> DataManager
+    AppContext --> AuthService
+    DataManager --> WebSocketClient
+    DataManager --> Domain
+    DataManager --> FeatureClients
+    FeatureClients --> BaseClient
+    BaseClient --> AuthService
+    Views --> AppContext
+    Views --> Components
+    Components -.->|data-action-click| ActionRegistry
+```
+
 ## 3. Application Lifecycle & Context
 ### `AppContext`
 
@@ -126,6 +168,22 @@ the current selection, so unrelated `hashchange` events never re-render.
 - **Dashboard View**: `frontend/src/ui/views/DashboardView.ts`
 - **Pipeline Detail View**: `frontend/src/ui/views/PipelineDetailView.ts`
 
+### 6.1 Route Resolution
+
+```mermaid
+flowchart TD
+    H["hashchange / initial load"] --> M["Navigator matches hash<br/>against registered patterns"]
+    M --> F{"pattern found?"}
+    F -- no --> NF["not-found / fallback"]
+    F -- yes --> S{"same pattern as<br/>mounted view?"}
+    S -- new pattern --> U["unmount -> render -> mount"]
+    S -- same pattern --> UP{"view.update(params)<br/>returns true?"}
+    UP -- yes --> R["reuse view (no re-render)"]
+    UP -- "no / not implemented" --> U
+    U --> D["render into #content"]
+    R --> D
+```
+
 ### UI Consistency
 
 - Standardized Tailwind classes for common elements (cards, buttons, inputs).
@@ -217,6 +275,21 @@ The Data Manager acts as a single source of truth for all domain entities expose
 - **Optimistic Updates**: Exposes `updateTask` and `updatePipeline` helpers that mutate the cache immediately and notify listeners, allowing components to reflect changes before server confirmation.
 - **Removal**: Handles deletion of tasks via `removeTask` and propagates deletions to listeners.
 - **Data Conversion**: Wraps raw payloads in domain model instances (`new Task(data)`, `new Pipeline(data)`), ensuring type safety and normalizing fields such as `_id` → `id`.
+
+### Data Flow
+
+```mermaid
+flowchart LR
+    WS["WebSocketClient<br/>TASK_UPDATED · PIPELINE_UPDATED · …"] --> DM["DataManager"]
+    Clients["REST clients<br/>PipelineClient · TaskClient"] --> DM
+    DM --> Cache["Cache<br/>Map of id to entity"]
+    DM --> Listeners["Listeners<br/>keyed by query"]
+    DM --> Conv["Domain conversion<br/>new Task() / new Pipeline()"]
+    Conv --> Cache
+    Cache --> UI["Components / Views"]
+    Listeners --> UI
+    UI -->|"on(query, cb)"| Listeners
+```
 
 ## 11. Recommended Libraries
 
