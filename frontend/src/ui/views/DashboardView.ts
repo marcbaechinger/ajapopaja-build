@@ -19,8 +19,10 @@ import { AppContext } from '../../core/AppContext.ts';
 import { Pipeline, PipelineStatus, Task } from '../../core/domain.ts';
 import { ConfirmationDialog } from '../components/dialogs/ConfirmationDialog.ts';
 import { PipelineEditDialog } from '../components/dialogs/PipelineEditDialog.ts';
+import { Icon } from '../components/common/Icon.ts';
 import { PipelineItemView } from '../components/pipeline/PipelineItemView.ts';
 import { SessionManagerButton } from '../components/session/SessionManagerButton.ts';
+import { GettingStartedDialog, renderGettingStartedGuide } from './GettingStartedGuide.ts';
 
 // Sort weight per pipeline status. Lower weight renders first.
 // Unknown/non-conforming statuses fall back to 3 (last).
@@ -45,6 +47,8 @@ export class DashboardView extends View {
   private container: HTMLElement | null = null;
   private context: AppContext;
   private unsubs: (() => void)[] = [];
+  /** The getting-started overlay, when open. Used to dismiss it before creating a pipeline. */
+  private gettingStartedDialog: GettingStartedDialog | null = null;
 
   constructor(context: AppContext) {
     super();
@@ -71,12 +75,47 @@ export class DashboardView extends View {
 
   private registerActions() {
     this.context.actionRegistry.register('create_pipeline', async () => {
-      const dialog = new PipelineEditDialog({
-        mode: 'create',
-        context: this.context
+      await this.openCreatePipelineDialog();
+    });
+
+    // The primary button inside the getting-started overlay: dismiss the guide
+    // first so the (modal) create dialog can be shown.
+    this.context.actionRegistry.register('create_pipeline_from_guide', async () => {
+      this.gettingStartedDialog?.dismiss();
+      this.gettingStartedDialog = null;
+      await this.openCreatePipelineDialog();
+    });
+
+    // “Readme” access once pipelines exist: reopen the onboarding guide as an
+    // overlay so it stays available for reference without cluttering the list.
+    this.context.actionRegistry.register('open_getting_started', () => {
+      if (this.gettingStartedDialog) return;
+      const dialog = new GettingStartedDialog();
+      this.gettingStartedDialog = dialog;
+      void dialog.show().finally(() => {
+        if (this.gettingStartedDialog === dialog) this.gettingStartedDialog = null;
       });
-      await dialog.show();
-      // List will be updated via WebSocket
+    });
+
+    // Copies a project blueprint prompt to the clipboard and confirms inline.
+    this.context.actionRegistry.register('copy_project_prompt', async (_e, el) => {
+      const targetId = el.getAttribute('data-copy-target');
+      const pre = targetId ? document.getElementById(targetId) : null;
+      const text = pre?.textContent ?? '';
+      if (!text) return;
+      try {
+        await navigator.clipboard.writeText(text);
+        const label = el.querySelector('.copy-label');
+        if (label) {
+          const original = label.textContent ?? 'Copy prompt';
+          label.textContent = 'Copied!';
+          window.setTimeout(() => {
+            label.textContent = original;
+          }, 1500);
+        }
+      } catch (error) {
+        console.error('Failed to copy project prompt:', error);
+      }
     });
 
     this.context.actionRegistry.register('delete_pipeline', async (e, el) => {
@@ -112,6 +151,16 @@ export class DashboardView extends View {
     });
   }
 
+  /** Opens the “Create Pipeline” dialog. Shared by the header and the guide. */
+  private async openCreatePipelineDialog() {
+    const dialog = new PipelineEditDialog({
+      mode: 'create',
+      context: this.context
+    });
+    await dialog.show();
+    // List will be updated via WebSocket
+  }
+
   async refreshList() {
     if (!this.container) return;
     const listContainer = this.container.querySelector('#pipeline-list') as HTMLElement;
@@ -119,9 +168,15 @@ export class DashboardView extends View {
 
     try {
       const pipelines = await this.context.pipelineClient.list();
-      
+
+      // The onboarding guide takes over the empty dashboard: hide the regular
+      // “Active Pipelines” header (and its create button) so the first page
+      // reads as a single, focused getting-started experience.
+      const header = this.container.querySelector('#pipelines-header') as HTMLElement | null;
+      if (header) header.classList.toggle('hidden', pipelines.length === 0);
+
       if (pipelines.length === 0) {
-        listContainer.innerHTML = '<p class="text-app-muted italic">No pipelines created yet.</p>';
+        listContainer.innerHTML = renderGettingStartedGuide('inline');
         return;
       }
 
@@ -246,12 +301,18 @@ export class DashboardView extends View {
 
       <main class="flex flex-col gap-8">
         <section class="bg-app-surface p-6 rounded-xl shadow-xl border border-app-border transition-all hover:border-app-accent-2/50">
-          <div class="flex justify-between items-center mb-6">
+          <div id="pipelines-header" class="flex justify-between items-center mb-6">
             <h2 class="text-2xl font-bold text-app-accent-2">Active Pipelines</h2>
-            <button data-action-click="create_pipeline" class="flex items-center gap-2 bg-app-accent-1 hover:brightness-110 text-white text-xs font-bold uppercase tracking-widest px-4 py-2 rounded-lg transition-all shadow-lg cursor-pointer">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
-              Create Pipeline
-            </button>
+            <div class="flex items-center gap-2">
+              <button data-action-click="open_getting_started" class="flex items-center gap-2 bg-app-bg hover:bg-app-surface px-4 py-2 rounded-xl border border-app-border text-app-muted hover:text-app-accent-2 transition-all cursor-pointer group" title="Open the getting started guide">
+                ${Icon.render('documentation', { size: 16, className: 'group-hover:scale-110 transition-transform' })}
+                <span class="text-xs font-bold uppercase tracking-widest">Guide</span>
+              </button>
+              <button data-action-click="create_pipeline" class="flex items-center gap-2 bg-app-accent-1 hover:brightness-110 text-white text-xs font-bold uppercase tracking-widest px-4 py-2 rounded-lg transition-all shadow-lg cursor-pointer">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                Create Pipeline
+              </button>
+            </div>
           </div>
           <div id="pipeline-list" class="space-y-2">
             <p class="text-app-muted animate-pulse">Loading pipelines...</p>
@@ -273,7 +334,10 @@ export class DashboardView extends View {
     if (!this.container) return;
     const isAvailable = await this.context.systemClient.isOllamaAvailable();
     if (!isAvailable) {
-      this.container.querySelector('[data-action-click="toggle_assistant"]')?.classList.add('hidden');
+      // Hide every assistant entry point (header and getting-started guide)
+      // so the UI never offers an action the backend cannot serve.
+      this.container.querySelectorAll('[data-action-click="toggle_assistant"]')
+        .forEach((el) => el.classList.add('hidden'));
     }
   }
 
@@ -289,5 +353,7 @@ export class DashboardView extends View {
   unmount() {
     this.unsubs.forEach(unsub => unsub());
     this.unsubs = [];
+    this.gettingStartedDialog?.dismiss();
+    this.gettingStartedDialog = null;
   }
 }

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { DashboardView } from './DashboardView.ts';
 import { PipelineStatus, TaskStatus } from '../../core/domain.ts';
 
@@ -82,6 +82,10 @@ describe('DashboardView', () => {
 
     vi.stubGlobal('location', { hash: '' });
     vi.stubGlobal('alert', vi.fn());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('should register actions and websocket listeners on construction', () => {
@@ -271,6 +275,85 @@ describe('DashboardView', () => {
 
     const versionEl = container.querySelector('#app-version');
     expect(versionEl?.textContent).toBe('v1.0.0');
+  });
+
+  it('should render the getting-started guide when no pipelines exist', async () => {
+    mockContext.pipelineClient.list.mockResolvedValue([]);
+    const view = new DashboardView(mockContext);
+    container.innerHTML = view.render();
+    view.mount(container);
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    const list = container.querySelector('#pipeline-list');
+    // Hero + Gitea walkthrough.
+    expect(list?.innerHTML).toContain('Build your first pipeline');
+    expect(list?.innerHTML).toContain('Create a Gitea repository');
+    expect(list?.innerHTML).toContain('repository');
+    expect(list?.innerHTML).toContain('issues');
+    // Project blueprint prompts.
+    expect(list?.innerHTML).toContain('React single-page app');
+    expect(list?.innerHTML).toContain('React + Python API');
+    expect(list?.innerHTML).toContain('Python CLI with Rich UI');
+    // The regular header is hidden so the guide is the whole first page.
+    expect(container.querySelector('#pipelines-header')?.classList.contains('hidden')).toBe(true);
+  });
+
+  it('should show the pipeline header and guide button once pipelines exist', async () => {
+    mockContext.pipelineClient.list.mockResolvedValue([
+      { id: 'p1', name: 'Pipe 1', status: PipelineStatus.ACTIVE, version: 1 },
+    ]);
+    mockContext.taskClient.listByPipeline.mockResolvedValue([]);
+    const view = new DashboardView(mockContext);
+    container.innerHTML = view.render();
+    view.mount(container);
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(container.querySelector('#pipelines-header')?.classList.contains('hidden')).toBe(false);
+    expect(container.querySelector('[data-action-click="open_getting_started"]')).toBeTruthy();
+  });
+
+  it('should copy a project blueprint prompt to the clipboard', async () => {
+    const clipboardWrite = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText: clipboardWrite } });
+    mockContext.pipelineClient.list.mockResolvedValue([]);
+
+    const view = new DashboardView(mockContext);
+    container.innerHTML = view.render();
+    view.mount(container);
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    const copyAction = mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === 'copy_project_prompt')[1];
+    const button = container.querySelector('[data-action-click="copy_project_prompt"]') as HTMLElement;
+    expect(button).toBeTruthy();
+
+    await copyAction(undefined, button);
+
+    expect(clipboardWrite).toHaveBeenCalledTimes(1);
+    const copied = clipboardWrite.mock.calls[0][0] as string;
+    expect(copied).toContain('Vite');
+    expect(copied).toContain('TypeScript');
+    expect(button.querySelector('.copy-label')?.textContent).toBe('Copied!');
+  });
+
+  it('should open the getting-started overlay from the guide action', () => {
+    // JSDOM does not implement the native dialog methods.
+    HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) {
+      this.open = true;
+    });
+    HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) {
+      this.open = false;
+    });
+
+    new DashboardView(mockContext);
+    const openAction = mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === 'open_getting_started')[1];
+    openAction(undefined, document.body);
+
+    const dialogs = Array.from(document.querySelectorAll('dialog'));
+    expect(dialogs.length).toBeGreaterThan(0);
+    expect(document.body.textContent).toContain('Getting Started');
+    expect(document.body.textContent).toContain('Build your first pipeline');
+    // The overlay routes its primary button through a dedicated action.
+    expect(document.querySelector('[data-action-click="create_pipeline_from_guide"]')).toBeTruthy();
   });
 
   it('should cleanup subscriptions on unmount', () => {
