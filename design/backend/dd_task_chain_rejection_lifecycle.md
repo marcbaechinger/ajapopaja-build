@@ -182,7 +182,43 @@ flowchart TD
     J -->|"ordering guard §3.6"| N["Does NOT fire:\nPR1 is no longer OPEN"]
 ```
 
-## 8. Gap analysis
+## 8. Content vs. ancestry: does a rejected middle commit block descendants?
+
+The base selection for a sandbox is keyed on **commit hashes** (`c3`'s parent is
+`c2` in the retained workspace). PR representation and acceptance, however, are
+keyed on **content**:
+
+| Layer | Keyed on | Detail |
+|-------|----------|--------|
+| Sandbox chain / base selection | commit hash | `S3` is fetched from `S2` and branched at `c2`; `c3`'s parent is `c2`. |
+| PR representation | content | The local PR stores `patch = diff(c2, c3)`, a blob/context diff — no ancestry required. |
+| Acceptance | content | `git apply --3way` only checks whether the patch's preimage/context matches the target tree; it never checks the commit graph. |
+
+The `Parent commit (base): c2` line in the summary is audit metadata only and is
+not consulted at accept time.
+
+Consequently, in a chain `c1 → c2 → c3` where the tasks edit **disjoint** files
+(`f1`, `f2`, `f3`), rejecting `c2` and accepting `PR3` onto `main` still works:
+`diff(c2,c3)` contains only `f3`'s hunk, and `f3@c2 == f3@M`, so it applies. `c2` is
+not required as an ancestor. The failure is content-dependent, not automatic:
+
+| Case | Applies? | Why |
+|------|----------|-----|
+| `c3` edits `f3` only, `c2` edited `f2` | ✅ | different blobs; hunk context matches `M` |
+| `c3` edits a *different region* of `f2` | ✅ usually | hunks are local; context does not include `c2`'s edits |
+| `c3` edits lines/context that `c2` rewrote | ❌ | patch preimage is `f2@c2`, absent from `R` → mismatch |
+| `c3` applies cleanly but calls something `c2` added | ⚠️ | merges textually; semantically broken |
+
+`git apply --3way` can only perform its 3-way rescue when the patch's `index`
+preimage blobs exist in `R`. Sandbox commits do not, so overlapping hunks
+generally fail hard (`HTTP 500` + workspace reset) rather than merging.
+
+This generalises to an N-deep chain: each PR carries only `diff(c_{n-1}, c_n)`, so a
+rejected middle commit `ck` blocks a descendant only where that descendant's patch
+depends on `ck`'s content. `tree(cN) = tree(c1) + Δ2 + ... + ΔN`; a missing `Δk`
+leaves the tree wrong wherever later diffs rely on it. Disjoint work is unaffected.
+
+## 9. Gap analysis
 
 | Situation | Design rule | Covered? |
 |-----------|-------------|-----------|
@@ -198,8 +234,9 @@ flowchart TD
 1. In the t1+t2-at-once scenario the chain is formed **before** the user can
    review, so rejecting `PR1` does not make `PR2` fall back to `main`. Accepting
    `PR2` alone replays `diff(c1,c2)` on `M`, which can either fail or produce a
-   partial result. The ordering guard does not catch it because `PR1` is no longer
-   `OPEN` after the reject.
+   partial result. Whether it is harmful depends on content overlap (see [§8](#8-content-vs-ancestry-does-a-rejected-middle-commit-block-descendants));
+   either way the recorded base `c1` never exists in `main`. The ordering guard
+   does not catch it because `PR1` is no longer `OPEN` after the reject.
 2. A remote reject is silently ignored: the local PR/task remain `SUBMITTED`, and
    in `gitea_pr` mode `R.main` already carries `c1'`, so later tasks build on work
    the remote user rejected.
@@ -207,7 +244,7 @@ flowchart TD
    branches stack; a rejected PR1's change can still reach the remote through a
    merged PR2.
 
-## 9. Proposed fixes
+## 10. Proposed fixes
 
 1. **Re-chain or invalidate descendants on reject.** When `PR1` is rejected,
    detect sessions/PRs already chained onto `c1` and either mark them stale or
@@ -223,7 +260,7 @@ flowchart TD
    `R.main` at accept time, so a remote rejection can actually undo the change
    locally and feature branches stop stacking.
 
-## 10. Test strategy
+## 11. Test strategy
 
 * Unit: reject flips `PR.status`/task status; a chained descendant is flagged or
   blocked as specified by fix 1.
