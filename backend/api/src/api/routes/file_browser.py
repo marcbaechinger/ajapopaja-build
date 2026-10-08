@@ -21,10 +21,18 @@ workspace; absolute paths are never exposed to the client.
 """
 
 import logging
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
-from api.auth import get_current_user
+from api.auth import (
+    RAW_FILE_TOKEN_TTL_SECONDS,
+    create_raw_file_token,
+    decode_raw_file_token,
+    get_current_user,
+)
 from core.exceptions import EntityNotFoundError
 from core.models.models import (
     DirectoryListing,
@@ -34,12 +42,50 @@ from core.models.models import (
     User,
 )
 from core.queries import pipeline as pipeline_queries
-from core.services.file_browser import FileBrowserService, PathEscapeError
+from core.services.file_browser import (
+    FileBrowserService,
+    PathEscapeError,
+    guess_media_type,
+)
 from core.services.file_search import FileSearchService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/pipelines/{pipeline_id}/files", tags=["file-browser"])
+
+
+class RawFileUrl(BaseModel):
+    """A short-lived token that authorises a single raw file view."""
+
+    token: str
+    expires_in: int
+
+
+def _resolve_file_or_http(pipeline, path: str):
+    """Resolve a file, translating service errors into HTTP responses.
+
+    The sync counterpart of :func:`_handle`, used by the raw-file endpoints
+    (whose path resolution happens before a ``FileResponse`` is built).
+    """
+    try:
+        return FileBrowserService.resolve_file(pipeline, path)
+    except EntityNotFoundError:
+        raise
+    except PathEscapeError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
+    except IsADirectoryError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Path is a directory, not a file",
+        )
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Path not found"
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        ) from e
 
 
 async def _handle(coro):
@@ -114,3 +160,55 @@ async def search_files(
     """Search filenames (and pathnames) in the pipeline repository."""
     pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
     return await _handle(FileSearchService.search(pipeline, q, limit))
+
+
+@router.post("/raw-url", response_model=RawFileUrl)
+async def create_raw_file_url(
+    pipeline_id: str,
+    path: str = Query(..., min_length=1),
+    current_user: User = Depends(get_current_user),
+):
+    """Mint a short-lived token to open ``path`` in the raw viewer.
+
+    The path is validated up front (traversal, ``.git``, missing, directory)
+    so failures surface immediately instead of in the new browser tab.
+    """
+    pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
+    _resolved, clean = _resolve_file_or_http(pipeline, path)
+    return RawFileUrl(
+        token=create_raw_file_token(current_user.username, pipeline_id, clean),
+        expires_in=RAW_FILE_TOKEN_TTL_SECONDS,
+    )
+
+
+@router.get("/raw")
+async def read_raw_file(
+    pipeline_id: str,
+    token: Optional[str] = Query(None),
+):
+    """Stream the full file named by a raw-file token.
+
+    The token *is* the authentication and the file path is taken from the
+    token, not the URL, so the link cannot be edited to read another file.
+    """
+    claims = decode_raw_file_token(token)
+    if claims.pipeline_id != pipeline_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Token does not match this pipeline",
+        )
+
+    pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
+    resolved, _clean = _resolve_file_or_http(pipeline, claims.path)
+
+    return FileResponse(
+        resolved,
+        media_type=guess_media_type(resolved.name),
+        filename=resolved.name,
+        content_disposition_type="inline",
+        headers={
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "sandbox",
+            "Cache-Control": "private, no-store",
+        },
+    )

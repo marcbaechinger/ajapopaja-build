@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Optional, Union
 
@@ -20,6 +21,7 @@ import bcrypt
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
+from pydantic import BaseModel
 
 from core.models.models import User
 
@@ -29,7 +31,21 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
+# Scope and lifetime of the short-lived tokens that authorise a single raw
+# file view. Raw tokens are path-bound and must never be accepted as general
+# access credentials (see ``decode_token``).
+RAW_FILE_SCOPE = "file:raw"
+RAW_FILE_TOKEN_TTL_SECONDS = 60
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
+
+
+class RawFileToken(BaseModel):
+    """Decoded claims of a raw-file access token."""
+
+    username: str
+    pipeline_id: str
+    path: str
 
 
 def verify_password(plain_password: str, hashed_password: str):
@@ -70,6 +86,69 @@ def create_refresh_token(data: dict):
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
+def create_raw_file_token(username: str, pipeline_id: str, path: str) -> str:
+    """Mint a short-lived, path-bound token for the raw file endpoint.
+
+    The token binds the user, the pipeline and the exact repository-relative
+    path together. It is only accepted by ``decode_raw_file_token`` and is
+    rejected as a general access credential everywhere else.
+    """
+    expire = datetime.now(UTC) + timedelta(seconds=RAW_FILE_TOKEN_TTL_SECONDS)
+    to_encode = {
+        "sub": username,
+        "scope": RAW_FILE_SCOPE,
+        "pipeline_id": pipeline_id,
+        "path": path,
+        "jti": str(uuid.uuid4()),
+        "exp": expire,
+    }
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def decode_raw_file_token(token: Optional[str]) -> RawFileToken:
+    """Validate a raw-file token and return its claims.
+
+    Raises ``HTTPException(401)`` for anything that is not a valid, unexpired
+    token carrying the raw-file scope.
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or expired raw file token",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    if not token:
+        raise credentials_exception
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        raise credentials_exception
+
+    if payload.get("scope") != RAW_FILE_SCOPE:
+        raise credentials_exception
+
+    username = payload.get("sub")
+    pipeline_id = payload.get("pipeline_id")
+    path = payload.get("path")
+    if not username or not pipeline_id or not path:
+        raise credentials_exception
+
+    return RawFileToken(username=username, pipeline_id=pipeline_id, path=path)
+
+
+def decode_token(token: str) -> dict:
+    """Decode and validate an application JWT.
+
+    Centralises the token-confusion guard: a raw-file token must never be
+    accepted as a general access credential by the REST API, the WebSocket
+    handshake or the MCP endpoints. Any future decoding entry point should go
+    through this helper so it inherits the check.
+    """
+    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    if payload.get("scope") == RAW_FILE_SCOPE:
+        raise JWTError("raw file token cannot be used as an access credential")
+    return payload
+
+
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -77,7 +156,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = decode_token(token)
         username: Union[str, None] = payload.get("sub")
         if username is None:
             raise credentials_exception
@@ -96,7 +175,7 @@ async def get_current_user_from_token(token: Optional[str]) -> Optional[User]:
     if not token:
         return None
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = decode_token(token)
         username: str = payload.get("sub")
         if username is None:
             return None

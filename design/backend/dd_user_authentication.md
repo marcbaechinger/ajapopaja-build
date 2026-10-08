@@ -73,3 +73,22 @@ This document describes the design for implementing token-based authentication (
 - **Token Expiration**: Access tokens must be short-lived.
 - **Sensitive Data**: Never log passwords or raw tokens.
 - **CORS**: Ensure `allow_credentials=True` is set in FastAPI CORS middleware to allow cookies.
+
+## 6. Scoped Tokens (Raw File Viewer)
+
+Opening a file in a new browser tab cannot attach the `Authorization` header,
+so the raw-file viewer uses a dedicated token scope instead of reusing the
+30-minute access token in a URL:
+
+- **Scope**: raw-file tokens carry `scope: "file:raw"` and bind the user, the
+  pipeline id and the exact repository-relative path (plus a `jti` and a 60 s
+  `exp`). See `create_raw_file_token` / `decode_raw_file_token` in `api.auth`.
+- **Minting**: `POST /api/pipelines/{pipeline_id}/files/raw-url` is an ordinary
+  authenticated endpoint and validates the path before signing.
+- **Consumption**: `GET /api/pipelines/{pipeline_id}/files/raw?token=…` has no
+  `get_current_user` dependency; the path is read from the token so the URL
+  cannot be edited to read a different file.
+- **Token confusion prevention**: `decode_token` rejects any JWT carrying the
+  raw-file scope, so such a token can never authenticate the REST API, the
+  WebSocket handshake or the MCP endpoints. All token-decoding entry points
+  must go through `decode_token` so the guard is inherited.

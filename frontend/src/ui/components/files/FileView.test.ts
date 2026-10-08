@@ -92,4 +92,35 @@ describe('FileView', () => {
     expect(button!.getAttribute('data-path')).toBe('backend/core/foo_bar.py');
     expect(button!.getAttribute('title')).toBe('Copy path');
   });
+
+  it('renders a raw action next to the copy action carrying the path', () => {
+    const host = renderIntoDom(
+      file({ name: 'foo_bar.py', path: 'backend/core/foo_bar.py', content: '' })
+    );
+
+    const button = host.querySelector(
+      '[data-action-click="open_file_raw"]'
+    ) as HTMLButtonElement | null;
+    expect(button).not.toBeNull();
+    expect(button!.getAttribute('data-path')).toBe('backend/core/foo_bar.py');
+    expect(button!.getAttribute('title')).toBe('Open raw file');
+    expect(button!.getAttribute('aria-label')).toBe('Open raw file');
+    expect(button!.textContent!.trim().toLowerCase()).toBe('raw');
+
+    // The raw button sits immediately after the copy-path button.
+    const copy = host.querySelector('[data-action-click="copy_file_path"]');
+    expect(copy!.nextElementSibling).toBe(button);
+  });
+
+  it('renders the raw action for binary files too', () => {
+    const host = renderIntoDom(
+      file({ name: 'logo.png', path: 'assets/logo.png', is_binary: true })
+    );
+
+    const button = host.querySelector(
+      '[data-action-click="open_file_raw"]'
+    ) as HTMLButtonElement | null;
+    expect(button).not.toBeNull();
+    expect(button!.getAttribute('data-path')).toBe('assets/logo.png');
+  });
 });

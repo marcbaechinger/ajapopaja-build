@@ -31,7 +31,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastmcp.utilities.lifespan import combine_lifespans
-from jose import JWTError, jwt
+from jose import JWTError
 
 from ajapopaja_mcp.server import mcp
 from api.assistant.ws_handler import register_assistant_handlers
@@ -39,7 +39,7 @@ from api.oneprompt.ws_handler import (
     initialize_oneprompt,
     register_oneprompt_handlers,
 )
-from api.auth import ALGORITHM, SECRET_KEY, get_current_user_from_token
+from api.auth import decode_token, get_current_user_from_token
 from api.dev_server_ws import register_dev_process_ws
 from api.notifications import register_notification_handlers
 from api.notifications.router import router as notifications_router
@@ -245,7 +245,7 @@ async def websocket_endpoint(
         return
 
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = decode_token(token)
         username: Union[str, None] = payload.get("sub")
         if username is None:
             logger.warning(

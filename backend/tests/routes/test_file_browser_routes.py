@@ -19,7 +19,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import status
 
-from api.auth import get_current_user
+from api.auth import (
+    RAW_FILE_TOKEN_TTL_SECONDS,
+    create_raw_file_token,
+    decode_raw_file_token,
+    decode_token,
+    get_current_user,
+    get_current_user_from_token,
+)
 from api.main import app
 from core.services import file_search
 from core.services.file_browser import MAX_TEXT_BYTES
@@ -411,3 +418,177 @@ async def test_search_endpoint_requires_authentication(async_client, tmp_path):
             "/api/pipelines/p1/files/search", params={"q": "a"}
         )
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+# --- raw file viewer ---------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_raw_url_requires_authentication(async_client, tmp_path):
+    repo = _make_repo(tmp_path)
+    app.dependency_overrides.clear()
+    with _patch_pipeline(repo):
+        response = await async_client.post(
+            "/api/pipelines/p1/files/raw-url", params={"path": "clean.txt"}
+        )
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.asyncio
+async def test_raw_url_mints_path_bound_token(async_client, tmp_path):
+    repo = _make_repo(tmp_path)
+    with _patch_pipeline(repo):
+        response = await async_client.post(
+            "/api/pipelines/p1/files/raw-url", params={"path": "./sub/nested.txt"}
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert data["expires_in"] == RAW_FILE_TOKEN_TTL_SECONDS
+    claims = decode_raw_file_token(data["token"])
+    assert claims.username == "testuser"
+    assert claims.pipeline_id == "p1"
+    # The minted path is normalised before being bound into the token.
+    assert claims.path == "sub/nested.txt"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "path,expected",
+    [
+        ("sub", status.HTTP_400_BAD_REQUEST),
+        ("nope.txt", status.HTTP_404_NOT_FOUND),
+        (".git/config", status.HTTP_404_NOT_FOUND),
+        ("../outside", status.HTTP_400_BAD_REQUEST),
+    ],
+)
+async def test_raw_url_validates_path_before_minting(
+    async_client, tmp_path, path, expected
+):
+    repo = _make_repo(tmp_path)
+    with _patch_pipeline(repo):
+        response = await async_client.post(
+            "/api/pipelines/p1/files/raw-url", params={"path": path}
+        )
+    assert response.status_code == expected
+
+
+@pytest.mark.asyncio
+async def test_raw_file_streams_full_binary_with_headers(async_client, tmp_path):
+    repo = _make_repo(tmp_path)
+    payload = b"\x00\x01\x02" * (MAX_TEXT_BYTES // 3 + 1000)
+    (repo / "big.bin").write_bytes(payload)
+    token = create_raw_file_token("testuser", "p1", "big.bin")
+
+    with _patch_pipeline(repo):
+        response = await async_client.get(
+            "/api/pipelines/p1/files/raw", params={"token": token}
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.headers["content-type"].startswith("application/octet-stream")
+    disposition = response.headers["content-disposition"]
+    assert disposition.startswith("inline;")
+    assert "big.bin" in disposition
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["content-security-policy"] == "sandbox"
+    assert response.headers["cache-control"] == "private, no-store"
+    # The full payload, well past the 1 MiB text truncation limit.
+    assert response.content == payload
+
+
+@pytest.mark.asyncio
+async def test_raw_file_serves_typescript_as_text(async_client, tmp_path):
+    repo = _make_repo(tmp_path)
+    (repo / "app.ts").write_text("const x = 1;\n")
+    token = create_raw_file_token("testuser", "p1", "app.ts")
+
+    with _patch_pipeline(repo):
+        response = await async_client.get(
+            "/api/pipelines/p1/files/raw", params={"token": token}
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    content_type = response.headers["content-type"]
+    assert content_type.startswith("text/plain")
+    assert "video/mp2t" not in content_type
+    assert response.text == "const x = 1;\n"
+
+
+@pytest.mark.asyncio
+async def test_raw_file_rejects_missing_token(async_client):
+    response = await async_client.get("/api/pipelines/p1/files/raw")
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.asyncio
+async def test_raw_file_rejects_garbage_token(async_client):
+    response = await async_client.get(
+        "/api/pipelines/p1/files/raw", params={"token": "not-a-jwt"}
+    )
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.asyncio
+async def test_raw_file_rejects_expired_token(async_client, tmp_path, monkeypatch):
+    import api.auth as auth_module
+
+    monkeypatch.setattr(auth_module, "RAW_FILE_TOKEN_TTL_SECONDS", -1)
+    repo = _make_repo(tmp_path)
+    token = create_raw_file_token("testuser", "p1", "clean.txt")
+
+    with _patch_pipeline(repo):
+        response = await async_client.get(
+            "/api/pipelines/p1/files/raw", params={"token": token}
+        )
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.asyncio
+async def test_raw_file_rejects_wrong_pipeline(async_client):
+    token = create_raw_file_token("testuser", "p1", "clean.txt")
+
+    # The pipeline binding is checked before any pipeline lookup.
+    response = await async_client.get(
+        "/api/pipelines/p2/files/raw", params={"token": token}
+    )
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "path,expected",
+    [
+        ("nope.txt", status.HTTP_404_NOT_FOUND),
+        (".git/config", status.HTTP_404_NOT_FOUND),
+        ("sub", status.HTTP_400_BAD_REQUEST),
+    ],
+)
+async def test_raw_file_maps_resolution_errors(async_client, tmp_path, path, expected):
+    repo = _make_repo(tmp_path)
+    token = create_raw_file_token("testuser", "p1", path)
+    with _patch_pipeline(repo):
+        response = await async_client.get(
+            "/api/pipelines/p1/files/raw", params={"token": token}
+        )
+    assert response.status_code == expected
+
+
+@pytest.mark.asyncio
+async def test_raw_token_rejected_as_access_credential(async_client, tmp_path):
+    token = create_raw_file_token("testuser", "p1", "clean.txt")
+    app.dependency_overrides.clear()
+
+    response = await async_client.get(
+        "/api/auth/me", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.asyncio
+async def test_raw_token_rejected_by_ws_helper():
+    token = create_raw_file_token("testuser", "p1", "clean.txt")
+
+    assert await get_current_user_from_token(token) is None
+    with pytest.raises(Exception):
+        decode_token(token)

@@ -58,6 +58,36 @@ export class FileBrowserClient extends BaseClient {
   }
 
   /**
+   * Mint a short-lived, path-bound token for the raw file endpoint. Goes
+   * through {@link BaseClient} so it inherits the bearer token and the 401
+   * refresh/retry behaviour.
+   */
+  async createRawFileToken(
+    pipelineId: string,
+    path: string
+  ): Promise<{ token: string; expiresIn: number }> {
+    const params = new URLSearchParams({ path });
+    const response = await this.fetch(
+      `${this.baseUrl}/pipelines/${pipelineId}/files/raw-url?${params.toString()}`,
+      { method: 'POST' }
+    );
+    const data = await response.json();
+    return {
+      token: String(data?.token ?? ''),
+      expiresIn: Number(data?.expires_in ?? 0),
+    };
+  }
+
+  /**
+   * Build the token-bearing URL a browser tab can navigate to directly. The
+   * token is URL-encoded because it is a JWT and contains dot-separated
+   * segments but no reserved characters that are safe to leave unescaped.
+   */
+  rawFileUrl(pipelineId: string, token: string): string {
+    return `${this.baseUrl}/pipelines/${pipelineId}/files/raw?token=${encodeURIComponent(token)}`;
+  }
+
+  /**
    * Search the pipeline repository for filenames/paths. The optional abort
    * signal cancels a superseded as-you-type request.
    */

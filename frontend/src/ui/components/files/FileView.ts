@@ -269,6 +269,10 @@ export class FileView {
           <button type="button" data-action-click="copy_file_path" data-path="${escapeHtml(file.path)}"
             class="shrink-0 p-1 rounded text-app-muted hover:text-app-text hover:bg-app-surface/60 transition-colors cursor-pointer"
             title="Copy path" aria-label="Copy path">${Icon.render('copy', { size: 14 })}</button>
+          <button type="button" data-action-click="open_file_raw" data-path="${escapeHtml(file.path)}"
+            data-role="open-raw"
+            class="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide text-app-muted hover:text-app-text hover:bg-app-surface/60 transition-colors cursor-pointer"
+            title="Open raw file" aria-label="Open raw file">raw</button>
           ${badge}
         </div>
         <div class="grid grid-cols-2 gap-x-6 text-[11px] text-app-muted" data-role="file-metadata">

@@ -21,6 +21,7 @@ creates, deletes, clones, fetches or checks out anything.
 """
 
 import logging
+import mimetypes
 import re
 from datetime import UTC, datetime
 from pathlib import Path
@@ -47,6 +48,76 @@ BINARY_SNIFF_BYTES = 8192
 
 # Metadata directories that are never browsed.
 EXCLUDED_NAMES = {".git"}
+
+# Explicit media types for developer source/config extensions. ``mimetypes``
+# gets several of these wrong for our purposes (notably ``.ts`` ->
+# ``video/mp2t``), and serving source code as ``text/plain`` is always a
+# reasonable fallback for the raw viewer. Extensions that should genuinely be
+# rendered by the browser (``.html``, ``.svg``, images, PDF, ...) are left to
+# ``mimetypes``.
+_MEDIA_TYPE_OVERRIDES: Dict[str, str] = {
+    ".ts": "text/plain",
+    ".tsx": "text/plain",
+    ".mts": "text/plain",
+    ".cts": "text/plain",
+    ".js": "text/plain",
+    ".jsx": "text/plain",
+    ".mjs": "text/plain",
+    ".cjs": "text/plain",
+    ".md": "text/plain",
+    ".markdown": "text/plain",
+    ".mdx": "text/plain",
+    ".yml": "text/plain",
+    ".yaml": "text/plain",
+    ".toml": "text/plain",
+    ".py": "text/plain",
+    ".pyi": "text/plain",
+    ".pyw": "text/plain",
+    ".rs": "text/plain",
+    ".go": "text/plain",
+    ".java": "text/plain",
+    ".kt": "text/plain",
+    ".kts": "text/plain",
+    ".rb": "text/plain",
+    ".php": "text/plain",
+    ".c": "text/plain",
+    ".h": "text/plain",
+    ".cc": "text/plain",
+    ".cpp": "text/plain",
+    ".cxx": "text/plain",
+    ".hpp": "text/plain",
+    ".cs": "text/plain",
+    ".swift": "text/plain",
+    ".sh": "text/plain",
+    ".bash": "text/plain",
+    ".zsh": "text/plain",
+    ".sql": "text/plain",
+    ".ini": "text/plain",
+    ".cfg": "text/plain",
+    ".conf": "text/plain",
+    ".log": "text/plain",
+}
+
+
+def guess_media_type(name: str) -> str:
+    """Best-effort ``Content-Type`` for a file name.
+
+    Uses an explicit override map for developer source/config extensions
+    (where ``mimetypes`` is often wrong), then falls back to ``mimetypes``.
+    ``text/*`` types get a UTF-8 charset and unknown types degrade to
+    ``application/octet-stream``.
+    """
+    suffix = Path(name).suffix.lower()
+    override = _MEDIA_TYPE_OVERRIDES.get(suffix)
+    if override:
+        return f"{override}; charset=utf-8"
+
+    guessed, _encoding = mimetypes.guess_type(name)
+    if not guessed:
+        return "application/octet-stream"
+    if guessed.startswith("text/"):
+        return f"{guessed}; charset=utf-8"
+    return guessed
 
 
 class PathEscapeError(AjapopajaError):
@@ -250,8 +321,16 @@ class FileBrowserService:
         )
 
     @staticmethod
-    async def read_file(pipeline: Pipeline, rel_path: str) -> FileContent:
-        """Read a text file, classifying binary/oversized content safely."""
+    def resolve_file(pipeline: Pipeline, rel_path: str) -> Tuple[Path, str]:
+        """Resolve a single, existing file inside the pipeline root.
+
+        Returns the absolute resolved path and the normalized repo-relative
+        path. Shares the exact ``safe_join`` / ``sanitize_relative_path`` /
+        ``.git`` exclusion behaviour with :meth:`read_file`.
+
+        Raises ``IsADirectoryError`` for a directory and
+        ``FileNotFoundError`` for anything that is not an existing file.
+        """
         resolved, clean = FileBrowserService._resolve_path(
             pipeline, rel_path, allow_root=False
         )
@@ -259,6 +338,12 @@ class FileBrowserService:
             raise IsADirectoryError("Path is a directory")
         if not resolved.is_file():
             raise FileNotFoundError("Path not found")
+        return resolved, clean
+
+    @staticmethod
+    async def read_file(pipeline: Pipeline, rel_path: str) -> FileContent:
+        """Read a text file, classifying binary/oversized content safely."""
+        resolved, clean = FileBrowserService.resolve_file(pipeline, rel_path)
 
         try:
             stat = resolved.stat()
@@ -329,6 +414,7 @@ __all__ = [
     "FileBrowserService",
     "PathEscapeError",
     "UnreadablePathError",
+    "guess_media_type",
     "MAX_TEXT_BYTES",
     "BINARY_SNIFF_BYTES",
 ]

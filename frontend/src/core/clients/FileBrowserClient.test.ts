@@ -142,6 +142,27 @@ describe('FileBrowserClient', () => {
     expect(entry.gitStatus).toBe('untracked');
   });
 
+  it('mints a raw file token via an authenticated POST', async () => {
+    (fetch as any).mockResolvedValue(jsonResponse({ token: 'raw.jwt.token', expires_in: 60 }));
+
+    const result = await client.createRawFileToken('p1', 'src/ui/App.ts');
+
+    expect((fetch as any).mock.calls[0][0]).toBe(
+      'http://test/api/pipelines/p1/files/raw-url?path=src%2Fui%2FApp.ts'
+    );
+    expect((fetch as any).mock.calls[0][1].method).toBe('POST');
+    const headers = new Headers((fetch as any).mock.calls[0][1].headers);
+    expect(headers.get('Authorization')).toBe('Bearer token123');
+    expect(result.token).toBe('raw.jwt.token');
+    expect(result.expiresIn).toBe(60);
+  });
+
+  it('builds the raw file URL with an encoded token', () => {
+    expect(client.rawFileUrl('p1', 'a/b+c=d')).toBe(
+      'http://test/api/pipelines/p1/files/raw?token=a%2Fb%2Bc%3Dd'
+    );
+  });
+
   it('includes the Authorization header', async () => {
     (fetch as any).mockResolvedValue(jsonResponse({ path: '', entries: [] }));
 

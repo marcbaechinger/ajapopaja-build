@@ -355,6 +355,65 @@ describe('FileBrowseView', () => {
     expect(client.listDirectory).not.toHaveBeenCalled();
   });
 
+  it('opens the raw file in a synchronously-opened new tab', async () => {
+    const fakeWindow = { location: { href: '' }, opener: {}, close: vi.fn() };
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(fakeWindow as any);
+    client.createRawFileToken = vi
+      .fn()
+      .mockResolvedValue({ token: 'raw.jwt', expiresIn: 60 });
+    client.rawFileUrl = vi.fn().mockReturnValue('http://test/raw?token=raw.jwt');
+
+    view.render();
+    await flush();
+    client.readFile.mockResolvedValue(
+      new FileContent({ name: 'README.md', path: 'README.md', size: 5, content: '# hi\n' })
+    );
+    registry.get('file_browser_open_file')(new Event('click'), elementWithPath('README.md'));
+    await flush();
+
+    const button = root.querySelector(
+      '[data-action-click="open_file_raw"]'
+    ) as HTMLButtonElement;
+    expect(button).not.toBeNull();
+
+    await registry.get('open_file_raw')(new Event('click'), button);
+    await flush();
+
+    expect(openSpy).toHaveBeenCalledWith('', '_blank');
+    expect(fakeWindow.opener).toBeNull();
+    expect(client.createRawFileToken).toHaveBeenCalledWith('p1', 'README.md');
+    expect(client.rawFileUrl).toHaveBeenCalledWith('p1', 'raw.jwt');
+    expect(fakeWindow.location.href).toBe('http://test/raw?token=raw.jwt');
+
+    openSpy.mockRestore();
+  });
+
+  it('closes the opened tab when minting the raw token fails', async () => {
+    const fakeWindow = { location: { href: '' }, opener: {}, close: vi.fn() };
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(fakeWindow as any);
+    client.createRawFileToken = vi.fn().mockRejectedValue(new Error('boom'));
+    client.rawFileUrl = vi.fn();
+
+    view.render();
+    await flush();
+    client.readFile.mockResolvedValue(
+      new FileContent({ name: 'README.md', path: 'README.md', size: 5, content: '# hi\n' })
+    );
+    registry.get('file_browser_open_file')(new Event('click'), elementWithPath('README.md'));
+    await flush();
+
+    const button = root.querySelector(
+      '[data-action-click="open_file_raw"]'
+    ) as HTMLButtonElement;
+    await registry.get('open_file_raw')(new Event('click'), button);
+    await flush();
+
+    expect(fakeWindow.close).toHaveBeenCalled();
+    expect(client.rawFileUrl).not.toHaveBeenCalled();
+
+    openSpy.mockRestore();
+  });
+
   it('refreshes the current directory and re-reads the selected file', async () => {
     view.render();
     await flush();

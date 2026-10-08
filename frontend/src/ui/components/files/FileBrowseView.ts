@@ -275,6 +275,27 @@ export class FileBrowseView {
       const path = element.getAttribute('data-path');
       if (path) void this.openFile(path);
     });
+    register('open_file_raw', async (_event, element) => {
+      if (this.destroyed) return;
+      const path = element.getAttribute('data-path');
+      if (!path) return;
+      // The blank tab must be opened synchronously in the click handler or the
+      // browser blocks the popup; it is navigated once the token arrives.
+      const win = window.open('', '_blank');
+      if (win) win.opener = null;
+      try {
+        const { token } = await this.client.createRawFileToken(
+          this.pipelineId,
+          path
+        );
+        const url = this.client.rawFileUrl(this.pipelineId, token);
+        if (win) win.location.href = url;
+        else window.location.href = url;
+      } catch (error) {
+        win?.close();
+        console.error('Failed to open raw file:', error);
+      }
+    });
     register('file_browser_breadcrumb', (_event, element) => {
       if (this.destroyed) return;
       void this.loadDirectory(element.getAttribute('data-path') ?? '');
