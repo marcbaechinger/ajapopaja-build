@@ -256,3 +256,60 @@ try:
     DEV_SERVER_PORT = int(os.getenv("DEV_SERVER_PORT", "1224"))
 except ValueError as e:
     raise RuntimeError("DEV_SERVER_PORT must be an integer") from e
+
+
+# ---------------------------------------------------------------------------
+# Configuration introspection (read-only, used by the System Health dialog)
+# ---------------------------------------------------------------------------
+# Substrings that mark a configuration key as confidential. Confidential values
+# must never leave the server: the API only reports whether a value is stored.
+_CONFIDENTIAL_KEY_PATTERNS = (
+    "API_KEY",
+    "PASSWORD",
+    "PASSWD",
+    "SECRET",
+    "TOKEN",
+)
+
+
+def _is_confidential_config_key(key: str) -> bool:
+    """Return True if the configuration key holds a secret value."""
+    upper = key.upper()
+    return any(pattern in upper for pattern in _CONFIDENTIAL_KEY_PATTERNS)
+
+
+def _format_config_value(value: object) -> str:
+    """Render an arbitrary config constant as a human-readable string."""
+    if value is None:
+        return "(not set)"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, (list, tuple, set)):
+        values = list(value)
+        return ", ".join(str(v) for v in values) if values else "(none)"
+    return str(value)
+
+
+def get_config_properties() -> list[dict]:
+    """Return every configuration property as a redacted, JSON-safe list.
+
+    Each entry is a mapping of ``{"key", "value", "confidential"}``. For
+    confidential keys the actual value is never included; the entry reports
+    ``(stored)`` when a value is present and ``(not available)`` otherwise.
+    """
+    properties: list[dict] = []
+    for key in sorted(globals()):
+        # Only publicly named, module-level constants are configuration.
+        if key.startswith("_") or not key.isupper():
+            continue
+        value = globals()[key]
+        confidential = _is_confidential_config_key(key)
+        if confidential:
+            has_value = value not in (None, "", (), [], set(), {})
+            rendered = "(stored)" if has_value else "(not available)"
+        else:
+            rendered = _format_config_value(value)
+        properties.append({"key": key, "value": rendered, "confidential": confidential})
+    return properties

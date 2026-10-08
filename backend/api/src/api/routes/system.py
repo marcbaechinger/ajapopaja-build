@@ -19,6 +19,8 @@ from typing import Dict
 from fastapi import APIRouter
 from pymongo import AsyncMongoClient
 
+from core import config
+
 from ..assistant.tools.nvim_tools import get_nvim_socket_path, is_nvim_available
 from ..ollama_utils import is_ollama_available
 
@@ -93,3 +95,13 @@ async def health_check() -> Dict[str, dict]:
         results["pi"] = {"status": "error", "details": "pi command not found"}
 
     return results
+
+
+@router.get("/config")
+async def config_properties() -> Dict[str, list]:
+    """Return the server configuration as a read-only, redacted property list.
+
+    Confidential values (API keys, tokens, passwords) are never transmitted;
+    they are reported as ``(stored)`` or ``(not available)`` only.
+    """
+    return {"properties": config.get_config_properties()}

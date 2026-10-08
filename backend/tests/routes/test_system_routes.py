@@ -17,6 +17,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import status
 
+from core import config
+
 
 @pytest.mark.asyncio
 async def test_health_check_all_ok(async_client, init_mock_db):
@@ -73,3 +75,45 @@ async def test_health_check_mixed_status(async_client, init_mock_db):
                             assert data["ollama"]["status"] == "error"
                             assert data["nvim"]["status"] == "error"
                             assert data["pi"]["status"] == "error"
+
+
+@pytest.mark.asyncio
+async def test_config_properties_redact_secrets(
+    async_client, init_mock_db, monkeypatch
+):
+    monkeypatch.setattr(config, "OLLAMA_API_KEY", "super-secret-api-key")
+    monkeypatch.setattr(config, "GIT_PUSH_TOKEN", "")
+
+    response = await async_client.get("/api/system/config")
+    assert response.status_code == status.HTTP_200_OK
+
+    properties = response.json()["properties"]
+    by_key = {entry["key"]: entry for entry in properties}
+
+    # A stored secret only reveals that it is stored, never its value.
+    assert by_key["OLLAMA_API_KEY"]["confidential"] is True
+    assert by_key["OLLAMA_API_KEY"]["value"] == "(stored)"
+
+    # An empty secret is reported as unavailable.
+    assert by_key["GIT_PUSH_TOKEN"]["confidential"] is True
+    assert by_key["GIT_PUSH_TOKEN"]["value"] == "(not available)"
+
+    # Regular properties expose their value.
+    assert by_key["OLLAMA_MODEL"]["confidential"] is False
+    assert by_key["OLLAMA_MODEL"]["value"]
+
+    # The full response must never contain the secret value.
+    assert "super-secret-api-key" not in response.text
+
+
+@pytest.mark.asyncio
+async def test_config_properties_cover_all_config_constants(async_client, init_mock_db):
+    response = await async_client.get("/api/system/config")
+    assert response.status_code == status.HTTP_200_OK
+
+    keys = {entry["key"] for entry in response.json()["properties"]}
+    # Spot-check a representative cross-section of the configuration.
+    assert "WORKSPACES_ROOT" in keys
+    assert "IGNORED_DIRECTORIES" in keys
+    assert "BASEBOT_LOG_ENABLED" in keys
+    assert "DEV_SERVER_PORT" in keys

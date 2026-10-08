@@ -24,6 +24,19 @@ export interface HealthCheckResponse {
   pi: { status: string; details: string };
 }
 
+export interface ConfigProperty {
+  /** Fully qualified configuration key, e.g. `OLLAMA_MODEL`. */
+  key: string;
+  /** Human-readable value. Secrets are never included. */
+  value: string;
+  /** True when the value is a secret; only `(stored)`/`(not available)` is sent. */
+  confidential: boolean;
+}
+
+export interface ConfigPropertiesResponse {
+  properties: ConfigProperty[];
+}
+
 export class SystemClient extends BaseClient {
   constructor(authService: AuthService) {
     super(authService);
@@ -56,6 +69,21 @@ export class SystemClient extends BaseClient {
     } catch (e) {
       console.error('Failed to fetch version', e);
       return 'unknown';
+    }
+  }
+
+  /**
+   * Fetches the read-only server configuration. Secret values are redacted on
+   * the server and are never part of the response.
+   */
+  async getConfigProperties(): Promise<ConfigProperty[]> {
+    try {
+      const response = await this.fetch('/api/system/config');
+      const data = (await response.json()) as ConfigPropertiesResponse;
+      return Array.isArray(data?.properties) ? data.properties : [];
+    } catch (e) {
+      console.error('Failed to fetch configuration properties', e);
+      throw e;
     }
   }
 }
