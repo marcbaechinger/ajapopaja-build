@@ -14,11 +14,35 @@
 
 import os
 import shutil
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 import git
 
 from core import config
+
+
+@dataclass
+class SandboxBase:
+    """The commit a new sandbox should be branched from.
+
+    Used for ordered branch chaining: instead of always cloning the pipeline
+    repository's default branch (which only contains *accepted* work), a queued
+    task can be branched from the retained workspace of its still-pending
+    predecessor so its pull request only carries its own delta.
+
+    Attributes:
+        repo_path: Path of the predecessor's retained workspace (a full clone
+            that contains the predecessor's commit on ``ref``).
+        ref: Git ref inside ``repo_path`` to fetch, e.g.
+            ``refs/heads/coderbot/<task_id>``.
+        commit: Resolved tip commit of ``ref`` (audit / diff base).
+    """
+
+    repo_path: str
+    ref: str
+    commit: Optional[str] = None
 
 
 class SandboxGitHelper:
@@ -28,10 +52,14 @@ class SandboxGitHelper:
         task_id: str,
         source_repo_path: Path,
         workspace_path: Path | str | None = None,
+        base: Optional[SandboxBase] = None,
     ):
         self.bot_type = bot_type
         self.task_id = task_id
         self.source_repo_path = source_repo_path
+        # Optional chained base. When set, ``setup_sandbox`` imports the
+        # predecessor's commit and branches off it instead of the default branch.
+        self.base = base
         # Non-colliding paths: sandbox/coderbot/task_id vs sandbox/docbot/task_id.
         # A caller may override the path (used by the persistent Pi sessions that
         # retain their workspace under PI_SESSIONS_ROOT/<uid>/workspace).
@@ -42,7 +70,13 @@ class SandboxGitHelper:
         self.branch_name = f"{bot_type}/{task_id}"
 
     def setup_sandbox(self):
-        """Clones the source repo and creates a branch."""
+        """Clones the source repo and creates a branch.
+
+        Without a :attr:`base` the branch is created off the source repository's
+        checked-out/default branch (the historical behaviour). With a base the
+        predecessor's commit is fetched from its retained workspace and the new
+        branch is created at that commit, so queued tasks chain transitively.
+        """
         if self.sandbox_path.exists():
             self.cleanup()
 
@@ -51,8 +85,14 @@ class SandboxGitHelper:
         # Clone locally
         repo = git.Repo.clone_from(str(self.source_repo_path), str(self.sandbox_path))
 
-        # Create and checkout branch
-        repo.git.checkout("-b", self.branch_name)
+        if self.base is not None:
+            # Import the predecessor's commit from its retained workspace and
+            # create the branch at the fetched tip.
+            repo.git.fetch(str(self.base.repo_path), self.base.ref)
+            repo.git.checkout("-b", self.branch_name, "FETCH_HEAD")
+        else:
+            # Create and checkout branch off the default branch.
+            repo.git.checkout("-b", self.branch_name)
         return repo
 
     def reuse_existing(self) -> git.Repo:
@@ -117,11 +157,18 @@ class SandboxGitHelper:
         captured in the patch.
         """
         repo = self.get_repo()
-        default_branch = self.get_default_branch()
+        # A chained sandbox carries its predecessor's commit, so a diff against
+        # the default branch would include the predecessor's changes as well.
+        # Diff against the chained base instead so the patch stays the task's own
+        # delta.
+        if self.base is not None and self.base.commit:
+            base_ref = self.base.commit
+        else:
+            base_ref = self.get_default_branch()
         # Check whether the base ref actually exists before diffing against it.
         base_exists = False
         try:
-            repo.commit(default_branch)
+            repo.commit(base_ref)
             base_exists = True
         except Exception:
             base_exists = False
@@ -129,7 +176,7 @@ class SandboxGitHelper:
         if base_exists:
             # --binary is required so binary files (e.g. images) are included
             # in the patch and can be applied later via `git apply --3way`.
-            return repo.git.diff(default_branch, binary=True)
+            return repo.git.diff(base_ref, binary=True)
 
         # No commits yet: diff against the empty tree to include all files.
         return repo.git.diff(self._EMPTY_TREE, binary=True)

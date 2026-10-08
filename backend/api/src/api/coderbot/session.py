@@ -36,9 +36,10 @@ from core.models.models import (
     Task,
     TaskStatus,
 )
+from core.queries import pi_session as pi_session_queries
 from core.queries import task as task_queries
 
-from api.bot.git_helper import SandboxGitHelper
+from api.bot.git_helper import SandboxBase, SandboxGitHelper
 
 from .pi_parsers import (
     extract_final_summary,
@@ -199,6 +200,7 @@ class CoderBotSession(PiRpcProcess):
         session_record: Optional[PiSession] = None,
         resume_session_file: Optional[str] = None,
         persist: Optional[bool] = None,
+        base: Optional[SandboxBase] = None,
     ):
         self.session_uid = session_uid or (
             getattr(session_record, "uid", None) if session_record else None
@@ -240,6 +242,12 @@ class CoderBotSession(PiRpcProcess):
         # sandbox: the retained working tree is reused as-is.
         self.resume_in_place = False
         self.resume_message: Optional[str] = None
+        # Ordered branch chaining: when set, the sandbox is branched from this
+        # base (the predecessor's retained commit) instead of the default
+        # branch. ``base_session_uid`` records which session it chained from for
+        # audit. Resolved in ``run()`` unless the session is resumed in place.
+        self.base: Optional[SandboxBase] = base
+        self.base_session_uid: Optional[str] = None
         # The ``agent_end`` record captured by ``_handle_event``. ``run()`` reads
         # its ``messages`` payload after the process has exited.
         self.agent_end_event: Optional[Dict[str, Any]] = None
@@ -908,6 +916,8 @@ class CoderBotSession(PiRpcProcess):
             await self._save_session_record(
                 status=PiSessionStatus.COMPLETED,
                 base_commit=parent_commit_hash,
+                head_commit=head_commit_hash,
+                chained_from_session_uid=self.base_session_uid,
                 branch_name=self.helper.branch_name,
                 pull_request_ids=(
                     (list(self.session_record.pull_request_ids) + [pr_id])
@@ -974,6 +984,60 @@ class CoderBotSession(PiRpcProcess):
             logger.debug("Failed to save Pi session record", exc_info=True)
         write_meta(record)
 
+    async def _resolve_chain_base(self) -> Optional[SandboxBase]:
+        """Resolve the predecessor sandbox base for ordered branch chaining.
+
+        The newest eligible *still-pending* predecessor session for this pipeline
+        is turned into a :class:`SandboxBase` pointing at its retained workspace
+        and branch tip. Returns ``None`` when there is no eligible predecessor, in
+        which case the caller keeps whatever base it already had (normally
+        ``None``) and branches from the default branch.
+        """
+        before_created_at = getattr(self.session_record, "created_at", None)
+        try:
+            predecessor = await pi_session_queries.find_previous_pending_batch_session(
+                self.pipeline_id, before_created_at=before_created_at
+            )
+        except Exception:
+            logger.debug(
+                "Failed to resolve chaining predecessor for pipeline %s",
+                self.pipeline_id,
+                exc_info=True,
+            )
+            return None
+        if predecessor is None:
+            return None
+
+        repo_path = predecessor.workspace_path
+        branch_name = predecessor.branch_name
+        if not repo_path or not branch_name:
+            return None
+        try:
+            commit = git.Repo(str(repo_path)).commit(branch_name).hexsha
+        except Exception:
+            logger.debug(
+                "Predecessor session %s branch %s is not resolvable; falling "
+                "back to the default branch",
+                predecessor.uid,
+                branch_name,
+                exc_info=True,
+            )
+            return None
+
+        self.base_session_uid = predecessor.uid
+        logger.info(
+            "Chaining task %s onto session %s (%s @ %s)",
+            self.task_id,
+            predecessor.uid,
+            branch_name,
+            commit,
+        )
+        return SandboxBase(
+            repo_path=str(repo_path),
+            ref=f"refs/heads/{branch_name}",
+            commit=commit,
+        )
+
     async def run(self):
         """Runs the Pi subprocess and manages the RPC communication."""
         logger.info(f"Starting run() for task {self.task_id}")
@@ -1037,6 +1101,16 @@ class CoderBotSession(PiRpcProcess):
 
         self.pipeline = pipeline
 
+        if not self.resume_in_place and not self.iteration_mode:
+            # Ordered branch chaining: branch this task from its still-pending
+            # predecessor's commit (when one exists) so its PR only carries its
+            # own delta. Resolved here, at sandbox-setup time, because only now
+            # is the predecessor guaranteed to have finished. Iteration runs must
+            # NOT chain: they re-apply an existing PR patch on a fresh base.
+            resolved_base = await self._resolve_chain_base()
+            if resolved_base is not None:
+                self.base = resolved_base
+
         retain_workspace = self._should_retain_workspace()
         workspace_path = (
             str(pi_workspace_dir(self.session_uid)) if retain_workspace else None
@@ -1048,6 +1122,7 @@ class CoderBotSession(PiRpcProcess):
             model=self.model,
             pipeline_id=self.pipeline_id,
             task_id=self.task_id,
+            chained_from_session_uid=self.base_session_uid,
         )
 
         logger.info(f"Setting up sandbox for task {self.task_id}")
@@ -1056,6 +1131,7 @@ class CoderBotSession(PiRpcProcess):
             self.task_id,
             pipeline.workspace_abs_path,
             workspace_path=workspace_path,
+            base=self.base,
         )
         if self.resume_in_place:
             # A previously persisted batch workspace is reused as-is so the

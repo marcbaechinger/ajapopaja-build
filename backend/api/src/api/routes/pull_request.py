@@ -57,6 +57,10 @@ class FailureStrategy(str, Enum):
 class AcceptPullRequestRequest(BaseModel):
     commit_message: Optional[str] = None
     failure_strategy: FailureStrategy = FailureStrategy.REVERT
+    # When true, accept even though an older pull request for the same pipeline
+    # is still open (chained PRs form a sequence and are normally accepted in
+    # creation order).
+    force: bool = False
 
 
 class IteratePullRequestRequest(BaseModel):
@@ -98,6 +102,28 @@ def validate_patch(patch: Optional[str]) -> str:
     if not patch.endswith("\n"):
         patch = patch + "\n"
     return patch
+
+
+async def find_older_open_pull_request(pr: PullRequest) -> Optional[PullRequest]:
+    """Return the oldest still-open PR of the same pipeline created before ``pr``.
+
+    Ordered branch chaining makes pull requests a linear sequence; applying
+    their deltas out of order can still conflict (line-by-line patching is
+    inherently order-sensitive). This lookup lets the accept endpoint warn the
+    caller before that happens. Returns ``None`` when there is no older open PR.
+    """
+    if not pr.pipeline_id or pr.created_at is None:
+        return None
+    return (
+        await PullRequest.find(
+            PullRequest.pipeline_id == pr.pipeline_id,
+            PullRequest.status == PullRequestStatus.OPEN,
+            PullRequest.id != pr.id,
+            PullRequest.created_at < pr.created_at,
+        )
+        .sort("created_at")
+        .first_or_none()
+    )
 
 
 async def validate_workspace_clean(repo: git.Repo, workspace_path: str) -> None:
@@ -421,6 +447,21 @@ async def accept_pull_request(
         # Step 1: Validate inputs
         pr = validate_pull_request_exists(pr_id, await PullRequest.get(pr_id))
         validate_pull_request_status(pr)
+
+        # Step 1b: Chained PRs must be accepted in creation order. Warn (409)
+        # when an older PR of the same pipeline is still open unless the caller
+        # explicitly forces the out-of-order acceptance.
+        if not (request.force if request else False):
+            older = await find_older_open_pull_request(pr)
+            if older is not None:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        "An older pull request for this pipeline is still open "
+                        f"(PR {older.id}). Accept it first, or retry with "
+                        "force=true to accept this one out of order."
+                    ),
+                )
 
         pipeline = await Pipeline.get(pr.pipeline_id)
         workspace_path = validate_pipeline(

@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -610,5 +611,130 @@ async def test_iterate_pull_request_happy_path(async_client, init_mock_db):
             enqueued_pr, comments = mock_manager.process_pr_iteration.await_args.args
             assert str(enqueued_pr.id) == str(pr_id)
             assert comments == "Please review and fix"
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_accept_pull_request_blocks_out_of_order(async_client, init_mock_db):
+    """Accepting a newer PR while an older one is still OPEN returns a 409."""
+    mock_user = AsyncMock()
+    mock_user.username = "testuser"
+    app.dependency_overrides[get_current_user] = lambda: mock_user
+
+    base = datetime(2026, 1, 1, tzinfo=UTC)
+    older = PullRequest(
+        pipeline_id="pipe_123",
+        task_id="task_old",
+        summary="old",
+        branch_name="coderbot/old",
+        patch="patch",
+        status=PullRequestStatus.OPEN,
+        created_at=base,
+    )
+    await older.insert()
+
+    newer_id = ObjectId()
+    newer = PullRequest(
+        id=newer_id,
+        pipeline_id="pipe_123",
+        task_id="task_new",
+        summary="new",
+        branch_name="coderbot/new",
+        patch="patch",
+        status=PullRequestStatus.OPEN,
+        created_at=base + timedelta(hours=1),
+    )
+
+    try:
+        with patch(
+            "api.routes.pull_request.PullRequest.get",
+            new_callable=AsyncMock,
+            return_value=newer,
+        ):
+            response = await async_client.post(
+                f"/api/pull_requests/{newer_id}/accept"
+            )
+
+        assert response.status_code == 409
+        assert "older pull request" in response.json()["detail"].lower()
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_accept_pull_request_force_allows_out_of_order(
+    async_client, init_mock_db
+):
+    """``force=true`` accepts a newer PR even though an older one is OPEN."""
+    mock_user = AsyncMock()
+    mock_user.username = "testuser"
+    app.dependency_overrides[get_current_user] = lambda: mock_user
+
+    base = datetime(2026, 1, 1, tzinfo=UTC)
+    older = PullRequest(
+        pipeline_id="pipe_123",
+        task_id="task_old",
+        summary="old",
+        branch_name="coderbot/old",
+        patch="patch",
+        status=PullRequestStatus.OPEN,
+        created_at=base,
+    )
+    await older.insert()
+
+    pr_id = ObjectId()
+    mock_pr = PullRequest(
+        id=pr_id,
+        pipeline_id="pipe_123",
+        task_id="task_new",
+        summary="summary",
+        branch_name="feature/x",
+        patch="patch",
+        status=PullRequestStatus.OPEN,
+        created_at=base + timedelta(hours=1),
+    )
+    mock_pipeline = MagicMock()
+    mock_pipeline.workspace_abs_path = "/tmp/remote_repo"
+    mock_pipeline.repo_uri = "https://host/owner/repo.git"
+    mock_repo = MagicMock()
+    mock_task = MagicMock()
+    mock_task.id = "task_new"
+    mock_task.status = TaskStatus.PULL_REQUEST_AVAILABLE
+
+    try:
+        with (
+            patch(
+                "api.routes.pull_request.PullRequest.get",
+                new_callable=AsyncMock,
+                return_value=mock_pr,
+            ),
+            patch("api.routes.pull_request.Pipeline.get", return_value=mock_pipeline),
+            patch("api.routes.pull_request.git_utils.get_repo", return_value=mock_repo),
+            patch(
+                "api.routes.pull_request.validate_workspace_clean",
+                new_callable=AsyncMock,
+            ),
+            patch("api.routes.pull_request.apply_patch", new_callable=AsyncMock),
+            patch("api.routes.pull_request.format_workspace", new_callable=AsyncMock),
+            patch("api.routes.pull_request.commit_changes", return_value="abc1234"),
+            patch("api.routes.pull_request.git_utils.push_with_auth"),
+            patch("api.routes.pull_request.Task.get", return_value=mock_task),
+            patch(
+                "api.routes.pull_request.update_pull_request_status",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "api.routes.pull_request.update_task_status",
+                new_callable=AsyncMock,
+            ),
+            patch.object(pr_routes.config, "REMOTE_PR_MODE", "direct"),
+        ):
+            response = await async_client.post(
+                f"/api/pull_requests/{pr_id}/accept",
+                json={"force": True},
+            )
+
+        assert response.status_code == 200
     finally:
         app.dependency_overrides.clear()

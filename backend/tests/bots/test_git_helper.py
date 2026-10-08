@@ -17,7 +17,8 @@ from unittest.mock import MagicMock, patch
 
 import git
 
-from api.bot.git_helper import SandboxGitHelper
+from api.bot.git_helper import SandboxBase, SandboxGitHelper
+from core.utils import git_utils
 
 
 def test_get_default_branch_from_env(monkeypatch):
@@ -144,3 +145,157 @@ def test_get_patch_falls_back_to_empty_tree_when_base_ref_unborn(monkeypatch):
 
     assert patch_str == "empty-tree-patch"
     repo.git.diff.assert_called_once_with(SandboxGitHelper._EMPTY_TREE, binary=True)
+
+
+def test_setup_sandbox_without_base_checks_out_new_branch(tmp_path):
+    """Without a base the sandbox branches off the cloned default branch."""
+    helper = SandboxGitHelper("coderbot", "task_id", Path("/fake/path"))
+    repo = MagicMock()
+
+    with patch("api.bot.git_helper.git.Repo.clone_from", return_value=repo):
+        result = helper.setup_sandbox()
+
+    assert result is repo
+    repo.git.fetch.assert_not_called()
+    repo.git.checkout.assert_called_once_with("-b", "coderbot/task_id")
+
+
+def test_setup_sandbox_with_base_fetches_and_checks_out_fetch_head(tmp_path):
+    """With a base the predecessor's commit is fetched and used as the branch
+    point (never `clone -b`)."""
+    base = SandboxBase(
+        repo_path="/predecessor/workspace",
+        ref="refs/heads/coderbot/t1",
+        commit="abc123",
+    )
+    helper = SandboxGitHelper(
+        "coderbot", "t2", Path("/fake/path"), base=base
+    )
+    repo = MagicMock()
+
+    with patch("api.bot.git_helper.git.Repo.clone_from", return_value=repo):
+        result = helper.setup_sandbox()
+
+    assert result is repo
+    repo.git.fetch.assert_called_once_with(
+        "/predecessor/workspace", "refs/heads/coderbot/t1"
+    )
+    repo.git.checkout.assert_called_once_with(
+        "-b", "coderbot/t2", "FETCH_HEAD"
+    )
+
+
+def test_get_patch_diffs_against_chained_base_commit(monkeypatch):
+    """A chained sandbox diffs against the predecessor's commit, not the
+    default branch."""
+    monkeypatch.delenv("DEFAULT_GIT_BRANCH", raising=False)
+    base = SandboxBase(
+        repo_path="/predecessor/workspace",
+        ref="refs/heads/coderbot/t1",
+        commit="chained-base-commit",
+    )
+    helper = SandboxGitHelper(
+        "coderbot", "t2", Path("/fake/path"), base=base
+    )
+
+    repo = MagicMock()
+    repo.commit.return_value = "base-commit"
+    repo.git.diff.return_value = "chained-patch"
+
+    with patch.object(SandboxGitHelper, "get_repo", return_value=repo):
+        with patch.object(
+            SandboxGitHelper, "get_default_branch", return_value="main"
+        ) as mock_default:
+            patch_str = helper.get_patch()
+
+    assert patch_str == "chained-patch"
+    repo.git.diff.assert_called_once_with("chained-base-commit", binary=True)
+    mock_default.assert_not_called()
+
+
+def test_setup_sandbox_chains_predecessor_commit(tmp_path):
+    """End-to-end (real repos): a new sandbox is branched at the
+    predecessor's commit and its patch is the task's own delta, which applies
+    cleanly on top of that commit."""
+    import os
+    import tempfile
+
+    source = tmp_path / "source"
+    source.mkdir()
+    source_repo = git.Repo.init(str(source))
+    (source / "shared.txt").write_text("base\n", encoding="utf-8")
+    source_repo.git.add(A=True)
+    source_repo.git.commit(
+        "-m",
+        "main",
+        "--no-verify",
+        env=git_utils.ensure_git_identity(source_repo),
+    )
+    main_commit = source_repo.head.commit.hexsha
+
+    # Predecessor sandbox: a clone with one commit on coderbot/t1.
+    predecessor = tmp_path / "predecessor"
+    pred_repo = git.Repo.clone_from(str(source), str(predecessor))
+    pred_repo.git.checkout("-b", "coderbot/t1")
+    (predecessor / "shared.txt").write_text("base\ntask1\n", encoding="utf-8")
+    pred_repo.git.add(A=True)
+    pred_repo.git.commit(
+        "-m",
+        "task1",
+        "--no-verify",
+        env=git_utils.ensure_git_identity(pred_repo),
+    )
+    c1 = pred_repo.head.commit.hexsha
+    assert c1 != main_commit
+
+    sandbox = tmp_path / "sandbox"
+    base = SandboxBase(
+        repo_path=str(predecessor),
+        ref="refs/heads/coderbot/t1",
+        commit=c1,
+    )
+    helper = SandboxGitHelper(
+        "coderbot", "t2", source, workspace_path=sandbox, base=base
+    )
+    helper.setup_sandbox()
+
+    repo = helper.get_repo()
+    assert repo.active_branch.name == "coderbot/t2"
+    # The chained task starts exactly at the predecessor's commit, which sits on
+    # top of the source main commit (transitive chain).
+    assert repo.head.commit.hexsha == c1
+    assert repo.commit("HEAD~1").hexsha == main_commit
+
+    # Task 2 edits the same file and commits.
+    (sandbox / "shared.txt").write_text(
+        "base\ntask1\ntask2\n", encoding="utf-8"
+    )
+    repo.git.add(A=True)
+    repo.git.commit(
+        "-m", "task2", "--no-verify", env=git_utils.ensure_git_identity(repo)
+    )
+
+    # The generated patch only carries task 2's own delta (not task 1's).
+    patch_str = helper.get_patch()
+    assert "+task2" in patch_str
+    assert "+task1" not in patch_str
+
+    # ... and applies cleanly on a checkout of the predecessor's commit, which
+    # is what acceptance produces after PR1 lands.
+    acceptor = tmp_path / "acceptor"
+    acc_repo = git.Repo.clone_from(str(predecessor), str(acceptor))
+    acc_repo.git.checkout(c1)
+    patch_file = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".patch", delete=False
+        ) as fh:
+            fh.write(patch_str if patch_str.endswith("\n") else patch_str + "\n")
+            patch_file = fh.name
+        acc_repo.git.apply("--3way", patch_file)
+    finally:
+        if patch_file and os.path.exists(patch_file):
+            os.remove(patch_file)
+    assert (acceptor / "shared.txt").read_text(encoding="utf-8") == (
+        "base\ntask1\ntask2\n"
+    )

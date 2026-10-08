@@ -603,6 +603,12 @@ class PiSession(Document):
     # Reconstruction / audit
     base_commit: Optional[str] = None
     branch_name: Optional[str] = None
+    # Hash of the commit this session created in its sandbox (audit/UI).
+    head_commit: Optional[str] = None
+    # UID of the retained predecessor workspace this session's sandbox was
+    # branched from (ordered branch chaining), or None when branched from the
+    # default branch.
+    chained_from_session_uid: Optional[str] = None
 
     # Bookkeeping
     resume_count: int = 0

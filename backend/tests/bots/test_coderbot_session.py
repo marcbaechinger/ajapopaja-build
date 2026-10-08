@@ -32,6 +32,7 @@ from core.models.models import (
     Task,
     TaskStatus,
 )
+from core.utils import git_utils
 
 
 class _FakeStdin:
@@ -1442,3 +1443,215 @@ async def test_coderbot_handle_agent_end_updates_existing_pr(init_mock_db):
     ]
     assert created_msgs, "Expected a PULL_REQUEST_CREATED broadcast"
     assert created_msgs[0].args[0].payload["id"] == str(pr.id)
+
+
+@pytest.mark.asyncio
+async def test_coderbot_run_resolves_and_passes_chain_base(init_mock_db, tmp_path):
+    """A still-pending predecessor's retained workspace is resolved into a
+    SandboxBase (workspace, ref and commit tip) and handed to the helper."""
+    pipeline = Pipeline(
+        name="Test Pipeline", workspace_path="test", workspace_abs_path="/tmp"
+    )
+    await pipeline.insert()
+
+    task = Task(
+        title="Chained Task",
+        pipeline_id=str(pipeline.id),
+        design_doc="D",
+        spec="S",
+    )
+    await task.insert()
+
+    # A real predecessor workspace containing the branch.
+    ws = tmp_path / "predecessor"
+    ws.mkdir()
+    repo = git.Repo.init(str(ws))
+    (ws / "file.txt").write_text("predecessor\n", encoding="utf-8")
+    repo.git.add(A=True)
+    repo.git.commit(
+        "-m",
+        "predecessor commit",
+        "--no-verify",
+        env=git_utils.ensure_git_identity(repo),
+    )
+    repo.create_head("coderbot/t1")
+    tip = repo.head.commit.hexsha
+
+    predecessor = PiSession(
+        uid="u-prev",
+        kind=PiSessionKind.CODERBOT,
+        status=PiSessionStatus.COMPLETED,
+        pipeline_id=str(pipeline.id),
+        task_id="t1",
+        workspace_path=str(ws),
+        branch_name="coderbot/t1",
+    )
+    await predecessor.insert()
+
+    original_run_tests = config.CODERBOT_RUN_TESTS
+    config.CODERBOT_RUN_TESTS = False
+    try:
+        with (
+            patch("api.coderbot.session.SandboxGitHelper") as mock_helper_cls,
+            patch(
+                "api.coderbot.session.pi_session_queries."
+                "find_previous_pending_batch_session",
+                new=AsyncMock(return_value=predecessor),
+            ) as mock_find,
+            patch("api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock),
+            patch("api.coderbot.session.asyncio.create_subprocess_exec") as mock_exec,
+            patch.object(CoderBotSession, "_open_log_file"),
+            patch("pathlib.Path.mkdir"),
+        ):
+            mock_helper = MagicMock()
+            mock_helper.branch_name = "coderbot/t2"
+            mock_helper.get_patch.return_value = "test-patch"
+            mock_repo = MagicMock()
+            mock_repo.git.diff.return_value = "test-patch"
+            mock_repo.head.commit.hexsha = "a" * 40
+            mock_helper.get_repo.return_value = mock_repo
+            mock_helper_cls.return_value = mock_helper
+
+            session = CoderBotSession(
+                pipeline_id=str(pipeline.id), task_id=str(task.id)
+            )
+            fake_proc = FakePiProcess(events=[{"type": "agent_end", "messages": []}])
+            mock_exec.return_value = fake_proc
+
+            await session.run()
+
+        mock_find.assert_awaited_once()
+        kwargs = mock_helper_cls.call_args.kwargs
+        assert kwargs["base"] is not None
+        assert kwargs["base"].repo_path == str(ws)
+        assert kwargs["base"].ref == "refs/heads/coderbot/t1"
+        assert kwargs["base"].commit == tip
+        assert session.base_session_uid == "u-prev"
+    finally:
+        config.CODERBOT_RUN_TESTS = original_run_tests
+
+
+@pytest.mark.asyncio
+async def test_coderbot_run_resume_in_place_skips_chaining(init_mock_db):
+    """Resuming a retained workspace must not resolve or apply a chain base."""
+    pipeline = Pipeline(
+        name="Test Pipeline", workspace_path="test", workspace_abs_path="/tmp"
+    )
+    await pipeline.insert()
+
+    task = Task(
+        title="Resume Task",
+        pipeline_id=str(pipeline.id),
+        design_doc="D",
+        spec="S",
+    )
+    await task.insert()
+
+    original_run_tests = config.CODERBOT_RUN_TESTS
+    config.CODERBOT_RUN_TESTS = False
+    try:
+        with (
+            patch("api.coderbot.session.SandboxGitHelper") as mock_helper_cls,
+            patch(
+                "api.coderbot.session.pi_session_queries."
+                "find_previous_pending_batch_session",
+                new=AsyncMock(),
+            ) as mock_find,
+            patch("api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock),
+            patch("api.coderbot.session.asyncio.create_subprocess_exec") as mock_exec,
+            patch("builtins.open", MagicMock()),
+            patch("pathlib.Path.mkdir"),
+        ):
+            mock_helper = MagicMock()
+            mock_helper.branch_name = "test-branch"
+            mock_helper.get_patch.return_value = "test-patch"
+            mock_repo = MagicMock()
+            mock_repo.git.diff.return_value = "test-patch"
+            mock_repo.head.commit.hexsha = "a" * 40
+            mock_helper.get_repo.return_value = mock_repo
+            mock_helper_cls.return_value = mock_helper
+
+            session = CoderBotSession(
+                pipeline_id=str(pipeline.id), task_id=str(task.id)
+            )
+            session.resume_in_place = True
+            fake_proc = FakePiProcess(events=[{"type": "agent_end", "messages": []}])
+            mock_exec.return_value = fake_proc
+
+            await session.run()
+
+        mock_find.assert_not_awaited()
+        assert mock_helper_cls.call_args.kwargs["base"] is None
+        mock_helper.reuse_existing.assert_called_once()
+    finally:
+        config.CODERBOT_RUN_TESTS = original_run_tests
+
+
+@pytest.mark.asyncio
+async def test_coderbot_run_iteration_skips_chaining(init_mock_db):
+    """A PR-iteration run re-applies the existing patch on a fresh base, so it
+    must not resolve or apply a chain base."""
+    pipeline = Pipeline(
+        name="Test Pipeline", workspace_path="test", workspace_abs_path="/tmp"
+    )
+    await pipeline.insert()
+
+    task = Task(
+        title="Iterate Task",
+        pipeline_id=str(pipeline.id),
+        design_doc="D",
+        spec="S",
+    )
+    await task.insert()
+
+    pr = PullRequest(
+        pipeline_id=str(pipeline.id),
+        task_id=str(task.id),
+        subject="s",
+        summary="",
+        branch_name="coderbot/t1",
+        patch="diff --git a/a b/a\n+change\n",
+        status=PullRequestStatus.OPEN,
+    )
+    await pr.insert()
+
+    original_run_tests = config.CODERBOT_RUN_TESTS
+    config.CODERBOT_RUN_TESTS = False
+    try:
+        with (
+            patch("api.coderbot.session.SandboxGitHelper") as mock_helper_cls,
+            patch(
+                "api.coderbot.session.pi_session_queries."
+                "find_previous_pending_batch_session",
+                new=AsyncMock(),
+            ) as mock_find,
+            patch.object(CoderBotSession, "_apply_existing_patch"),
+            patch("api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock),
+            patch("api.coderbot.session.asyncio.create_subprocess_exec") as mock_exec,
+            patch("builtins.open", MagicMock()),
+            patch("pathlib.Path.mkdir"),
+        ):
+            mock_helper = MagicMock()
+            mock_helper.branch_name = "coderbot/t1"
+            mock_helper.get_patch.return_value = "test-patch"
+            mock_repo = MagicMock()
+            mock_repo.git.diff.return_value = "test-patch"
+            mock_repo.head.commit.hexsha = "a" * 40
+            mock_helper.get_repo.return_value = mock_repo
+            mock_helper_cls.return_value = mock_helper
+
+            session = CoderBotSession(
+                pipeline_id=str(pipeline.id),
+                task_id=str(task.id),
+                pr=pr,
+                comments="please fix",
+            )
+            fake_proc = FakePiProcess(events=[{"type": "agent_end", "messages": []}])
+            mock_exec.return_value = fake_proc
+
+            await session.run()
+
+        mock_find.assert_not_awaited()
+        assert mock_helper_cls.call_args.kwargs["base"] is None
+    finally:
+        config.CODERBOT_RUN_TESTS = original_run_tests
