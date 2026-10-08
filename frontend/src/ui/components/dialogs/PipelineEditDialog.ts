@@ -170,9 +170,9 @@ export class PipelineEditDialog extends BaseDialog<void> {
     // In create mode no pipeline exists yet, so render against a fresh one.
     this.pipeline = props.pipeline ?? new Pipeline({});
     this.pipelineId = props.pipelineId;
-    // In create mode both tabs are editable and we default to the local tab;
+    // In create mode both tabs are editable and we default to the remote tab;
     // in edit mode the dialog is locked to the pipeline's type.
-    this.activeTab = create ? 'local' : this.isRemote() ? 'remote' : 'local';
+    this.activeTab = create ? 'remote' : this.isRemote() ? 'remote' : 'local';
     // After props are set, we MUST re-render because the first render in super() had no props.
     this.reRender();
     // Show the current dev-server state without blocking the dialog render.
@@ -516,8 +516,8 @@ export class PipelineEditDialog extends BaseDialog<void> {
     const remoteReadonly = create ? false : !remote;
     return `
       <div class="flex gap-1 border-b border-app-border">
-        <button type="button" data-tab="local" class="${this.tabClass('local')}">Local Repository</button>
         <button type="button" data-tab="remote" class="${this.tabClass('remote')}">Remote Repository</button>
+        <button type="button" data-tab="local" class="${this.tabClass('local')}">Local Repository</button>
       </div>
       <div id="repo-tab-content" class="flex flex-col gap-4">
         ${this.activeTab === 'local' ? this.renderLocalTab(localReadonly, create) : this.renderRemoteTab(remoteReadonly, create)}

@@ -616,23 +616,38 @@ describe('PipelineEditDialog', () => {
       const dialog = new PipelineEditDialog(props);
       const showPromise = dialog.show();
 
-      // Local tab is active by default; fields are editable.
+      // Remote tab is active by default; fields are editable.
       const nameInput = document.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
-      const workspaceInput = document.querySelector('input[name="workspace_path"]') as HTMLInputElement;
+      const repoUriInput = document.querySelector('input[name="repo_uri"]') as HTMLInputElement;
+      const usernameInput = document.querySelector('input[name="repo_username"]') as HTMLInputElement;
+      const tokenInput = document.querySelector('input[name="repo_token"]') as HTMLInputElement;
       expect(nameInput.readOnly).toBe(false);
-      expect(workspaceInput.readOnly).toBe(false);
+      expect(repoUriInput.readOnly).toBe(false);
+      expect(usernameInput.readOnly).toBe(false);
+      expect(tokenInput.readOnly).toBe(false);
       // No status select or hidden pipeline ID in create mode.
       expect(document.querySelector('select[name="pipeline_status"]')).toBeNull();
       expect(document.body.textContent).not.toContain('ID:');
 
-      // Switching to the remote tab keeps remote fields editable.
-      switchToTab('remote');
-      const repoUriInput = document.querySelector('input[name="repo_uri"]') as HTMLInputElement;
-      const usernameInput = document.querySelector('input[name="repo_username"]') as HTMLInputElement;
-      const tokenInput = document.querySelector('input[name="repo_token"]') as HTMLInputElement;
-      expect(repoUriInput.readOnly).toBe(false);
-      expect(usernameInput.readOnly).toBe(false);
-      expect(tokenInput.readOnly).toBe(false);
+      // Switching to the local tab keeps local fields editable.
+      switchToTab('local');
+      const workspaceInput = document.querySelector('input[name="workspace_path"]') as HTMLInputElement;
+      expect((document.querySelector('input[name="pipeline_name"]') as HTMLInputElement).readOnly).toBe(false);
+      expect(workspaceInput.readOnly).toBe(false);
+
+      document.querySelector('#pipeline-edit-cancel')?.dispatchEvent(new MouseEvent('click'));
+      await showPromise;
+    });
+
+    it('should order the remote tab before the local tab', async () => {
+      const props = mkCreateProps();
+      const dialog = new PipelineEditDialog(props);
+      const showPromise = dialog.show();
+
+      const repoTabs = Array.from(document.querySelectorAll('[data-tab]')).map(
+        (el) => (el as HTMLElement).dataset.tab
+      );
+      expect(repoTabs).toEqual(['remote', 'local']);
 
       document.querySelector('#pipeline-edit-cancel')?.dispatchEvent(new MouseEvent('click'));
       await showPromise;
@@ -642,6 +657,9 @@ describe('PipelineEditDialog', () => {
       const props = mkCreateProps();
       const dialog = new PipelineEditDialog(props);
       const showPromise = dialog.show();
+
+      // Remote is the default tab; switch to local before entering local data.
+      switchToTab('local');
 
       const nameInput = document.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
       const workspaceInput = document.querySelector('input[name="workspace_path"]') as HTMLInputElement;
