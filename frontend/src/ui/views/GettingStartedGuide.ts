@@ -50,8 +50,10 @@ export interface ProjectBlueprint {
 
 /**
  * The curated blueprints shown in the “Jump-start a project” section. Each
- * prompt is a complete, self-contained instruction that a coding agent can act
- * on without further clarification.
+ * prompt asks a coding agent to create the ajapopaja tasks that bootstrap the
+ * project. Mentioning ajapopaja tasks triggers the bundled ajapopaja skill, so
+ * the agent creates one reviewable task per step instead of scaffolding
+ * everything in a single pass.
  */
 export const PROJECT_BLUEPRINTS: ProjectBlueprint[] = [
   {
@@ -60,11 +62,9 @@ export const PROJECT_BLUEPRINTS: ProjectBlueprint[] = [
     subtitle: 'Vite + TypeScript + React + Tailwind',
     icon: 'lightning',
     tags: ['Vite', 'TypeScript', 'React', 'Tailwind'],
-    prompt: `You are setting up a brand-new web application in this repository.
+    prompt: `Create ajapopaja tasks in this pipeline to bootstrap a brand-new React single-page application. Please create tasks in ajapopaja for each of the three steps below; use the ajapopaja task tools/skill and give every task a clear title and a detailed spec.
 
-Goal: a production-ready single-page application.
-
-Stack
+Task 1 — Set up the React single-page app blueprint
 - Vite (latest) as the build tool and dev server
 - TypeScript in strict mode
 - React 18+ with function components and hooks
@@ -73,18 +73,17 @@ Stack
 - Vitest + React Testing Library for tests
 - ESLint + Prettier
 
-Please:
-1. Scaffold the app at the repository root.
-2. Configure TypeScript strict mode, path aliases and the Vite dev proxy if needed.
-3. Create a clean folder structure: src/components, src/pages, src/lib, src/styles.
-4. Build a small but polished example feature (for example a task list with
-   add / complete / delete) that exercises state, routing and reusable components.
-5. Add responsive styling and a light/dark theme toggle using Tailwind.
-6. Add unit tests for the example feature.
-7. Add a README that documents setup, scripts (dev, build, test, lint) and structure.
-8. Make sure "npm run build", "npm run lint" and "npm test" all pass.
+Task 2 — Create the project layout (directories and files)
+- Scaffold the app at the repository root
+- Configure TypeScript strict mode, path aliases and the Vite dev proxy if needed
+- Create a clean folder structure: src/components, src/pages, src/lib, src/styles
 
-Do not commit node_modules/ or dist/. Briefly explain the key decisions when done.`,
+Task 3 — Set up the tooling and a basic smoke test app
+- Configure the tooling for init/install, building, linting, testing and serving (HTTP) the stack
+- Build a small but polished smoke test app (for example a task list with add / complete / delete) that exercises state, routing and reusable components and renders in the browser
+- Deliver the exact commands for init/install, build, lint, test and serve (HTTP) so they can be pasted into the PipelineEditDialog's Build, Lint, Test and Serve configuration
+
+Create these ajapopaja tasks now. Keep each task small and independently reviewable, and do not commit node_modules/ or dist/.`,
   },
   {
     id: 'fullstack',
@@ -92,16 +91,14 @@ Do not commit node_modules/ or dist/. Briefly explain the key decisions when don
     subtitle: 'Vite/TypeScript/React frontend with a FastAPI backend',
     icon: 'architecture',
     tags: ['Vite', 'React', 'FastAPI', 'Python', 'uv'],
-    prompt: `You are setting up a brand-new full-stack web application in this repository.
+    prompt: `Create ajapopaja tasks in this pipeline to bootstrap a brand-new full-stack web application. Please create tasks in ajapopaja for each of the three steps below; use the ajapopaja task tools/skill and give every task a clear title and a detailed spec.
 
-Goal: a React frontend and a Python API backend that work together locally.
-
+Task 1 — Set up the React + Python API blueprint
 Frontend (frontend/)
 - Vite + TypeScript + React
 - React Router and Tailwind CSS
 - A small typed API client with error handling
 - Vitest + React Testing Library
-
 Backend (backend/)
 - Python 3.11+ managed with uv (single workspace)
 - FastAPI + Uvicorn
@@ -109,20 +106,21 @@ Backend (backend/)
 - CORS configured for the Vite dev server
 - An in-memory store behind a repository interface
 - pytest + httpx for API tests
-
 Endpoints
 - GET /api/health -> { "status": "ok" }
 - GET/POST/PUT/DELETE /api/items -> a simple CRUD example
 
-Please:
-1. Create the frontend/ and backend/ structure plus shared root scripts.
-2. Wire the frontend to the backend (at least list and create).
-3. Add loading, empty and error states in the UI.
-4. Add a root README with exact run instructions for both halves.
-5. Ensure "uv run pytest", "uv run ruff check", "npm run build", "npm run lint"
-   and "npm test" all pass.
+Task 2 — Create the project layout (directories and files)
+- Create the frontend/ and backend/ structure plus shared root scripts
+- Wire the frontend to the backend (at least list and create) with a typed API contract on both sides
+- Add loading, empty and error states in the UI
 
-Do not commit build artifacts. Keep the API contract typed on both sides.`,
+Task 3 — Set up the tooling and a basic smoke test app
+- Configure the tooling for init/install, building, linting, testing and serving (HTTP) both halves
+- Build a basic smoke test app that starts the stack, calls GET /api/health and lists/creates items end to end
+- Deliver the exact commands for init/install, build, lint, test and serve (HTTP) so they can be pasted into the PipelineEditDialog's Build, Lint, Test and Serve configuration
+
+Create these ajapopaja tasks now. Keep each task small and independently reviewable, and do not commit build artifacts.`,
   },
   {
     id: 'python-cli',
@@ -130,11 +128,9 @@ Do not commit build artifacts. Keep the API contract typed on both sides.`,
     subtitle: 'Typer + Rich command-line application',
     icon: 'file',
     tags: ['Python', 'Typer', 'Rich', 'pytest'],
-    prompt: `You are setting up a brand-new Python command-line application in this repository.
+    prompt: `Create ajapopaja tasks in this pipeline to bootstrap a brand-new Python command-line application. Please create tasks in ajapopaja for each of the three steps below; use the ajapopaja task tools/skill and give every task a clear title and a detailed spec.
 
-Goal: a polished, installable CLI with a rich terminal UI.
-
-Stack
+Task 1 — Set up the Python CLI with Rich UI blueprint
 - Python 3.11+ managed with uv (single pyproject.toml)
 - typer for the command-line interface
 - rich for tables, panels, progress bars, trees and colours
@@ -142,21 +138,18 @@ Stack
 - pytest for tests
 - ruff for linting and formatting
 
-Please:
-1. Create the package under src/<package_name>/ with a thin __main__.py and a
-   cli module exposing the Typer app.
-2. Add example commands that showcase Rich output:
-   - hello NAME -> a panel greeting
-   - list -> a formatted table
-   - sync -> a live progress bar
-3. Add a --verbose flag, a --version flag and environment-based configuration.
-4. Separate pure business logic from presentation so the core is unit-testable.
-5. Add tests with pytest covering the logic and at least one CLI invocation via
-   typer.testing.CliRunner.
-6. Add a README with installation and usage examples.
-7. Ensure "uv run pytest" and "uv run ruff check" pass.
+Task 2 — Create the project layout (directories and files)
+- Create the package under src/<package_name>/ with a thin __main__.py and a cli module exposing the Typer app
+- Add example commands that showcase Rich output: hello NAME -> a panel greeting, list -> a formatted table, sync -> a live progress bar
+- Add a --verbose flag, a --version flag and environment-based configuration
+- Separate pure business logic from presentation so the core is unit-testable
 
-Do not commit __pycache__/ or build artifacts.`,
+Task 3 — Set up the tooling and a basic smoke test app
+- Configure the tooling for init/install, building, linting, testing and serving (HTTP) the project
+- Build a basic smoke test app that exercises the CLI end to end, including at least one invocation via typer.testing.CliRunner
+- Deliver the exact commands for init/install, build, lint, test and serve (HTTP) so they can be pasted into the PipelineEditDialog's Build, Lint, Test and Serve configuration
+
+Create these ajapopaja tasks now. Keep each task small and independently reviewable, and do not commit __pycache__/ or build artifacts.`,
   },
 ];
 
@@ -189,7 +182,7 @@ function renderBlueprintCard(bp: ProjectBlueprint, idPrefix = 'prompt'): string 
       </summary>
       <div class="border-t border-app-border p-4 bg-app-surface/40">
         <div class="flex items-center justify-between gap-3 mb-2">
-          <span class="text-[10px] font-bold uppercase tracking-widest text-app-muted">Ready-to-use project setup prompt</span>
+          <span class="text-[10px] font-bold uppercase tracking-widest text-app-muted">Ready-to-use ajapopaja task prompt</span>
           <button type="button"
                   data-action-click="copy_project_prompt"
                   data-copy-target="${promptId}"
@@ -303,9 +296,9 @@ function renderBlueprints(opts: { idPrefix?: string; compact?: boolean } = {}): 
             Jump-start a new project
           </h3>
           <p class="text-sm text-app-muted mt-1">
-            No code yet? Expand a blueprint, copy the prompt and paste it into the Assistant,
-            the Interactive Coding Agent or a new task to scaffold a complete, working project
-            layout.
+            No code yet? Expand a blueprint, copy the prompt and paste it into the Assistant
+            or the Interactive Coding Agent. It creates the ajapopaja tasks that scaffold the
+            project layout and the build, lint, test and serve commands.
           </p>
         </div>
         <button data-action-click="toggle_assistant"
