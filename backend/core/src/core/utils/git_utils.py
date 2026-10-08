@@ -37,6 +37,33 @@ def get_repo(workspace_abs_path: str) -> git.Repo:
     return git.Repo(workspace_abs_path)
 
 
+def _sync_origin_url(repo: git.Repo, repo_uri: str) -> None:
+    """Point the repository's ``origin`` remote at the pipeline's ``repo_uri``.
+
+    The checkout may have been created earlier, possibly on the host before
+    ``REMOTE_WORKSPACES_ROOT`` was bind-mounted into the container, so its
+    stored ``origin`` URL can reference a host-specific location (for example
+    ``http://localhost:3000/...``) that is unreachable from inside the
+    container. ``pipeline.repo_uri`` is the source of truth, so reconcile the
+    remote before any fetch/pull. An existing ``origin`` is updated in place;
+    a missing one is created.
+    """
+    try:
+        origin = repo.remotes.origin
+    except (AttributeError, IndexError):
+        logger.info("Adding missing origin remote %s", repo_uri)
+        repo.create_remote("origin", repo_uri)
+        return
+    if origin.url != repo_uri:
+        logger.info(
+            "Updating origin URL for %s from %s to %s",
+            repo.working_tree_dir,
+            origin.url,
+            repo_uri,
+        )
+        origin.set_url(repo_uri)
+
+
 async def ensure_repo_cloned(pipeline: Pipeline) -> None:
     """
     Ensure the pipeline's remote repo is cloned and in sync with origin.
@@ -44,6 +71,10 @@ async def ensure_repo_cloned(pipeline: Pipeline) -> None:
     For local pipelines (no repo_uri) this is a no-op. For remote pipelines it
     clones the repo into REMOTE_WORKSPACES_ROOT on first use, then fetches and
     fast-forwards to keep it in sync with origin.
+
+    The remote's URL is reconciled with ``pipeline.repo_uri`` before fetching so
+    a checkout that was created elsewhere (e.g. on the host with a
+    ``localhost`` URL) still syncs from inside the container.
     """
     if not pipeline.repo_uri:
         return
@@ -57,6 +88,7 @@ async def ensure_repo_cloned(pipeline: Pipeline) -> None:
         logger.info(f"Cloned remote repo {pipeline.repo_uri} to {target}")
     else:
         repo = git.Repo(str(target))
+        _sync_origin_url(repo, pipeline.repo_uri)
         repo.remotes.origin.fetch()
         try:
             repo.git.pull("--ff-only")

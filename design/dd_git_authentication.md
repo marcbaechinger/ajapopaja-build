@@ -247,8 +247,12 @@ updated.
   fields on the `Pipeline` model, set via the pipeline edit dialog.
 - `push_with_auth()` resolves credentials (pipeline → global → none) and
   injects them only for the push, keeping the stored `repo_uri` clean.
-- The existing `ensure_repo_cloned()` (clone + fetch + pull) is unchanged; it
-  works for public repos without credentials.
+- The existing `ensure_repo_cloned()` (clone + fetch + pull) is otherwise
+  unchanged; it works for public repos without credentials. Before fetching it
+  reconciles the checkout's `origin` URL with `pipeline.repo_uri`, so a clone
+  that was created on the host (e.g. with a `localhost` URL) or under an older
+  `repo_uri` still syncs from inside the container once
+  `REMOTE_WORKSPACES_ROOT` is bind-mounted.
 
 ### 6.1 Environment variables reference
 

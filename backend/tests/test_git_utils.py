@@ -242,6 +242,57 @@ async def test_ensure_repo_cloned_syncs_when_present(tmp_path):
         mock_repo.git.pull.assert_called_once_with("--ff-only")
 
 
+@pytest.mark.asyncio
+async def test_ensure_repo_cloned_reconciles_stale_origin(tmp_path):
+    """A checkout cloned elsewhere (e.g. on the host as ``localhost``) is
+    re-pointed at the pipeline's ``repo_uri`` before fetching."""
+    pipeline = MagicMock()
+    pipeline.repo_uri = "https://host/org/my-app.git"
+    target = tmp_path / "my-app"
+    target.mkdir(parents=True)
+    pipeline.workspace_abs_path = target
+
+    with patch("core.utils.git_utils.git.Repo") as mock_repo_cls:
+        mock_repo = MagicMock()
+        mock_repo.remotes.origin.url = "http://localhost:3000/org/my-app.git"
+        mock_repo_cls.return_value = mock_repo
+        await git_utils.ensure_repo_cloned(pipeline)
+        mock_repo.remotes.origin.set_url.assert_called_once_with(
+            "https://host/org/my-app.git"
+        )
+        mock_repo.remotes.origin.fetch.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_ensure_repo_cloned_keeps_matching_origin(tmp_path):
+    pipeline = MagicMock()
+    pipeline.repo_uri = "https://host/org/my-app.git"
+    target = tmp_path / "my-app"
+    target.mkdir(parents=True)
+    pipeline.workspace_abs_path = target
+
+    with patch("core.utils.git_utils.git.Repo") as mock_repo_cls:
+        mock_repo = MagicMock()
+        mock_repo.remotes.origin.url = "https://host/org/my-app.git"
+        mock_repo_cls.return_value = mock_repo
+        await git_utils.ensure_repo_cloned(pipeline)
+        mock_repo.remotes.origin.set_url.assert_not_called()
+        mock_repo.remotes.origin.fetch.assert_called_once()
+
+
+def test_sync_origin_url_creates_missing_remote():
+    class _Remotes:
+        def __getattr__(self, name):
+            raise AttributeError(name)
+
+    repo = MagicMock()
+    repo.remotes = _Remotes()
+
+    git_utils._sync_origin_url(repo, "https://host/org/my-app.git")
+
+    repo.create_remote.assert_called_once_with("origin", "https://host/org/my-app.git")
+
+
 def test_ensure_repo_present_local_returns_none():
     pipeline = MagicMock()
     pipeline.repo_uri = None
