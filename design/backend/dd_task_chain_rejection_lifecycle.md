@@ -56,7 +56,7 @@ sequenceDiagram
     MGR->>Q: enqueue session1 (PiSession uid1)
     U->>MGR: send t2
     MGR->>Q: enqueue session2 (PiSession uid2)
-    Note over Q: queue=[t1,t2]; both tasks INPROGRESS;<br/>no branches anywhere yet
+    Note over Q: queue=[t1,t2], both tasks INPROGRESS, no branches anywhere yet
 
     MGR->>S1: run t1
     S1->>R: clone (M)
@@ -165,7 +165,7 @@ repository.
 flowchart TD
     A["t1+t2 queued together\n(serial queue)"] --> B["t1: branch coderbot/t1 @ M\n→ c1"]
     B --> C["PR1 OPEN\n(S1 stack M←c1)"]
-    C --> D["t2: branch coderbot/t2 @ c1\n(chained; normal case)"]
+    C --> D["t2: branch coderbot/t2 @ c1 (chained, normal case)"]
     D --> E["PR2 OPEN\nS2 stack M←c1←c2\npatch = diff(c1,c2)"]
 
     E --> F{"How is PR1 rejected?"}
