@@ -107,9 +107,9 @@ describe('FileView', () => {
     expect(button!.getAttribute('aria-label')).toBe('Open raw file');
     expect(button!.textContent!.trim().toLowerCase()).toBe('raw');
 
-    // The raw button sits immediately after the copy-path button.
-    const copy = host.querySelector('[data-action-click="copy_file_path"]');
-    expect(copy!.nextElementSibling).toBe(button);
+    // The raw button sits after the copy/download icon buttons.
+    const download = host.querySelector('[data-action-click="download_file"]');
+    expect(download!.nextElementSibling).toBe(button);
   });
 
   it('renders the raw action for binary files too', () => {
@@ -122,5 +122,48 @@ describe('FileView', () => {
     ) as HTMLButtonElement | null;
     expect(button).not.toBeNull();
     expect(button!.getAttribute('data-path')).toBe('assets/logo.png');
+  });
+
+  it('renders a download action next to the copy action carrying the path', () => {
+    const host = renderIntoDom(
+      file({ name: 'foo_bar.py', path: 'backend/core/foo_bar.py', content: '' })
+    );
+
+    const button = host.querySelector(
+      '[data-action-click="download_file"]'
+    ) as HTMLButtonElement | null;
+    expect(button).not.toBeNull();
+    expect(button!.getAttribute('data-path')).toBe('backend/core/foo_bar.py');
+    expect(button!.getAttribute('title')).toBe('Download file');
+    expect(button!.getAttribute('aria-label')).toBe('Download file');
+    expect(button!.querySelector('use')!.getAttribute('href')).toBe(
+      '/icons.svg#download-icon'
+    );
+
+    // The download button sits immediately after the copy-path button.
+    const copy = host.querySelector('[data-action-click="copy_file_path"]');
+    expect(copy!.nextElementSibling).toBe(button);
+  });
+
+  it('renders the download action for binary and truncated files too', () => {
+    const binary = renderIntoDom(
+      file({ name: 'logo.png', path: 'assets/logo.png', is_binary: true })
+    );
+    const truncated = renderIntoDom(
+      file({
+        name: 'big.log',
+        path: 'logs/big.log',
+        truncated: true,
+        content: 'partial',
+      })
+    );
+
+    for (const host of [binary, truncated]) {
+      const button = host.querySelector(
+        '[data-action-click="download_file"]'
+      ) as HTMLButtonElement | null;
+      expect(button).not.toBeNull();
+      expect(button!.getAttribute('data-action-click')).toBe('download_file');
+    }
   });
 });

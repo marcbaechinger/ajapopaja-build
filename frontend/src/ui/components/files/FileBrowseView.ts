@@ -27,6 +27,18 @@ import { FileSearchInputView } from './FileSearchInputView.ts';
 import { Icon } from '../common/Icon.ts';
 import { escapeHtml } from '../utils/fileBrowser.ts';
 
+declare global {
+  interface Window {
+    /**
+     * File System Access API save picker. TypeScript's DOM lib does not ship
+     * this method, and it is absent in browsers without the API.
+     */
+    showSaveFilePicker?: (options?: {
+      suggestedName?: string;
+    }) => Promise<FileSystemFileHandle>;
+  }
+}
+
 export interface FileBrowseViewOptions {
   pipelineId: string;
   client: FileBrowserClient;
@@ -294,6 +306,61 @@ export class FileBrowseView {
       } catch (error) {
         win?.close();
         console.error('Failed to open raw file:', error);
+      }
+    });
+    register('download_file', async (_event, element) => {
+      if (this.destroyed) return;
+      const path = element.getAttribute('data-path');
+      if (!path) return;
+
+      const name =
+        this.selectedFile?.path === path
+          ? this.selectedFile.name
+          : path.split('/').pop() ?? 'download';
+
+      try {
+        const { token } = await this.client.createRawFileToken(
+          this.pipelineId,
+          path
+        );
+        const url = this.client.rawFileUrl(this.pipelineId, token, {
+          download: true,
+        });
+        // The raw request authenticates with the token in the query string, so
+        // the bearer-aware BaseClient.fetch cannot be reused here.
+        const response = await fetch(url);
+        if (response.ok === false) {
+          throw new Error(`Download failed with status ${response.status}`);
+        }
+
+        // Prefer the File System Access API so the user gets a save dialog and
+        // the response streams straight to disk without buffering the file.
+        const savePicker = window.showSaveFilePicker;
+        if (savePicker) {
+          const handle = await savePicker.call(window, {
+            suggestedName: name,
+          });
+          const writable = await handle.createWritable();
+          if (response.body) {
+            await response.body.pipeTo(writable);
+          } else {
+            await writable.write(await response.blob());
+            await writable.close();
+          }
+        } else {
+          // Fallback for browsers without the File System Access API.
+          const blob = await response.blob();
+          const objectUrl = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = objectUrl;
+          link.download = name;
+          link.click();
+          URL.revokeObjectURL(objectUrl);
+        }
+
+        FileView.showCopiedFeedback(element);
+      } catch (error) {
+        console.error('Failed to download file:', error);
       }
     });
     register('file_browser_breadcrumb', (_event, element) => {

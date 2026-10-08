@@ -82,9 +82,16 @@ export class FileBrowserClient extends BaseClient {
    * Build the token-bearing URL a browser tab can navigate to directly. The
    * token is URL-encoded because it is a JWT and contains dot-separated
    * segments but no reserved characters that are safe to leave unescaped.
+   * ``opts.download`` asks the backend to send an attachment disposition so
+   * the browser opens a save dialog instead of rendering the file inline.
    */
-  rawFileUrl(pipelineId: string, token: string): string {
-    return `${this.baseUrl}/pipelines/${pipelineId}/files/raw?token=${encodeURIComponent(token)}`;
+  rawFileUrl(
+    pipelineId: string,
+    token: string,
+    opts: { download?: boolean } = {}
+  ): string {
+    const download = opts.download ? '&download=1' : '';
+    return `${this.baseUrl}/pipelines/${pipelineId}/files/raw?token=${encodeURIComponent(token)}${download}`;
   }
 
   /**

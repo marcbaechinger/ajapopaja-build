@@ -235,8 +235,8 @@ export class FileView {
     registry.register('copy_file_path', copyPath);
   }
 
-  /** Briefly swap the copy icon for a check to confirm the copy happened. */
-  private static showCopiedFeedback(element: HTMLElement): void {
+  /** Briefly swap an action icon for a check to confirm it succeeded. */
+  static showCopiedFeedback(element: HTMLElement): void {
     const original = element.innerHTML;
     element.innerHTML = Icon.render('check', { size: 14 });
     window.setTimeout(() => {
@@ -269,6 +269,9 @@ export class FileView {
           <button type="button" data-action-click="copy_file_path" data-path="${escapeHtml(file.path)}"
             class="shrink-0 p-1 rounded text-app-muted hover:text-app-text hover:bg-app-surface/60 transition-colors cursor-pointer"
             title="Copy path" aria-label="Copy path">${Icon.render('copy', { size: 14 })}</button>
+          <button type="button" data-action-click="download_file" data-path="${escapeHtml(file.path)}"
+            class="shrink-0 p-1 rounded text-app-muted hover:text-app-text hover:bg-app-surface/60 transition-colors cursor-pointer"
+            title="Download file" aria-label="Download file">${Icon.render('download', { size: 14 })}</button>
           <button type="button" data-action-click="open_file_raw" data-path="${escapeHtml(file.path)}"
             data-role="open-raw"
             class="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide text-app-muted hover:text-app-text hover:bg-app-surface/60 transition-colors cursor-pointer"

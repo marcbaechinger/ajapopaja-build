@@ -16,6 +16,9 @@
 
 import { describe, it, expect } from 'vitest';
 import { Icon } from './Icon.ts';
+// Raw sprite source so the registry mapping and the actual SVG definition stay
+// in sync (jsdom never loads the sprite over the network).
+import iconsSprite from '../../../../public/icons.svg?raw';
 
 describe('Icon', () => {
   it('should render an icon from the registry', () => {
@@ -44,6 +47,15 @@ describe('Icon', () => {
   it('should handle data attributes', () => {
     const html = Icon.render('search', { dataAttrs: { 'data-action': 'search' } });
     expect(html).toContain('data-action="search"');
+  });
+
+  it('should render the download icon from the registry', () => {
+    const html = Icon.render('download');
+    expect(html).toContain('<use href="/icons.svg#download-icon" />');
+  });
+
+  it('should define the download symbol in the sprite', () => {
+    expect(iconsSprite).toContain('<symbol id="download-icon"');
   });
 
   it('should allow runtime registration', () => {

@@ -24,6 +24,7 @@ export const iconMap: Record<string, string> = {
   chevronRight: 'chevron-right-icon',
   edit: 'edit-icon',
   copy: 'copy-icon',
+  download: 'download-icon',
   trash: 'trash-icon',
   check: 'check-icon',
   clock: 'clock-icon',

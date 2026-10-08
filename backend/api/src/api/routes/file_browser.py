@@ -22,6 +22,7 @@ workspace; absolute paths are never exposed to the client.
 
 import logging
 from typing import Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
@@ -185,11 +186,14 @@ async def create_raw_file_url(
 async def read_raw_file(
     pipeline_id: str,
     token: Optional[str] = Query(None),
+    download: bool = Query(False),
 ):
     """Stream the full file named by a raw-file token.
 
     The token *is* the authentication and the file path is taken from the
     token, not the URL, so the link cannot be edited to read another file.
+    ``download=True`` switches the disposition to an attachment so the browser
+    opens a save dialog; the default keeps the inline raw viewer behaviour.
     """
     claims = decode_raw_file_token(token)
     if claims.pipeline_id != pipeline_id:
@@ -201,12 +205,15 @@ async def read_raw_file(
     pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
     resolved, _clean = _resolve_file_or_http(pipeline, claims.path)
 
+    disposition = "attachment" if download else "inline"
     return FileResponse(
         resolved,
         media_type=guess_media_type(resolved.name),
-        filename=resolved.name,
-        content_disposition_type="inline",
         headers={
+            # Only the basename is exposed, never the absolute filesystem path.
+            "Content-Disposition": (
+                f"{disposition}; filename*=UTF-8''{quote(resolved.name)}"
+            ),
             "X-Content-Type-Options": "nosniff",
             "Content-Security-Policy": "sandbox",
             "Cache-Control": "private, no-store",

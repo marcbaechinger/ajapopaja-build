@@ -414,6 +414,97 @@ describe('FileBrowseView', () => {
     openSpy.mockRestore();
   });
 
+  it('downloads the selected file through the File System Access API', async () => {
+    const writable = { write: vi.fn(), close: vi.fn() };
+    const handle = { createWritable: vi.fn().mockResolvedValue(writable) };
+    const picker = vi.fn().mockResolvedValue(handle);
+    (window as any).showSaveFilePicker = picker;
+    const pipeTo = vi.fn().mockResolvedValue(undefined);
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue({ ok: true, body: { pipeTo } } as any);
+    client.createRawFileToken = vi
+      .fn()
+      .mockResolvedValue({ token: 'raw.jwt', expiresIn: 60 });
+    client.rawFileUrl = vi
+      .fn()
+      .mockReturnValue('http://test/raw?token=raw.jwt&download=1');
+
+    view.render();
+    await flush();
+    client.readFile.mockResolvedValue(
+      new FileContent({ name: 'README.md', path: 'README.md', size: 5, content: '# hi\n' })
+    );
+    registry.get('file_browser_open_file')(new Event('click'), elementWithPath('README.md'));
+    await flush();
+
+    const button = root.querySelector(
+      '[data-action-click="download_file"]'
+    ) as HTMLButtonElement;
+    expect(button).not.toBeNull();
+
+    await registry.get('download_file')(new Event('click'), button);
+    await flush();
+
+    expect(client.createRawFileToken).toHaveBeenCalledWith('p1', 'README.md');
+    expect(client.rawFileUrl).toHaveBeenCalledWith('p1', 'raw.jwt', { download: true });
+    expect(picker).toHaveBeenCalledWith({ suggestedName: 'README.md' });
+    expect(handle.createWritable).toHaveBeenCalled();
+    expect(pipeTo).toHaveBeenCalledWith(writable);
+    expect(fetchSpy).toHaveBeenCalledWith('http://test/raw?token=raw.jwt&download=1');
+
+    fetchSpy.mockRestore();
+    delete (window as any).showSaveFilePicker;
+  });
+
+  it('falls back to an <a download> when the picker API is unavailable', async () => {
+    delete (window as any).showSaveFilePicker;
+    const blob = new Blob(['hello']);
+    const createObjectURL = vi.fn().mockReturnValue('blob:test');
+    const revokeObjectURL = vi.fn();
+    (URL as any).createObjectURL = createObjectURL;
+    (URL as any).revokeObjectURL = revokeObjectURL;
+    let clicked: HTMLAnchorElement | null = null;
+    const clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(function (this: HTMLAnchorElement) {
+        clicked = this;
+      });
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue({ ok: true, blob: vi.fn().mockResolvedValue(blob) } as any);
+    client.createRawFileToken = vi
+      .fn()
+      .mockResolvedValue({ token: 'raw.jwt', expiresIn: 60 });
+    client.rawFileUrl = vi
+      .fn()
+      .mockReturnValue('http://test/raw?token=raw.jwt&download=1');
+
+    view.render();
+    await flush();
+    client.readFile.mockResolvedValue(
+      new FileContent({ name: 'README.md', path: 'README.md', size: 5, content: '# hi\n' })
+    );
+    registry.get('file_browser_open_file')(new Event('click'), elementWithPath('README.md'));
+    await flush();
+
+    const button = root.querySelector(
+      '[data-action-click="download_file"]'
+    ) as HTMLButtonElement;
+    await registry.get('download_file')(new Event('click'), button);
+    await flush();
+
+    expect(createObjectURL).toHaveBeenCalledWith(blob);
+    expect(clicked!.download).toBe('README.md');
+    expect(clicked!.href).toContain('blob:test');
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:test');
+
+    clickSpy.mockRestore();
+    fetchSpy.mockRestore();
+    delete (URL as any).createObjectURL;
+    delete (URL as any).revokeObjectURL;
+  });
+
   it('refreshes the current directory and re-reads the selected file', async () => {
     view.render();
     await flush();

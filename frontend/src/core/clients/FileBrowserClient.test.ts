@@ -163,6 +163,12 @@ describe('FileBrowserClient', () => {
     );
   });
 
+  it('adds the download flag to the raw file URL when requested', () => {
+    expect(client.rawFileUrl('p1', 'a/b+c=d', { download: true })).toBe(
+      'http://test/api/pipelines/p1/files/raw?token=a%2Fb%2Bc%3Dd&download=1'
+    );
+  });
+
   it('includes the Authorization header', async () => {
     (fetch as any).mockResolvedValue(jsonResponse({ path: '', entries: [] }));
 

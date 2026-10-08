@@ -498,6 +498,46 @@ async def test_raw_file_streams_full_binary_with_headers(async_client, tmp_path)
 
 
 @pytest.mark.asyncio
+async def test_raw_file_download_disposition_streams_full_binary(
+    async_client, tmp_path
+):
+    repo = _make_repo(tmp_path)
+    payload = b"\x00\x01\x02" * (MAX_TEXT_BYTES // 3 + 1000)
+    (repo / "big.bin").write_bytes(payload)
+    token = create_raw_file_token("testuser", "p1", "big.bin")
+
+    with _patch_pipeline(repo):
+        response = await async_client.get(
+            "/api/pipelines/p1/files/raw",
+            params={"token": token, "download": "1"},
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    disposition = response.headers["content-disposition"]
+    assert disposition.startswith("attachment;")
+    assert "filename*=UTF-8''big.bin" in disposition
+    # The full payload is streamed unchanged, no 1 MiB cut.
+    assert response.content == payload
+
+
+@pytest.mark.asyncio
+async def test_raw_file_defaults_to_inline_disposition(async_client, tmp_path):
+    repo = _make_repo(tmp_path)
+    (repo / "clean.txt").write_text("hello\n")
+    token = create_raw_file_token("testuser", "p1", "clean.txt")
+
+    with _patch_pipeline(repo):
+        response = await async_client.get(
+            "/api/pipelines/p1/files/raw", params={"token": token}
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    disposition = response.headers["content-disposition"]
+    assert disposition.startswith("inline;")
+    assert "filename*=UTF-8''clean.txt" in disposition
+
+
+@pytest.mark.asyncio
 async def test_raw_file_serves_typescript_as_text(async_client, tmp_path):
     repo = _make_repo(tmp_path)
     (repo / "app.ts").write_text("const x = 1;\n")
