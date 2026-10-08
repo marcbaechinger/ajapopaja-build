@@ -360,7 +360,7 @@ class BaseBotSession(ABC):
                                 {
                                     "role": "tool",
                                     "content": json.dumps(result),
-                                    "name": tool_name,
+                                    "tool_name": tool_name,
                                 }
                             )
                             self._log_turn(

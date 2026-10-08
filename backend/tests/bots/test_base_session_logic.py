@@ -165,7 +165,100 @@ async def test_base_session_run_loop():
         assert session.history[2]["role"] == "assistant"
         assert "tool_calls" in session.history[2]
         assert session.history[3]["role"] == "tool"
-        assert session.history[3]["name"] == "test_tool"
+        assert session.history[3]["tool_name"] == "test_tool"
+
+
+@pytest.mark.asyncio
+async def test_base_session_multiple_tool_calls_keep_tool_name():
+    """Regression test for multi-call assistant turns.
+
+    A single assistant message may carry more than one tool call. Each resulting
+    ``role: "tool"`` entry must carry the matching ``tool_name`` so Ollama can
+    link every result back to the call it belongs to.
+    """
+
+    class MultiToolSession(ConcreteBotSession):
+        def get_tools(self) -> List[ToolDefinition]:
+            async def list_project_structure(pipeline_id: str, task_id: str):
+                """
+                Lists the project structure.
+
+                Returns:
+                    A dict with the discovered files.
+                """
+                return {"files": []}
+
+            async def read_source_file(pipeline_id: str, task_id: str, path: str):
+                """
+                Reads a source file.
+
+                Args:
+                    path: The path of the file to read.
+                """
+                return {"ok": True, "path": path}
+
+            async def terminal_tool(pipeline_id: str, task_id: str):
+                """
+                Finishes the session.
+                """
+                return {"status": "finished"}
+
+            registry = ToolRegistry()
+            registry.register_tool(list_project_structure)
+            registry.register_tool(read_source_file)
+            registry.register_tool(terminal_tool)
+            return registry.list_tools()
+
+    config = BaseBotSessionConfig(max_iterations=5)
+    session = MultiToolSession("p1", "t1", session_config=config)
+
+    # A single assistant turn carrying two tool calls with different names.
+    multi_call_response = MagicMock()
+    multi_call_response.message.content = "I will call two tools."
+    call_one = MagicMock()
+    call_one.function.name = "list_project_structure"
+    call_one.function.arguments = {}
+    call_two = MagicMock()
+    call_two.function.name = "read_source_file"
+    call_two.function.arguments = {"path": "main.py"}
+    multi_call_response.message.tool_calls = [call_one, call_two]
+
+    terminal_response = MagicMock()
+    terminal_response.message.content = "Done."
+    terminal_call = MagicMock()
+    terminal_call.function.name = "terminal_tool"
+    terminal_call.function.arguments = {}
+    terminal_response.message.tool_calls = [terminal_call]
+
+    with patch.object(session.client, "chat") as mock_chat:
+        mock_chat.side_effect = [
+            AsyncIter([multi_call_response]),
+            AsyncIter([terminal_response]),
+        ]
+
+        await session.run()
+
+        # The exact messages handed to the Ollama client must retain tool_name.
+        messages_sent_to_chat = mock_chat.call_args_list[-1].kwargs["messages"]
+
+    tool_entries = [m for m in session.history if m.get("role") == "tool"]
+    assert [m["tool_name"] for m in tool_entries] == [
+        "list_project_structure",
+        "read_source_file",
+        "terminal_tool",
+    ]
+    assert "name" not in tool_entries[0]
+
+    # Strong check: tool_name must survive Ollama's Message validation, which
+    # AsyncClient.chat applies to every outgoing message before sending.
+    from ollama._client import _copy_messages
+
+    validated = [m for m in _copy_messages(messages_sent_to_chat) if m.role == "tool"]
+    assert [m.tool_name for m in validated] == [
+        "list_project_structure",
+        "read_source_file",
+        "terminal_tool",
+    ]
 
 
 @pytest.mark.asyncio
