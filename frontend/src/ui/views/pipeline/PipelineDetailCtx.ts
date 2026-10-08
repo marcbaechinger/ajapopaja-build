@@ -43,11 +43,12 @@ export interface DevProcessState {
  * - `#pipeline-header-container`      header wrapper            (P2 layout, shell fills it)
  * - `#backlog-sidebar`                collapse target           (P2)
  * - `#backlog-view`                   BacklogView host          (shell / backlog refresh)
- * - `#content-tablist`                4 tab buttons             (P8)
+ * - `#content-tablist`                5 tab buttons             (P8)
  * - `#selected-task-view`             Task editor panel         (P7)
  * - `#interactive-coding-view-mount`  Coding Agent panel        (P8)
  * - `#file-browser-view-mount`        File Browser panel        (P8)
  * - `#history-view-mount`             Commits panel             (P8)
+ * - `#getting-started-view-mount`     Getting Started panel     (P8)
  * - `#execution-engine-view`          right sidebar             (P3)
  * - `#engine-piview-mount`            CoderBot PiView slot      (P3, inner id)
  * - `#pipeline-session-list`          inline session rows       (P4)
@@ -66,6 +67,7 @@ export const PIPELINE_DOM_IDS = {
   interactiveCodingViewMount: 'interactive-coding-view-mount',
   fileBrowserViewMount: 'file-browser-view-mount',
   historyViewMount: 'history-view-mount',
+  gettingStartedViewMount: 'getting-started-view-mount',
   executionEngineView: 'execution-engine-view',
   enginePiViewMount: 'engine-piview-mount',
   pipelineSessionList: 'pipeline-session-list',

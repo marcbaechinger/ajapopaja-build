@@ -184,6 +184,7 @@ describe('PIPELINE_DOM_IDS', () => {
       interactiveCodingViewMount: 'interactive-coding-view-mount',
       fileBrowserViewMount: 'file-browser-view-mount',
       historyViewMount: 'history-view-mount',
+      gettingStartedViewMount: 'getting-started-view-mount',
       executionEngineView: 'execution-engine-view',
       enginePiViewMount: 'engine-piview-mount',
       pipelineSessionList: 'pipeline-session-list',

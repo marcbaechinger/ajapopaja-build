@@ -17,6 +17,7 @@
 import { FileBrowseView } from '../../components/files/FileBrowseView.ts';
 import { HistoryView } from '../../components/pipeline/HistoryView.ts';
 import { InteractiveCodingView } from '../../components/session/InteractiveCodingView.ts';
+import { renderPipelineGettingStartedGuide } from '../GettingStartedGuide.ts';
 import type { ContentTab } from '../../../core/PipelineRoute.ts';
 import type { PipelineSubRoute, HashWriteMode } from './PipelineSubRoute.ts';
 import type { PipelineDetailCtx } from './PipelineDetailCtx.ts';
@@ -30,8 +31,8 @@ export interface ContentTabsControllerDeps {
 }
 
 /**
- * Owns the four content tabs, the lazy mount/teardown of the File Browser /
- * History / Interactive-Coding fragments, the Coding-Agent session lifecycle
+ * Owns the five content tabs, the lazy mount/teardown of the File Browser /
+ * History / Getting Started fragments, the Coding-Agent session lifecycle
  * and the tab ⇄ sub-route wiring.
  *
  * Extracted verbatim from `PipelineDetailView` (P8). The shell keeps only a
@@ -47,6 +48,10 @@ export class ContentTabsController {
   private fileBrowseView: FileBrowseView | null = null;
   private historyView: HistoryView | null = null;
   private interactiveCodingView: InteractiveCodingView | null = null;
+  // The Getting Started panel is static markup plus data-action hooks; it is
+  // rendered once into its mount point (lazily on first activation) and then
+  // only toggled, matching the other content fragments.
+  private gettingStartedMounted = false;
   // Whether the mounted InteractiveCodingView was created with a Start action
   // (i.e. the pipeline's `repo_uri` was known and remote). Tracked so the view is
   // rebuilt once after `loadPipeline()` resolves, when the capability becomes
@@ -61,14 +66,15 @@ export class ContentTabsController {
    * Repaints visibility + tab active state and lazily mounts the active
    * fragment.
    *
-   * Shows/hides the four content fragments (TaskItem, InteractiveCodingView,
-   * FileBrowseView, HistoryView) and keeps every tab button's active/disabled
-   * state in sync. Switching tabs only toggles the visibility of pre-rendered
-   * DOM fragments (no re-render, no teardown), so in-progress edits and the file
-   * browser's/history's state survive switching back and forth. The File Browser
-   * and History are lazily mounted on first activation; the Coding Agent view is
-   * kept mounted so the tab is always available, with the embedded PiView showing
-   * its empty state while no session is attached.
+   * Shows/hides the five content fragments (TaskItem, InteractiveCodingView,
+   * FileBrowseView, HistoryView, Getting Started guide) and keeps every tab
+   * button's active/disabled state in sync. Switching tabs only toggles the
+   * visibility of pre-rendered DOM fragments (no re-render, no teardown), so
+   * in-progress edits and the file browser's/history's state survive switching
+   * back and forth. The File Browser, History and Getting Started are lazily
+   * mounted on first activation; the Coding Agent view is kept mounted so the
+   * tab is always available, with the embedded PiView showing its empty state
+   * while no session is attached.
    */
   refresh(): void {
     const container = this.deps.getHost();
@@ -77,20 +83,24 @@ export class ContentTabsController {
     const mount = container.querySelector('#interactive-coding-view-mount') as HTMLElement | null;
     const fileMount = container.querySelector('#file-browser-view-mount') as HTMLElement | null;
     const historyMount = container.querySelector('#history-view-mount') as HTMLElement | null;
+    const gettingStartedMount = container.querySelector('#getting-started-view-mount') as HTMLElement | null;
     const taskTab = container.querySelector('#tab-task-editor') as HTMLElement | null;
     const codingTab = container.querySelector('#tab-coding-agent') as HTMLElement | null;
     const fileTab = container.querySelector('#tab-file-browser') as HTMLElement | null;
     const historyTab = container.querySelector('#tab-history') as HTMLElement | null;
+    const gettingStartedTab = container.querySelector('#tab-getting-started') as HTMLElement | null;
 
     const showTaskEditor = this.deps.ctx.state.contentTab === 'task-editor';
     const showInteractive = this.deps.ctx.state.contentTab === 'coding-agent';
     const showFileBrowser = this.deps.ctx.state.contentTab === 'file-browser';
     const showHistory = this.deps.ctx.state.contentTab === 'history';
+    const showGettingStarted = this.deps.ctx.state.contentTab === 'getting-started';
 
     selected?.classList.toggle('hidden', !showTaskEditor);
     mount?.classList.toggle('hidden', !showInteractive);
     fileMount?.classList.toggle('hidden', !showFileBrowser);
     historyMount?.classList.toggle('hidden', !showHistory);
+    gettingStartedMount?.classList.toggle('hidden', !showGettingStarted);
 
     if (showInteractive) {
       this.mountInteractiveCodingView();
@@ -100,6 +110,9 @@ export class ContentTabsController {
     }
     if (showHistory) {
       this.mountHistoryView();
+    }
+    if (showGettingStarted) {
+      this.mountGettingStartedView();
     }
 
     const setTabActive = (el: HTMLElement | null, active: boolean) => {
@@ -114,6 +127,7 @@ export class ContentTabsController {
     setTabActive(codingTab, showInteractive);
     setTabActive(fileTab, showFileBrowser);
     setTabActive(historyTab, showHistory);
+    setTabActive(gettingStartedTab, showGettingStarted);
 
     this.deps.ctx.refresh.sessionList();
   }
@@ -330,6 +344,22 @@ export class ContentTabsController {
       actionRegistry: this.deps.ctx.context.actionRegistry,
     });
     this.historyView.render();
+  }
+
+  /**
+   * Renders the static Getting Started guide into its panel the first time the
+   * tab is shown. The markup only references shared actions, so it never needs
+   * to be rebuilt; subsequent activations just toggle its visibility.
+   */
+  private mountGettingStartedView(): void {
+    const container = this.deps.getHost();
+    if (this.gettingStartedMounted || !container) return;
+    const mount = container.querySelector(
+      '#getting-started-view-mount'
+    ) as HTMLElement | null;
+    if (!mount) return;
+    mount.innerHTML = renderPipelineGettingStartedGuide();
+    this.gettingStartedMounted = true;
   }
 
   /**

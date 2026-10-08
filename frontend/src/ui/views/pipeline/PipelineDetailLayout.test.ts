@@ -80,6 +80,7 @@ describe('PipelineDetailLayout', () => {
       expect(html).toContain('id="interactive-coding-view-mount"');
       expect(html).toContain('id="file-browser-view-mount"');
       expect(html).toContain('id="history-view-mount"');
+      expect(html).toContain('id="getting-started-view-mount"');
     });
   });
 
@@ -98,21 +99,22 @@ describe('PipelineDetailLayout', () => {
       expect(root.querySelector('#interactive-coding-view-mount')).not.toBeNull();
       expect(root.querySelector('#file-browser-view-mount')).not.toBeNull();
       expect(root.querySelector('#history-view-mount')).not.toBeNull();
+      expect(root.querySelector('#getting-started-view-mount')).not.toBeNull();
     });
   });
 
   describe('renderTabList', () => {
-    it('renders the four tabs with the Task editor selected by default', () => {
+    it('renders the five tabs with the Task editor selected by default', () => {
       const html = PipelineDetailLayout.renderTabList();
       const root = renderInto(html);
 
-      const tabIds = ['tab-task-editor', 'tab-coding-agent', 'tab-file-browser', 'tab-history'];
+      const tabIds = ['tab-task-editor', 'tab-coding-agent', 'tab-file-browser', 'tab-history', 'tab-getting-started'];
       for (const id of tabIds) {
         expect(root.querySelector(`#${id}`)).not.toBeNull();
       }
 
       const tabs = root.querySelectorAll('[role="tab"]');
-      expect(tabs).toHaveLength(4);
+      expect(tabs).toHaveLength(5);
       expect(root.querySelector('#content-tablist')!.getAttribute('role')).toBe('tablist');
 
       const expectedTabs: Array<[string, string]> = [
@@ -120,6 +122,7 @@ describe('PipelineDetailLayout', () => {
         ['tab-coding-agent', 'coding-agent'],
         ['tab-file-browser', 'file-browser'],
         ['tab-history', 'history'],
+        ['tab-getting-started', 'getting-started'],
       ];
       for (const [id, contentTab] of expectedTabs) {
         const tab = root.querySelector(`#${id}`) as HTMLElement;
@@ -132,6 +135,11 @@ describe('PipelineDetailLayout', () => {
       );
       expect(selected).toHaveLength(1);
       expect(selected[0].id).toBe('tab-task-editor');
+
+      // The guide dialog re-opens the same content as a focused overlay.
+      const guideButton = root.querySelector('#open-pipeline-guide') as HTMLElement;
+      expect(guideButton).not.toBeNull();
+      expect(guideButton.getAttribute('data-action-click')).toBe('open_pipeline_guide');
     });
   });
 

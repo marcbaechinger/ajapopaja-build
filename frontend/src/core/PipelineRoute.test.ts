@@ -29,6 +29,7 @@ describe('PipelineRoute', () => {
       expect(PipelineRoute.build('p1', 'coding-agent')).toBe('#/pipeline/p1/tab/agent');
       expect(PipelineRoute.build('p1', 'file-browser', null)).toBe('#/pipeline/p1/tab/fb');
       expect(PipelineRoute.build('p1', 'history')).toBe('#/pipeline/p1/tab/history');
+      expect(PipelineRoute.build('p1', 'getting-started')).toBe('#/pipeline/p1/tab/guide');
     });
 
     it('distinguishes "no path" from the explicit repository root', () => {
@@ -95,6 +96,11 @@ describe('PipelineRoute', () => {
       });
       expect(PipelineRoute.parse('tab/history')).toEqual({
         tab: 'history',
+        fbPath: null,
+        taskId: null,
+      });
+      expect(PipelineRoute.parse('tab/guide')).toEqual({
+        tab: 'getting-started',
         fbPath: null,
         taskId: null,
       });
@@ -168,6 +174,7 @@ describe('PipelineRoute', () => {
         ['file-browser', 'a/b'],
         ['file-browser', 'a b/c#d'],
         ['history', null],
+        ['getting-started', null],
       ];
       for (const [tab, fbPath, taskId] of cases) {
         const parsed = PipelineRoute.parse(

@@ -19,17 +19,22 @@ import { Icon } from '../components/common/Icon.ts';
 import { escapeHtml } from '../components/utils/html.ts';
 
 /**
- * The empty-state “readme” of the dashboard.
+ * Onboarding guides for the two entry points of the app.
  *
- * It is rendered inline while no pipeline exists and can be reopened as an
- * overlay (via the small *Guide* button in the pipeline header) once pipelines
- * are present, so the onboarding reference never gets in the way but is always
- * one click away.
+ * - {@link renderGettingStartedGuide} is the empty-state “readme” of the
+ *   dashboard. It is rendered inline while no pipeline exists and can be
+ *   reopened as an overlay (via the *Guide* button in the pipeline header) once
+ *   pipelines are present.
+ * - {@link renderPipelineGettingStartedGuide} is the pipeline workbench guide.
+ *   It is the landing tab while the pipeline has no tasks (or no task is
+ *   selected) and can be reopened as a wide-but-readable overlay from the
+ *   *Guide* button beside the content tabs.
  *
- * This module is intentionally presentation-only: the dashboard owns the
+ * This module is intentionally presentation-only: the owning view registers the
  * action handlers and delegates clicks through the shared action registry
  * (`create_pipeline`, `create_pipeline_from_guide`, `open_getting_started`,
- * `copy_project_prompt`, `toggle_assistant`).
+ * `open_pipeline_guide`, `focus_new_task`, `copy_project_prompt`,
+ * `toggle_assistant`).
  */
 
 /** A ready-to-use project setup prompt offered as an expandable card. */
@@ -156,13 +161,14 @@ Do not commit __pycache__/ or build artifacts.`,
 ];
 
 /** Renders a single expandable project blueprint card. */
-function renderBlueprintCard(bp: ProjectBlueprint): string {
+function renderBlueprintCard(bp: ProjectBlueprint, idPrefix = 'prompt'): string {
   const tags = bp.tags
     .map(
       (tag) =>
         `<span class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border border-app-border text-app-muted bg-app-surface">${escapeHtml(tag)}</span>`
     )
     .join('');
+  const promptId = `${idPrefix}-${bp.id}`;
 
   return `
     <details class="group/blueprint rounded-xl border border-app-border bg-app-bg overflow-hidden transition-colors hover:border-app-accent-2/40">
@@ -186,13 +192,13 @@ function renderBlueprintCard(bp: ProjectBlueprint): string {
           <span class="text-[10px] font-bold uppercase tracking-widest text-app-muted">Ready-to-use project setup prompt</span>
           <button type="button"
                   data-action-click="copy_project_prompt"
-                  data-copy-target="prompt-${bp.id}"
+                  data-copy-target="${promptId}"
                   class="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-app-bg border border-app-border text-[10px] font-bold uppercase tracking-wider text-app-accent-2 hover:bg-app-accent-2/10 transition-all cursor-pointer">
             ${Icon.render('copy', { size: 12 })}
             <span class="copy-label">Copy prompt</span>
           </button>
         </div>
-        <pre id="prompt-${bp.id}" class="text-xs leading-relaxed text-app-text/90 whitespace-pre-wrap break-words font-mono bg-app-bg border border-app-border rounded-lg p-3 max-h-72 overflow-y-auto custom-scrollbar">${escapeHtml(bp.prompt)}</pre>
+        <pre id="${promptId}" class="text-xs leading-relaxed text-app-text/90 whitespace-pre-wrap break-words font-mono bg-app-bg border border-app-border rounded-lg p-3 max-h-72 overflow-y-auto custom-scrollbar">${escapeHtml(bp.prompt)}</pre>
       </div>
     </details>
   `;
@@ -283,7 +289,11 @@ function renderSteps(): string {
 }
 
 /** Renders the “Jump-start a project” blueprint section. */
-function renderBlueprints(): string {
+function renderBlueprints(opts: { idPrefix?: string; compact?: boolean } = {}): string {
+  const idPrefix = opts.idPrefix ?? 'prompt';
+  const grid = opts.compact
+    ? 'grid grid-cols-1 2xl:grid-cols-3 gap-3'
+    : 'grid grid-cols-1 lg:grid-cols-3 gap-3';
   return `
     <section class="flex flex-col gap-4">
       <div class="flex items-end justify-between gap-4 flex-wrap">
@@ -293,8 +303,9 @@ function renderBlueprints(): string {
             Jump-start a new project
           </h3>
           <p class="text-sm text-app-muted mt-1">
-            No code yet? Expand a blueprint, copy the prompt and paste it into the Assistant
-            (or into a task) to scaffold a complete, working project layout.
+            No code yet? Expand a blueprint, copy the prompt and paste it into the Assistant,
+            the Interactive Coding Agent or a new task to scaffold a complete, working project
+            layout.
           </p>
         </div>
         <button data-action-click="toggle_assistant"
@@ -303,8 +314,8 @@ function renderBlueprints(): string {
           <span class="text-xs font-bold uppercase tracking-widest">Open Assistant</span>
         </button>
       </div>
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        ${PROJECT_BLUEPRINTS.map(renderBlueprintCard).join('')}
+      <div class="${grid}">
+        ${PROJECT_BLUEPRINTS.map((bp) => renderBlueprintCard(bp, idPrefix)).join('')}
       </div>
     </section>
   `;
@@ -363,6 +374,268 @@ export function renderGettingStartedGuide(variant: 'inline' | 'dialog' = 'inline
   `;
 }
 
+/** Section heading used throughout the pipeline guide. */
+function renderGuideSection(
+  icon: string,
+  title: string,
+  subtitle: string,
+  body: string
+): string {
+  return `
+    <section class="flex flex-col gap-4">
+      <div>
+        <h3 class="text-xl font-bold text-app-text flex items-center gap-2">
+          <span class="text-app-accent-2">${Icon.render(icon, { size: 18 })}</span>
+          ${escapeHtml(title)}
+        </h3>
+        <p class="text-sm text-app-muted mt-1">${subtitle}</p>
+      </div>
+      ${body}
+    </section>
+  `;
+}
+
+/** A small, consistent feature card used across the pipeline guide. */
+function renderInfoCard(icon: string, title: string, body: string): string {
+  return `
+    <div class="rounded-xl border border-app-border bg-app-bg p-4 flex flex-col gap-2 min-w-0">
+      <div class="flex items-center gap-2">
+        <span class="shrink-0 w-8 h-8 rounded-lg bg-app-accent-2/10 border border-app-accent-2/20 text-app-accent-2 flex items-center justify-center">
+          ${Icon.render(icon, { size: 16 })}
+        </span>
+        <h4 class="font-bold text-app-text text-sm">${escapeHtml(title)}</h4>
+      </div>
+      <p class="text-xs text-app-muted leading-relaxed">${body}</p>
+    </div>
+  `;
+}
+
+/**
+ * The hero of the pipeline guide: a compact call to action for a pipeline that
+ * has no tasks yet (or whose Task editor is idle).
+ */
+function renderPipelineHero(): string {
+  return `
+    <section class="relative overflow-hidden rounded-2xl border border-app-border bg-app-bg p-6">
+      <div class="absolute -top-24 -right-24 w-64 h-64 rounded-full bg-app-accent-2/10 blur-3xl pointer-events-none"></div>
+      <div class="absolute -bottom-24 -left-24 w-64 h-64 rounded-full bg-app-accent-1/10 blur-3xl pointer-events-none"></div>
+      <div class="relative">
+        <div class="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-app-accent-2 bg-app-accent-2/10 border border-app-accent-2/20 rounded-full px-3 py-1 mb-4">
+          <span class="w-1.5 h-1.5 rounded-full bg-app-accent-2"></span>
+          Start here
+        </div>
+        <h2 class="text-2xl font-black text-app-text tracking-tight">Turn an idea into a reviewed pull request</h2>
+        <p class="text-app-muted mt-3 leading-relaxed max-w-2xl">
+          This pipeline is a workspace around your Git repository. Describe one focused unit of work
+          as a task, let the agents design, implement and review it, then approve the pull request.
+          Nothing is final until you say so.
+        </p>
+        <div class="flex items-center gap-3 mt-5 flex-wrap">
+          <button data-action-click="focus_new_task"
+                  class="flex items-center gap-2 bg-app-accent-1 hover:brightness-110 text-white text-xs font-bold uppercase tracking-widest px-5 py-2.5 rounded-lg transition-all shadow-lg cursor-pointer">
+            ${Icon.render('plus', { size: 16 })}
+            Create your first task
+          </button>
+          <button data-action-click="toggle_assistant"
+                  class="flex items-center gap-2 bg-app-surface hover:bg-app-bg px-5 py-2.5 rounded-lg border border-app-border text-app-text text-xs font-bold uppercase tracking-widest transition-all cursor-pointer">
+            ${Icon.render('lightning', { size: 16 })}
+            Ask the Assistant
+          </button>
+        </div>
+        <p class="text-[11px] text-app-muted mt-4">
+          Short on words? Paste a blueprint below, or let an agent turn a one-liner into a spec.
+        </p>
+      </div>
+    </section>
+  `;
+}
+
+/** “Create tasks in seconds” — the three quick on-ramps. */
+function renderTaskCreationSection(): string {
+  return renderGuideSection(
+    'plus',
+    'Create tasks in seconds',
+    'A task is one focused change. Small tasks give the agents a clear target and produce better results.',
+    `
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        ${renderInfoCard(
+          'edit',
+          'Type it in the header',
+          'Use the <span class="text-app-text font-semibold">What needs to be done?</span> box at the top. Press Enter and the task appears in the Backlog — no forms, no setup.'
+        )}
+        ${renderInfoCard(
+          'lightning',
+          'Ask the Assistant',
+          'The dashboard Assistant (Ctrl/Cmd+Alt+A) can create and edit tasks for you. Describe the outcome and it takes care of the rest.'
+        )}
+        ${renderInfoCard(
+          'documentation',
+          'Pair with the agent',
+          'The <span class="text-app-text font-semibold">Coding Agent</span> tab is pinned to the tip of the main branch. It reads your latest code and can create and edit tasks through the bundled ajapopaja skill.'
+        )}
+      </div>
+    `
+  );
+}
+
+/**
+ * The recommended agent loop. Each step names the bot, what it does and where
+ * the user stays in control.
+ */
+function renderAgentWorkflowSection(): string {
+  const specStep = `
+    <p>You don't need a perfect spec. Write a short description, then let SpecBot expand it.</p>
+    <p class="mt-2">SpecBot proposes an elaborated specification inline; you accept or reject it, and the accepted text becomes the task's spec.</p>
+  `;
+  const designStep = `
+    <p>Tick <span class="text-app-text font-semibold">design document</span> when the change deserves a plan. ArchBot turns the spec into a structured design doc.</p>
+    <p class="mt-2">Design docs are <span class="text-app-text font-semibold">versioned</span> on every write — yours or the AI's — so you can always compare and roll back to an earlier revision.</p>
+  `;
+  const coderStep = `
+    <p>Schedule the task and CoderBot implements it in an isolated sandbox and opens a pull request.</p>
+    <p class="mt-2">Tasks sent to CoderBot are <span class="text-app-text font-semibold">queued and executed sequentially</span>, so parallel requests never race on the same working copy.</p>
+  `;
+  const reviewStep = `
+    <p>ReviewBot inspects the spec, the design doc and the diff, and stores a technical review on the task.</p>
+    <p class="mt-2">Use its findings to create the next tasks. Accept the pull request to land the change, then start the next iteration.</p>
+  `;
+
+  return renderGuideSection(
+    'git-pull-request',
+    'The agent workflow',
+    'A proven loop from idea to merged change. Run every step by hand, or let the bots hand off to each other.',
+    `
+      <div class="flex flex-col gap-3">
+        ${renderStep('1', 'Sharpen the spec with SpecBot', specStep, 'edit')}
+        ${renderStep('2', 'Design with ArchBot', designStep, 'architecture')}
+        ${renderStep('3', 'Implement with CoderBot', coderStep, 'lightning')}
+        ${renderStep('4', 'Review with ReviewBot, then iterate', reviewStep, 'git-pull-request')}
+      </div>
+      <div class="mt-3 flex items-start gap-2 text-xs rounded-lg border border-app-accent-2/30 bg-app-accent-2/10 text-app-text/90 p-3">
+        <span class="mt-0.5 text-app-accent-2">${Icon.render('settings', { size: 14 })}</span>
+        <span>
+          Choose which model each bot uses in the pipeline properties
+          (<span class="text-app-text font-semibold">Ctrl/Cmd+Shift+P</span> or the edit icon next to the pipeline name)
+          — e.g. a fast model for quick specs and a stronger model for implementation.
+        </span>
+      </div>
+    `
+  );
+}
+
+/** One chip of the task lifecycle. */
+function renderLifecycleChip(status: string, detail: string, accent: string): string {
+  return `
+    <div class="flex flex-col items-center text-center gap-1 min-w-[7rem]">
+      <span class="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border ${accent}">${escapeHtml(status)}</span>
+      <span class="text-[10px] text-app-muted leading-tight max-w-[9rem]">${escapeHtml(detail)}</span>
+    </div>
+  `;
+}
+
+/** The Backlog → submitted lifecycle as a horizontal flow. */
+function renderLifecycleSection(): string {
+  const arrow = `<span class="text-app-muted/50 shrink-0">${Icon.render('arrowRight', { size: 14 })}</span>`;
+  const chips = [
+    renderLifecycleChip('Backlog', 'Created; optionally elaborate the spec', 'border-app-border text-app-muted bg-app-surface'),
+    renderLifecycleChip('Proposed design', 'Optional design doc awaiting approval', 'border-purple-500/40 text-purple-300 bg-purple-500/10'),
+    renderLifecycleChip('Scheduled', 'Queued for CoderBot', 'border-blue-500/40 text-blue-300 bg-blue-500/10'),
+    renderLifecycleChip('In progress', 'CoderBot is implementing', 'border-amber-500/40 text-amber-300 bg-amber-500/10'),
+    renderLifecycleChip('Submitted', 'Pull request awaiting your review', 'border-emerald-500/40 text-emerald-300 bg-emerald-500/10'),
+  ];
+  return renderGuideSection(
+    'refresh',
+    'How tasks move through the pipeline',
+    'The UI mirrors the feature implementation process. Watch each column light up as the work progresses.',
+    `
+      <div class="flex items-center gap-2 flex-wrap rounded-xl border border-app-border bg-app-bg p-4">
+        ${chips.join(arrow)}
+      </div>
+    `
+  );
+}
+
+/** The workbench tabs and what each one is for. */
+function renderWorkbenchSection(): string {
+  return renderGuideSection(
+    'copyRects',
+    'Your workbench',
+    'Four tools around the same repository, always one click away. Your selection and scroll position survive tab switches.',
+    `
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        ${renderInfoCard(
+          'edit',
+          'Task editor',
+          'Open any task to read and edit its spec and design doc. SpecBot and ArchBot assist right where you work, and you approve every change before it is used.'
+        )}
+        ${renderInfoCard(
+          'documentation',
+          'Coding Agent',
+          'An interactive session pinned to the tip of the main branch. Explore the code, ask questions, and create or edit tasks through the ajapopaja MCP skill.'
+        )}
+        ${renderInfoCard(
+          'folderOpen',
+          'File Browser',
+          'Browse the repository without a session and preview syntax-highlighted files. Use the filename search to jump straight to a file.'
+        )}
+        ${renderInfoCard(
+          'clock',
+          'Commits',
+          'See the changes in the repository, newest first, and open any commit in an inline DiffView before you accept the change.'
+        )}
+      </div>
+    `
+  );
+}
+
+/** MCP + external agents. */
+function renderMcpSection(): string {
+  return renderGuideSection(
+    'architecture',
+    'Bring your own agent',
+    'Everything the UI can do with tasks is also exposed over the Model Context Protocol.',
+    `
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        ${renderInfoCard(
+          'documentation',
+          'ajapopaja MCP in the Coding Agent',
+          'The Coding Agent tab already speaks MCP through the bundled ajapopaja skill, so it can search, read, create and schedule tasks for this pipeline.'
+        )}
+        ${renderInfoCard(
+          'architecture',
+          'External coding agents',
+          'Point any MCP-capable agent (Claude, Cursor, VS Code, …) at the server and let it read and implement tasks from outside the dashboard. See the skill in <code class="text-app-accent-2">.pi/skills/ajapopaja</code>.'
+        )}
+      </div>
+    `
+  );
+}
+
+/**
+ * Returns the full pipeline onboarding page markup.
+ *
+ * @param variant `inline` renders the page as the Getting Started tab inside
+ * the PipelineDetailView; `dialog` renders the same content in the manual
+ * overlay. The blueprint prompt ids are namespaced per variant so the inline
+ * tab and the overlay never collide in the DOM.
+ */
+export function renderPipelineGettingStartedGuide(
+  variant: 'inline' | 'dialog' = 'inline'
+): string {
+  const idPrefix = variant === 'dialog' ? 'pipeline-dialog-prompt' : 'pipeline-prompt';
+  return `
+    <div class="flex flex-col gap-8">
+      ${renderPipelineHero()}
+      ${renderBlueprints({ idPrefix, compact: true })}
+      ${renderTaskCreationSection()}
+      ${renderAgentWorkflowSection()}
+      ${renderLifecycleSection()}
+      ${renderWorkbenchSection()}
+      ${renderMcpSection()}
+    </div>
+  `;
+}
+
 /**
  * Overlay wrapper around {@link renderGettingStartedGuide}. Used once pipelines
  * already exist so the reference remains available without occupying the
@@ -385,5 +658,28 @@ export class GettingStartedDialog extends BaseDialog<void> {
   /** Closes the overlay. Public so the dashboard can dismiss it before opening the create dialog. */
   public dismiss(): void {
     this.close();
+  }
+}
+
+/**
+ * Overlay wrapper around {@link renderPipelineGettingStartedGuide}. Opened from
+ * the small *Guide* button beside the pipeline tabs, so the onboarding reference
+ * stays available after the first tasks exist without occupying a tab.
+ *
+ * The width is deliberately capped at `max-w-3xl`: wide enough for the two-up
+ * card grids, but narrow enough to stay comfortable to read.
+ */
+export class PipelineGettingStartedDialog extends BaseDialog<void> {
+  constructor() {
+    super({
+      title: 'Pipeline Getting Started',
+      maxWidth: 'max-w-3xl',
+      maxHeight: 'max-h-[85vh]',
+      iconSvg: Icon.render('documentation', { size: 20 }),
+    });
+  }
+
+  protected renderBody(): string {
+    return `<div class="p-6">${renderPipelineGettingStartedGuide('dialog')}</div>`;
   }
 }

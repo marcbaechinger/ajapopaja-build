@@ -39,6 +39,7 @@ import { registerMiscActions } from './pipeline/actions/miscActions.ts';
 import { registerTaskSpecActions } from './pipeline/actions/taskSpecActions.ts';
 import { registerTaskDesignDocActions } from './pipeline/actions/taskDesignDocActions.ts';
 import { registerTaskLifecycleActions } from './pipeline/actions/taskLifecycleActions.ts';
+import { PipelineGettingStartedDialog } from './GettingStartedGuide.ts';
 import EasyMDE from 'easymde';
 import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
 
@@ -86,6 +87,14 @@ export class PipelineDetailView extends View {
   private realtime: PipelineRealtimeController | null = null;
   private selectedTaskCtrl: SelectedTaskController | null = null;
   private contentTabs: ContentTabsController | null = null;
+
+  // Whether the URL deep-linked a specific content tab. When it did, the
+  // Getting Started auto-selection never overrides the user's choice.
+  private readonly routeSpecifiedTab: boolean;
+  // The Getting Started tab is auto-selected once, after the first task load,
+  // while there is nothing to show. Subsequent refreshes only fall back to it
+  // when the pipeline runs out of tasks while the Task editor is idle.
+  private guideTabResolved = false;
 
   // Which content tab is active in the prep column. The tab list is always
   // visible; the Coding Agent tab is always selectable and shows its empty
@@ -153,6 +162,8 @@ export class PipelineDetailView extends View {
     // later, once the session state is known.
     const route = this.subRoute.parse(params.rest);
     this.contentTab = route.tab;
+    const restSegments = (params.rest ?? '').split('/').filter((segment) => segment !== '');
+    this.routeSpecifiedTab = restSegments[0] === 'tab';
     this.pendingFbPath = route.fbPath;
     this.pendingTaskId = route.taskId;
     this.sidebarCollapsed =
@@ -351,10 +362,54 @@ export class PipelineDetailView extends View {
     // tab never re-renders (and never tears down) an already mounted fragment.
     this.context.actionRegistry.register('select_content_tab', (_e, el) => {
       const tab = el.getAttribute('data-content-tab');
-      if (tab !== 'task-editor' && tab !== 'coding-agent' && tab !== 'file-browser' && tab !== 'history') {
+      if (
+        tab !== 'task-editor' &&
+        tab !== 'coding-agent' &&
+        tab !== 'file-browser' &&
+        tab !== 'history' &&
+        tab !== 'getting-started'
+      ) {
         return;
       }
       this.setContentTab(tab, { hash: 'push' });
+    });
+
+    // Opens the pipeline onboarding guide as a dialog so it stays available for
+    // reference after the first tasks exist (the Guide button beside the tabs).
+    this.context.actionRegistry.register('open_pipeline_guide', () => {
+      void new PipelineGettingStartedDialog().show();
+    });
+
+    // Focuses the header's "What needs to be done?" input from the guide CTA.
+    this.context.actionRegistry.register('focus_new_task', () => {
+      const input = this.container?.querySelector<HTMLInputElement>('#task-title');
+      input?.focus();
+      if (typeof input?.scrollIntoView === 'function') {
+        input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    });
+
+    // Copies a project blueprint prompt to the clipboard and confirms inline.
+    // Shares the markup with the Dashboard's guide, so it is registered here
+    // too (whichever view mounts last owns the handler; both are equivalent).
+    this.context.actionRegistry.register('copy_project_prompt', async (_e, el) => {
+      const targetId = el.getAttribute('data-copy-target');
+      const pre = targetId ? document.getElementById(targetId) : null;
+      const text = pre?.textContent ?? '';
+      if (!text) return;
+      try {
+        await navigator.clipboard.writeText(text);
+        const label = el.querySelector('.copy-label');
+        if (label) {
+          const original = label.textContent ?? 'Copy prompt';
+          label.textContent = 'Copied!';
+          window.setTimeout(() => {
+            label.textContent = original;
+          }, 1500);
+        }
+      } catch (error) {
+        console.error('Failed to copy project prompt:', error);
+      }
     });
 
     this.context.actionRegistry.register('toggle_interactive_view', () => {
@@ -481,11 +536,43 @@ export class PipelineDetailView extends View {
       this.refreshBacklog();
       this.refreshSelectedTask();
       this.refreshExecutionEngine();
+      // Landing-tab rule: while nothing is selected there is nothing useful to
+      // show in the Task editor, so land on the Getting Started guide instead.
+      this.applyDefaultGuideTab();
       // Reconcile outstanding SpecAgent proposals from the durable cache so a
       // proposal that finished while the user was elsewhere is re-surfaced.
       void this.realtime?.fetchSpecProposals();
     } catch (error) {
       console.error('Error refreshing tasks:', error);
+    }
+  }
+
+  /**
+   * Applies the “Getting Started is the default while there is nothing to show”
+   * rule. On the first task load a pipeline with no tasks, or with no selected
+   * task, lands on the guide. Later it only falls back to the guide when the
+   * pipeline runs out of tasks while the Task editor is idle, so a user who
+   * deliberately opened another tab is never yanked away. An explicit sub-route
+   * always wins.
+   */
+  private applyDefaultGuideTab(): void {
+    if (this.routeSpecifiedTab) {
+      this.guideTabResolved = true;
+      return;
+    }
+    if (!this.guideTabResolved) {
+      this.guideTabResolved = true;
+      if (this.allLoadedTasks.length === 0 || !this.selectedTask) {
+        this.setContentTab('getting-started', { hash: 'replace' });
+      }
+      return;
+    }
+    if (
+      this.allLoadedTasks.length === 0 &&
+      !this.selectedTask &&
+      this.contentTab === 'task-editor'
+    ) {
+      this.setContentTab('getting-started', { hash: 'none' });
     }
   }
 
@@ -652,7 +739,10 @@ export class PipelineDetailView extends View {
     if (!this.container) return;
     const isAvailable = await this.context.systemClient.isOllamaAvailable();
     if (!isAvailable) {
-      this.container.querySelector('[data-action-click="toggle_assistant"]')?.classList.add('hidden');
+      // Hide every assistant entry point (header and getting-started guide)
+      // so the UI never offers an action the backend cannot serve.
+      this.container.querySelectorAll('[data-action-click="toggle_assistant"]')
+        .forEach((el) => el.classList.add('hidden'));
     }
   }
 

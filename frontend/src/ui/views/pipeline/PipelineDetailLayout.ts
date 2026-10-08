@@ -117,7 +117,7 @@ export class PipelineDetailLayout {
     `;
   }
 
-  /** The preparation column: session list, pull requests, tab list and the four tab panels. */
+  /** The preparation column: session list, pull requests, tab list and the five tab panels. */
   static renderPrepColumn(opts: RenderPrepColumnOptions): string {
     return `
       <div class="flex flex-col gap-8 min-w-0 lg:min-w-[350px]">
@@ -130,10 +130,11 @@ export class PipelineDetailLayout {
           <div id="col-prep">
             <div id="pull-request-section">${opts.pullRequestSectionHtml}</div>
           </div>
-          <!-- Four tabs over four pre-rendered DOM fragments. The tab list is
+          <!-- Five tabs over five pre-rendered DOM fragments. The tab list is
                always visible; the Coding Agent tab shows its "No active
                session" state (with a Start action for remote pipelines) while
-               no session is attached. "Task editor" is the default. -->
+               no session is attached, and the Getting Started tab holds the
+               pipeline onboarding guide. "Task editor" is the default. -->
           ${PipelineDetailLayout.renderTabList()}
           <div id="selected-task-view" role="tabpanel" aria-labelledby="tab-task-editor" class="mt-6">
             <p class="text-app-muted/60 text-xs italic text-center border border-dashed border-app-border/40 rounded-xl py-6 px-3">Select a task from the backlog to open it here.</p>
@@ -141,15 +142,17 @@ export class PipelineDetailLayout {
           <div id="interactive-coding-view-mount" role="tabpanel" aria-labelledby="tab-coding-agent" class="mt-6 hidden"></div>
           <div id="file-browser-view-mount" role="tabpanel" aria-labelledby="tab-file-browser" class="mt-6 hidden"></div>
           <div id="history-view-mount" role="tabpanel" aria-labelledby="tab-history" class="mt-6 hidden"></div>
+          <div id="getting-started-view-mount" role="tabpanel" aria-labelledby="tab-getting-started" class="mt-6 hidden"></div>
         </div>
       </div>
     `;
   }
 
-  /** The four always-visible content tab buttons. "Task editor" is the default active tab. */
+  /** The five always-visible content tab buttons. "Task editor" is the default active tab. */
   static renderTabList(): string {
-    return `<div id="content-tablist" role="tablist" aria-label="Pipeline content"
-            class="mt-6 flex items-center gap-1 border-b border-app-border/40">
+    return `<div class="mt-6 flex items-end gap-1 border-b border-app-border/40">
+            <div id="content-tablist" role="tablist" aria-label="Pipeline content"
+              class="flex items-center gap-1 min-w-0 overflow-x-auto whitespace-nowrap">
             <button id="tab-task-editor" data-action-click="select_content_tab" data-content-tab="task-editor" type="button"
               role="tab" aria-selected="true" aria-controls="selected-task-view"
               class="px-3 py-2 text-xs font-bold uppercase tracking-widest border-b-2 -mb-px transition-colors cursor-pointer border-app-accent-1 text-app-accent-1">
@@ -169,6 +172,18 @@ export class PipelineDetailLayout {
               role="tab" aria-selected="false" aria-controls="history-view-mount"
               class="px-3 py-2 text-xs font-bold uppercase tracking-widest border-b-2 -mb-px transition-colors cursor-pointer border-transparent text-app-muted hover:text-app-text">
               Commits
+            </button>
+            <button id="tab-getting-started" data-action-click="select_content_tab" data-content-tab="getting-started" type="button"
+              role="tab" aria-selected="false" aria-controls="getting-started-view-mount"
+              class="px-3 py-2 text-xs font-bold uppercase tracking-widest border-b-2 -mb-px transition-colors cursor-pointer border-transparent text-app-muted hover:text-app-text">
+              Getting Started
+            </button>
+            </div>
+            <button id="open-pipeline-guide" data-action-click="open_pipeline_guide" type="button"
+              class="ml-auto shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-app-border bg-app-bg text-[10px] font-bold uppercase tracking-wider text-app-muted hover:text-app-accent-2 hover:border-app-accent-2/40 transition-all cursor-pointer"
+              title="Open the getting started guide in a dialog">
+              <svg class="w-3 h-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+              Guide
             </button>
           </div>`;
   }

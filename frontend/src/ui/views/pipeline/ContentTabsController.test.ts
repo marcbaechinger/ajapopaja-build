@@ -224,7 +224,12 @@ describe('ContentTabsController (tabs + lazy mounts + sub-route, via PipelineDet
 
     const selected = container.querySelector('#selected-task-view') as HTMLElement;
     const mount = container.querySelector('#interactive-coding-view-mount') as HTMLElement;
-    expect(selected.classList.contains('hidden')).toBe(false);
+    const gettingStarted = container.querySelector('#getting-started-view-mount') as HTMLElement;
+    // With no tasks the Getting Started tab is the landing panel; the Coding
+    // Agent view is still mounted so its tab is usable without a session.
+    expect(gettingStarted.classList.contains('hidden')).toBe(false);
+    expect((view as any).contentTab).toBe('getting-started');
+    expect(selected.classList.contains('hidden')).toBe(true);
     expect(mount.classList.contains('hidden')).toBe(true);
     // The Coding Agent view is always mounted so the tab is usable without a
     // session (the embedded PiView shows its empty state).
@@ -727,6 +732,7 @@ describe('ContentTabsController', () => {
       <div id="interactive-coding-view-mount" class="hidden"></div>
       <div id="file-browser-view-mount" class="hidden"></div>
       <div id="history-view-mount" class="hidden"></div>
+      <div id="getting-started-view-mount" class="hidden"></div>
       <button id="tab-task-editor" role="tab" aria-selected="true"
         class="border-app-accent-1 text-app-accent-1"></button>
       <button id="tab-coding-agent" role="tab" aria-selected="false"
@@ -734,6 +740,8 @@ describe('ContentTabsController', () => {
       <button id="tab-file-browser" role="tab" aria-selected="false"
         class="border-transparent text-app-muted"></button>
       <button id="tab-history" role="tab" aria-selected="false"
+        class="border-transparent text-app-muted"></button>
+      <button id="tab-getting-started" role="tab" aria-selected="false"
         class="border-transparent text-app-muted"></button>
     `;
 
@@ -799,6 +807,19 @@ describe('ContentTabsController', () => {
     expect(tab('tab-coding-agent').getAttribute('aria-selected')).toBe('true');
     expect(tab('tab-task-editor').getAttribute('aria-selected')).toBe('false');
     expect(refresh.sessionList).toHaveBeenCalledTimes(1);
+  });
+
+  it("setTab('getting-started') shows the guide panel and writes the canonical hash", () => {
+    controller.setTab('getting-started', { hash: 'push' });
+
+    expect(ctx.state.contentTab).toBe('getting-started');
+    expect(mountEl('getting-started-view-mount').classList.contains('hidden')).toBe(false);
+    expect(mountEl('selected-task-view').classList.contains('hidden')).toBe(true);
+    expect(mountEl('interactive-coding-view-mount').classList.contains('hidden')).toBe(true);
+    expect(tab('tab-getting-started').getAttribute('aria-selected')).toBe('true');
+    expect(tab('tab-task-editor').getAttribute('aria-selected')).toBe('false');
+    // The guide markup is mounted lazily and contains its own jump-start section.
+    expect(mountEl('getting-started-view-mount').textContent).toContain('Jump-start a new project');
   });
 
   it('activateForTask is a no-op when the id already matches (including both null)', () => {

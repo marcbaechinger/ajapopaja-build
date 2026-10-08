@@ -832,3 +832,163 @@ describe('PipelineDetailView Keyboard Shortcuts', () => {
     view.unmount();
   });
 });
+
+describe('PipelineDetailView Getting Started', () => {
+  let mockContext: any;
+  let container: HTMLElement;
+
+  const getAction = (name: string) =>
+    mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === name)![1];
+
+  const TASK = {
+    id: 't1',
+    title: 'Task 1',
+    status: TaskStatus.CREATED,
+    deleted: false,
+    version: 1,
+    order: 0,
+    type: 'manual',
+    want_design_doc: false,
+  };
+
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    LocalStorageManager.resetInstances();
+    vi.clearAllMocks();
+
+    mockContext = {
+      actionRegistry: { register: vi.fn(), execute: vi.fn() },
+      wsClient: { on: vi.fn().mockReturnValue(() => {}) },
+      dataManager: {
+        on: vi.fn().mockReturnValue(() => {}),
+        updateTask: vi.fn(),
+        updatePipeline: vi.fn(),
+      },
+      authService: {
+        getUser: vi.fn().mockReturnValue({ username: 'testuser' }),
+        getAccessToken: vi.fn().mockReturnValue('token'),
+      },
+      pipelineClient: {
+        get: vi.fn().mockResolvedValue({ id: 'p1', name: 'Pipe 1' }),
+        getGitStatus: vi.fn().mockResolvedValue({ staged: 0, unstaged: 0, untracked: 0 }),
+        getDevServerStatus: vi.fn().mockResolvedValue({ running: false, pid: null, port: null }),
+        getGitLog: vi.fn().mockResolvedValue({ commits: [], total: 0 }),
+        getCommitDiff: vi.fn().mockResolvedValue({ patch: '' }),
+        pull: vi.fn().mockResolvedValue({ status: 'ok', message: 'ok' }),
+      },
+      taskClient: {
+        listByPipeline: vi.fn().mockResolvedValue([]),
+        listCompletedByPipeline: vi.fn().mockResolvedValue({ tasks: [], total_count: 0 }),
+      },
+      pullRequestClient: { getPullRequestsByPipeline: vi.fn().mockResolvedValue([]) },
+      systemClient: { isOllamaAvailable: vi.fn().mockResolvedValue(true) },
+      coderBotService: {
+        getCurrentSession: vi.fn(() => null),
+        refreshSession: vi.fn().mockResolvedValue(null),
+        onSessionChange: vi.fn(() => () => {}),
+      },
+      interactiveCodingService: {
+        getCurrentSession: vi.fn(() => null),
+        refreshSession: vi.fn().mockResolvedValue(null),
+        onSessionChange: vi.fn(() => () => {}),
+        onSessionsChange: vi.fn(() => () => {}),
+        getSessions: vi.fn().mockReturnValue([]),
+        startSession: vi.fn().mockResolvedValue(undefined),
+      },
+      fileBrowserClient: {
+        listDirectory: vi.fn().mockResolvedValue({ path: '', parent: null, entries: [] }),
+        readFile: vi.fn().mockResolvedValue({ path: 'a.txt', name: 'a.txt', content: '' }),
+        getMeta: vi.fn().mockResolvedValue({ isDir: true }),
+      },
+    };
+
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn(() => null),
+      setItem: vi.fn(),
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('lands on the Getting Started tab and renders the guide when no tasks exist', async () => {
+    mockContext.taskClient.listByPipeline.mockResolvedValue([]);
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await view.refreshTasks();
+
+    expect((view as any).contentTab).toBe('getting-started');
+    const guide = container.querySelector('#getting-started-view-mount') as HTMLElement;
+    expect(guide.classList.contains('hidden')).toBe(false);
+    expect(guide.innerHTML).toContain('Turn an idea into a reviewed pull request');
+    expect(guide.innerHTML).toContain('Jump-start a new project');
+    expect(
+      container.querySelector('#tab-getting-started')!.getAttribute('aria-selected')
+    ).toBe('true');
+  });
+
+  it('lands on the Getting Started tab when tasks exist but none is selected', async () => {
+    mockContext.taskClient.listByPipeline.mockResolvedValue([{ ...TASK }]);
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await view.refreshTasks();
+
+    expect((view as any).contentTab).toBe('getting-started');
+  });
+
+  it('respects an explicit deep link instead of auto-selecting the guide', async () => {
+    mockContext.taskClient.listByPipeline.mockResolvedValue([]);
+    const view = new PipelineDetailView(mockContext, { id: 'p1', rest: 'tab/history' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await view.refreshTasks();
+
+    expect((view as any).contentTab).toBe('history');
+  });
+
+  it('falls back to the guide when the selected task disappears', async () => {
+    mockContext.taskClient.listByPipeline.mockResolvedValue([{ ...TASK }]);
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await view.refreshTasks();
+
+    const selectAction = getAction('select_task');
+    const el = document.createElement('div');
+    el.setAttribute('data-view-id', 't1');
+    selectAction(new Event('click'), el);
+    expect((view as any).contentTab).toBe('task-editor');
+
+    // The task is deleted: the local cache empties and the selection clears.
+    mockContext.taskClient.listByPipeline.mockResolvedValue([]);
+    await view.refreshTasks();
+
+    expect((view as any).selectedTask).toBeNull();
+    expect((view as any).contentTab).toBe('getting-started');
+  });
+
+  it('opens the pipeline guide dialog from the open_pipeline_guide action', () => {
+    // JSDOM does not implement the native dialog methods.
+    HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) {
+      this.open = true;
+    });
+    HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) {
+      this.open = false;
+    });
+
+    new PipelineDetailView(mockContext, { id: 'p1' });
+    getAction('open_pipeline_guide')();
+
+    const dialog = document.querySelector('dialog');
+    expect(dialog).not.toBeNull();
+    expect(dialog!.textContent).toContain('Pipeline Getting Started');
+    expect(dialog!.textContent).toContain('Jump-start a new project');
+    // Close it so the shared BaseDialog singleton does not leak into other tests.
+    (dialog!.querySelector('#dialog-close-btn') as HTMLElement).click();
+  });
+});

@@ -33,6 +33,7 @@
  *   #/pipeline/<id>/tab/fb/path/to/folder -> file browser, that directory
  *   #/pipeline/<id>/tab/fb/path/file.html -> file browser, that file
  *   #/pipeline/<id>/tab/history            -> repository history
+ *   #/pipeline/<id>/tab/guide              -> getting-started guide
  *
  * The trailing file-browser path is a repo-relative POSIX path, encoded per
  * segment. It is opaque to the router: whether the last segment names a file
@@ -41,20 +42,27 @@
  * editor tab.
  */
 
-export type ContentTab = 'task-editor' | 'coding-agent' | 'file-browser' | 'history';
+export type ContentTab =
+  | 'task-editor'
+  | 'coding-agent'
+  | 'file-browser'
+  | 'history'
+  | 'getting-started';
 
 export const TAB_SLUG_TO_TAB: Record<string, ContentTab> = {
   task: 'task-editor',
   agent: 'coding-agent',
   fb: 'file-browser',
   history: 'history',
+  guide: 'getting-started',
 };
 
 export const TAB_TO_SLUG: Record<ContentTab, string> = {
   'task-editor': 'task',
   'coding-agent': 'agent',
   'file-browser': 'fb',
-  'history': 'history',
+  history: 'history',
+  'getting-started': 'guide',
 };
 
 export interface PipelineRouteState {
