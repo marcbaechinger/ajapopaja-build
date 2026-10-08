@@ -89,7 +89,7 @@ export class FileSearchInputView {
             : ''
         }
         <div id="${this.idPrefix}-listbox" role="listbox"
-          class="absolute right-0 top-full mt-1 w-72 max-h-64 overflow-y-auto custom-scrollbar rounded-xl border border-app-border bg-app-surface shadow-2xl z-40 py-1"
+          class="absolute right-0 top-full mt-1 w-[34rem] max-h-64 overflow-y-auto custom-scrollbar rounded-xl border border-app-border bg-app-surface shadow-2xl z-40 py-1"
           hidden></div>
       </div>
     `;
@@ -278,8 +278,8 @@ export class FileSearchInputView {
             <span class="shrink-0 ${result.isDir ? 'text-app-accent-2' : 'text-app-muted'}" aria-hidden="true">
               ${Icon.render(result.isDir ? 'folder' : 'file', { size: 12 })}
             </span>
-            <span class="truncate">${escapeHtml(result.name)}</span>
-            <span class="ml-auto shrink-0 max-w-[55%] truncate text-[10px] text-app-muted/70">${escapeHtml(dir)}</span>
+            <span class="min-w-0 truncate">${escapeHtml(result.name)}</span>
+            <span class="ml-auto min-w-0 shrink-[999] truncate text-[10px] text-app-muted/70">${escapeHtml(dir)}</span>
           </div>
         `;
       })

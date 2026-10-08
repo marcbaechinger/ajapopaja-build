@@ -119,6 +119,28 @@ describe('FileSearchInputView', () => {
     expect(input().getAttribute('aria-expanded')).toBe('true');
   });
 
+  it('renders a wider results listbox while keeping right alignment', () => {
+    build();
+    const classes = panel().className;
+    expect(classes).toContain('right-0');
+    expect(classes).toContain('w-[34rem]');
+  });
+
+  it('gives the file name priority over the directory path when truncating', async () => {
+    build();
+    type('File');
+    await vi.advanceTimersByTimeAsync(150);
+    await vi.runOnlyPendingTimersAsync();
+
+    const option = panel().querySelector<HTMLElement>('[data-role="search-result"]')!;
+    const [, name, path] = Array.from(option.querySelectorAll<HTMLElement>('span'));
+    // The name may truncate as a last resort...
+    expect(name.className).toContain('truncate');
+    // ...but the directory path shrinks first so the file name keeps its space.
+    expect(path.className).not.toContain('shrink-0');
+    expect(path.className).toContain('shrink-[999]');
+  });
+
   it('searches immediately on Enter, bypassing the debounce', async () => {
     build();
     type('abc');
