@@ -233,7 +233,11 @@ async def test_excludes_interactive_and_scopes_by_pipeline(init_mock_db, tmp_pat
     assert await pi_session_queries.find_previous_pending_batch_session("p1") is None
 
     # A valid batch session in p2 is not returned for p1.
-    pr2 = await _insert_pr("p2")
+    # The PR must post-date the session so it is recognised as an initial run
+    # rather than a PR-iteration run (see `_is_initial_batch_run`).
+    pr2 = await _insert_pr(
+        "p2", created_at=datetime.now(UTC) + timedelta(seconds=1)
+    )
     await _insert_session(
         "p2",
         uid="u-batch",
