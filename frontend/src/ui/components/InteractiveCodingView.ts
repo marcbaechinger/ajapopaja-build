@@ -44,6 +44,11 @@ export interface InteractiveCodingViewOptions {
  *   decorator emits an empty snapshot and an inactive state so `PiView` drops
  *   the now-stale log.
  *
+ * "Attached" means a *live* session for this pipeline: pipeline identity AND
+ * `active`. A paused session (active === false) is deliberately treated as
+ * detached so the composed `PiView` resets to its "No active session…" empty
+ * state; resuming flips `active` back on and re-attaches the session.
+ *
  * Exported for testing; production code should treat it as an implementation
  * detail of {@link InteractiveCodingView}.
  */
@@ -56,12 +61,16 @@ export class PipelineScopedPiSession implements PiSessionService {
   private startTimeListeners = new Set<(startTime: number | null) => void>();
   private mine: boolean;
   private unsubscribe: () => void;
+  private unsubscribeState: () => void;
 
   constructor(service: InteractiveCodingService, pipelineId: string) {
     this.service = service;
     this.pipelineId = pipelineId;
     this.mine = this.computeMine();
+    // Identity/busy changes AND active-state changes both recompute attachment.
+    // `handleSessionChange` is idempotent, so duplicate events are harmless.
     this.unsubscribe = service.onSessionChange(() => this.handleSessionChange());
+    this.unsubscribeState = service.onSessionStateChange(() => this.handleSessionChange());
   }
 
   /** Whether the singleton currently owns a session for this pipeline. */
@@ -69,9 +78,15 @@ export class PipelineScopedPiSession implements PiSessionService {
     return this.computeMine();
   }
 
+  /**
+   * Whether the singleton currently owns a *live* session for this pipeline.
+   * A paused session (active === false) is deliberately treated as detached so
+   * the composed PiView resets to its "No active session…" empty state; resuming
+   * flips `active` back on and re-attaches the session.
+   */
   private computeMine(): boolean {
     const session = this.service.getCurrentSession?.();
-    return !!session && session.pipelineId === this.pipelineId;
+    return !!session && session.pipelineId === this.pipelineId && session.active;
   }
 
   private handleSessionChange(): void {
@@ -95,6 +110,7 @@ export class PipelineScopedPiSession implements PiSessionService {
   destroy(): void {
     try {
       this.unsubscribe();
+      this.unsubscribeState();
     } catch (e) {
       console.error('PipelineScopedPiSession: error tearing down subscription', e);
     }
@@ -164,13 +180,7 @@ export class PipelineScopedPiSession implements PiSessionService {
 
   onSessionStateChange(listener: (active: boolean) => void): () => void {
     this.stateListeners.add(listener);
-    const unsub = this.service.onSessionStateChange((active) => {
-      if (this.mine) listener(active);
-    });
-    return () => {
-      this.stateListeners.delete(listener);
-      unsub();
-    };
+    return () => this.stateListeners.delete(listener);
   }
 }
 

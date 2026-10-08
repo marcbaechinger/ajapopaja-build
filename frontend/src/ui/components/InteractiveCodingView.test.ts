@@ -299,6 +299,71 @@ describe('InteractiveCodingView', () => {
     );
   });
 
+  it('detaches the embedded log when the session is paused', () => {
+    const history = [{ id: 'b1', kind: 'text', text: 'hello' }];
+    service.getHistory.mockReturnValue(history);
+    view.render();
+    const scoped = piViewInstances[0].service;
+    const blockListener = vi.fn();
+    const stateListener = vi.fn();
+    scoped.onBlocks(blockListener);
+    scoped.onSessionStateChange(stateListener);
+
+    // The session stays bound to this pipeline but is paused (active: false).
+    service.getCurrentSession.mockReturnValue({
+      pipelineId: 'p1',
+      uid: 'u1',
+      active: false,
+      busy: false,
+    });
+    service.isActive.mockReturnValue(false);
+    service._fire();
+
+    expect(blockListener).toHaveBeenCalledWith([]);
+    expect(stateListener).toHaveBeenCalledWith(false);
+    expect(scoped.getHistory()).toEqual([]);
+    expect(scoped.isActive()).toBe(false);
+    // The view's own predicate is untouched: header still reads "Paused".
+    expect((root.querySelector('#interactive-status') as HTMLElement).textContent).toBe('Paused');
+  });
+
+  it('re-attaches the session to the embedded log when it is resumed', () => {
+    const history = [{ id: 'b1', kind: 'text', text: 'hello' }];
+    service.getHistory.mockReturnValue(history);
+    view.render();
+    const scoped = piViewInstances[0].service;
+    const blockListener = vi.fn();
+    const stateListener = vi.fn();
+    scoped.onBlocks(blockListener);
+    scoped.onSessionStateChange(stateListener);
+
+    // Pause first: the scoped log detaches.
+    service.getCurrentSession.mockReturnValue({
+      pipelineId: 'p1',
+      uid: 'u1',
+      active: false,
+      busy: false,
+    });
+    service.isActive.mockReturnValue(false);
+    service._fire();
+    expect(scoped.getHistory()).toEqual([]);
+
+    // Resume: the live session is re-attached and its history re-emitted.
+    service.getCurrentSession.mockReturnValue({
+      pipelineId: 'p1',
+      uid: 'u1',
+      active: true,
+      busy: false,
+    });
+    service.isActive.mockReturnValue(true);
+    service._fire();
+
+    expect(blockListener).toHaveBeenLastCalledWith(history);
+    expect(stateListener).toHaveBeenLastCalledWith(true);
+    expect(scoped.getHistory()).toBe(history);
+    expect(scoped.isActive()).toBe(true);
+  });
+
   it('renders only the Pause control in the header', () => {
     view.render();
     expect(root.querySelector('#interactive-pause-btn')).not.toBeNull();
