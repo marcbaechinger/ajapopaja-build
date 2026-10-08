@@ -14,7 +14,8 @@ as a Linux system service. It is a manual, step-by-step walkthrough of what the
 4. [Install as a Linux systemd service](#4-install-as-a-linux-systemd-service)
 5. [Manage the service](#5-manage-the-service)
 6. [First-time setup: create the admin user](#6-first-time-setup-create-the-admin-user)
-7. [Troubleshooting](#7-troubleshooting)
+7. [Run an isolated staging instance](#7-run-an-isolated-staging-instance)
+8. [Troubleshooting](#8-troubleshooting)
 
 ---
 
@@ -88,6 +89,8 @@ systemd service, these live in the **environment file** `/etc/ajapopaja-build.en
 Create `/etc/ajapopaja-build.env` with the variables you need. A typical example:
 
 ```ini
+CONTAINER_NAME=ajapopaja-build
+AJAPOPAJA_ENV_FILE=/etc/ajapopaja-build.env
 MONGODB_URI=mongodb://host.docker.internal:27017/
 DATABASE_NAME=ajapopaja_build_prod
 PORT=8081
@@ -97,8 +100,14 @@ OLLAMA_HOST=http://host.docker.internal:11434
 # ONE_PROMPT_OLLAMA_MODEL=gpt-oss:20b  # optional; defaults to OLLAMA_MODEL
 WORKSPACES_ROOT=/home/marc-baechinger/monolit/code
 PI_SESSIONS_ROOT=/data/ajapopaja/pi_sessions
+SANDBOX_ROOT=/data/ajapopaja/sandboxes
+REMOTE_WORKSPACES_ROOT=/data/ajapopaja/remote_workspaces
 CODERBOT_DEFAULT_MODEL=deepseek-v4.1-flash:cloud
 ```
+
+A ready-to-copy template lives in `deploy/prod.env.example`; the staging
+template is `deploy/staging.env.example` (see
+[section 7](#7-run-an-isolated-staging-instance)).
 
 ### 3.2 Variable reference
 
@@ -106,6 +115,8 @@ CODERBOT_DEFAULT_MODEL=deepseek-v4.1-flash:cloud
 |----------|----------|-------------|
 | `MONGODB_URI` | **Yes** | MongoDB connection string. Use `host.docker.internal` to reach a MongoDB running on the host. |
 | `DATABASE_NAME` | No | Name of the MongoDB database. Default: `ajapopaja_build_prod`. |
+| `CONTAINER_NAME` | No | Docker container name, used by `docker-compose.yml`. Default: `ajapopaja-build`. Staging uses `ajapopaja-build-staging`. |
+| `AJAPOPAJA_ENV_FILE` | No | Path of the env file the compose file forwards into the container. Default: `/etc/ajapopaja-build.env`. |
 | `PORT` | No | HTTP port the app listens on. Default: `8081`. |
 | `DEV_SERVER_PORT` | No | Port published to the host on which a user-started pipeline dev server listens. Injected into serve commands as `$DEV_SERVER_PORT` (and `$PORT`). Default: `1224`. |
 | `OLLAMA_HOST` | **Yes** (for AI features) | URL of the Ollama server. Use `http://host.docker.internal:11434` to reach Ollama on the host. |
@@ -115,7 +126,10 @@ CODERBOT_DEFAULT_MODEL=deepseek-v4.1-flash:cloud
 | `WORKSPACES_ROOT` | **Yes** | Absolute path (on the host) to the directory containing the git repositories the app manages. Must exist and be mounted into the container. |
 | `PI_SESSIONS_ROOT` | No | Absolute path where interactive and batch Pi sessions are persisted. Default: `/data/ajapopaja/pi_sessions`. The path is created on demand, but it must be mounted **identically** (`host:container`) into the container to survive restarts (see 3.3). |
 | `CODERBOT_DEFAULT_MODEL` | No | Model used by the CoderBot when spawning `pi` sessions. If unset, no `--model` flag is passed to `pi`. |
-| `SANDBOX_ROOT` | No | Directory inside the container where bot sandboxes are created. Default: `/data/ajapopaja/sandboxes`. |
+| `SANDBOX_ROOT` | No | Directory where bot sandboxes are created. Default: `/data/ajapopaja/sandboxes`. Mounted `host:container` 1:1 so sandboxes survive restarts. |
+| `REMOTE_WORKSPACES_ROOT` | No | Directory where remote repositories (pipelines with a `repo_uri`) are cloned. Default: `/data/ajapopaja/remote_workspaces`. Mounted `host:container` 1:1. |
+| `AUTH_SECRET_KEY` | No | Secret used to sign JWTs. Set a distinct value per instance so tokens cannot be replayed across production and staging. |
+| `GIT_PUSH_USERNAME` / `GIT_PUSH_TOKEN` | No | Global Gitea credentials used when a pipeline does not declare its own `repo_token`. Scope the staging token to staging repositories only. |
 | `MCP_AUTHENTICATION_ENABLED` | No | Set `true` to enable MCP authentication. Default: `false`. |
 | `BASEBOT_LOG_ENABLED` | No | Set `false` to disable bot logging. Default: `true`. |
 | `CODERBOT_RUN_TESTS` | No | When `true` (default), CoderBot runs the project's documented test suite (see `README.md`) in the sandbox after Pi finishes, surfacing the results on the PR. Set `false` to skip this post-run verification. |
@@ -204,10 +218,10 @@ ports, volumes, host mapping, and env forwarding:
 services:
   ajapopaja-build:
     image: ajapopaja-build:latest
-    container_name: ajapopaja-build
+    container_name: ${CONTAINER_NAME:-ajapopaja-build}
     restart: always
     env_file:
-      - /etc/ajapopaja-build.env
+      - ${AJAPOPAJA_ENV_FILE:-/etc/ajapopaja-build.env}
     ports:
       - "${PORT:-8081}:${PORT:-8081}"
       - "${DEV_SERVER_PORT:-1224}:${DEV_SERVER_PORT:-1224}"
@@ -215,13 +229,21 @@ services:
       - /home:/home
       - /Users:/Users
       - /tmp/nvimsocket:/tmp/nvimsocket
-      - /data/ajapopaja/pi_sessions:/data/ajapopaja/pi_sessions
+      - ${PI_SESSIONS_ROOT:-/data/ajapopaja/pi_sessions}:${PI_SESSIONS_ROOT:-/data/ajapopaja/pi_sessions}
+      - ${SANDBOX_ROOT:-/data/ajapopaja/sandboxes}:${SANDBOX_ROOT:-/data/ajapopaja/sandboxes}
+      - ${REMOTE_WORKSPACES_ROOT:-/data/ajapopaja/remote_workspaces}:${REMOTE_WORKSPACES_ROOT:-/data/ajapopaja/remote_workspaces}
+      - ${WORKSPACES_ROOT:-/home/marc-baechinger/monolit/code}:${WORKSPACES_ROOT:-/home/marc-baechinger/monolit/code}
     extra_hosts:
       - "host.docker.internal:host-gateway"
 ```
 
-`env_file` forwards **every** variable in `/etc/ajapopaja-build.env` into the
-container automatically, so you never need to list individual `-e` flags.
+`env_file` forwards **every** variable in `${AJAPOPAJA_ENV_FILE}` into the
+container automatically, so you never need to list individual `-e` flags. The
+same variables drive the `${...}` interpolation, which is what lets the same
+compose file serve both production and staging. The values default to the
+historic production values, so an existing `/etc/ajapopaja-build.env` keeps
+working unchanged. Note that `SANDBOX_ROOT`, `REMOTE_WORKSPACES_ROOT` and
+`WORKSPACES_ROOT` are now mounted (persisted) on the host as well.
 
 ### 4.3 Install the service
 
@@ -317,7 +339,86 @@ docker run --rm \
 
 ---
 
-## 7. Troubleshooting
+## 7. Run an isolated staging instance
+
+Staging is a **second container built from the same image** as production. It
+lets you try the end-to-end flow as a brand-new user — register, create a first
+pipeline, create a first task, let CoderBot implement it — against a clean
+database and its own host directories, without touching production state.
+
+The deploy workflow mirrors production:
+
+```bash
+git pull && ./deploy-local.sh staging \
+  && sudo systemctl restart ajapopaja-build-staging \
+  && sudo journalctl -u ajapopaja-build-staging -f
+```
+
+`deploy-local.sh` accepts an optional environment name (`prod` by default). It
+builds the image and exports the shared tarball **once**; only the env file, data
+directory, systemd unit and compose project differ per environment. The staging
+env file is installed to `/etc/ajapopaja-build-staging.env` from
+`deploy/staging.env.example`, and `AUTH_SECRET_KEY` is replaced with a freshly
+generated random value on first deploy.
+
+### 7.1 What is isolated
+
+| Aspect | Production | Staging |
+| --- | --- | --- |
+| Container / compose project | `ajapopaja-build` | `ajapopaja-build-staging` |
+| Web port | `8081` | `8082` |
+| Dev-server port | `1224` | `1225` |
+| MongoDB database | `ajapopaja_build_prod` | `ajapopaja_build_staging` |
+| Pi sessions | `/data/ajapopaja/pi_sessions` | `/data/ajapopaja/staging/pi_sessions` |
+| Sandboxes | `/data/ajapopaja/sandboxes` | `/data/ajapopaja/staging/sandboxes` |
+| Remote workspaces | `/data/ajapopaja/remote_workspaces` | `/data/ajapopaja/staging/remote_workspaces` |
+| Workspace root | `/home/<user>/monolit/code` | `/data/ajapopaja/staging/workspaces` |
+| JWT secret | `/etc/ajapopaja-build.env` | auto-generated in the staging env file |
+
+MongoDB, Gitea, the Docker image and the filesystem roots are the only stateful
+dependencies; everything that is *written* gets its own staging instance.
+Ollama is stateless inference and is intentionally shared. The staging Gitea
+`GIT_PUSH_TOKEN` **must** be scoped to staging repositories: point every staging
+pipeline at a staging repo so agent branches and PRs never land in production.
+
+### 7.2 First-run walkthrough
+
+```bash
+# 1. One-time: create the host directories and (optionally) seed test data.
+./scripts/bootstrap_staging.sh          # truly empty -> first-time user journey
+# ./scripts/bootstrap_staging.sh --seed # or import the test_repo task data set
+
+# 2. Deploy and start the staging instance (see command above).
+```
+
+1. Open `http://<host>:8082` — production on `:8081` keeps running untouched.
+2. Register a new user (the staging database starts empty).
+3. Create a first pipeline pointing at a **staging** Gitea repository.
+4. Create a first task and let the agents implement it.
+
+### 7.3 Lightweight alternative
+
+For a short-lived test without installing the systemd unit:
+
+```bash
+git pull && ./docker-build.sh latest
+cd /data/ajapopaja/staging && \
+  docker compose -p ajapopaja-build-staging \
+    --env-file /etc/ajapopaja-build-staging.env up
+```
+
+### 7.4 Managing staging
+
+```bash
+sudo systemctl start ajapopaja-build-staging
+sudo systemctl status ajapopaja-build-staging
+sudo systemctl restart ajapopaja-build-staging
+sudo journalctl -u ajapopaja-build-staging -f
+```
+
+---
+
+## 8. Troubleshooting
 
 ### The app cannot read a mounted git repository ("dubious ownership")
 

@@ -34,9 +34,12 @@ def test_compose_publishes_dev_server_port():
     assert "${DEV_SERVER_PORT:-1224}:${DEV_SERVER_PORT:-1224}" in compose
 
 
-def test_deploy_script_seeds_dev_server_port():
-    script = (REPO_ROOT / "deploy-local.sh").read_text()
-    assert "DEV_SERVER_PORT=1224" in script
+def test_deploy_templates_seed_dev_server_port():
+    prod = (REPO_ROOT / "deploy" / "prod.env.example").read_text()
+    staging = (REPO_ROOT / "deploy" / "staging.env.example").read_text()
+    assert "DEV_SERVER_PORT=1224" in prod
+    # Staging must publish a different port so both instances can run at once.
+    assert "DEV_SERVER_PORT=1225" in staging
 
 
 def test_dockerfile_bundles_pi_skill_library():

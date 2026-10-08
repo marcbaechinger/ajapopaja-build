@@ -1,19 +1,28 @@
 services:
   ajapopaja-build:
     image: ajapopaja-build:latest
-    container_name: ajapopaja-build
+    # Instance identity. Defaults keep the production deployment unchanged;
+    # staging overrides them from its own env file (see deploy/staging.env.example).
+    container_name: ${CONTAINER_NAME:-ajapopaja-build}
     restart: always
-    # Forward every variable from the env file into the container automatically.
-    # No need to list individual -e flags.
+    # Runtime variables for the container. The path is resolved from the
+    # *interpolation* environment (the systemd unit's EnvironmentFile), so each
+    # instance forwards its own env file into its own container.
     env_file:
-      - /etc/ajapopaja-build.env
+      - ${AJAPOPAJA_ENV_FILE:-/etc/ajapopaja-build.env}
     ports:
       - "${PORT:-8081}:${PORT:-8081}"
       - "${DEV_SERVER_PORT:-1224}:${DEV_SERVER_PORT:-1224}"
     volumes:
+      # Shared host paths (repos reachable from /home and /Users, editor socket).
       - /home:/home
       - /Users:/Users
       - /tmp/nvimsocket:/tmp/nvimsocket
-      - /data/ajapopaja/pi_sessions:/data/ajapopaja/pi_sessions
+      # Per-instance writable roots. Host and container paths MUST be identical:
+      # Pi sessions and the data models persist absolute paths.
+      - ${PI_SESSIONS_ROOT:-/data/ajapopaja/pi_sessions}:${PI_SESSIONS_ROOT:-/data/ajapopaja/pi_sessions}
+      - ${SANDBOX_ROOT:-/data/ajapopaja/sandboxes}:${SANDBOX_ROOT:-/data/ajapopaja/sandboxes}
+      - ${REMOTE_WORKSPACES_ROOT:-/data/ajapopaja/remote_workspaces}:${REMOTE_WORKSPACES_ROOT:-/data/ajapopaja/remote_workspaces}
+      - ${WORKSPACES_ROOT:-/home/marc-baechinger/monolit/code}:${WORKSPACES_ROOT:-/home/marc-baechinger/monolit/code}
     extra_hosts:
       - "host.docker.internal:host-gateway"

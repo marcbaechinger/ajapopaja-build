@@ -28,7 +28,10 @@ SESSIONS_ROOT = "/data/ajapopaja/pi_sessions"
 
 def test_compose_mounts_sessions_root_identically():
     compose = (REPO_ROOT / "docker-compose.yml").read_text()
-    assert f"{SESSIONS_ROOT}:{SESSIONS_ROOT}" in compose
+    # The default root must still be mounted host-path:container-path 1:1. The
+    # mapping is parameterized for staging, but the production default is kept.
+    root = f"${{PI_SESSIONS_ROOT:-{SESSIONS_ROOT}}}"
+    assert f"{root}:{root}" in compose
 
 
 def test_dockerfile_declares_and_creates_sessions_root():
@@ -37,10 +40,17 @@ def test_dockerfile_declares_and_creates_sessions_root():
     assert f"mkdir -p {SESSIONS_ROOT}" in dockerfile
 
 
-def test_deploy_script_seeds_sessions_root():
+def test_deploy_template_seeds_sessions_root():
+    env = (REPO_ROOT / "deploy" / "prod.env.example").read_text()
+    assert f"PI_SESSIONS_ROOT={SESSIONS_ROOT}" in env
+
+
+def test_deploy_script_creates_sessions_root_from_env():
     script = (REPO_ROOT / "deploy-local.sh").read_text()
-    assert f"PI_SESSIONS_ROOT={SESSIONS_ROOT}" in script
-    assert f"mkdir -p {SESSIONS_ROOT}" in script
+    # The script now creates every writable root declared by the env file.
+    assert "set -a" in script
+    assert "mkdir -p" in script
+    assert "PI_SESSIONS_ROOT" in script
 
 
 def test_docker_build_example_mounts_sessions_root():

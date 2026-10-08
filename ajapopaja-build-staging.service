@@ -1,0 +1,25 @@
+[Unit]
+Description=Ajapopaja Build Staging Service
+After=docker.service
+Requires=docker.service
+
+[Service]
+Restart=always
+# Loads variables for ${PORT} / volume / env_file interpolation in
+# docker-compose.yml. All variables are forwarded to the container via env_file.
+EnvironmentFile=/etc/ajapopaja-build-staging.env
+WorkingDirectory=/data/ajapopaja/staging
+# `-p` gives staging its own compose project so it never shares networks or
+# volumes with the production stack, even though both use the same image.
+ExecStartPre=-/usr/bin/docker compose -p ajapopaja-build-staging down
+ExecStartPre=-/usr/bin/docker rm -f ajapopaja-build-staging
+# Load the image in case it was updated or missing (shared with production).
+ExecStartPre=/usr/bin/docker load -i /data/ajapopaja/docker/ajapopaja-build.tar
+# Run compose in the foreground so the process stays alive as long as the
+# container runs. With `-d` the command exits immediately and Restart=always
+# would tear the container down and recreate it in an endless loop.
+ExecStart=/usr/bin/docker compose -p ajapopaja-build-staging up
+ExecStop=/usr/bin/docker compose -p ajapopaja-build-staging down
+
+[Install]
+WantedBy=multi-user.target

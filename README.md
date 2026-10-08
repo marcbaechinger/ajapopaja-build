@@ -89,6 +89,18 @@ Agents work on real code inside isolated sandboxes and report back through the U
 [**`INSTALL.md`**](INSTALL.md) – it covers building the Docker image, configuring
 environment variables, and installing/applying the systemd service.
 
+**Staging (second, isolated container):** run the same image against a clean
+database and its own host directories:
+
+```bash
+git pull && ./deploy-local.sh staging \
+  && sudo systemctl restart ajapopaja-build-staging \
+  && sudo journalctl -u ajapopaja-build-staging -f
+```
+
+See [INSTALL.md §7](INSTALL.md#7-run-an-isolated-staging-instance) for the full
+staging workflow and the list of isolated dependencies.
+
 **Quick local dev setup:**
 
 ```bash
