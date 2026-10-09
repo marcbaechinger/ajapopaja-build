@@ -22,6 +22,7 @@ import {
   formatTimestamp,
   gitStatusPresentation,
 } from '../utils/fileBrowser.ts';
+import { FileView } from './FileView.ts';
 
 /**
  * Main-panel directory listing. Shows name, size, modified date and git status
@@ -34,7 +35,7 @@ export class DirectoryView {
 
     return `
       <div class="flex flex-col h-full min-h-0">
-        <div class="grid grid-cols-[minmax(0,1fr)_5rem_10rem_6rem_2rem] gap-2 px-3 py-2 border-b border-app-border/40 text-[10px] font-bold uppercase tracking-widest text-app-muted/70">
+        <div class="grid grid-cols-[minmax(0,1fr)_5rem_10rem_6rem_6rem] gap-2 px-3 py-2 border-b border-app-border/40 text-[10px] font-bold uppercase tracking-widest text-app-muted/70">
           <span>Name</span>
           <span class="text-right">Size</span>
           <span>Modified</span>
@@ -53,8 +54,15 @@ export class DirectoryView {
       ? `<span class="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold ${status.badgeClass}">${status.label}</span>`
       : '<span class="text-app-muted/40 text-[10px]">—</span>';
 
+    // Files expose the same copy/download/raw actions as the FileView header;
+    // directories only offer copy-path.
+    const actions = FileView.renderActionButtons(entry.path, {
+      download: !entry.isDir,
+      raw: !entry.isDir,
+    });
+
     return `
-      <div class="grid grid-cols-[minmax(0,1fr)_5rem_10rem_6rem_2rem] gap-2 items-center px-3 py-1.5 hover:bg-app-surface/60 rounded transition-colors">
+      <div class="grid grid-cols-[minmax(0,1fr)_5rem_10rem_6rem_6rem] gap-2 items-center px-3 py-1.5 hover:bg-app-surface/60 rounded transition-colors">
         <button type="button"
           data-action-click="${action}"
           data-path="${escapeHtml(entry.path)}"
@@ -74,11 +82,7 @@ export class DirectoryView {
           )}</span>
           <span>${statusCell}</span>
         </button>
-        <button type="button"
-          data-action-click="copy_file_path"
-          data-path="${escapeHtml(entry.path)}"
-          class="justify-self-end shrink-0 p-1 rounded text-app-muted hover:text-app-text hover:bg-app-surface/60 transition-colors cursor-pointer"
-          title="Copy path" aria-label="Copy path">${Icon.render('copy', { size: 14 })}</button>
+        <div class="flex items-center gap-0.5 justify-self-end shrink-0">${actions}</div>
       </div>
     `;
   }

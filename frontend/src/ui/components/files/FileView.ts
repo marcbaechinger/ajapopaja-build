@@ -210,6 +210,19 @@ function highlightContent(content: string, language: string | null): string {
 }
 
 /**
+ * Which file actions to render in {@link FileView.renderActionButtons}. All
+ * default to `true` so the FileView header shows the full set.
+ */
+export interface FileActionButtonsOptions {
+  /** Include the copy-path button. */
+  copy?: boolean;
+  /** Include the download button. */
+  download?: boolean;
+  /** Include the "raw" button. */
+  raw?: boolean;
+}
+
+/**
  * Main-panel view for a single file: metadata header plus a read-only code
  * block. Binary and truncated files render a clear message instead of content.
  * Text content is syntax-highlighted with a lightweight highlight.js subset.
@@ -244,6 +257,41 @@ export class FileView {
     }, 1500);
   }
 
+  /**
+   * Render the file action buttons in the canonical order: copy path,
+   * download, raw. Shared between the FileView header and the DirectoryView so
+   * a file row offers exactly the same actions as an opened file. Directories
+   * only get the copy-path action.
+   */
+  static renderActionButtons(
+    path: string,
+    opts: FileActionButtonsOptions = {}
+  ): string {
+    const { copy = true, download = true, raw = true } = opts;
+    const encodedPath = escapeHtml(path);
+
+    const copyButton = copy
+      ? `<button type="button" data-action-click="copy_file_path" data-path="${encodedPath}"
+          class="shrink-0 p-1 rounded text-app-muted hover:text-app-text hover:bg-app-surface/60 transition-colors cursor-pointer"
+          title="Copy path" aria-label="Copy path">${Icon.render('copy', { size: 14 })}</button>`
+      : '';
+
+    const downloadButton = download
+      ? `<button type="button" data-action-click="download_file" data-path="${encodedPath}"
+          class="shrink-0 p-1 rounded text-app-muted hover:text-app-text hover:bg-app-surface/60 transition-colors cursor-pointer"
+          title="Download file" aria-label="Download file">${Icon.render('download', { size: 14 })}</button>`
+      : '';
+
+    const rawButton = raw
+      ? `<button type="button" data-action-click="open_file_raw" data-path="${encodedPath}"
+          data-role="open-raw"
+          class="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide text-app-muted hover:text-app-text hover:bg-app-surface/60 transition-colors cursor-pointer"
+          title="Open raw file" aria-label="Open raw file">raw</button>`
+      : '';
+
+    return `${copyButton}${downloadButton}${rawButton}`;
+  }
+
   static render(file: FileContent): string {
     return `
       <div class="flex flex-col h-full min-h-0">
@@ -266,16 +314,7 @@ export class FileView {
         <div class="flex items-center gap-2 min-w-0">
           <span class="shrink-0 text-app-muted" aria-hidden="true">${Icon.render('file', { size: 16 })}</span>
           <h3 class="text-sm font-bold text-app-text truncate" title="${escapeHtml(file.path)}">${escapeHtml(file.name)}</h3>
-          <button type="button" data-action-click="copy_file_path" data-path="${escapeHtml(file.path)}"
-            class="shrink-0 p-1 rounded text-app-muted hover:text-app-text hover:bg-app-surface/60 transition-colors cursor-pointer"
-            title="Copy path" aria-label="Copy path">${Icon.render('copy', { size: 14 })}</button>
-          <button type="button" data-action-click="download_file" data-path="${escapeHtml(file.path)}"
-            class="shrink-0 p-1 rounded text-app-muted hover:text-app-text hover:bg-app-surface/60 transition-colors cursor-pointer"
-            title="Download file" aria-label="Download file">${Icon.render('download', { size: 14 })}</button>
-          <button type="button" data-action-click="open_file_raw" data-path="${escapeHtml(file.path)}"
-            data-role="open-raw"
-            class="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide text-app-muted hover:text-app-text hover:bg-app-surface/60 transition-colors cursor-pointer"
-            title="Open raw file" aria-label="Open raw file">raw</button>
+          ${this.renderActionButtons(file.path)}
           ${badge}
         </div>
         <div class="grid grid-cols-2 gap-x-6 text-[11px] text-app-muted" data-role="file-metadata">
