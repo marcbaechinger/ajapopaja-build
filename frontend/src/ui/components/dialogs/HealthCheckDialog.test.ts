@@ -126,6 +126,28 @@ describe('HealthCheckDialog', () => {
     expect(textContent).not.toContain('super-secret-api-key-value');
   });
 
+  it('renders the read-only icon to the right of the property title', async () => {
+    const dialog = new HealthCheckDialog(mockAppContext as AppContext);
+    dialog.show();
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    (document.querySelector('[data-health-tab="config"]') as HTMLButtonElement).click();
+
+    const rows = Array.from(document.querySelectorAll('#hc-config-list > div'));
+    const secretRow = rows.find(row => row.textContent?.includes('OLLAMA_API_KEY'))!;
+    const titleGroup = secretRow.firstElementChild!;
+
+    // The title must come first so all row titles align at the line start,
+    // with the read-only icon (and the secret badge) to its right.
+    expect(titleGroup.children[0].tagName.toLowerCase()).toBe('span');
+    expect(titleGroup.children[0].textContent).toBe('OLLAMA_API_KEY');
+    expect(titleGroup.children[1].tagName.toLowerCase()).toBe('svg');
+
+    // Non-confidential rows have no read-only icon.
+    const plainRow = rows.find(row => row.textContent?.includes('OLLAMA_MODEL'))!;
+    expect(plainRow.firstElementChild!.querySelector('svg')).toBeNull();
+  });
+
   it('filters configuration properties by the search box', async () => {
     const dialog = new HealthCheckDialog(mockAppContext as AppContext);
     dialog.show();

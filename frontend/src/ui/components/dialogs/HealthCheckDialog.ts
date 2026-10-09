@@ -229,12 +229,12 @@ export class HealthCheckDialog extends BaseDialog {
         (property) => `
         <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-4 rounded-lg border border-app-border bg-app-surface px-3 py-2 hover:border-app-accent-2/50 transition-colors">
           <div class="flex items-center gap-2 min-w-0">
+            <span class="font-mono text-xs font-semibold text-app-text break-all">${escapeHtml(property.key)}</span>
             ${
               property.confidential
                 ? Icon.render('eyeOff', { size: 14, className: 'text-app-accent-2 shrink-0' })
                 : ''
             }
-            <span class="font-mono text-xs font-semibold text-app-text break-all">${escapeHtml(property.key)}</span>
             ${
               property.confidential
                 ? '<span class="shrink-0 text-[10px] font-bold uppercase tracking-wider text-app-accent-2 bg-app-accent-2/10 border border-app-accent-2/30 rounded-full px-2 py-0.5">secret</span>'
