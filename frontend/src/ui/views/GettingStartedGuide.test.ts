@@ -57,6 +57,16 @@ describe('renderPipelineGettingStartedGuide', () => {
     expect(html).toContain('filename search');
   });
 
+  it('keeps every lifecycle badge legend on a single line', () => {
+    const html = renderPipelineGettingStartedGuide();
+    // Legends must never wrap or the badges fall out of vertical alignment.
+    expect(html).toContain('text-[10px] text-app-muted leading-tight whitespace-nowrap');
+    // Optional stages are marked with a footnote instead of inline wording.
+    expect(html).not.toContain('optionally');
+    expect(html).not.toContain('Optional design doc');
+    expect(html).toContain('* Optional step');
+  });
+
   it('covers creating tasks and the MCP integration', () => {
     const html = renderPipelineGettingStartedGuide();
     expect(html).toContain('Create tasks in seconds');

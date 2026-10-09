@@ -516,12 +516,15 @@ function renderAgentWorkflowSection(): string {
   );
 }
 
-/** One chip of the task lifecycle. */
+/**
+ * One chip of the task lifecycle. The legend is kept on a single line
+ * (`whitespace-nowrap`) so every badge sits at the same height in the flow.
+ */
 function renderLifecycleChip(status: string, detail: string, accent: string): string {
   return `
-    <div class="flex flex-col items-center text-center gap-1 min-w-[7rem]">
-      <span class="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border ${accent}">${escapeHtml(status)}</span>
-      <span class="text-[10px] text-app-muted leading-tight max-w-[9rem]">${escapeHtml(detail)}</span>
+    <div class="flex flex-col items-center text-center gap-1 shrink-0 min-w-[8.5rem]">
+      <span class="text-[10px] font-black uppercase tracking-widest whitespace-nowrap px-2.5 py-1 rounded-full border ${accent}">${escapeHtml(status)}</span>
+      <span class="text-[10px] text-app-muted leading-tight whitespace-nowrap">${escapeHtml(detail)}</span>
     </div>
   `;
 }
@@ -530,8 +533,8 @@ function renderLifecycleChip(status: string, detail: string, accent: string): st
 function renderLifecycleSection(): string {
   const arrow = `<span class="text-app-muted/50 shrink-0">${Icon.render('arrowRight', { size: 14 })}</span>`;
   const chips = [
-    renderLifecycleChip('Backlog', 'Created; optionally elaborate the spec', 'border-app-border text-app-muted bg-app-surface'),
-    renderLifecycleChip('Proposed design', 'Optional design doc awaiting approval', 'border-purple-500/40 text-purple-300 bg-purple-500/10'),
+    renderLifecycleChip('Backlog', 'Created; elaborate spec*', 'border-app-border text-app-muted bg-app-surface'),
+    renderLifecycleChip('Proposed design', 'Design doc awaiting approval*', 'border-purple-500/40 text-purple-300 bg-purple-500/10'),
     renderLifecycleChip('Scheduled', 'Queued for CoderBot', 'border-blue-500/40 text-blue-300 bg-blue-500/10'),
     renderLifecycleChip('In progress', 'CoderBot is implementing', 'border-amber-500/40 text-amber-300 bg-amber-500/10'),
     renderLifecycleChip('Submitted', 'Pull request awaiting your review', 'border-emerald-500/40 text-emerald-300 bg-emerald-500/10'),
@@ -541,8 +544,11 @@ function renderLifecycleSection(): string {
     'How tasks move through the pipeline',
     'The UI mirrors the feature implementation process. Watch each column light up as the work progresses.',
     `
-      <div class="flex items-center gap-2 flex-wrap rounded-xl border border-app-border bg-app-bg p-4">
-        ${chips.join(arrow)}
+      <div class="rounded-xl border border-app-border bg-app-bg p-4">
+        <div class="flex items-center gap-2 overflow-x-auto custom-scrollbar">
+          ${chips.join(arrow)}
+        </div>
+        <p class="mt-3 text-[10px] text-app-muted">* Optional step — a task can be scheduled without an elaborated spec or a design document.</p>
       </div>
     `
   );
