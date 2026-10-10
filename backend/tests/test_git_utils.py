@@ -511,6 +511,26 @@ def test_ensure_feature_branch_checks_out_when_exists():
     repo.git.checkout.assert_called_once_with("feature/x")
 
 
+def test_ensure_feature_branch_uses_start_point_when_missing():
+    repo = MagicMock()
+    main = MagicMock()
+    main.name = "main"
+    repo.branches = [main]
+    git_utils.ensure_feature_branch(repo, "feature/x", start_point="coderbot/t1")
+    repo.git.checkout.assert_called_once_with("-b", "feature/x", "coderbot/t1")
+
+
+def test_ensure_feature_branch_resets_existing_to_start_point():
+    repo = MagicMock()
+    existing = MagicMock()
+    existing.name = "feature/x"
+    repo.branches = [existing]
+    git_utils.ensure_feature_branch(repo, "feature/x", start_point="coderbot/t1")
+    repo.git.checkout.assert_called_once_with("feature/x")
+    repo.git.reset.assert_called_once_with("--hard", "coderbot/t1")
+    repo.git.clean.assert_called_once_with("-fd")
+
+
 def test_create_branch_at_head_creates_without_checkout():
     repo = MagicMock()
     repo.branches = [MagicMock(name="main")]

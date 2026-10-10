@@ -38,6 +38,7 @@ from core.models.models import (
     Task,
     TaskStatus,
 )
+from core.queries import pi_session as pi_session_queries
 from core.queries import task as task_queries
 from core.utils import git_utils
 
@@ -125,6 +126,48 @@ async def find_older_open_pull_request(pr: PullRequest) -> Optional[PullRequest]
         .sort("created_at")
         .first_or_none()
     )
+
+
+async def _resolve_chained_start_point(
+    repo: git.Repo, pr: PullRequest
+) -> Optional[str]:
+    """Return the local branch a chained PR's feature branch must start from.
+
+    A chained PR's patch is a diff relative to its predecessor's commit, so it
+    must be applied on top of the predecessor's accepted work. In Gitea-PR mode
+    the predecessor's accepted commit lives on its local feature branch (the
+    default branch is deliberately kept clean), so return that branch when it is
+    present. Returns ``None`` for non-chained PRs or when the predecessor branch
+    is not available locally; callers then fall back to the default branch.
+    """
+    try:
+        branch = await pi_session_queries.find_chained_predecessor_branch(
+            pr.pi_session_uid
+        )
+    except Exception:
+        logger.debug(
+            "Failed to resolve chained start point for PR %s", pr.id, exc_info=True
+        )
+        return None
+    if not branch:
+        return None
+    try:
+        if branch in {b.name for b in repo.branches}:
+            logger.info(
+                "Chained PR %s will start from predecessor branch %s",
+                pr.id,
+                branch,
+            )
+            return branch
+    except git.exc.GitCommandError:
+        pass
+    logger.warning(
+        "Chained PR %s predecessor branch %s not found locally; falling back "
+        "to the default branch",
+        pr.id,
+        branch,
+    )
+    return None
 
 
 async def validate_workspace_clean(repo: git.Repo, workspace_path: str) -> None:
@@ -487,7 +530,13 @@ async def accept_pull_request(
         default_branch: Optional[str] = None
         if gitea_pr:
             default_branch = git_utils.current_default_branch(repo)
-            git_utils.ensure_feature_branch(repo, pr.branch_name)
+            # A chained PR's patch is a delta against its predecessor's commit.
+            # Stack its branch on the predecessor's accepted feature branch when
+            # one exists; otherwise branch off the clean default branch.
+            start_point = await _resolve_chained_start_point(repo, pr)
+            git_utils.ensure_feature_branch(
+                repo, pr.branch_name, start_point=start_point
+            )
 
         try:
             await apply_patch(repo, pr)

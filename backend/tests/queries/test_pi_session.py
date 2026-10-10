@@ -289,3 +289,43 @@ def test_workspace_has_branch_handles_blank_inputs(tmp_path):
         pi_session_queries.workspace_has_branch(str(tmp_path / "missing"), "b")
         is False
     )
+
+
+@pytest.mark.asyncio
+async def test_find_chained_predecessor_branch(init_mock_db):
+    """A chained session resolves to its predecessor's branch name."""
+    await _insert_session(
+        "p1", uid="u1", workspace_path=None, branch_name="coderbot/t1"
+    )
+    chained = await _insert_session(
+        "p1", uid="u2", workspace_path=None, branch_name="coderbot/t2"
+    )
+    chained.chained_from_session_uid = "u1"
+    await chained.save()
+
+    found = await pi_session_queries.find_chained_predecessor_branch("u2")
+    assert found == "coderbot/t1"
+
+
+@pytest.mark.asyncio
+async def test_find_chained_predecessor_branch_returns_none(init_mock_db):
+    """Non-chained, unknown and blank session uids return None."""
+    await _insert_session(
+        "p1", uid="u1", workspace_path=None, branch_name="coderbot/t1"
+    )
+
+    assert await pi_session_queries.find_chained_predecessor_branch(None) is None
+    assert await pi_session_queries.find_chained_predecessor_branch("missing") is None
+    assert await pi_session_queries.find_chained_predecessor_branch("u1") is None
+
+
+@pytest.mark.asyncio
+async def test_find_chained_predecessor_branch_missing_predecessor(init_mock_db):
+    """A dangling chained_from reference does not raise."""
+    chained = await _insert_session(
+        "p1", uid="u2", workspace_path=None, branch_name="coderbot/t2"
+    )
+    chained.chained_from_session_uid = "does-not-exist"
+    await chained.save()
+
+    assert await pi_session_queries.find_chained_predecessor_branch("u2") is None

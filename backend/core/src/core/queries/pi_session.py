@@ -145,3 +145,46 @@ async def find_previous_pending_batch_session(
             continue
         return record
     return None
+
+
+async def find_chained_predecessor_branch(
+    session_uid: Optional[str],
+) -> Optional[str]:
+    """Return the predecessor branch a chained session's PR was based on.
+
+    ``session_uid`` is the uid of the CoderBot session that produced a pull
+    request. When that session chained from an earlier run, the returned value is
+    the predecessor's branch name. Accepting a chained pull request can then
+    stack its feature branch on the predecessor's accepted branch instead of the
+    clean default branch: the chained PR's patch is a delta relative to the
+    predecessor's commit and does not apply to the default branch on its own.
+
+    Returns ``None`` for non-chained sessions and when the predecessor cannot be
+    resolved (missing uid, missing record, query failure).
+    """
+    if not session_uid:
+        return None
+    try:
+        session = await PiSession.find_one(PiSession.uid == session_uid)
+    except Exception:
+        logger.debug(
+            "Failed to load session %s for chained base resolution",
+            session_uid,
+            exc_info=True,
+        )
+        return None
+    if session is None or not session.chained_from_session_uid:
+        return None
+    try:
+        predecessor = await PiSession.find_one(
+            PiSession.uid == session.chained_from_session_uid
+        )
+    except Exception:
+        logger.debug(
+            "Failed to load predecessor %s for session %s",
+            session.chained_from_session_uid,
+            session_uid,
+            exc_info=True,
+        )
+        return None
+    return predecessor.branch_name if predecessor else None

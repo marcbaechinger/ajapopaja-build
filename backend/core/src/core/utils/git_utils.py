@@ -235,12 +235,20 @@ def push_branch_with_auth(repo: git.Repo, pipeline: Pipeline, branch: str) -> No
         repo.git.push("origin", f"refs/heads/{branch}:refs/heads/{branch}")
 
 
-def ensure_feature_branch(repo: git.Repo, branch_name: str) -> None:
+def ensure_feature_branch(
+    repo: git.Repo, branch_name: str, start_point: Optional[str] = None
+) -> None:
     """Create and check out `branch_name` from the default branch if missing.
 
     If the branch already exists it is checked out as-is (no-op creation). The
     new branch is created from the current HEAD so an already-applied patch on
     the default branch is carried over onto the feature branch.
+
+    When ``start_point`` is given the branch is created at that ref instead of
+    the current HEAD, and an already-existing branch is reset to it first. This
+    is used to stack a chained pull request on top of its predecessor's accepted
+    branch rather than on the clean default branch, and to make a retry after a
+    failed apply idempotent.
     """
     try:
         exists = any(b.name == branch_name for b in repo.branches)
@@ -249,10 +257,20 @@ def ensure_feature_branch(repo: git.Repo, branch_name: str) -> None:
 
     if not exists:
         logger.info(f"Creating feature branch {branch_name}")
-        repo.git.checkout("-b", branch_name)
+        if start_point:
+            repo.git.checkout("-b", branch_name, start_point)
+        else:
+            repo.git.checkout("-b", branch_name)
     else:
         logger.info(f"Feature branch {branch_name} already exists; checking it out")
         repo.git.checkout(branch_name)
+        if start_point:
+            # Re-point the branch at the requested start point before the patch
+            # is applied so a retry does not reuse a branch created from an
+            # earlier (or default) base.
+            logger.info(f"Resetting feature branch {branch_name} to {start_point}")
+            repo.git.reset("--hard", start_point)
+            repo.git.clean("-fd")
 
 
 def create_branch_at_head(repo: git.Repo, branch_name: str) -> None:
