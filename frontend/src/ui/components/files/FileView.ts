@@ -351,9 +351,16 @@ export class FileView {
 
     const content = file.content ?? '';
     const highlighted = highlightContent(content, detectLanguage(file));
+    const lineNumbers = Array.from(
+      { length: content.split('\n').length },
+      (_unused, index) => index + 1
+    ).join('\n');
     return `
       ${truncated}
-      <pre class="p-3 text-[11px] leading-relaxed text-app-text whitespace-pre overflow-x-auto"><code class="hljs">${highlighted}</code></pre>
+      <div class="flex">
+        <div aria-hidden="true" class="select-none shrink-0 pt-3 pl-3 pr-3 text-right text-[11px] leading-relaxed text-app-muted/50 whitespace-pre border-r border-app-border/40">${lineNumbers}</div>
+        <pre class="flex-1 p-3 text-[11px] leading-relaxed text-app-text whitespace-pre overflow-x-auto"><code class="hljs">${highlighted}</code></pre>
+      </div>
     `;
   }
 }

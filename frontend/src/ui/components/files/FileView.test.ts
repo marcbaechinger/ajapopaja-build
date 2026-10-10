@@ -31,6 +31,23 @@ function renderIntoDom(file: FileContent): HTMLElement {
 }
 
 describe('FileView', () => {
+  it('prepends line numbers without including them in the selectable code', () => {
+    const host = renderIntoDom(
+      file({ name: 'app.py', path: 'app.py', content: 'print(1)\nprint(2)\n' })
+    );
+
+    const gutter = host.querySelector('[aria-hidden="true"].select-none');
+    expect(gutter).not.toBeNull();
+    expect(gutter!.textContent).toContain('1');
+    expect(gutter!.textContent).toContain('3');
+
+    // Line numbers live outside the <code> element, so selecting/copying the
+    // source code never picks them up.
+    const code = host.querySelector('code.hljs')!;
+    expect(code.textContent).not.toContain('\n1');
+    expect(code.textContent).not.toContain('\n3');
+  });
+
   it('syntax-highlights content based on the file extension', () => {
     const host = renderIntoDom(
       file({ name: 'app.ts', path: 'src/app.ts', content: 'const answer: number = 42;\n' })
