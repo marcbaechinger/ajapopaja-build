@@ -185,3 +185,28 @@ python3 ./mcp_client.py --url http://localhost:${PORT:-8081} update-task-spec <t
 ## Troubleshooting
 - If you get a `307 Redirect` or `405 Method Not Allowed`, ensure the URL ends with `/mcp/` or use the `--url http://localhost:${PORT:-8081}` default which handles it.
 - Ensure the FastAPI server is running on the specified port (default `8081`, configurable via `$PORT`).
+
+## Running a Dev Server
+
+CoderBot and interactive sessions run inside a Docker container. A dev server
+started in the container is only reachable from the host if it:
+
+1. **Binds to `0.0.0.0`, not `127.0.0.1`/`localhost`.** Binding to loopback
+   makes the server reachable only from inside the container.
+2. **Binds to `$DEV_SERVER_PORT`, not a hard-coded / framework-default port.**
+   That port is the one published to the host (and it is the same number inside
+   and outside the container). For pipeline dev-server commands it is also
+   exported as `$PORT`.
+
+Most tools let you set host and port explicitly:
+
+```bash
+# Python (uv) server
+uv run <app> --host 0.0.0.0 --port $DEV_SERVER_PORT
+
+# Node / npm dev server
+npm run dev -- --host 0.0.0.0 --port $DEV_SERVER_PORT
+```
+
+Do not hard-code a port; always read `$DEV_SERVER_PORT` so the command works in
+both production and staging (they publish different ports).
