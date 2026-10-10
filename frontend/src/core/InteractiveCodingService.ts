@@ -493,6 +493,15 @@ export class InteractiveCodingService implements PiSessionService {
       if (info && info.is_active) {
         this.currentPipelineId = info.pipeline_id ?? this.currentPipelineId;
         if (info.uid) this.sessionUid = info.uid;
+        // Replay the persisted event log before notifying listeners, so a
+        // re-attached PiView sees the full conversation after a page reload
+        // instead of an empty log. Mirrors CoderBotService.reconnect's
+        // history replay. loadSessionHistory suspends emits and emits a single
+        // snapshot once the replay finishes, so this is cheap even for long
+        // sessions.
+        if (info.uid) {
+          await this.loadSessionHistory(info.uid);
+        }
         this.setStartTime(this.parseStartTime(info.start_time));
         this.setBusy(!!info.busy);
         this.setActive(true);
