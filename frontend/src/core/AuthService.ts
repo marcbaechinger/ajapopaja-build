@@ -23,6 +23,12 @@ export interface AuthState {
   isAuthenticated: boolean;
 }
 
+/**
+ * Treat a token that expires within this many seconds as already expired so a
+ * request is refreshed *before* it goes out instead of relying on a 401.
+ */
+const ACCESS_TOKEN_EXPIRY_LEEWAY_SECONDS = 30;
+
 export class AuthService {
   private state: AuthState = {
     user: null,
@@ -33,21 +39,73 @@ export class AuthService {
   private listeners: ((state: AuthState) => void)[] = [];
   private storage = LocalStorageManager.getInstance('auth');
 
+  /**
+   * Shared in-flight refresh so concurrent 401s (or several clients waking up
+   * at once) trigger exactly one `POST /api/auth/refresh`. Only that request
+   * may clear the session; a second caller never races it into a logout.
+   */
+  private refreshInFlight: Promise<string | null> | null = null;
+
   constructor() {
     this.loadFromStorage();
+  }
+
+  /**
+   * Decode the `exp` claim of a JWT without verifying it. Returns `null` when
+   * the token is not a readable JWT.
+   */
+  private static decodeExpiry(token: string): number | null {
+    try {
+      const payloadPart = token.split('.')[1];
+      if (!payloadPart) return null;
+      const base64 = payloadPart.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = base64.padEnd(
+        base64.length + ((4 - (base64.length % 4)) % 4),
+        '='
+      );
+      const payload = JSON.parse(atob(padded));
+      return typeof payload.exp === 'number' ? payload.exp : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private isTokenValid(token: string): boolean {
+    const exp = AuthService.decodeExpiry(token);
+    // A token without a readable `exp` is passed through; the server will
+    // reject it with a 401 and the normal refresh path takes over.
+    if (exp === null) return true;
+    return exp - ACCESS_TOKEN_EXPIRY_LEEWAY_SECONDS > Date.now() / 1000;
   }
 
   private loadFromStorage() {
     const savedUser = this.storage.get<User>('user');
     const savedToken = this.storage.get<string>('token');
 
-    if (savedUser && savedToken) {
+    if (!savedUser) {
+      return;
+    }
+
+    if (savedToken && this.isTokenValid(savedToken)) {
       this.state = {
         user: savedUser,
         accessToken: savedToken,
         isAuthenticated: true,
       };
+      return;
     }
+
+    // The persisted user is still there but the access token is missing or
+    // expired. The refresh cookie may still be valid, so recover the session
+    // proactively instead of waiting for the first 401. Report the session as
+    // authenticated while doing so to avoid a flash of the login view; a
+    // definitive failure clears the state and notifies the listeners.
+    this.state = {
+      user: savedUser,
+      accessToken: null,
+      isAuthenticated: true,
+    };
+    void this.refreshToken();
   }
 
   private saveToStorage() {
@@ -84,6 +142,22 @@ export class AuthService {
     return this.state.accessToken;
   }
 
+  /**
+   * Return a usable access token, refreshing when the cached one is missing or
+   * about to expire. Used by callers that cannot recover from a 401 after the
+   * fact (notably the WebSocket handshake).
+   */
+  public async ensureValidToken(): Promise<string | null> {
+    const token = this.state.accessToken;
+    if (token && this.isTokenValid(token)) {
+      return token;
+    }
+    if (this.state.user) {
+      return this.refreshToken();
+    }
+    return token;
+  }
+
   public getUser(): User | null {
     return this.state.user;
   }
@@ -112,6 +186,7 @@ export class AuthService {
     try {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
+        credentials: 'same-origin',
         body: formData,
       });
 
@@ -152,19 +227,43 @@ export class AuthService {
 
   public async logout() {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'same-origin',
+      });
     } finally {
       this.clear();
     }
   }
 
-  public async refreshToken(): Promise<string | null> {
+  /**
+   * Refresh the access token, sharing a single in-flight request between all
+   * concurrent callers. Only a definitive refresh failure clears the session.
+   */
+  public refreshToken(): Promise<string | null> {
+    if (this.refreshInFlight) {
+      return this.refreshInFlight;
+    }
+    this.refreshInFlight = this.performRefresh().finally(() => {
+      this.refreshInFlight = null;
+    });
+    return this.refreshInFlight;
+  }
+
+  private async performRefresh(): Promise<string | null> {
     try {
-      const response = await fetch('/api/auth/refresh', { method: 'POST' });
+      const response = await fetch('/api/auth/refresh', {
+        method: 'POST',
+        credentials: 'same-origin',
+      });
       if (response.ok) {
         const data = await response.json();
-        const user = this.getUser();
-        if (user) {
+        const username = data?.username ?? this.getUser()?.username;
+        if (username && data?.access_token) {
+          const user: User = {
+            ...(this.getUser() ?? {}),
+            username,
+          } as User;
           this.setAuth(user, data.access_token);
           return data.access_token;
         }

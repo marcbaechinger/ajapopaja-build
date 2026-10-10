@@ -83,7 +83,7 @@ mechanism is there, adoption is not.
 | `AppContext` | `{ theme }`, plus DOM `data-theme` | `AppContext.state` | ❌ Not persisted (read from DOM attribute on boot) | Toggle updates the DOM but never writes storage |
 | `DataManager` | `pipelines`, `tasks`, `designDocs`, listener map | In-memory `Map` | ❌ Volatile | Fed by WS; read by almost nobody |
 | `WebSocketClient` | socket, handlers, reconnect backoff, `lastSentMessage`, `clientId` | In-memory | ❌ Volatile | Correct place for transport state |
-| `AuthService` | access/refresh token, current user | `LocalStorageManager('auth')` | ✅ `localStorage` | Only service using `LocalStorageManager` for auth |
+| `AuthService` | access token + current user (refresh token stays in an `HttpOnly` cookie) | `LocalStorageManager('auth')` | ✅ `localStorage` (access token/user only) | The refresh token is never written to `localStorage`; see `design/backend/dd_user_authentication.md` §5 |
 | `CoderBotService` | `blocks`, `openBlocks`, `messageHistory`, `currentTaskId`, `currentPipelineId`, `isSessionActive`, `sessionStartTime`, `loadedSessionKey` | In-memory + **raw `localStorage['ajapopaja:coderbot:session']`** | ⚠️ Raw key, bypasses `LocalStorageManager` | Active-session state overlaps `coderbotState` in `PipelineDetailView` |
 | `AssistantService` | listener list only | In-memory | ❌ Volatile | Stateless fan-out of WS responses |
 | `AssistantPanel` | `{ position, size }` settings, open/history flags | `LocalStorageManager('assistant')` + in-memory | ✅ settings | `isOpen`, `hasLoadedHistory`, DOM refs are UI state |

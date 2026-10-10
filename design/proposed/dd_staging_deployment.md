@@ -96,6 +96,12 @@ the application mutates and that therefore needs to be **fresh** for staging.
   production is an optional (and reasonable) improvement.
 - There is no `AUTH_SECRET_KEY` in `/etc/ajapopaja-build.env`, so production
   currently falls back to the development default. Staging must set its own.
+- Both instances set a refresh cookie named `refresh_token`. Cookies are
+  scoped by `(name, domain, path)` and **not** by port, so logging into
+  staging overwrites production's refresh cookie (and vice versa). Each
+  instance must use a distinct `REFRESH_COOKIE_NAME`; when it is unset the app
+  derives the name from `DATABASE_NAME`, which is already distinct per
+  instance.
 - The `ajapopaja` Gitea push token is global (`GIT_PUSH_TOKEN`) unless a
   pipeline overrides it. Staging should override it (per-pipeline
   `repo_token`, or a staging value in the staging env file).
@@ -397,6 +403,12 @@ host directories.
 - **Secret isolation.** `AUTH_SECRET_KEY` must differ; otherwise a staging JWT
   is valid against production. `MCP_AUTH_TOKEN` (if auth is enabled) should
   differ too.
+- **Cookie-name isolation.** Cookies are shared per host, not per port. Even
+  with distinct secrets, production and staging must use distinct refresh
+  cookie names or a staging login will evict the production session. The env
+  templates set `REFRESH_COOKIE_NAME=refresh_token_prod` and
+  `refresh_token_staging`; the app also derives a distinct default from
+  `DATABASE_NAME`.
 - **Gitea isolation.** The single biggest risk is a staging pipeline pointing at
   a production repo and creating branches/PRs there. Use a separate staging
   repo and a token scoped to it. Optionally set `REMOTE_PR_MODE` so the two

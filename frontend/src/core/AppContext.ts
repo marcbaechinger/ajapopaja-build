@@ -291,7 +291,7 @@ export class AppContext {
   }
 
   start() {
-    this.wsClient.connect();
+    void this.wsClient.connect();
     this.navigator.start();
     console.log('Ajapopaja AppContext Started');
   }

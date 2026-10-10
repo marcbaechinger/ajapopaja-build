@@ -39,7 +39,7 @@ from api.oneprompt.ws_handler import (
     initialize_oneprompt,
     register_oneprompt_handlers,
 )
-from api.auth import decode_token, get_current_user_from_token
+from api.auth import decode_token, get_current_user_from_token, validate_secret_key
 from api.dev_server_ws import register_dev_process_ws
 from api.notifications import register_notification_handlers
 from api.notifications.router import router as notifications_router
@@ -106,6 +106,7 @@ for logger_name in ["uvicorn.access", "uvicorn.error"]:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Application starting up...")
+    validate_secret_key()
     logger.info("Initializing database...")
     await init_db()
     try:

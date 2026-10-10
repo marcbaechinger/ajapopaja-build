@@ -129,6 +129,8 @@ template is `deploy/staging.env.example` (see
 | `SANDBOX_ROOT` | No | Directory where bot sandboxes are created. Default: `/data/ajapopaja/sandboxes`. Mounted `host:container` 1:1 so sandboxes survive restarts. |
 | `REMOTE_WORKSPACES_ROOT` | No | Directory where remote repositories (pipelines with a `repo_uri`) are cloned. Default: `/data/ajapopaja/remote_workspaces`. Mounted `host:container` 1:1. |
 | `AUTH_SECRET_KEY` | No | Secret used to sign JWTs. Set a distinct value per instance so tokens cannot be replayed across production and staging. |
+| `REFRESH_COOKIE_NAME` | No | Name of the `HttpOnly` refresh-token cookie. Defaults to a name derived from `DATABASE_NAME` (e.g. `refresh_token_ajapopaja_build_prod`), falling back to `refresh_token`. Cookies are **not** scoped by port, so production and staging on the same host must use distinct names. |
+| `AUTH_COOKIE_SECURE` | No | Set to `true` when the app is served over HTTPS so the refresh cookie gets the `Secure` attribute. Default: `false`. |
 | `GIT_PUSH_USERNAME` / `GIT_PUSH_TOKEN` | No | Global Gitea credentials used when a pipeline does not declare its own `repo_token`. Scope the staging token to staging repositories only. |
 | `MCP_AUTHENTICATION_ENABLED` | No | Set `true` to enable MCP authentication. Default: `false`. |
 | `BASEBOT_LOG_ENABLED` | No | Set `false` to disable bot logging. Default: `true`. |
@@ -359,7 +361,9 @@ builds the image and exports the shared tarball **once**; only the env file, dat
 directory, systemd unit and compose project differ per environment. The staging
 env file is installed to `/etc/ajapopaja-build-staging.env` from
 `deploy/staging.env.example`, and `AUTH_SECRET_KEY` is replaced with a freshly
-generated random value on first deploy.
+generated random value on first deploy. Production gets its own generated
+secret the same way. Each template also sets a distinct `REFRESH_COOKIE_NAME`
+so the two instances do not overwrite each other's session cookie.
 
 ### 7.1 What is isolated
 

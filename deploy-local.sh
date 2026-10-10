@@ -53,13 +53,12 @@ sudo cp docker-compose.yml "$DATA_DIR/docker-compose.yml"
 echo "2c. Setting up environment file at $ENV_FILE..."
 if [ ! -f "$ENV_FILE" ]; then
   sudo cp "$ENV_TEMPLATE" "$ENV_FILE"
-  # Staging must never share the production JWT secret, so replace the
-  # placeholder with a freshly generated random value on first deploy.
-  if [ "$ENV_NAME" = "staging" ]; then
-    SECRET=$(openssl rand -hex 32 2>/dev/null \
-      || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')
-    sudo sed -i "s/^AUTH_SECRET_KEY=.*/AUTH_SECRET_KEY=$SECRET/" "$ENV_FILE"
-  fi
+  # Every instance must have its own JWT secret so tokens cannot be replayed
+  # across production and staging. Replace the placeholder with a freshly
+  # generated random value on first deploy.
+  SECRET=$(openssl rand -hex 32 2>/dev/null \
+    || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')
+  sudo sed -i "s/^AUTH_SECRET_KEY=.*/AUTH_SECRET_KEY=$SECRET/" "$ENV_FILE"
   echo "Created environment file from $ENV_TEMPLATE."
 else
   echo "Environment file already exists, skipping."

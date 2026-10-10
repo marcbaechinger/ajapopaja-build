@@ -23,12 +23,15 @@ from pydantic import BaseModel
 from api.auth import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     ALGORITHM,
+    REFRESH_TOKEN_EXPIRE_DAYS,
     SECRET_KEY,
     authenticate_user,
     create_access_token,
     create_refresh_token,
     get_current_user,
     get_password_hash,
+    get_refresh_cookie_name,
+    is_auth_cookie_secure,
 )
 from core.models.models import User
 
@@ -91,15 +94,17 @@ async def login_for_access_token(
     )
     refresh_token = create_refresh_token(data={"sub": user.username})
 
-    # Set refresh token in HttpOnly cookie
+    # Set refresh token in an HttpOnly cookie. The cookie name is
+    # per-instance so production and staging on the same host do not clobber
+    # each other (cookies are not scoped by port).
     response.set_cookie(
-        key="refresh_token",
+        key=get_refresh_cookie_name(),
         value=refresh_token,
         httponly=True,
-        max_age=7 * 24 * 60 * 60,  # 7 days
-        expires=7 * 24 * 60 * 60,
+        max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        expires=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
         samesite="lax",
-        secure=False,  # Set to True in production
+        secure=is_auth_cookie_secure(),
     )
 
     return {
@@ -111,7 +116,7 @@ async def login_for_access_token(
 
 @router.post("/refresh", response_model=Token)
 async def refresh_token(request: Request, response: Response):
-    refresh_token = request.cookies.get("refresh_token")
+    refresh_token = request.cookies.get(get_refresh_cookie_name())
     if not refresh_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -154,7 +159,7 @@ async def refresh_token(request: Request, response: Response):
 
 @router.post("/logout")
 async def logout(response: Response):
-    response.delete_cookie("refresh_token")
+    response.delete_cookie(get_refresh_cookie_name())
     return {"detail": "Successfully logged out"}
 
 

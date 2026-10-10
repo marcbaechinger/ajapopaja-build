@@ -2,6 +2,15 @@
 
 ## Unreleased – Interactive session manager
 
+* **No more surprise logouts when running staging side by side** – the refresh
+  cookie name is no longer hard-coded to `refresh_token`. It is read from
+  `REFRESH_COOKIE_NAME` (defaulting to a name derived from `DATABASE_NAME`), so
+  production and staging on the same host stop overwriting each other's
+  HttpOnly refresh cookie. Because the cookie name changes, every browser does
+  one re-login after upgrading. The access token is now refreshed proactively
+  and only once per burst of concurrent `401`s, and the WebSocket
+  re-authenticates after a refused handshake.
+
 * **Coding Agent tab is always available** – the detached **Start Interactive
   Session** button above the content area is gone. The Coding Agent tab is now
   always shown; with no session attached it renders PiView's “No active

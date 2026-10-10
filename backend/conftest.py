@@ -62,6 +62,18 @@ def isolate_pi_sessions_root(monkeypatch, tmp_path):
     monkeypatch.setenv("PI_SESSIONS_ROOT", str(sessions_root))
 
 
+@pytest.fixture(autouse=True)
+def isolate_auth_cookie_name(monkeypatch):
+    """Keep the refresh-cookie name deterministic during tests.
+
+    The application derives a per-instance cookie name from ``DATABASE_NAME``
+    when ``REFRESH_COOKIE_NAME`` is unset. The host running the tests may have
+    ``DATABASE_NAME`` set, so pin the cookie name here; tests that exercise the
+    derivation delete this variable explicitly.
+    """
+    monkeypatch.setenv("REFRESH_COOKIE_NAME", "refresh_token")
+
+
 @pytest.fixture
 async def init_mock_db():
     mongodb_uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017")

@@ -31,6 +31,17 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ||
 // We use the '#content' div as the main view container
 const app = new AppContext('content', API_BASE);
 
+// Redirect to the login view as soon as the session is cleared (for example
+// when the refresh cookie is rejected). Without this the user only notices on
+// the next navigation or reload.
+app.authService.onAuthStateChanged((state) => {
+  if (state.isAuthenticated) return;
+  const hash = window.location.hash || '#/';
+  if (!hash.startsWith('#/login') && !hash.startsWith('#/register')) {
+    window.location.hash = '#/login';
+  }
+});
+
 // Middleware for authentication
 const requireAuth = (factory: (params: Record<string, string>) => any) => {
   return (params: Record<string, string>) => {

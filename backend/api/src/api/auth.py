@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 import os
+import re
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Optional, Union
@@ -30,6 +32,62 @@ SECRET_KEY = os.getenv("AUTH_SECRET_KEY", "your-secret-key-for-development-only"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 7
+
+logger = logging.getLogger(__name__)
+
+
+def validate_secret_key() -> None:
+    """Warn when the app runs with the shared development JWT secret.
+
+    A missing ``AUTH_SECRET_KEY`` makes every instance fall back to the same
+    well-known secret, so tokens (and therefore sessions) become replayable
+    across deployments. We warn instead of failing hard so an existing
+    deployment keeps serving while the operator sets a per-instance secret.
+    """
+    if os.getenv("AUTH_SECRET_KEY"):
+        return
+    logger.warning(
+        "AUTH_SECRET_KEY is not set; falling back to the insecure development "
+        "secret. Set a distinct AUTH_SECRET_KEY per instance before exposing "
+        "the app (see deploy/*.env.example)."
+    )
+
+
+def get_refresh_cookie_name() -> str:
+    """Return the name of the refresh-token cookie for this instance.
+
+    Cookies are scoped by ``(name, domain, path)`` and **not** by port, so two
+    instances served from the same host (e.g. production on ``:8081`` and
+    staging on ``:8082``) would otherwise overwrite each other's
+    ``refresh_token`` cookie. The name is resolved at call time so each
+    instance can be configured independently via ``REFRESH_COOKIE_NAME``; when
+    that is unset a suffix is derived from ``DATABASE_NAME`` so instances with
+    their own databases stay isolated even without extra configuration.
+    """
+    explicit = os.getenv("REFRESH_COOKIE_NAME")
+    if explicit:
+        return explicit
+    database = os.getenv("DATABASE_NAME", "").strip()
+    if not database:
+        return "refresh_token"
+    safe = re.sub(r"[^A-Za-z0-9]+", "_", database).strip("_")
+    return f"refresh_token_{safe}" if safe else "refresh_token"
+
+
+def is_auth_cookie_secure() -> bool:
+    """Whether the refresh cookie should carry the ``Secure`` attribute.
+
+    Enable this (``AUTH_COOKIE_SECURE=true``) whenever the app is served over
+    HTTPS; leaving it on for plain HTTP would stop the browser from storing
+    the cookie at all.
+    """
+    return os.getenv("AUTH_COOKIE_SECURE", "false").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
 
 # Scope and lifetime of the short-lived tokens that authorise a single raw
 # file view. Raw tokens are path-bound and must never be accepted as general

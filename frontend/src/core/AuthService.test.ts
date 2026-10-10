@@ -17,6 +17,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AuthService } from './AuthService.ts';
 
+/** Build an unsigned JWT with a given `exp` (seconds from now). */
+function makeToken(expSecondsFromNow: number, username = 'admin'): string {
+  const encode = (value: unknown) =>
+    btoa(JSON.stringify(value))
+      .replace(/=/g, '')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_');
+  const header = encode({ alg: 'HS256', typ: 'JWT' });
+  const payload = encode({
+    sub: username,
+    exp: Math.floor(Date.now() / 1000) + expSecondsFromNow,
+  });
+  return `${header}.${payload}.signature`;
+}
+
 describe('AuthService', () => {
   let service: AuthService;
 
@@ -151,5 +166,88 @@ describe('AuthService', () => {
 
     expect(newToken).toBe(null);
     expect(service.isAuthenticated()).toBe(false);
+  });
+
+  it('should not refresh a still-valid persisted token on boot', () => {
+    const token = makeToken(600);
+    localStorage.setItem('auth:user', JSON.stringify({ username: 'admin' }));
+    localStorage.setItem('auth:token', JSON.stringify(token));
+
+    const newService = new AuthService();
+
+    expect(newService.isAuthenticated()).toBe(true);
+    expect(newService.getAccessToken()).toBe(token);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('should proactively refresh an expired persisted token on boot', async () => {
+    localStorage.setItem('auth:user', JSON.stringify({ username: 'admin' }));
+    localStorage.setItem('auth:token', JSON.stringify(makeToken(-60)));
+    (fetch as any).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ access_token: 'fresh_token', username: 'admin' }),
+    });
+
+    const newService = new AuthService();
+
+    expect(newService.isAuthenticated()).toBe(true);
+    await vi.waitFor(() => expect(newService.getAccessToken()).toBe('fresh_token'));
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('should share a single in-flight refresh between concurrent callers', async () => {
+    service.setAuth({ username: 'user' } as any, makeToken(-60));
+    let resolveFetch: (value: any) => void = () => {};
+    (fetch as any).mockImplementation(
+      () => new Promise((resolve) => { resolveFetch = resolve; })
+    );
+
+    const first = service.refreshToken();
+    const second = service.refreshToken();
+    const third = service.refreshToken();
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    resolveFetch({
+      ok: true,
+      json: () => Promise.resolve({ access_token: 'shared_token', username: 'user' }),
+    });
+
+    const tokens = await Promise.all([first, second, third]);
+    expect(tokens).toEqual(['shared_token', 'shared_token', 'shared_token']);
+    expect(service.getAccessToken()).toBe('shared_token');
+  });
+
+  it('should clear the session only on a definitive refresh failure', async () => {
+    service.setAuth({ username: 'user' } as any, 'old_token');
+    (fetch as any).mockResolvedValueOnce({ ok: false });
+    expect(await service.refreshToken()).toBe(null);
+    expect(service.isAuthenticated()).toBe(false);
+
+    service.setAuth({ username: 'user' } as any, 'old_token_2');
+    (fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ access_token: 'recovered', username: 'user' }),
+    });
+    expect(await service.refreshToken()).toBe('recovered');
+    expect(service.isAuthenticated()).toBe(true);
+  });
+
+  it('should return a valid cached token from ensureValidToken', async () => {
+    const token = makeToken(600);
+    service.setAuth({ username: 'user' } as any, token);
+
+    await expect(service.ensureValidToken()).resolves.toBe(token);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('should refresh from ensureValidToken when the token is expired', async () => {
+    service.setAuth({ username: 'user' } as any, makeToken(-60));
+    (fetch as any).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ access_token: 'fresh', username: 'user' }),
+    });
+
+    await expect(service.ensureValidToken()).resolves.toBe('fresh');
+    expect(service.getAccessToken()).toBe('fresh');
   });
 });

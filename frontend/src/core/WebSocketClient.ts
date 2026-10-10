@@ -28,6 +28,11 @@ export class WebSocketClient {
   private baseUrl: string;
   private authService: AuthService;
   private clientId: string;
+  /**
+   * Guards against an endless refresh/connect loop when the handshake keeps
+   * being rejected. Reset on every successful `open`.
+   */
+  private authRetryPending = false;
 
   constructor(apiBaseUrl: string, authService: AuthService) {
     // Generate a unique client ID for this session/tab
@@ -44,10 +49,13 @@ export class WebSocketClient {
 
   private lastSentMessage: { type: string, payload: any } | null = null;
 
-  public connect() {
+  public async connect(): Promise<void> {
     if (this.ws?.readyState === WebSocket.OPEN) return;
 
-    const token = this.authService.getAccessToken();
+    // The access token is carried in the URL, so make sure it is fresh before
+    // opening the socket instead of relying on a 401-style retry that never
+    // arrives for a refused handshake.
+    const token = await this.authService.ensureValidToken();
     const url = token ? `${this.baseUrl}?token=${token}` : this.baseUrl;
 
     console.log('Connecting to WebSocket:', this.baseUrl);
@@ -56,6 +64,7 @@ export class WebSocketClient {
     this.ws.onopen = () => {
       console.log('WebSocket Connected');
       this.currentReconnectTimeout = this.reconnectTimeout;
+      this.authRetryPending = false;
     };
 
     this.ws.onmessage = async (event) => {
@@ -83,11 +92,28 @@ export class WebSocketClient {
       }
     };
 
-    this.ws.onclose = () => {
+    this.ws.onclose = (event?: CloseEvent) => {
+      // 1008 = policy violation. The backend uses it to reject a handshake
+      // with a missing/expired token; refresh once and reconnect with the new
+      // token instead of looping on the same stale credential.
+      if (event?.code === 1008 && !this.authRetryPending) {
+        this.authRetryPending = true;
+        console.log('WebSocket handshake rejected; refreshing token before reconnect');
+        void this.authService.refreshToken().then((newToken) => {
+          if (newToken) {
+            this.currentReconnectTimeout = this.reconnectTimeout;
+            void this.connect();
+          } else {
+            console.log('WebSocket reconnect skipped: no valid token');
+          }
+        });
+        return;
+      }
+
       console.log('WebSocket Closed. Reconnecting in', this.currentReconnectTimeout, 'ms');
       setTimeout(() => {
         this.currentReconnectTimeout = Math.min(this.currentReconnectTimeout * 2, this.maxReconnectTimeout);
-        this.connect();
+        void this.connect();
       }, this.currentReconnectTimeout);
     };
 

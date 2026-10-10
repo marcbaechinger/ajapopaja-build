@@ -299,14 +299,23 @@ flowchart LR
 
 ## 12. Authentication
 
-The SPA maintains user sessions via JWT stored securely in `localStorage`.
+The SPA keeps the short-lived **access token** and the username in
+`localStorage` (`auth:token`, `auth:user`). The long-lived **refresh token** is
+*never* written to `localStorage`: it is delivered by the backend as an
+`HttpOnly` cookie and used only by the `/api/auth/refresh` endpoint (see
+[`design/backend/dd_user_authentication.md`](../backend/dd_user_authentication.md)#5).
 
 ### 12.1. `AuthService`
 
 The central manager for user sessions:
 
-- **State Management**: Tracks current user and access tokens.
-- **Session Persistence**: Saves/restores tokens from `localStorage` on page reload.
+- **State Management**: Tracks the current user and the access token. The
+  refresh token lives in an `HttpOnly` cookie owned by the browser.
+- **Session Persistence**: Saves/restores the access token and user from
+  `localStorage` on page reload. On boot an expired access token triggers a
+  proactive refresh instead of waiting for the first `401`.
+- **Single-flight Refresh**: Concurrent refresh attempts share one in-flight
+  `POST /api/auth/refresh` request; only a definitive failure clears the state.
 - **Login/Logout Logic**: Interacts with the `/api/auth` endpoints to authenticate users and manage token lifecycle.
 
 - **File Path**: `frontend/src/core/AuthService.ts`
@@ -325,5 +334,4 @@ A high-level `requireAuth` wrapper protects specific routes within `main.ts`. It
 
 ### 12.4. WebSocket Security & Re-Authentication
 
-The `WebSocketClient` retrieves the latest access token from the `AuthService` and appends it to the connection URL as a query parameter during the `connect()` phase.
-If a WebSocket message fails due to an expired token (e.g., an `assistant_error` with `Unauthorized`), the `WebSocketClient` automatically intercepts the failure, requests a token refresh via the `AuthService`, and retries the last sent message upon a successful refresh (similar to the HTTP 401 interception in `BaseClient`).
+The `WebSocketClient` retrieves the latest access token from the `AuthService` and appends it to the connection URL as a query parameter during the `connect()` phase. Because a refused handshake never produces an in-band error message, a `1008` (policy violation) close is treated as an authentication failure: the client refreshes the token once and reconnects with it, then falls back to the normal backoff loop. If a WebSocket message later fails due to an expired token (e.g., an `assistant_error` with `Unauthorized`), the `WebSocketClient` also intercepts the failure, requests a token refresh via the `AuthService`, and retries the last sent message upon a successful refresh (similar to the HTTP 401 interception in `BaseClient`).
