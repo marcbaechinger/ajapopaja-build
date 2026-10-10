@@ -172,6 +172,9 @@ class CoderBotManager:
             "start_time": (
                 session.start_time.isoformat() if session.start_time else None
             ),
+            # Expose the model id so the UI can show which model the session is
+            # running with in its status overlay.
+            "model": getattr(session, "model", None),
         }
 
     def set_default_model(self, model: Optional[str]) -> None:
@@ -385,6 +388,9 @@ class CoderBotManager:
                 session.start_time.isoformat() if session.start_time else None
             ),
             "busy": turn_task is not None and not turn_task.done(),
+            # Expose the model id so the UI can show which model the session is
+            # running with in its status overlay.
+            "model": getattr(session, "model", None),
         }
 
     async def start_interactive_session(self, pipeline: Pipeline) -> dict:

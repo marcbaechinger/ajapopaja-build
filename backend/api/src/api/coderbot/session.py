@@ -1057,6 +1057,7 @@ class CoderBotSession(PiRpcProcess):
                     "pipeline_id": self.pipeline_id,
                     "task_id": self.task_id,
                     "session_uid": self.session_uid,
+                    "model": self.model,
                 },
             )
         )
@@ -1427,6 +1428,7 @@ class InteractivePiSession(PiRpcProcess):
                     "start_time": (
                         self.start_time.isoformat() if self.start_time else None
                     ),
+                    "model": self.model,
                 },
             )
         )

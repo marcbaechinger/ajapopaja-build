@@ -67,6 +67,12 @@ export interface PiSessionService {
   isActive(): boolean;
   /** Wall-clock start (epoch ms) of the session, when known. */
   getSessionStartTime(): number | null;
+  /**
+   * The model id (e.g. `gpt-oss:120`) currently used by the session, or null
+   * when no model is known. Optional so existing PiSessionService
+   * implementations remain valid without it.
+   */
+  getCurrentModel?(): string | null;
   /** Subscribe to session start-time updates (e.g. post-history-load). */
   onSessionStartTimeChange(listener: (startTime: number | null) => void): () => void;
   clearHistory(): void;
@@ -2013,9 +2019,11 @@ export class PiView {
   private updateStatusText() {
     const text = this.root.querySelector('#piview-status-text') as HTMLElement | null;
     if (!text) return;
+    const model = this.service.getCurrentModel?.() ?? null;
     if (this.sessionActive && this.startTime !== null) {
       const running = this.elapsedMs + (Date.now() - this.startTime);
-      text.textContent = `Running since ${this.formatElapsed(running)}`;
+      const timing = `Running since ${this.formatElapsed(running)}`;
+      text.textContent = model ? `${timing} · ${model}` : timing;
     } else if (this.hasRunSession) {
       text.textContent = `Session ended · ${this.formatElapsed(this.elapsedMs)}`;
     } else {

@@ -635,6 +635,34 @@ describe('PiView', () => {
     expect(dot.className).not.toContain('animate-pulse');
   });
 
+  it('shows the current model name in the running status when one is known', () => {
+    const { service, listeners } = createStubService({
+      getCurrentModel: vi.fn(() => 'gpt-oss:120'),
+    });
+    const view = new PiView(service, mount);
+    view.render();
+
+    listeners.state.forEach((l) => l(true));
+    const text = mount.querySelector('#piview-status-text') as HTMLElement;
+    expect(text.textContent).toContain('Running since');
+    expect(text.textContent).toContain('gpt-oss:120');
+
+    view.destroy();
+  });
+
+  it('does not show a model name while the session is idle', () => {
+    const { service } = createStubService({
+      getCurrentModel: vi.fn(() => 'gpt-oss:120'),
+    });
+    const view = new PiView(service, mount);
+    view.render();
+
+    const text = mount.querySelector('#piview-status-text') as HTMLElement;
+    expect(text.textContent).toBe('Session idle');
+
+    view.destroy();
+  });
+
   it('shows running status + pulsing dot, persists across log entries, and ends on stop', () => {
     const { service, emitBlocks, listeners } = createStubService();
     const view = new PiView(service, mount);

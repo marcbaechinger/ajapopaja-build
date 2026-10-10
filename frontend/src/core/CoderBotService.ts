@@ -57,6 +57,7 @@ export class CoderBotService {
    * session start instead of when the PiView was created.
    */
   private sessionStartTime: number | null = null;
+  private currentModel: string | null = null;
   private startTimeListeners: Set<(startTime: number | null) => void> = new Set();
 
   private static readonly SESSION_STORAGE_KEY = 'ajapopaja:coderbot:session';
@@ -74,6 +75,7 @@ export class CoderBotService {
       if (taskId !== this.currentTaskId) {
         this.clearHistory();
         this.currentTaskId = taskId;
+        this.currentModel = msg.payload?.model ?? null;
         // A brand-new session is beginning; seed a local start reference until
         // the server-reported start time is loaded with the history.
         this.setSessionStartTime(Date.now());
@@ -237,6 +239,11 @@ export class CoderBotService {
     return this.sessionStartTime;
   }
 
+  /** Returns the model id of the current session, when known. */
+  public getCurrentModel(): string | null {
+    return this.currentModel;
+  }
+
   /**
    * Subscribe to session start-time updates (e.g. once the server-reported start
    * time is loaded from the history/session endpoints after a mount).
@@ -266,6 +273,7 @@ export class CoderBotService {
         this.currentPipelineId = session.pipeline_id ?? this.currentPipelineId;
         this.currentTaskId = session.task_id;
         if (session.session_uid) this.currentSessionUid = session.session_uid;
+        this.currentModel = session.model ?? null;
         this.setSessionActive(!!session.is_active);
         this.setSessionStartTime(this.parseStartTime(session.start_time));
         this.persistSession();
@@ -320,6 +328,9 @@ export class CoderBotService {
         const session = await this.fetchSession();
         if (session?.start_time) {
           this.setSessionStartTime(this.parseStartTime(session.start_time));
+        }
+        if (session?.model != null) {
+          this.currentModel = session.model;
         }
       } catch (e) {
         console.error('Failed to adopt CoderBot session start time', e);
@@ -390,7 +401,7 @@ export class CoderBotService {
     }
   }
 
-  private async fetchSession(): Promise<{ pipeline_id?: string; task_id?: string; session_uid?: string; is_active?: boolean; start_time?: string | null } | null> {
+  private async fetchSession(): Promise<{ pipeline_id?: string; task_id?: string; session_uid?: string; is_active?: boolean; start_time?: string | null; model?: string | null } | null> {
     const token = this.authService.getAccessToken();
     const response = await fetch('/api/coderbot/session', {
       headers: { 'Authorization': `Bearer ${token}` },

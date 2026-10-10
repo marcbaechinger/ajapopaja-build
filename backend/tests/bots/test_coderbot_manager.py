@@ -457,6 +457,7 @@ async def test_get_active_session_returns_active_session():
     mock.task_id = "t1"
     mock.start_time = None
     mock.session_uid = None
+    mock.model = None
     manager._active_session = mock
     assert manager.get_active_session() == {
         "pipeline_id": "p1",
@@ -464,6 +465,7 @@ async def test_get_active_session_returns_active_session():
         "session_uid": None,
         "is_active": True,
         "start_time": None,
+        "model": None,
     }
 
 
@@ -475,6 +477,7 @@ async def test_get_active_session_returns_last_session_inactive():
     mock.task_id = "t1"
     mock.start_time = None
     mock.session_uid = None
+    mock.model = None
     manager._last_session = mock
     assert manager.get_active_session() == {
         "pipeline_id": "p1",
@@ -482,6 +485,7 @@ async def test_get_active_session_returns_last_session_inactive():
         "session_uid": None,
         "is_active": False,
         "start_time": None,
+        "model": None,
     }
 
 
@@ -495,6 +499,7 @@ async def test_get_active_session_includes_start_time():
     mock.task_id = "t1"
     mock.start_time = datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
     mock.session_uid = None
+    mock.model = None
     manager._active_session = mock
     assert manager.get_active_session() == {
         "pipeline_id": "p1",
@@ -502,6 +507,7 @@ async def test_get_active_session_includes_start_time():
         "session_uid": None,
         "is_active": True,
         "start_time": "2026-01-02T03:04:05+00:00",
+        "model": None,
     }
 
 
@@ -519,6 +525,7 @@ def _interactive_session_mock(**overrides):
     session.session_file = None
     session.session_dir = None
     session.start_time = datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
+    session.model = None
     session.start_interactive = AsyncMock()
     session.stop = AsyncMock()
     session.wait = AsyncMock(return_value=None)
@@ -641,6 +648,7 @@ async def test_get_interactive_session_returns_info():
         "is_active": True,
         "start_time": "2026-01-02T03:04:05+00:00",
         "busy": False,
+        "model": None,
     }
 
 

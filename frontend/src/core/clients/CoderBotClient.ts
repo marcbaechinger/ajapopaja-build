@@ -72,6 +72,7 @@ export class CoderBotClient extends BaseClient {
     is_active: boolean;
     start_time: string | null;
     busy: boolean;
+    model?: string | null;
   }> {
     const res = await this.fetch(`/api/coderbot/interactive/start/${pipelineId}`, {
       method: 'POST',
@@ -99,6 +100,7 @@ export class CoderBotClient extends BaseClient {
     is_active: boolean;
     start_time: string | null;
     busy: boolean;
+    model?: string | null;
   } | null> {
     const res = await this.fetch(`/api/coderbot/interactive/session`, {});
     if (!res.ok) return null;

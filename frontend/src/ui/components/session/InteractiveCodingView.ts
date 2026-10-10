@@ -143,6 +143,10 @@ export class PipelineScopedPiSession implements PiSessionService {
     return this.mine ? this.service.getSessionStartTime() : null;
   }
 
+  getCurrentModel(): string | null {
+    return this.mine ? (this.service.getCurrentModel?.() ?? null) : null;
+  }
+
   onSessionStartTimeChange(listener: (startTime: number | null) => void): () => void {
     this.startTimeListeners.add(listener);
     const unsub = this.service.onSessionStartTimeChange((startTime) => {

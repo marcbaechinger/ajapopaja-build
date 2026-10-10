@@ -91,6 +91,7 @@ export class InteractiveCodingService implements PiSessionService {
   private sessionUid: string | null = null;
   private isSessionActive: boolean = false;
   private sessionStartTime: number | null = null;
+  private currentModel: string | null = null;
   private busy: boolean = false;
 
   // --- Session list / switcher state -------------------------------------
@@ -241,6 +242,8 @@ export class InteractiveCodingService implements PiSessionService {
       this.pendingResumeUid = null;
     }
 
+    this.currentModel = payload?.model ?? (isResume ? this.currentModel : null);
+
     this.setStartTime(this.parseStartTime(payload.start_time));
     this.setBusy(false);
     this.setActive(true);
@@ -291,6 +294,7 @@ export class InteractiveCodingService implements PiSessionService {
       // response as an immediate/fallback update.
       this.setActive(!!info.is_active);
       this.setBusy(!!info.busy);
+      this.currentModel = info.model ?? null;
       this.setStartTime(this.parseStartTime(info.start_time));
       const uid = (info as any).uid ?? this.sessionUid;
       if (uid) {
@@ -401,6 +405,7 @@ export class InteractiveCodingService implements PiSessionService {
     }
     this.sessionUid = uid;
     if (info?.pipeline_id) this.currentPipelineId = info.pipeline_id;
+    this.currentModel = info?.model ?? null;
     this.setStartTime(info?.last_active_at ? this.parseStartTime(info.last_active_at) : Date.now());
     this.setBusy(false);
     this.setActive(true);
@@ -493,6 +498,7 @@ export class InteractiveCodingService implements PiSessionService {
       if (info && info.is_active) {
         this.currentPipelineId = info.pipeline_id ?? this.currentPipelineId;
         if (info.uid) this.sessionUid = info.uid;
+        this.currentModel = info.model ?? null;
         // Replay the persisted event log before notifying listeners, so a
         // re-attached PiView sees the full conversation after a page reload
         // instead of an empty log. Mirrors CoderBotService.reconnect's
@@ -774,6 +780,11 @@ export class InteractiveCodingService implements PiSessionService {
 
   public getSessionStartTime(): number | null {
     return this.sessionStartTime;
+  }
+
+  /** Returns the model id of the current interactive session, when known. */
+  public getCurrentModel(): string | null {
+    return this.currentModel;
   }
 
   public onSessionStartTimeChange(listener: StartTimeListener): () => void {
