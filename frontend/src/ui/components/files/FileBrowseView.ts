@@ -89,6 +89,16 @@ export class FileBrowseView {
   private loading: boolean = false;
   private error: string | null = null;
   private requestId: number = 0;
+  /**
+   * Repo-relative path of the file currently being opened, or `null`. Cleared
+   * as soon as the request settles (or a directory navigation starts). It lets
+   * {@link getCurrentPath} report the file the user is opening instead of only
+   * the parent directory it will live in, so the host's route idempotence check
+   * can recognise a duplicate `hashchange` re-entry and skip the reload.
+   */
+  private pendingFilePath: string | null = null;
+  /** In-flight `readFile` request, used to coalesce duplicate opens. */
+  private pendingFile: Promise<void> | null = null;
   private destroyed: boolean = false;
   private searchInput: FileSearchInputView | null = null;
 
@@ -148,6 +158,9 @@ export class FileBrowseView {
     this.error = null;
     this.currentDir = path;
     this.selectedFile = null;
+    // A directory load is not a file open; drop the in-flight file target so
+    // `getCurrentPath()` reports the directory again.
+    this.pendingFilePath = null;
     this.storage.put(`lastPath:${this.pipelineId}`, path);
     if (!opts.silent) this.onNavigate?.({ dir: path, file: null });
     this.renderBreadcrumb();
@@ -169,7 +182,18 @@ export class FileBrowseView {
   }
 
   async openFile(path: string, opts: { silent?: boolean } = {}): Promise<void> {
+    // Coalesce a repeated open for a path that is already in flight. Without
+    // this, a duplicate caller (route re-entry, `refresh()` race) would start a
+    // second read, make the first response stale and repaint the loading
+    // placeholder — the visible flicker. A deliberate re-read of an already
+    // displayed file still runs, because the pending state is cleared as soon
+    // as the request settles.
+    if (this.pendingFile && this.pendingFilePath === path) {
+      return this.pendingFile;
+    }
     const requestId = ++this.requestId;
+    // Remember the target while the read is in flight (see `pendingFilePath`).
+    this.pendingFilePath = path;
     this.loading = true;
     this.error = null;
     this.selectedFile = null;
@@ -180,17 +204,31 @@ export class FileBrowseView {
     if (!opts.silent) this.onNavigate?.({ dir: this.currentDir, file: path });
     this.renderMain();
 
+    const request = (async () => {
+      try {
+        const file = await this.client.readFile(this.pipelineId, path);
+        // A newer navigation superseded this read; it already owns the pending
+        // state, so leave it untouched.
+        if (this.isStale(requestId)) return;
+        this.selectedFile = file;
+        this.loading = false;
+        this.pendingFilePath = null;
+        this.renderMain();
+      } catch (e) {
+        if (this.isStale(requestId)) return;
+        this.loading = false;
+        this.error = this.errorMessage(e, 'Failed to open the file.');
+        this.pendingFilePath = null;
+        this.renderMain();
+      }
+    })();
+    this.pendingFile = request;
     try {
-      const file = await this.client.readFile(this.pipelineId, path);
-      if (this.isStale(requestId)) return;
-      this.selectedFile = file;
-      this.loading = false;
-      this.renderMain();
-    } catch (e) {
-      if (this.isStale(requestId)) return;
-      this.loading = false;
-      this.error = this.errorMessage(e, 'Failed to open the file.');
-      this.renderMain();
+      await request;
+    } finally {
+      // Only this request may clear the slot; a newer navigation has already
+      // replaced it with its own pending promise.
+      if (this.pendingFile === request) this.pendingFile = null;
     }
   }
 
@@ -204,9 +242,16 @@ export class FileBrowseView {
     }
   }
 
-  /** Current directory and selected file, for host-side idempotence checks. */
+  /**
+   * Current directory and selected file, for host-side idempotence checks.
+   * Falls back to the file being opened so an in-flight load is reported as the
+   * target the user is on, letting the host skip a duplicate route re-entry.
+   */
   getCurrentPath(): { dir: string; file: string | null } {
-    return { dir: this.currentDir, file: this.selectedFile?.path ?? null };
+    return {
+      dir: this.currentDir,
+      file: this.selectedFile?.path ?? this.pendingFilePath,
+    };
   }
 
   // --- rendering ----------------------------------------------------------

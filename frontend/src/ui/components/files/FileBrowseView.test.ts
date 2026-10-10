@@ -722,6 +722,97 @@ describe('FileBrowseView route wiring', () => {
     await v.refresh();
     expect(onNavigate.mock.calls.length).toBe(before);
   });
+
+  it('reports the in-flight file from getCurrentPath() until the read settles', async () => {
+    let resolveRead: (value: FileContent) => void = () => {};
+    client.readFile.mockImplementation(
+      () => new Promise<FileContent>((resolve) => { resolveRead = resolve; })
+    );
+
+    const v = build();
+    const pending = v.openFile('src/App.ts');
+
+    // While the read is unresolved the target file is reported, not the
+    // parent directory it will belong to.
+    expect(v.getCurrentPath()).toEqual({ dir: 'src', file: 'src/App.ts' });
+
+    resolveRead(makeFile('src/App.ts'));
+    await pending;
+
+    expect(v.getCurrentPath()).toEqual({ dir: 'src', file: 'src/App.ts' });
+  });
+
+  it('coalesces a duplicate open of the same in-flight file into one read', async () => {
+    let resolveRead: (value: FileContent) => void = () => {};
+    client.readFile.mockImplementation(
+      () => new Promise<FileContent>((resolve) => { resolveRead = resolve; })
+    );
+
+    const v = build();
+    const first = v.openFile('src/App.ts');
+    const second = v.openFile('src/App.ts');
+
+    expect(client.readFile).toHaveBeenCalledTimes(1);
+    resolveRead(makeFile('src/App.ts'));
+    await Promise.all([first, second]);
+    expect(client.readFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('makes a route re-entry for an in-flight file a no-op', async () => {
+    let resolveRead: (value: FileContent) => void = () => {};
+    client.readFile.mockImplementation(
+      () => new Promise<FileContent>((resolve) => { resolveRead = resolve; })
+    );
+    client.getMeta.mockResolvedValue({ isDir: false });
+
+    const v = build();
+    // User-initiated open: the read is in flight and the route write queues a
+    // hashchange that re-enters the view.
+    void v.openFile('src/App.ts');
+    expect(client.readFile).toHaveBeenCalledTimes(1);
+
+    // The host only navigates when the view's current path differs from the
+    // route's path. Reporting the in-flight file makes the guard short-circuit.
+    const { dir, file } = v.getCurrentPath();
+    const current = file ?? (dir ? dir : null);
+    if (current !== 'src/App.ts') void v.navigateTo('src/App.ts', { silent: true });
+    await flush();
+
+    expect(client.getMeta).not.toHaveBeenCalled();
+    expect(client.readFile).toHaveBeenCalledTimes(1);
+
+    resolveRead(makeFile('src/App.ts'));
+    await flush();
+    expect(v.getCurrentPath()).toEqual({ dir: 'src', file: 'src/App.ts' });
+  });
+
+  it('discards a stale file response from fast navigation', async () => {
+    const fileA = new FileContent({ name: 'A.ts', path: 'src/A.ts', size: 4, content: 'AAA\n' });
+    const fileB = new FileContent({ name: 'B.ts', path: 'src/B.ts', size: 4, content: 'BBB\n' });
+    let resolveFirst: (value: FileContent) => void = () => {};
+    const first = new Promise<FileContent>((resolve) => { resolveFirst = resolve; });
+    client.readFile
+      .mockImplementationOnce(() => first)
+      .mockImplementationOnce(() => Promise.resolve(fileB));
+
+    const v = build();
+    v.render();
+    await flush();
+
+    // Start 'A' (slow) then immediately open 'B' (fast).
+    void v.openFile('src/A.ts');
+    void v.openFile('src/B.ts');
+    await flush();
+
+    expect(root.querySelector('#file-browser-main')!.textContent).toContain('BBB');
+
+    // The late 'A' response must be ignored; 'B' stays selected.
+    resolveFirst(fileA);
+    await flush();
+    expect(root.querySelector('#file-browser-main')!.textContent).toContain('BBB');
+    expect(root.querySelector('#file-browser-main')!.textContent).not.toContain('AAA');
+    expect(v.getCurrentPath()).toEqual({ dir: 'src', file: 'src/B.ts' });
+  });
 });
 
 describe('FileBrowseView file search', () => {

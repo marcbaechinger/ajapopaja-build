@@ -924,4 +924,30 @@ describe('ContentTabsController', () => {
     expect(appContext.fileBrowserClient.getMeta).toHaveBeenCalledWith('p1', 'src');
     expect(ctx.state.pendingFbPath).toBeNull();
   });
+
+  it('makes a route re-entry for an in-flight file open a no-op', async () => {
+    controller.setTab('file-browser', { hash: 'none' });
+    const fileView = (controller as any).fileBrowseView;
+    expect(fileView).not.toBeNull();
+
+    let resolveRead: (value: any) => void = () => {};
+    appContext.fileBrowserClient.readFile.mockImplementation(
+      () => new Promise((resolve) => { resolveRead = resolve; })
+    );
+    appContext.fileBrowserClient.getMeta.mockClear();
+
+    void fileView.openFile('src/App.ts', { silent: true });
+    expect(appContext.fileBrowserClient.readFile).toHaveBeenCalledTimes(1);
+
+    // The push wrote the sub-route; the resulting hashchange applies it. The
+    // view reports the in-flight file, so the guard skips navigateTo().
+    controller.applyRoute({ rest: 'tab/fb/src/App.ts' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(appContext.fileBrowserClient.getMeta).not.toHaveBeenCalled();
+    expect(appContext.fileBrowserClient.readFile).toHaveBeenCalledTimes(1);
+
+    resolveRead({ path: 'src/App.ts', name: 'App.ts', content: 'app\n' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
 });
