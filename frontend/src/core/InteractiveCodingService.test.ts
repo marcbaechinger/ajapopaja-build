@@ -224,6 +224,26 @@ describe('InteractiveCodingService', () => {
     expect(service.isActive()).toBe(false);
   });
 
+  it('refreshSession replays the persisted history after a page reload', async () => {
+    client.getInteractiveSession.mockResolvedValue({
+      pipeline_id: 'p7',
+      uid: 'uid-reload',
+      is_active: true,
+      start_time: '2026-02-03T04:05:00Z',
+      busy: false,
+    });
+    client.getSessionEvents.mockResolvedValue([
+      {
+        type: 'message_update',
+        assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'reloaded' },
+      },
+    ]);
+    await service.refreshSession();
+    expect(service.getCurrentSession().uid).toBe('uid-reload');
+    expect(client.getSessionEvents).toHaveBeenCalledWith('uid-reload');
+    expect(texts(service.getHistory())[0].text).toBe('reloaded');
+  });
+
   it('clearHistory resets the log', () => {
     rpc(ws, { type: 'agent_start' });
     service.clearHistory();
