@@ -556,6 +556,24 @@ async def test_raw_file_serves_typescript_as_text(async_client, tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_raw_file_serves_markdown_as_markdown(async_client, tmp_path):
+    repo = _make_repo(tmp_path)
+    (repo / "README.md").write_text("# Title\n")
+    token = create_raw_file_token("testuser", "p1", "README.md")
+
+    with _patch_pipeline(repo):
+        response = await async_client.get(
+            "/api/pipelines/p1/files/raw", params={"token": token}
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    content_type = response.headers["content-type"]
+    assert content_type.startswith("text/markdown")
+    assert "charset=utf-8" in content_type
+    assert response.text == "# Title\n"
+
+
+@pytest.mark.asyncio
 async def test_raw_file_rejects_missing_token(async_client):
     response = await async_client.get("/api/pipelines/p1/files/raw")
     assert response.status_code == status.HTTP_401_UNAUTHORIZED

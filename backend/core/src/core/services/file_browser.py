@@ -52,9 +52,10 @@ EXCLUDED_NAMES = {".git"}
 # Explicit media types for developer source/config extensions. ``mimetypes``
 # gets several of these wrong for our purposes (notably ``.ts`` ->
 # ``video/mp2t``), and serving source code as ``text/plain`` is always a
-# reasonable fallback for the raw viewer. Extensions that should genuinely be
-# rendered by the browser (``.html``, ``.svg``, images, PDF, ...) are left to
-# ``mimetypes``.
+# reasonable fallback for the raw viewer. Markdown is served with its own
+# ``text/markdown`` type so the raw viewer reports the correct media type.
+# Extensions that should genuinely be rendered by the browser (``.html``,
+# ``.svg``, images, PDF, ...) are left to ``mimetypes``.
 _MEDIA_TYPE_OVERRIDES: Dict[str, str] = {
     ".ts": "text/plain",
     ".tsx": "text/plain",
@@ -64,8 +65,8 @@ _MEDIA_TYPE_OVERRIDES: Dict[str, str] = {
     ".jsx": "text/plain",
     ".mjs": "text/plain",
     ".cjs": "text/plain",
-    ".md": "text/plain",
-    ".markdown": "text/plain",
+    ".md": "text/markdown",
+    ".markdown": "text/markdown",
     ".mdx": "text/plain",
     ".yml": "text/plain",
     ".yaml": "text/plain",
