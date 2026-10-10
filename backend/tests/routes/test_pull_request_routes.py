@@ -103,6 +103,98 @@ async def test_reject_pull_request_unauthenticated(async_client, init_mock_db):
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
+@pytest.mark.asyncio
+async def test_reject_pull_request_broadcasts_task_status_update(init_mock_db):
+    """Rejecting a PR moves the task PULL_REQUEST_AVAILABLE -> CREATED and
+    broadcasts TASK_STATUS_UPDATED so the UI updates the displayed TaskItem."""
+    from core.models.models import Task
+    from api.websocket_manager import WSMessage
+
+    task = Task(
+        title="Task 1",
+        pipeline_id="pipe_123",
+        status=TaskStatus.PULL_REQUEST_AVAILABLE,
+        commit_hash="abc1234",
+    )
+    await task.insert()
+
+    pr = PullRequest(
+        id=ObjectId(),
+        pipeline_id="pipe_123",
+        task_id=str(task.id),
+        summary="summary",
+        branch_name="branch",
+        patch="patch",
+        status=PullRequestStatus.SUBMITTED,
+    )
+    await pr.insert()
+
+    with patch(
+        "api.routes.pull_request.ws_manager.broadcast", new_callable=AsyncMock
+    ) as mock_broadcast:
+        result = await pr_routes.reject_pull_request(str(pr.id))
+
+    assert result["status"] == "success"
+
+    updated = await Task.get(str(task.id))
+    assert updated.status == TaskStatus.CREATED
+    transitions = [(t.from_status, t.to_status, t.by) for t in updated.history]
+    assert (
+        TaskStatus.PULL_REQUEST_AVAILABLE,
+        TaskStatus.CREATED,
+        "user",
+    ) in transitions
+
+    status_msgs = [
+        c
+        for c in mock_broadcast.await_args_list
+        if isinstance(c.args[0], WSMessage) and c.args[0].type == "TASK_STATUS_UPDATED"
+    ]
+    assert len(status_msgs) == 1
+    payload = status_msgs[0].args[0].payload
+    assert payload["id"] == str(task.id)
+    assert payload["status"] == TaskStatus.CREATED
+
+
+@pytest.mark.asyncio
+async def test_reject_pull_request_leaves_other_statuses_untouched(init_mock_db):
+    """A task that is not awaiting review keeps its status and no WS message
+    is broadcast."""
+    from core.models.models import Task
+    from api.websocket_manager import WSMessage
+
+    task = Task(
+        title="Task 1",
+        pipeline_id="pipe_123",
+        status=TaskStatus.IMPLEMENTED,
+    )
+    await task.insert()
+
+    pr = PullRequest(
+        id=ObjectId(),
+        pipeline_id="pipe_123",
+        task_id=str(task.id),
+        summary="summary",
+        branch_name="branch",
+        patch="patch",
+        status=PullRequestStatus.OPEN,
+    )
+    await pr.insert()
+
+    with patch(
+        "api.routes.pull_request.ws_manager.broadcast", new_callable=AsyncMock
+    ) as mock_broadcast:
+        await pr_routes.reject_pull_request(str(pr.id))
+
+    unchanged = await Task.get(str(task.id))
+    assert unchanged.status == TaskStatus.IMPLEMENTED
+    assert not [
+        c
+        for c in mock_broadcast.await_args_list
+        if isinstance(c.args[0], WSMessage) and c.args[0].type == "TASK_STATUS_UPDATED"
+    ]
+
+
 def test_retarget_verified_commit_hash_replaces_sandbox_hash():
     head = "70ce091c2163f5561a8468bfd14c0e880bd5e283"
     sandbox = "3e80ca4f2777bd1180dbab8717ad514fa6f5853c"

@@ -130,6 +130,28 @@ describe('registerPullRequestActions', () => {
       expect(deps.refreshPullRequests).toHaveBeenCalledTimes(2);
     });
 
+    it('refreshes the mutated task through the DataManager after rejecting', async () => {
+      const fresh = { id: 't1', status: 'created' };
+      const get = vi.fn().mockResolvedValue(fresh);
+      const updateTask = vi.fn();
+      (ctx.context as any).taskClient = { get };
+      (ctx.context as any).dataManager = { updateTask };
+
+      const action = getAction('open_pr_dialog');
+      const el = document.createElement('button');
+      el.setAttribute('data-task-id', 't1');
+      el.setAttribute('data-pr-id', 'pr1');
+
+      await action(noEvent, el);
+      const props = (PullRequestDialog as any).mock.calls[0][0];
+      props.onReject();
+
+      // The task is re-read and pushed through the DataManager so the pipeline's
+      // incremental update path can patch the TaskItem header in place.
+      await vi.waitFor(() => expect(updateTask).toHaveBeenCalledWith(fresh));
+      expect(get).toHaveBeenCalledWith('t1');
+    });
+
     it('passes prId as undefined when data-pr-id is missing', async () => {
       const action = getAction('open_pr_dialog');
       const el = document.createElement('button');

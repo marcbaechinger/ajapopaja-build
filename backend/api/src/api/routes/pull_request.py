@@ -29,6 +29,7 @@ from api.auth import get_current_user
 from api.coderbot.manager import coderbot_manager
 from api.git_hosting.gitea import GiteaApiError
 from api.git_hosting.pull_requests import create_pipeline_pull_request
+from api.websocket_manager import WSMessage, manager as ws_manager
 from core import config
 from core.models.models import (
     Pipeline,
@@ -621,7 +622,16 @@ async def reject_pull_request(pr_id: str):
     task = await Task.get(pr.task_id)
     if task and task.status == TaskStatus.PULL_REQUEST_AVAILABLE:
         logger.info(f"Updating status for task {pr.task_id} to CREATED")
-        await task_queries.transition_task(
+        updated_task = await task_queries.transition_task(
             str(task.id), TaskStatus.CREATED, actor="user"
+        )
+        # Broadcast the status change so connected clients move the task out of
+        # PULL_REQUEST_AVAILABLE and back into the backlog. Without this the
+        # transition only exists in the backend and TaskItem stays stale.
+        await ws_manager.broadcast(
+            WSMessage(
+                type="TASK_STATUS_UPDATED",
+                payload=updated_task.model_dump(mode="json"),
+            )
         )
     return {"status": "success", "message": "Pull Request rejected"}

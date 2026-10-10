@@ -83,6 +83,7 @@ export function registerPullRequestActions(
       },
       onReject: () => {
         deps.refreshPullRequests();
+        void refreshTaskAfterMutation(taskId);
       }
     });
     await dialog.show();
