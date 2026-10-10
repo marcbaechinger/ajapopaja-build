@@ -332,6 +332,12 @@ export class SessionManagerPanel {
   private async handleAction(action: string | undefined, uid: string): Promise<void> {
     const service = this.context.interactiveCodingService;
     if (!service) return;
+    // Batch (`coderbot`) sessions are read-only for the interactive session
+    // manager: never switch to or pause them through the interactive service.
+    // Only the non-interactive actions (open / discard / title) are allowed.
+    if ((action === 'switch' || action === 'pause') && this.isBatchSession(uid)) {
+      return;
+    }
     try {
       if (action === 'switch') {
         if (service.isBusy?.()) {
@@ -376,6 +382,12 @@ export class SessionManagerPanel {
       this.setError(e instanceof Error ? e.message : String(e));
       this.renderBody();
     }
+  }
+
+  /** Whether the cached session `uid` is a read-only batch (coderbot) session. */
+  private isBatchSession(uid: string): boolean {
+    const session = this.context.interactiveCodingService?.getSession?.(uid);
+    return session?.kind === 'coderbot' || session?.bot_type === 'coderbot';
   }
 
   /**

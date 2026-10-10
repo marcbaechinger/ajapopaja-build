@@ -168,6 +168,18 @@ describe('PipelineSessionListController', () => {
       expect(listHost().querySelector('[data-session-uid="running"]')).toBeNull();
     });
 
+    it('excludes batch (coderbot) sessions from the interactive resume list', () => {
+      service.getSessions.mockReturnValue([
+        { uid: 'interactive', kind: 'interactive', pipeline_id: 'p1', status: 'paused' },
+        { uid: 'batch', kind: 'coderbot', pipeline_id: 'p1', status: 'completed' },
+      ]);
+
+      makeController().refresh();
+
+      expect(listHost().querySelector('[data-session-uid="interactive"]')).not.toBeNull();
+      expect(listHost().querySelector('[data-session-uid="batch"]')).toBeNull();
+    });
+
     it('always renders an empty list for a non-remote pipeline', () => {
       ctx.state.pipeline = { id: 'p1', name: 'Local' } as any;
       service.getSessions.mockReturnValue([

@@ -86,7 +86,14 @@ export class PipelineScopedPiSession implements PiSessionService {
    */
   private computeMine(): boolean {
     const session = this.service.getCurrentSession?.();
-    return !!session && session.pipelineId === this.pipelineId && session.active;
+    return (
+      !!session &&
+      session.pipelineId === this.pipelineId &&
+      session.active &&
+      // Defence in depth: a batch (`coderbot`) session must never attach to
+      // the interactive PiView, even if it somehow became the current session.
+      session.kind !== 'coderbot'
+    );
   }
 
   private handleSessionChange(): void {
@@ -330,10 +337,16 @@ export class InteractiveCodingView {
     }
   }
 
-  /** Whether the singleton currently owns a session for this pipeline. */
+  /** Whether the singleton currently owns an interactive session for this pipeline. */
   private isMine(): boolean {
     const session = this.service.getCurrentSession?.();
-    return !!session && session.pipelineId === this.pipelineId;
+    return (
+      !!session &&
+      session.pipelineId === this.pipelineId &&
+      // A batch (`coderbot`) session is never an interactive session, so the
+      // composer and Pause controls stay disabled for it.
+      session.kind !== 'coderbot'
+    );
   }
 
   private updateComposerState() {

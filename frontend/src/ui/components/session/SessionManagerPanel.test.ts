@@ -153,6 +153,45 @@ describe('SessionManagerPanel', () => {
     expect(body.textContent).not.toContain('Batch one');
   });
 
+  it('renders batch (coderbot) sessions read-only (no switch/pause action)', () => {
+    const { context } = makeContext([
+      makeSession('u2', { kind: 'coderbot', status: 'completed', label: 'Batch one' }),
+    ]);
+    const panel = new SessionManagerPanel(context as any);
+    panel.open();
+
+    const showBatch = panel['container'].querySelector(
+      '#session-manager-show-batch'
+    ) as HTMLInputElement;
+    showBatch.checked = true;
+    showBatch.dispatchEvent(new Event('change'));
+
+    const body = panel['container'].querySelector('#session-manager-body') as HTMLElement;
+    const row = body.querySelector('[data-session-uid="u2"]') as HTMLElement;
+    expect(row).not.toBeNull();
+    expect(row.querySelector('[data-session-action="switch"]')).toBeNull();
+    expect(row.querySelector('[data-session-action="pause"]')).toBeNull();
+    // The read-only affordances remain available.
+    expect(row.querySelector('[data-session-action="discard"]')).not.toBeNull();
+    expect(row.querySelector('[data-session-action="open"]')).not.toBeNull();
+  });
+
+  it('does not switch to a batch (coderbot) session through a stray row action', async () => {
+    const { context, service } = makeContext([
+      makeSession('u2', { kind: 'coderbot', status: 'completed', label: 'Batch one' }),
+    ]);
+    const panel = new SessionManagerPanel(context as any);
+    panel.open();
+
+    // Simulate a stale/keyboard-triggered switch action on the read-only row.
+    const body = panel['container'].querySelector('#session-manager-body') as HTMLElement;
+    body.innerHTML = '<button data-session-action="switch" data-session-uid="u2">go</button>';
+    (body.querySelector('button') as HTMLElement).click();
+    await Promise.resolve();
+
+    expect(service.switchSession).not.toHaveBeenCalled();
+  });
+
   it('highlights the selected filter chip', () => {
     const { context } = makeContext([
       makeSession('u1', { status: 'paused' }),

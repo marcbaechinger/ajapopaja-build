@@ -65,6 +65,14 @@ describe('SessionListItemView', () => {
     }
   });
 
+  it('does not offer Switch/Pause for read-only batch (coderbot) sessions', () => {
+    for (const status of ['paused', 'completed', 'failed', 'running', 'starting'] as PiSessionSummary['status'][]) {
+      const el = mount(SessionListItemView.render(session({ kind: 'coderbot', status })));
+      expect(el.querySelector('[data-session-action="switch"]')).toBeNull();
+      expect(el.querySelector('[data-session-action="pause"]')).toBeNull();
+    }
+  });
+
   it('shows a Pause action instead of Switch for the active session', () => {
     const el = mount(SessionListItemView.render(session({ status: 'running' }), { isActive: true }));
     expect(el.querySelector('[data-session-action="pause"]')).not.toBeNull();

@@ -118,7 +118,15 @@ function makeService() {
   const listeners = new Set<() => void>();
   const stateListeners = new Set<() => void>();
   return {
-    getCurrentSession: vi.fn(() => ({ pipelineId: 'p1', uid: 'u1', active: true, busy: false })),
+    getCurrentSession: vi.fn(
+      (): {
+        pipelineId: string;
+        uid: string;
+        active: boolean;
+        busy: boolean;
+        kind?: string | null;
+      } => ({ pipelineId: 'p1', uid: 'u1', active: true, busy: false })
+    ),
     isBusy: vi.fn(() => false),
     isActive: vi.fn(() => true),
     sendMessage: vi.fn().mockResolvedValue(undefined),
@@ -278,6 +286,26 @@ describe('InteractiveCodingView', () => {
     expect(scoped.isActive()).toBe(true);
     expect((root.querySelector('#interactive-status') as HTMLElement).textContent).toBe(
       'Session active'
+    );
+  });
+
+  it('does not attach a batch (coderbot) session to the embedded log', () => {
+    service.getCurrentSession.mockReturnValue({
+      pipelineId: 'p1',
+      uid: 'batch-1',
+      active: true,
+      busy: false,
+      kind: 'coderbot',
+    });
+    service.getHistory.mockReturnValue([{ id: 'b1', kind: 'text', text: 'batch output' }]);
+    view.render();
+
+    const scoped = piViewInstances[0].service;
+    expect(scoped.getHistory()).toEqual([]);
+    expect(scoped.isActive()).toBe(false);
+    expect(promptViewInstances[0].disabled).toBe(true);
+    expect(promptViewInstances[0].placeholder).toBe(
+      'Start an interactive session to chat with the coding agent.'
     );
   });
 

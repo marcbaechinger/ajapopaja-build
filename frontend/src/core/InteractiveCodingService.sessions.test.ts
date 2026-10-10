@@ -155,6 +155,32 @@ describe('InteractiveCodingService session cache', () => {
     expect(listener).not.toHaveBeenCalled();
   });
 
+  it('switchSession ignores a batch (coderbot) session', async () => {
+    client.listSessions.mockResolvedValue([
+      summary('batch-1', { kind: 'coderbot', status: 'completed' }),
+    ]);
+    await service.refreshSessions();
+
+    await service.switchSession('batch-1');
+
+    expect(client.resumeSession).not.toHaveBeenCalled();
+    expect(service.getCurrentSession().uid).toBeNull();
+    expect(service.getCurrentSession().active).toBe(false);
+  });
+
+  it('resumeSession rejects a batch (coderbot) session', async () => {
+    client.listSessions.mockResolvedValue([
+      summary('batch-1', { kind: 'coderbot', status: 'completed' }),
+    ]);
+    await service.refreshSessions();
+
+    await expect(service.resumeSession('batch-1')).rejects.toThrow(
+      /batch coderbot sessions/i
+    );
+    expect(client.resumeSession).not.toHaveBeenCalled();
+    expect(service.getCurrentSession().uid).toBeNull();
+  });
+
   it('pauseSession marks the active session paused in the cache', async () => {
     ws.dispatch('INTERACTIVE_STARTED', {
       pipeline_id: 'p1',

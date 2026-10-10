@@ -154,6 +154,11 @@ export class SessionListItemView {
     const turns = session.resume_count ?? 0;
     const turnLabel = turns === 1 ? '1 turn' : `${turns} turns`;
     const kind = session.kind ? escapeHtml(session.kind) : 'interactive';
+    // Batch (`coderbot`) sessions are managed by the batch CoderBot flow. The
+    // interactive session manager only surfaces them read-only, so they never
+    // offer the Switch/Pause actions that would attach them to the interactive
+    // PiView.
+    const isBatch = session.kind === 'coderbot' || session.bot_type === 'coderbot';
     const model = session.model ? escapeHtml(session.model) : '';
 
     const error = session.last_error
@@ -184,7 +189,10 @@ export class SessionListItemView {
       : '';
 
     let primaryAction = '';
-    if (session.status === 'starting') {
+    if (isBatch) {
+      // Read-only: no Switch / Pause / Cancel for batch sessions.
+      primaryAction = '';
+    } else if (session.status === 'starting') {
       primaryAction = `<button type="button" data-session-action="pause" data-session-uid="${escapeHtml(uid)}"
         class="text-[11px] px-3 py-1 rounded bg-amber-600 text-white hover:bg-amber-700 transition-colors cursor-pointer font-medium">Cancel</button>`;
     } else if (isActive && isRunning) {

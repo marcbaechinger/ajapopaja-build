@@ -67,7 +67,7 @@ export class PipelineSessionListController {
     return this.deps.host.querySelector('#pipeline-session-list') as HTMLElement | null;
   }
 
-  /** Resumable (paused/completed/failed) sessions belonging to this pipeline. */
+  /** Resumable (paused/completed/failed) interactive sessions for this pipeline. */
   private resumableSessions(): PiSessionSummary[] {
     const service = this.deps.ctx.context.interactiveCodingService;
     if (!service?.getSessions) return [];
@@ -77,6 +77,10 @@ export class PipelineSessionListController {
         .filter(
           (s) =>
             s.pipeline_id === this.deps.ctx.pipelineId &&
+            // Batch (`coderbot`) sessions are managed by the batch CoderBot
+            // flow and must never be attached to the interactive PiView.
+            s.kind !== 'coderbot' &&
+            s.bot_type !== 'coderbot' &&
             (s.status === 'paused' || s.status === 'completed' || s.status === 'failed')
         );
     } catch {

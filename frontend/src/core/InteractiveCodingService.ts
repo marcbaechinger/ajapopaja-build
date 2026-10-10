@@ -31,6 +31,12 @@ export interface InteractiveSessionInfo {
   uid: string | null;
   active: boolean;
   busy: boolean;
+  /**
+   * Durable session kind. Always `interactive` for a session the interactive
+   * service legitimately owns; consumers use it to reject `coderbot` (batch)
+   * sessions that must never attach to the interactive PiView.
+   */
+  kind?: string | null;
 }
 
 type SessionStateListener = (active: boolean) => void;
@@ -347,8 +353,40 @@ export class InteractiveCodingService implements PiSessionService {
     this.notifySessionsChange();
   }
 
+  /**
+   * Whether `uid` identifies a batch (`coderbot`) session. Batch sessions are
+   * managed by the batch CoderBot flow and must never be attached to the
+   * interactive PiView. The kind is resolved from the durable-session cache,
+   * falling back to a best-effort detail fetch when the record is not cached.
+   */
+  private async isBatchSession(uid: string): Promise<boolean> {
+    let record = this.sessions.get(uid);
+    if (!record) {
+      const client = this.client as any;
+      if (typeof client.getSessionDetail === 'function') {
+        try {
+          const detail = await client.getSessionDetail(uid);
+          if (detail) {
+            this.upsertSession(detail, false);
+            record = detail;
+          }
+        } catch {
+          /* Unknown record: preserve the previous behaviour and proceed. */
+        }
+      }
+    }
+    return record?.kind === 'coderbot' || record?.bot_type === 'coderbot';
+  }
+
   /** Resume a previously paused/completed session and replay its event log. */
   public async resumeSession(uid: string): Promise<void> {
+    // Guard against attaching a batch CoderBot session to the interactive
+    // PiView: resuming a batch session belongs to the CoderBot (batch) flow.
+    if (await this.isBatchSession(uid)) {
+      throw new Error(
+        'Batch CoderBot sessions cannot be resumed as interactive sessions.'
+      );
+    }
     const client = this.client as any;
     // Guard the replay race: a (possibly late) INTERACTIVE_STARTED for this uid
     // must not wipe the history we are about to replay.
@@ -584,6 +622,9 @@ export class InteractiveCodingService implements PiSessionService {
    */
   public async switchSession(uid: string): Promise<void> {
     if (uid === this.sessionUid && this.isSessionActive) return;
+    // Batch sessions are read-only from the interactive session manager: never
+    // switch to (and thereby attach) a CoderBot batch session.
+    if (await this.isBatchSession(uid)) return;
 
     const previous = this.sessionUid;
     this.switchingUid = uid;
@@ -664,11 +705,13 @@ export class InteractiveCodingService implements PiSessionService {
   // ---------------------------------------------------------------------------
 
   public getCurrentSession(): InteractiveSessionInfo {
+    const record = this.sessionUid ? this.sessions.get(this.sessionUid) : undefined;
     return {
       pipelineId: this.currentPipelineId,
       uid: this.sessionUid,
       active: this.isSessionActive,
       busy: this.busy,
+      kind: record?.kind ?? (this.sessionUid ? 'interactive' : null),
     };
   }
 
