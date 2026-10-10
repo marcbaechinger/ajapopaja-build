@@ -24,6 +24,12 @@ from core.models.models import (
     _normalize_model_override,
 )
 
+#: Sentinel marking a value that was not supplied in a partial update. Used for
+#: ``suggested_model`` so an explicit ``None`` clears the pin while an omitted
+#: field leaves the stored value untouched (mirrors
+#: ``core.queries.pipeline._UNSET``).
+_UNSET: Any = object()
+
 # Allowed state transitions for a Task. Used by transition_task() to validate
 # that a status change is legal before it is applied and recorded in history.
 ALLOWED_TRANSITIONS: Dict[TaskStatus, set] = {
@@ -277,7 +283,7 @@ async def update_task_details(
     design_doc: Optional[str] = None,
     spec: Optional[str] = None,
     want_design_doc: Optional[bool] = None,
-    suggested_model: Optional[str] = None,
+    suggested_model: Any = _UNSET,
     actor: str = "mcp",
 ) -> Task:
     task = await get_task_by_id(task_id)
@@ -302,7 +308,9 @@ async def update_task_details(
         task.spec = spec
     if want_design_doc is not None:
         task.want_design_doc = want_design_doc
-    if suggested_model is not None:
+    # Use the sentinel so an explicit ``None`` clears the pin while an omitted
+    # field leaves the stored value untouched.
+    if suggested_model is not _UNSET:
         task.suggested_model = _normalize_model_override(suggested_model)
 
     if design_doc is not None:

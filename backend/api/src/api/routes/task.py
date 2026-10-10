@@ -36,6 +36,24 @@ class SearchTasksResponse(BaseModel):
     total_count: int
 
 
+class TaskUpdateRequest(BaseModel):
+    """PATCH body for a task, including the optional ``suggested_model`` pin.
+
+    A Pydantic request model (rather than individual ``Body`` params) is used so
+    an explicitly ``null`` ``suggested_model`` can be distinguished from an
+    omitted one and therefore clear the stored pin.
+    """
+
+    version: int
+    title: Optional[str] = None
+    description: Optional[str] = None
+    order: Optional[int] = None
+    design_doc: Optional[str] = None
+    spec: Optional[str] = None
+    want_design_doc: Optional[bool] = None
+    suggested_model: Optional[str] = None
+
+
 @task_router.get("/{task_id}/history", response_model=List[DesignDocHistory])
 async def get_task_design_doc_history(
     task_id: str, current_user: User = Depends(get_current_user)
@@ -141,26 +159,18 @@ async def reject_design(
 @task_router.patch("/{task_id}", response_model=Task)
 async def update_task_details(
     task_id: str,
-    version: int = Body(..., embed=True),
-    title: Optional[str] = Body(None, embed=True),
-    description: Optional[str] = Body(None, embed=True),
-    order: Optional[int] = Body(None, embed=True),
-    design_doc: Optional[str] = Body(None, embed=True),
-    spec: Optional[str] = Body(None, embed=True),
-    want_design_doc: Optional[bool] = Body(None, embed=True),
-    suggested_model: Optional[str] = Body(None, embed=True),
+    request: TaskUpdateRequest,
     current_user: User = Depends(get_current_user),
 ):
+    # Only forward fields the client actually sent so a partial PATCH does not
+    # clear unrelated values (while an explicit ``null`` still clears the
+    # suggested-model pin).
+    provided = request.model_dump(exclude_unset=True)
+    version = provided.pop("version")
     updated_task = await task_queries.update_task_details(
         task_id,
         version,
-        title,
-        description,
-        order,
-        design_doc,
-        spec=spec,
-        want_design_doc=want_design_doc,
-        suggested_model=suggested_model,
+        **provided,
         actor="user",
     )
     await manager.broadcast(

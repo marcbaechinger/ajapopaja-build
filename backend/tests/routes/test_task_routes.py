@@ -64,3 +64,57 @@ async def test_get_task_by_id(async_client, init_mock_db):
             assert response.json()["title"] == "Fix Bug"
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_patch_task_clears_suggested_model_with_explicit_null(
+    async_client, init_mock_db
+):
+    from api.auth import get_current_user
+    from api.main import app
+
+    app.dependency_overrides[get_current_user] = lambda: AsyncMock()
+    try:
+        with patch(
+            "api.routes.task.task_queries.update_task_details", new_callable=AsyncMock
+        ) as mock_update:
+            task = Task(title="Fix Bug", pipeline_id="p1", status=TaskStatus.CREATED)
+            mock_update.return_value = task
+
+            response = await async_client.patch(
+                "/api/tasks/t1", json={"version": 3, "suggested_model": None}
+            )
+
+            assert response.status_code == status.HTTP_200_OK
+            # An explicit JSON null must reach the query so it can clear the pin.
+            mock_update.assert_awaited_once_with(
+                "t1", 3, suggested_model=None, actor="user"
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_patch_task_omits_suggested_model_when_not_provided(
+    async_client, init_mock_db
+):
+    from api.auth import get_current_user
+    from api.main import app
+
+    app.dependency_overrides[get_current_user] = lambda: AsyncMock()
+    try:
+        with patch(
+            "api.routes.task.task_queries.update_task_details", new_callable=AsyncMock
+        ) as mock_update:
+            task = Task(title="Fix Bug", pipeline_id="p1", status=TaskStatus.CREATED)
+            mock_update.return_value = task
+
+            response = await async_client.patch(
+                "/api/tasks/t1", json={"version": 3, "order": 5}
+            )
+
+            assert response.status_code == status.HTTP_200_OK
+            # An omitted field must not be forwarded, so the stored pin survives.
+            mock_update.assert_awaited_once_with("t1", 3, order=5, actor="user")
+    finally:
+        app.dependency_overrides.clear()
