@@ -686,6 +686,25 @@ export class InteractiveCodingService implements PiSessionService {
     this.notifySessionsChange();
   }
 
+  /**
+   * Change the model persisted for a session and update the local cache.
+   *
+   * The new model is used the next time the session is resumed. Passing ``null``
+   * (or an empty string) clears the override so the deployment default applies.
+   */
+  public async updateSessionModel(
+    uid: string,
+    model: string | null
+  ): Promise<void> {
+    const client = this.client as any;
+    let updated: PiSessionSummary | null = null;
+    if (typeof client.updateSessionModel === 'function') {
+      updated = await client.updateSessionModel(uid, model);
+    }
+    this.upsertSession((updated ?? { uid, model }) as PiSessionSummary);
+    this.notifySessionsChange();
+  }
+
   // -----------------------------------------------------------------------
   // Cache helpers
   // -----------------------------------------------------------------------

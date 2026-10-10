@@ -398,3 +398,74 @@ async def test_send_session_message_targets_manager(async_client, init_mock_db):
             mock_send.assert_awaited_once_with("u1", "hi")
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_patch_session_updates_model(async_client, init_mock_db):
+    """PATCHing a paused session's model persists it and broadcasts the update."""
+    from core.models.models import PiSession, PiSessionKind, PiSessionStatus
+
+    _authenticate()
+    try:
+        record = PiSession(
+            uid="u-model",
+            kind=PiSessionKind.INTERACTIVE,
+            status=PiSessionStatus.PAUSED,
+            pipeline_id="p1",
+            model="old-model:cloud",
+        )
+        await record.insert()
+
+        with patch(
+            "api.coderbot.router.coderbot_manager.get_session",
+            new_callable=AsyncMock,
+            return_value=record,
+        ), patch(
+            "api.coderbot.router.ws_manager.broadcast", new_callable=AsyncMock
+        ) as mock_broadcast:
+            response = await async_client.patch(
+                "/api/coderbot/sessions/u-model",
+                json={"model": "new-model:cloud"},
+            )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["model"] == "new-model:cloud"
+        saved = await PiSession.find_one(PiSession.uid == "u-model")
+        assert saved.model == "new-model:cloud"
+        mock_broadcast.assert_awaited_once()
+        assert mock_broadcast.call_args.args[0].type == "SESSION_UPDATED"
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_patch_session_clears_model_with_blank(async_client, init_mock_db):
+    """A blank model clears the override so the session falls back to default."""
+    from core.models.models import PiSession, PiSessionKind, PiSessionStatus
+
+    _authenticate()
+    try:
+        record = PiSession(
+            uid="u-model",
+            kind=PiSessionKind.INTERACTIVE,
+            status=PiSessionStatus.PAUSED,
+            pipeline_id="p1",
+            model="old-model:cloud",
+        )
+        await record.insert()
+
+        with patch(
+            "api.coderbot.router.coderbot_manager.get_session",
+            new_callable=AsyncMock,
+            return_value=record,
+        ), patch("api.coderbot.router.ws_manager.broadcast", new_callable=AsyncMock):
+            response = await async_client.patch(
+                "/api/coderbot/sessions/u-model", json={"model": "   "}
+            )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["model"] is None
+        saved = await PiSession.find_one(PiSession.uid == "u-model")
+        assert saved.model is None
+    finally:
+        app.dependency_overrides.clear()

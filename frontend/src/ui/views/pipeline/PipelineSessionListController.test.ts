@@ -36,6 +36,7 @@ function makeInteractiveCodingService() {
     pauseSession: vi.fn().mockResolvedValue(undefined),
     switchSession: vi.fn().mockResolvedValue(undefined),
     discardSession: vi.fn().mockResolvedValue(undefined),
+    updateSessionModel: vi.fn().mockResolvedValue(undefined),
     isBusy: vi.fn(() => false),
   };
 }
@@ -320,6 +321,55 @@ describe('PipelineSessionListController', () => {
 
       expect(service.switchSession).not.toHaveBeenCalled();
       expect(service.pauseSession).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('model selection', () => {
+    const select = (uid = 's1', value = 'model-a') =>
+      `<select data-session-action="change-model" data-session-uid="${uid}">
+         <option value="">Use default</option>
+         <option value="${value}">${value}</option>
+       </select>`;
+
+    it('passes the loaded model catalog to the inline renderer', () => {
+      service.getSessions.mockReturnValue([
+        { uid: 's1', kind: 'interactive', pipeline_id: 'p1', status: 'paused' },
+      ]);
+      const renderSpy = vi.spyOn(SessionListItemView, 'render');
+
+      const controller = makeController();
+      controller.setModelOptions(['model-a', 'model-b']);
+
+      const pausedCall = renderSpy.mock.calls.find(
+        ([s]) => (s as PiSessionSummary).uid === 's1'
+      );
+      expect(pausedCall?.[1]).toMatchObject({
+        modelOptions: ['model-a', 'model-b'],
+      });
+    });
+
+    it('changing the model persists it for the session', async () => {
+      makeController();
+      listHost().innerHTML = select('s1', 'model-a');
+      const el = listHost().querySelector('select') as HTMLSelectElement;
+      el.value = 'model-a';
+
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      await flush();
+
+      expect(service.updateSessionModel).toHaveBeenCalledWith('s1', 'model-a');
+    });
+
+    it('clears the model when the default option is selected', async () => {
+      makeController();
+      listHost().innerHTML = select('s1', 'model-a');
+      const el = listHost().querySelector('select') as HTMLSelectElement;
+      el.value = '';
+
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      await flush();
+
+      expect(service.updateSessionModel).toHaveBeenCalledWith('s1', null);
     });
   });
 

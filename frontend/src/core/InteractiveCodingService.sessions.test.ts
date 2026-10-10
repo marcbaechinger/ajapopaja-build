@@ -65,6 +65,11 @@ function make() {
     updateSessionLabel: vi
       .fn()
       .mockImplementation((uid: string, label: string) => Promise.resolve(summary(uid, { label }))),
+    updateSessionModel: vi
+      .fn()
+      .mockImplementation((uid: string, model: string | null) =>
+        Promise.resolve(summary(uid, { model }))
+      ),
   };
   const service = new InteractiveCodingService(
     ws as unknown as WebSocketClient,
@@ -206,6 +211,14 @@ describe('InteractiveCodingService session cache', () => {
     await service.renameSession('u1', 'new');
     expect(client.updateSessionLabel).toHaveBeenCalledWith('u1', 'new');
     expect(service.getSession('u1')?.label).toBe('new');
+  });
+
+  it('updateSessionModel persists the model and updates the cache', async () => {
+    client.listSessions.mockResolvedValue([summary('u1', { model: 'old-model' })]);
+    await service.refreshSessions({ kind: 'interactive' });
+    await service.updateSessionModel('u1', 'new-model');
+    expect(client.updateSessionModel).toHaveBeenCalledWith('u1', 'new-model');
+    expect(service.getSession('u1')?.model).toBe('new-model');
   });
 
   it('onSessionsChange fires on start and stop', () => {

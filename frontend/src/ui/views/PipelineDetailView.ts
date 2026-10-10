@@ -735,6 +735,16 @@ export class PipelineDetailView extends View {
       },
       onSessionsChanged: () => this.syncInteractiveSession(),
     });
+    // Load the pi coderbot model catalog so a paused session's inline row can
+    // offer every model with which it may be resumed. Failures degrade to the
+    // session's current model only (see SessionListItemView).
+    void Promise.resolve(
+      this.context.pipelineClient?.getModelOptions?.(this.pipelineId)
+    )
+      .then((options) => this.sessionList?.setModelOptions(options?.coderbot ?? []))
+      .catch((error) =>
+        console.error('Failed to load session model options:', error)
+      );
     void this.context.interactiveCodingService?.refreshSessions?.({ kind: 'interactive' });
   }
 

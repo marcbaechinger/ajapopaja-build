@@ -41,11 +41,26 @@ export interface PipelineSessionListControllerDeps {
 export class PipelineSessionListController {
   private readonly deps: PipelineSessionListControllerDeps;
   private clickHandler: ((e: Event) => void) | null = null;
+  private changeHandler: ((e: Event) => void) | null = null;
+  /**
+   * The pi coderbot model catalog offered for paused sessions. Kept as
+   * controller state (rather than fetched inline) so the pure renderer stays
+   * synchronous and testable; `PipelineDetailView` loads it once on mount.
+   */
+  private modelOptions: string[] = [];
 
   constructor(deps: PipelineSessionListControllerDeps) {
     this.deps = deps;
     this.clickHandler = (e) => this.handleClick(e);
+    this.changeHandler = (e) => this.handleChange(e);
     this.listHost()?.addEventListener('click', this.clickHandler);
+    this.listHost()?.addEventListener('change', this.changeHandler);
+  }
+
+  /** Sets the pi coderbot model catalog used by the paused-session selector. */
+  setModelOptions(options: string[] | null | undefined): void {
+    this.modelOptions = Array.isArray(options) ? [...options] : [];
+    this.refresh();
   }
 
   /** Repaints the list from the current pipeline and session cache. */
@@ -55,11 +70,15 @@ export class PipelineSessionListController {
     this.render(isRemote ? this.resumableSessions() : []);
   }
 
-  /** Removes the row click listener. */
+  /** Removes the row click/change listeners. */
   teardown(): void {
     if (this.clickHandler) {
       this.listHost()?.removeEventListener('click', this.clickHandler);
       this.clickHandler = null;
+    }
+    if (this.changeHandler) {
+      this.listHost()?.removeEventListener('change', this.changeHandler);
+      this.changeHandler = null;
     }
   }
 
@@ -105,6 +124,7 @@ export class PipelineSessionListController {
           showDiscard: true,
           showOpenPipeline: false,
           showGenerateTitle: false,
+          modelOptions: this.modelOptions,
         })
       )
       .join('');
@@ -137,6 +157,25 @@ export class PipelineSessionListController {
           if (confirmed) service.discardSession?.(uid).then(() => this.deps.onSessionsChanged());
         });
     }
+  }
+
+  /**
+   * Handle a model-select change. The selected model is persisted for the
+   * paused session (empty value clears the override) so the next resume uses
+   * it.
+   */
+  private handleChange(event: Event): void {
+    const target = (event.target as HTMLElement)?.closest?.(
+      '[data-session-action="change-model"]'
+    ) as HTMLSelectElement | null;
+    if (!target) return;
+    if (!this.listHost()?.contains(target)) return;
+    const uid = target.getAttribute('data-session-uid') ?? '';
+    if (!uid) return;
+    const service = this.deps.ctx.context.interactiveCodingService;
+    if (!service?.updateSessionModel) return;
+    const value = target.value?.length ? target.value : null;
+    void service.updateSessionModel(uid, value);
   }
 
   /** Switch to a session, confirming when the current agent is mid-turn. */

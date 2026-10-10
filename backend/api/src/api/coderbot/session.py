@@ -206,6 +206,11 @@ class CoderBotSession(PiRpcProcess):
             getattr(session_record, "uid", None) if session_record else None
         )
         self.session_record = session_record
+        # When a durable record is supplied, its stored model is authoritative:
+        # this keeps a resumed session on the model chosen while it was paused
+        # even when the caller does not pass one explicitly.
+        if model is None and session_record is not None:
+            model = getattr(session_record, "model", None)
         if self.session_uid and config.PI_SESSION_PERSISTENCE_ENABLED:
             self.session_dir: Optional[str] = str(pi_sessions_dir(self.session_uid))
             ensure_session_dir(self.session_uid)
@@ -1310,6 +1315,11 @@ class InteractivePiSession(PiRpcProcess):
             getattr(session_record, "uid", None) if session_record else None
         )
         self.session_record = session_record
+        # Mirror ``CoderBotSession``: a supplied durable record's stored model is
+        # the authoritative model for a resume, so honour it when the caller does
+        # not pass an explicit ``model``.
+        if model is None and session_record is not None:
+            model = getattr(session_record, "model", None)
         if self.session_uid and config.PI_SESSION_PERSISTENCE_ENABLED:
             self.session_dir: Optional[str] = str(pi_sessions_dir(self.session_uid))
             ensure_session_dir(self.session_uid)

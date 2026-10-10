@@ -151,4 +151,53 @@ describe('SessionListItemView', () => {
     expect(el.querySelector('[data-session-action="generate-title"]')).toBeNull();
     expect(el.querySelector('[data-oneprompt-target]')).toBeNull();
   });
+
+  it('offers a model selector for paused sessions using the supplied catalog', () => {
+    const el = mount(
+      SessionListItemView.render(session({ status: 'paused', model: 'old-model' }), {
+        modelOptions: ['model-a', 'model-b'],
+      })
+    );
+    const select = el.querySelector(
+      '[data-session-model]'
+    ) as HTMLSelectElement | null;
+    expect(select).not.toBeNull();
+    expect(select?.getAttribute('data-session-action')).toBe('change-model');
+    expect(select?.getAttribute('data-session-uid')).toBe('u1');
+    const values = Array.from(select?.options ?? []).map((o) => o.value);
+    expect(values).toContain('');
+    expect(values).toContain('model-a');
+    expect(values).toContain('model-b');
+    // The current model is preserved even though it is not in the catalog.
+    expect(values).toContain('old-model');
+    expect(select?.value).toBe('old-model');
+  });
+
+  it('does not offer a model selector for non-paused sessions', () => {
+    for (const status of ['running', 'completed', 'failed', 'discarded'] as PiSessionSummary['status'][]) {
+      const el = mount(
+        SessionListItemView.render(session({ status }), { modelOptions: ['m1'] })
+      );
+      expect(el.querySelector('[data-session-model]')).toBeNull();
+    }
+  });
+
+  it('does not offer a model selector for batch (coderbot) sessions', () => {
+    const el = mount(
+      SessionListItemView.render(session({ kind: 'coderbot', status: 'paused' }), {
+        modelOptions: ['m1'],
+      })
+    );
+    expect(el.querySelector('[data-session-model]')).toBeNull();
+  });
+
+  it('honours showModelSelect: false', () => {
+    const el = mount(
+      SessionListItemView.render(session({ status: 'paused' }), {
+        modelOptions: ['m1'],
+        showModelSelect: false,
+      })
+    );
+    expect(el.querySelector('[data-session-model]')).toBeNull();
+  });
 });

@@ -188,6 +188,23 @@ export class CoderBotClient extends BaseClient {
     return await res.json();
   }
 
+  /**
+   * Change the model persisted for a durable session. The chosen model is used
+   * the next time the session is resumed. An empty value clears the override and
+   * falls back to the deployment default.
+   */
+  async updateSessionModel(
+    uid: string,
+    model: string | null
+  ): Promise<PiSessionSummary> {
+    const res = await this.fetch(`/api/coderbot/sessions/${uid}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: model ?? '' }),
+    });
+    return await res.json();
+  }
+
   async sendSessionMessage(uid: string, message: string): Promise<void> {
     await this.fetch(`/api/coderbot/sessions/${uid}/message`, {
       method: 'POST',

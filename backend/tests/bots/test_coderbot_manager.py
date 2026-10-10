@@ -850,6 +850,37 @@ async def test_registry_create_pause_resume_list_discard(init_mock_db):
 
 
 @pytest.mark.asyncio
+async def test_resume_uses_model_updated_while_paused(init_mock_db):
+    """Changing the stored model of a paused session is honoured on resume."""
+    manager = CoderBotManager()
+    record = PiSession(
+        uid="u-model",
+        kind=PiSessionKind.INTERACTIVE,
+        status=PiSessionStatus.PAUSED,
+        pipeline_id="p1",
+        cwd="/tmp/repo",
+        model="old-model:cloud",
+    )
+    await record.insert()
+
+    # Simulate the PATCH /sessions/{uid} endpoint persisting a new model.
+    record.model = "new-model:cloud"
+    await record.save()
+
+    session = _interactive_session_mock(_started_broadcast=False)
+    session.model = "new-model:cloud"
+    with (
+        patch("api.coderbot.manager.InteractivePiSession", return_value=session) as mock_cls,
+        patch.object(manager, "_watch_interactive_session", new_callable=AsyncMock),
+        patch("api.coderbot.manager.ws_manager.broadcast", new_callable=AsyncMock),
+    ):
+        resumed = await manager.resume_session(record.uid)
+
+    assert resumed.model == "new-model:cloud"
+    assert mock_cls.call_args.kwargs["model"] == "new-model:cloud"
+
+
+@pytest.mark.asyncio
 async def test_pause_current_when_resuming(init_mock_db):
     manager = CoderBotManager()
     session = _interactive_session_mock(_started_broadcast=False)

@@ -572,6 +572,10 @@ export class SessionManagerPanel {
               showDiscard: session.uid !== currentUid,
               showOpenPipeline: true,
               showGenerateTitle: true,
+              // The global drawer is pipeline-agnostic and does not load a
+              // per-pipeline model catalog; the inline per-pipeline list owns
+              // the paused-session model selector.
+              showModelSelect: false,
             })
           )
           .join('');

@@ -67,9 +67,15 @@ class SessionMessageRequest(BaseModel):
 
 
 class UpdateSessionRequest(BaseModel):
-    """Request body for updating the mutable fields of a session."""
+    """Request body for updating the mutable fields of a session.
+
+    Both fields are optional. An omitted field is left unchanged; an explicitly
+    provided empty ``model`` clears the stored override so the session falls
+    back to the deployment default on its next resume.
+    """
 
     label: Optional[str] = None
+    model: Optional[str] = None
 
 
 class ResumeSessionRequest(BaseModel):
@@ -186,10 +192,18 @@ async def get_session(uid: str):
 
 @router.patch("/sessions/{uid}")
 async def update_session(uid: str, request: UpdateSessionRequest):
-    """Update the mutable fields (currently the label) of a session."""
+    """Update the mutable fields (label, model) of a session.
+
+    Updating ``model`` changes the model recorded for the session; the next
+    ``resume`` of the session respawns Pi with that model. This lets a paused
+    session be resumed with a different model without discarding its history.
+    """
     record = await _get_session_or_404(uid)
     if request.label is not None:
         record.label = request.label
+    if request.model is not None:
+        # Normalize blank/whitespace values to ``None`` (use the default).
+        record.model = request.model.strip() or None
     record.updated_at = datetime.now(UTC)
     await record.save()
 

@@ -126,6 +126,19 @@ export interface SessionListItemOptions {
    * injectable so the rendered row is deterministically testable.
    */
   now?: number;
+  /**
+   * The pi coderbot model catalog used to populate the paused-session model
+   * selector. When omitted (or empty) the selector only offers “Use default”
+   * plus the session's current model, which keeps the row renderable before the
+   * catalog has loaded.
+   */
+  modelOptions?: string[];
+  /**
+   * Explicitly force the model selector on/off. When omitted it is shown for
+   * every non-batch paused session so the inline per-pipeline list (which does
+   * not set this flag) automatically gets it.
+   */
+  showModelSelect?: boolean;
 }
 
 /**
@@ -137,6 +150,8 @@ export interface SessionListItemOptions {
  *  - `data-session-action="switch"` → resume/switch to `data-session-uid`
  *  - `data-session-action="pause"`  → pause the active session
  *  - `data-session-action="discard"`→ discard `data-session-uid`
+ *  - `data-session-action="change-model"` → persist a new model for the paused
+ *    session (`data-session-uid`, select value)
  *  - `data-session-action="open"`   → navigate to the session's pipeline
  */
 export class SessionListItemView {
@@ -160,6 +175,16 @@ export class SessionListItemView {
     // PiView.
     const isBatch = session.kind === 'coderbot' || session.bot_type === 'coderbot';
     const model = session.model ? escapeHtml(session.model) : '';
+
+    // A paused session's model may be changed before it is resumed. The
+    // selector reuses the same coderbot model catalog the task model dialog
+    // exposes, so a session can be resumed with any model the pipeline allows.
+    const canChangeModel = !isBatch && session.status === 'paused';
+    const showModelSelect =
+      canChangeModel && (options.showModelSelect ?? true);
+    const modelSelect = showModelSelect
+      ? renderModelSelect(uid, session.model ?? null, options.modelOptions ?? [])
+      : '';
 
     const error = session.last_error
       ? `<div class="text-[11px] text-red-400 truncate" title="${escapeHtml(session.last_error)}">${escapeHtml(session.last_error)}</div>`
@@ -249,6 +274,7 @@ export class SessionListItemView {
         </div>
         ${error}
         ${links.length ? `<div class="flex flex-wrap gap-1">${links.join('')}</div>` : ''}
+        ${modelSelect}
         <div class="flex items-center gap-2 mt-0.5">
           ${primaryAction}
           ${openAction}
@@ -257,6 +283,37 @@ export class SessionListItemView {
       </div>
     `;
   }
+}
+
+/** Render the paused-session model `<select>` from the coderbot catalog. */
+function renderModelSelect(
+  uid: string,
+  currentModel: string | null,
+  modelOptions: string[]
+): string {
+  const current = currentModel ?? '';
+  // Preserve the session's current model even when it is missing from the
+  // fetched catalog (e.g. a custom model removed from models.json).
+  const values = [...modelOptions];
+  if (current && !values.includes(current)) values.unshift(current);
+  const options = values
+    .map(
+      (value) =>
+        `<option value="${escapeHtml(value)}"${value === current ? ' selected' : ''}>${escapeHtml(value)}</option>`
+    )
+    .join('');
+  return `
+    <label class="flex items-center gap-2 text-[10px] text-app-muted min-w-0">
+      <span class="uppercase font-bold tracking-widest shrink-0">Model</span>
+      <select data-session-model data-session-action="change-model" data-session-uid="${escapeHtml(uid)}"
+              class="session-model-select min-w-0 max-w-full bg-app-bg border border-app-border rounded px-1.5 py-1 text-[10px] text-app-text outline-none focus:ring-1 focus:ring-app-accent-2 cursor-pointer"
+              title="Change the model used when this session is resumed"
+              aria-label="Session model">
+        <option value=""${current ? '' : ' selected'}>Use default</option>
+        ${options}
+      </select>
+    </label>
+  `;
 }
 
 /** Minimal inline SVG set so the row renderer has no component dependency. */
