@@ -152,7 +152,7 @@ export class PipelineDetailLayout {
   static renderTabList(): string {
     return `<div class="mt-6 flex items-end gap-1 border-b border-app-border/40">
             <div id="content-tablist" role="tablist" aria-label="Pipeline content"
-              class="flex items-center gap-1 min-w-0 overflow-x-auto whitespace-nowrap">
+              class="flex items-center gap-1 min-w-0 overflow-x-auto overflow-y-hidden whitespace-nowrap">
             <button id="tab-task-editor" data-action-click="select_content_tab" data-content-tab="task-editor" type="button"
               role="tab" aria-selected="true" aria-controls="selected-task-view"
               class="px-3 py-2 text-xs font-bold uppercase tracking-widest border-b-2 -mb-px transition-colors cursor-pointer border-app-accent-1 text-app-accent-1">
