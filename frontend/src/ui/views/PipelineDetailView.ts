@@ -37,6 +37,7 @@ import { registerPullRequestActions } from './pipeline/actions/pullRequestAction
 import { registerBotActions, openCoderBotDialog } from './pipeline/actions/botActions.ts';
 import { registerMiscActions } from './pipeline/actions/miscActions.ts';
 import { registerTaskSpecActions } from './pipeline/actions/taskSpecActions.ts';
+import { registerTaskModelActions } from './pipeline/actions/taskModelActions.ts';
 import { registerTaskDesignDocActions } from './pipeline/actions/taskDesignDocActions.ts';
 import { registerTaskLifecycleActions } from './pipeline/actions/taskLifecycleActions.ts';
 import { PipelineGettingStartedDialog } from './GettingStartedGuide.ts';
@@ -338,6 +339,8 @@ export class PipelineDetailView extends View {
     });
 
     registerTaskDesignDocActions(this.ctx, {});
+
+    registerTaskModelActions(this.ctx);
 
     registerTaskLifecycleActions(this.ctx, {
       setContentTab: (tab, opts) => this.setContentTab(tab, opts),

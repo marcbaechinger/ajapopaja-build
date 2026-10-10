@@ -148,6 +148,7 @@ async def update_task_details(
     design_doc: Optional[str] = Body(None, embed=True),
     spec: Optional[str] = Body(None, embed=True),
     want_design_doc: Optional[bool] = Body(None, embed=True),
+    suggested_model: Optional[str] = Body(None, embed=True),
     current_user: User = Depends(get_current_user),
 ):
     updated_task = await task_queries.update_task_details(
@@ -159,6 +160,7 @@ async def update_task_details(
         design_doc,
         spec=spec,
         want_design_doc=want_design_doc,
+        suggested_model=suggested_model,
         actor="user",
     )
     await manager.broadcast(

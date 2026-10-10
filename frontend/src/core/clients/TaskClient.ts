@@ -109,7 +109,7 @@ export class TaskClient extends BaseClient {
     }
   }
 
-  async updateDetails(id: string, version: number, details: Partial<{title: string, description: string, order: number, design_doc: string, spec: string, want_design_doc: boolean}>): Promise<Task> {
+  async updateDetails(id: string, version: number, details: Partial<{title: string, description: string, order: number, design_doc: string, spec: string, want_design_doc: boolean, suggested_model: string | null}>): Promise<Task> {
     try {
       const response = await this.fetch(`${this.baseUrl}/tasks/${id}`, {
         method: 'PATCH',

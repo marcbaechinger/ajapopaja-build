@@ -94,6 +94,7 @@ export class Task {
   deleted: boolean = false;
   history: StateTransition[] = [];
   review_md?: string | null;
+  suggested_model?: string | null;
 
   constructor(json: any) {
     if (!json) return;
@@ -119,6 +120,7 @@ export class Task {
     if (json.scheduled_at !== undefined) this.scheduled_at = String(json.scheduled_at);
     if (json.deleted !== undefined) this.deleted = Boolean(json.deleted);
     if (json.review_md !== undefined) this.review_md = json.review_md;
+    if (json.suggested_model !== undefined) this.suggested_model = json.suggested_model;
     
     if (Array.isArray(json.history)) {
       this.history = json.history.map((t: any) => ({

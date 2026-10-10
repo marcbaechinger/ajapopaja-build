@@ -152,6 +152,12 @@ async def test_invalid_task_status():
         Task(title="Invalid", pipeline_id="123", status="invalid_status")
 
 
+def test_task_suggested_model_normalizes_blank_to_none():
+    assert Task(title="T", pipeline_id="123", suggested_model="gpt-oss:120").suggested_model == "gpt-oss:120"
+    assert Task(title="T", pipeline_id="123", suggested_model="   ").suggested_model is None
+    assert Task(title="T", pipeline_id="123").suggested_model is None
+
+
 def test_pipeline_workspace_abs_path_local():
     pipeline = Pipeline(name="Test", workspace_path="my-app")
     assert pipeline.workspace_abs_path == config.WORKSPACES_ROOT / "my-app"

@@ -94,6 +94,13 @@ export class SelectedTaskController {
         ctx.refresh.executionEngine();
         return;
       }
+
+      // A model-pinning change only affects the header's model badge. Patch the
+      // header in place so an open Specification/Design-Doc editor is preserved.
+      if (this.isSuggestedModelOnlyChange(prev, task)) {
+        this.updateHeaderOnly(task);
+        return;
+      }
     }
 
     ctx.refresh.backlog();
@@ -217,6 +224,22 @@ export class SelectedTaskController {
     };
     const onlyTitle = JSON.stringify(comparable(prev)) === JSON.stringify(comparable(next));
     return onlyTitle;
+  }
+
+  /**
+   * Returns whether an incoming task update carries only a ``suggested_model``
+   * change (i.e. every field other than suggested_model / version / updated_at
+   * is unchanged), so the header can be patched in place without re-rendering.
+   */
+  private isSuggestedModelOnlyChange(prev: Task, next: Task): boolean {
+    if ((prev.suggested_model ?? null) === (next.suggested_model ?? null)) {
+      return false;
+    }
+    const comparable = (t: Task) => {
+      const { suggested_model, version, updated_at, ...rest } = t as any;
+      return rest;
+    };
+    return JSON.stringify(comparable(prev)) === JSON.stringify(comparable(next));
   }
 
   /**

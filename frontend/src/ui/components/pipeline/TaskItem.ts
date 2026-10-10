@@ -270,6 +270,12 @@ export class TaskItem {
                 <button data-action-click="copy_task_id" class="p-1 hover:bg-app-surface text-app-muted hover:text-app-accent-2 rounded transition-all cursor-pointer group/copy" title="Copy Task ID">
                    ${Icon.render('copy', { size: 12, className: 'group-hover/copy:scale-110 transition-transform' })}
                 </button>
+                <button data-action-click="edit_suggested_model" data-task-id="${taskId}" data-version="${task.version}"
+                        class="flex items-center gap-1 text-[10px] text-app-muted uppercase font-bold tracking-widest bg-app-surface px-2 py-0.5 rounded border border-app-border hover:text-app-accent-2 hover:border-app-accent-2/50 transition-all cursor-pointer group/model"
+                        title="Change the model used for this task">
+                  <span class="truncate max-w-[180px]">Model: ${escapeHtml(task.suggested_model || 'unset')}</span>
+                  ${Icon.render('edit', { size: 10, className: 'flex-shrink-0 group-hover/model:scale-110 transition-transform' })}
+                </button>
                 ${canTriggerBots ? `
                   <button data-action-click="trigger_docbot" data-task-id="${taskId}" class="p-1 hover:bg-app-surface text-app-muted hover:text-green-600 rounded transition-all cursor-pointer group/docbot" title="Trigger DocBot (needs Ollama)">
                      ${Icon.render('documentation', { size: 12, className: 'group-hover/docbot:scale-110 transition-transform' })}

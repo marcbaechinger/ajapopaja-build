@@ -16,7 +16,13 @@ from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional
 
 from core.exceptions import EntityNotFoundError, VersionMismatchError
-from core.models.models import DesignDocHistory, StateTransition, Task, TaskStatus
+from core.models.models import (
+    DesignDocHistory,
+    StateTransition,
+    Task,
+    TaskStatus,
+    _normalize_model_override,
+)
 
 # Allowed state transitions for a Task. Used by transition_task() to validate
 # that a status change is legal before it is applied and recorded in history.
@@ -271,6 +277,7 @@ async def update_task_details(
     design_doc: Optional[str] = None,
     spec: Optional[str] = None,
     want_design_doc: Optional[bool] = None,
+    suggested_model: Optional[str] = None,
     actor: str = "mcp",
 ) -> Task:
     task = await get_task_by_id(task_id)
@@ -295,6 +302,8 @@ async def update_task_details(
         task.spec = spec
     if want_design_doc is not None:
         task.want_design_doc = want_design_doc
+    if suggested_model is not None:
+        task.suggested_model = _normalize_model_override(suggested_model)
 
     if design_doc is not None:
         # Save history if design_doc changes and old one exists

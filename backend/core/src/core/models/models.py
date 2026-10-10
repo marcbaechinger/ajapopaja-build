@@ -130,6 +130,17 @@ class Task(Document):
     # Original batch Pi session that implemented this task. Optional, so
     # existing documents remain valid without a migration.
     pi_session_uid: Optional[str] = None
+    # Pi-agent model id (from ``docker/pi-agent/models.json``) that a
+    # CoderBotSession started for this task should use instead of the
+    # configured pipeline/global model. Optional, so existing documents remain
+    # valid without a migration.
+    suggested_model: Optional[str] = None
+
+    @field_validator("suggested_model")
+    @classmethod
+    def validate_suggested_model(cls, v):
+        """Normalize blank/whitespace suggested models to ``None``."""
+        return _normalize_model_override(v)
 
     class Settings:
         name = "tasks"

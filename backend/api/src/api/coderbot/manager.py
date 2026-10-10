@@ -32,7 +32,7 @@ from core.models.models import (
 )
 from core.queries import pipeline as pipeline_queries
 from core.queries import task as task_queries
-from core.services.model_resolver import resolve_model
+from core.services.model_resolver import normalize_model, resolve_model
 from core.utils import git_utils
 
 from . import pi_session_store
@@ -182,14 +182,21 @@ class CoderBotManager:
         self._default_model = model
 
     async def _resolve_coderbot_model(
-        self, pipeline_id: Optional[str]
+        self, pipeline_id: Optional[str], task: Optional[Task] = None
     ) -> Optional[str]:
-        """Resolve the CoderBot model from the pipeline or the manager default.
+        """Resolve the CoderBot model for a batch session.
 
-        The pipeline's ``coderbot_model`` override wins; otherwise the
-        process-wide default (``set_default_model`` / ``config.CODERBOT_MODEL``)
-        is used. A missing pipeline degrades to the default.
+        A task's ``suggested_model`` pin always wins; otherwise the pipeline's
+        ``coderbot_model`` override is used, then the process-wide default
+        (``set_default_model`` / ``config.CODERBOT_MODEL``). A missing pipeline
+        degrades to the default.
         """
+        if task is not None:
+            suggested = getattr(task, "suggested_model", None)
+            if isinstance(suggested, str):
+                suggested = normalize_model(suggested)
+                if suggested:
+                    return suggested
         pipeline = None
         if pipeline_id:
             try:
@@ -245,7 +252,7 @@ class CoderBotManager:
         its human readable ``label`` so the session manager can show a
         meaningful name instead of ``(untitled)`` for every batch run.
         """
-        model = await self._resolve_coderbot_model(task.pipeline_id)
+        model = await self._resolve_coderbot_model(task.pipeline_id, task=task)
         record = PiSession(
             uid=str(uuid_module.uuid4()),
             kind=PiSessionKind.CODERBOT,
@@ -291,7 +298,7 @@ class CoderBotManager:
         label = _session_label(getattr(task, "title", None))
         if not label:
             label = _session_label(pr.subject)
-        model = await self._resolve_coderbot_model(pr.pipeline_id)
+        model = await self._resolve_coderbot_model(pr.pipeline_id, task=task)
         record = PiSession(
             uid=str(uuid_module.uuid4()),
             kind=PiSessionKind.CODERBOT,
