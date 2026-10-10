@@ -23,6 +23,82 @@
             "text"
           ],
           "reasoning": true
+        },
+        {
+          "contextWindow": 1048576,
+          "id": "deepseek-pro:cloud",
+          "input": [
+            "text"
+          ],
+          "reasoning": true
+        },
+        {
+          "contextWindow": 131072,
+          "id": "gpt-oss:120b-cloud",
+          "input": [
+            "text"
+          ],
+          "reasoning": true
+        },
+        {
+          "contextWindow": 262144,
+          "id": "qwen3-coder",
+          "input": [
+            "text"
+          ]
+        },
+        {
+          "_launch": true,
+          "contextWindow": 262144,
+          "id": "qwen3-coder:30b",
+          "input": [
+            "text"
+          ]
+        },
+        {
+          "_launch": true,
+          "contextWindow": 262144,
+          "id": "qwen3-coder-next",
+          "input": [
+            "text"
+          ]
+        },
+        {
+          "_launch": true,
+          "contextWindow": 131072,
+          "id": "gpt-oss:20b",
+          "input": [
+            "text"
+          ],
+          "reasoning": true
+        },
+        {
+          "_launch": true,
+          "contextWindow": 131072,
+          "id": "qwen3.8:27b",
+          "input": [
+            "text",
+            "image"
+          ],
+          "reasoning": true
+        },
+        {
+          "_launch": true,
+          "contextWindow": 131072,
+          "id": "gemma4:26b",
+          "input": [
+            "text",
+            "image"
+          ],
+          "reasoning": true
+        },
+        {
+          "_launch": true,
+          "contextWindow": 32768,
+          "id": "codestral:22b",
+          "input": [
+            "text"
+          ]
         }
       ]
     }
