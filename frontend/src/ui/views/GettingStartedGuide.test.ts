@@ -14,23 +14,40 @@
  * limitations under the License.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
+  renderGettingStartedGuide,
   renderPipelineGettingStartedGuide,
+  resetGettingStartedGuideCache,
   PipelineGettingStartedDialog,
 } from './GettingStartedGuide.ts';
+import {
+  installGettingStartedFetchMock,
+  flushPromises,
+} from './gettingStartedTestFixtures.ts';
 
 describe('renderPipelineGettingStartedGuide', () => {
-  it('starts with the jump-start project blueprints from the dashboard guide', () => {
-    const html = renderPipelineGettingStartedGuide();
+  let fetchMock: ReturnType<typeof installGettingStartedFetchMock>;
+
+  beforeEach(() => {
+    resetGettingStartedGuideCache();
+    fetchMock = installGettingStartedFetchMock();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('starts with the jump-start project blueprints from the dashboard guide', async () => {
+    const html = await renderPipelineGettingStartedGuide();
     expect(html).toContain('Jump-start a new project');
     expect(html).toContain('React single-page app');
     expect(html).toContain('React + Python API');
     expect(html).toContain('Python CLI with Rich UI');
   });
 
-  it('explains the SpecBot → ArchBot → CoderBot → ReviewBot workflow', () => {
-    const html = renderPipelineGettingStartedGuide();
+  it('explains the SpecBot → ArchBot → CoderBot → ReviewBot workflow', async () => {
+    const html = await renderPipelineGettingStartedGuide();
     expect(html).toContain('Sharpen the spec with SpecBot');
     expect(html).toContain('Design with ArchBot');
     expect(html).toContain('Implement with CoderBot');
@@ -44,8 +61,8 @@ describe('renderPipelineGettingStartedGuide', () => {
     expect(html).toContain('pipeline properties');
   });
 
-  it('describes the task lifecycle and every workbench tab', () => {
-    const html = renderPipelineGettingStartedGuide();
+  it('describes the task lifecycle and every workbench tab', async () => {
+    const html = await renderPipelineGettingStartedGuide();
     for (const stage of ['Backlog', 'Proposed design', 'Scheduled', 'In progress', 'Submitted']) {
       expect(html).toContain(stage);
     }
@@ -57,8 +74,8 @@ describe('renderPipelineGettingStartedGuide', () => {
     expect(html).toContain('filename search');
   });
 
-  it('keeps every lifecycle badge legend on a single line', () => {
-    const html = renderPipelineGettingStartedGuide();
+  it('keeps every lifecycle badge legend on a single line', async () => {
+    const html = await renderPipelineGettingStartedGuide();
     // Legends must never wrap or the badges fall out of vertical alignment.
     expect(html).toContain('text-[10px] text-app-muted leading-tight whitespace-nowrap');
     // Optional stages are marked with a footnote instead of inline wording.
@@ -67,8 +84,8 @@ describe('renderPipelineGettingStartedGuide', () => {
     expect(html).toContain('* Optional step');
   });
 
-  it('covers creating tasks and the MCP integration', () => {
-    const html = renderPipelineGettingStartedGuide();
+  it('covers creating tasks and the MCP integration', async () => {
+    const html = await renderPipelineGettingStartedGuide();
     expect(html).toContain('Create tasks in seconds');
     expect(html).toContain('Ask the Assistant');
     expect(html).toContain('ajapopaja MCP');
@@ -76,28 +93,71 @@ describe('renderPipelineGettingStartedGuide', () => {
     expect(html).toContain('Model Context Protocol');
   });
 
-  it('exposes the create-task CTA and copy-prompt action hooks', () => {
-    const html = renderPipelineGettingStartedGuide();
+  it('exposes the create-task CTA and copy-prompt action hooks', async () => {
+    const html = await renderPipelineGettingStartedGuide();
     expect(html).toContain('data-action-click="focus_new_task"');
     expect(html).toContain('data-action-click="copy_project_prompt"');
     expect(html).toContain('data-action-click="toggle_assistant"');
   });
 
-  it('namespaces the blueprint prompt ids per variant to avoid DOM collisions', () => {
-    expect(renderPipelineGettingStartedGuide('inline')).toContain('id="pipeline-prompt-react-spa"');
-    expect(renderPipelineGettingStartedGuide('dialog')).toContain(
+  it('namespaces the blueprint prompt ids per variant to avoid DOM collisions', async () => {
+    expect(await renderPipelineGettingStartedGuide('inline')).toContain(
+      'id="pipeline-prompt-react-spa"'
+    );
+    expect(await renderPipelineGettingStartedGuide('dialog')).toContain(
       'id="pipeline-dialog-prompt-react-spa"'
+    );
+  });
+
+  it('loads each static guide from the server only once', async () => {
+    await renderPipelineGettingStartedGuide();
+    await renderPipelineGettingStartedGuide('dialog');
+    await renderGettingStartedGuide();
+    await renderGettingStartedGuide('dialog');
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledWith('/getting-started/dashboard.html');
+    expect(fetchMock).toHaveBeenCalledWith('/getting-started/pipeline.html');
+  });
+
+  it('routes the dashboard hero through the variant-specific create action', async () => {
+    expect(await renderGettingStartedGuide('inline')).toContain(
+      'data-action-click="create_pipeline"'
+    );
+    expect(await renderGettingStartedGuide('dialog')).toContain(
+      'data-action-click="create_pipeline_from_guide"'
     );
   });
 });
 
 describe('PipelineGettingStartedDialog', () => {
-  it('renders the pipeline guide body at a readable width', () => {
+  beforeEach(() => {
+    resetGettingStartedGuideCache();
+    installGettingStartedFetchMock();
+    // JSDOM does not implement the native dialog methods.
+    HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) {
+      this.open = true;
+    });
+    HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) {
+      this.open = false;
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('renders the pipeline guide body at a readable width', async () => {
     const dialog = new PipelineGettingStartedDialog();
+    void dialog.show();
+    await flushPromises();
+
     const el = (dialog as any).dialog as HTMLDialogElement;
     expect(el.querySelector('#dialog-body-container')?.innerHTML).toContain(
       'Jump-start a new project'
     );
     expect(el.querySelector('.dialog-content')?.className).toContain('max-w-3xl');
+
+    (el.querySelector('#dialog-close-btn') as HTMLElement).click();
   });
 });

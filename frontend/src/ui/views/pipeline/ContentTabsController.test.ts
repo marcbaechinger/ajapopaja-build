@@ -26,6 +26,11 @@ import {
 import { LocalStorageManager } from '../../../core/LocalStorageManager.ts';
 import { TaskStatus } from '../../../core/domain.ts';
 import { InteractiveCodingView } from '../../components/session/InteractiveCodingView.ts';
+import {
+  installGettingStartedFetchMock,
+  flushPromises,
+} from '../gettingStartedTestFixtures.ts';
+import { resetGettingStartedGuideCache } from '../GettingStartedGuide.ts';
 import type { AppContext } from '../../../core/AppContext.ts';
 
 // Mock components to avoid deep rendering issues in unit tests.
@@ -724,6 +729,8 @@ describe('ContentTabsController', () => {
     window.location.hash = '';
     LocalStorageManager.resetInstances();
     vi.clearAllMocks();
+    resetGettingStartedGuideCache();
+    installGettingStartedFetchMock();
 
     host = document.createElement('div');
     document.body.appendChild(host);
@@ -809,7 +816,7 @@ describe('ContentTabsController', () => {
     expect(refresh.sessionList).toHaveBeenCalledTimes(1);
   });
 
-  it("setTab('getting-started') shows the guide panel and writes the canonical hash", () => {
+  it("setTab('getting-started') shows the guide panel and writes the canonical hash", async () => {
     controller.setTab('getting-started', { hash: 'push' });
 
     expect(ctx.state.contentTab).toBe('getting-started');
@@ -818,7 +825,8 @@ describe('ContentTabsController', () => {
     expect(mountEl('interactive-coding-view-mount').classList.contains('hidden')).toBe(true);
     expect(tab('tab-getting-started').getAttribute('aria-selected')).toBe('true');
     expect(tab('tab-task-editor').getAttribute('aria-selected')).toBe('false');
-    // The guide markup is mounted lazily and contains its own jump-start section.
+    // The guide markup is fetched lazily and contains its own jump-start section.
+    await flushPromises();
     expect(mountEl('getting-started-view-mount').textContent).toContain('Jump-start a new project');
   });
 

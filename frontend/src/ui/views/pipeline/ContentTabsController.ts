@@ -17,7 +17,10 @@
 import { FileBrowseView } from '../../components/files/FileBrowseView.ts';
 import { HistoryView } from '../../components/pipeline/HistoryView.ts';
 import { InteractiveCodingView } from '../../components/session/InteractiveCodingView.ts';
-import { renderPipelineGettingStartedGuide } from '../GettingStartedGuide.ts';
+import {
+  renderPipelineGettingStartedGuide,
+  renderGettingStartedLoading,
+} from '../GettingStartedGuide.ts';
 import type { ContentTab } from '../../../core/PipelineRoute.ts';
 import type { PipelineSubRoute, HashWriteMode } from './PipelineSubRoute.ts';
 import type { PipelineDetailCtx } from './PipelineDetailCtx.ts';
@@ -348,8 +351,8 @@ export class ContentTabsController {
 
   /**
    * Renders the static Getting Started guide into its panel the first time the
-   * tab is shown. The markup only references shared actions, so it never needs
-   * to be rebuilt; subsequent activations just toggle its visibility.
+   * tab is shown. The markup is fetched from the server on first activation and
+   * cached, so subsequent activations just toggle its visibility.
    */
   private mountGettingStartedView(): void {
     const container = this.deps.getHost();
@@ -358,8 +361,18 @@ export class ContentTabsController {
       '#getting-started-view-mount'
     ) as HTMLElement | null;
     if (!mount) return;
-    mount.innerHTML = renderPipelineGettingStartedGuide();
+    // Mark mounted immediately so repeated tab switches never reset the
+    // placeholder while the (cached) fetch is still in flight.
     this.gettingStartedMounted = true;
+    mount.innerHTML = renderGettingStartedLoading();
+    void renderPipelineGettingStartedGuide()
+      .then((html) => {
+        mount.innerHTML = html;
+      })
+      .catch((error) => {
+        console.error('Failed to load the pipeline getting started guide:', error);
+        mount.innerHTML = `<p class="text-red-400 p-6">Failed to load the getting started guide.</p>`;
+      });
   }
 
   /**

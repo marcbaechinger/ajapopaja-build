@@ -1,0 +1,935 @@
+<div class="flex flex-col gap-8">
+      
+    <section class="relative overflow-hidden rounded-2xl border border-app-border bg-app-bg p-6">
+      <div class="absolute -top-24 -right-24 w-64 h-64 rounded-full bg-app-accent-2/10 blur-3xl pointer-events-none"></div>
+      <div class="absolute -bottom-24 -left-24 w-64 h-64 rounded-full bg-app-accent-1/10 blur-3xl pointer-events-none"></div>
+      <div class="relative">
+        <div class="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-app-accent-2 bg-app-accent-2/10 border border-app-accent-2/20 rounded-full px-3 py-1 mb-4">
+          <span class="w-1.5 h-1.5 rounded-full bg-app-accent-2"></span>
+          Start here
+        </div>
+        <h2 class="text-2xl font-black text-app-text tracking-tight">Turn an idea into a reviewed pull request</h2>
+        <p class="text-app-muted mt-3 leading-relaxed max-w-2xl">
+          This pipeline is a workspace around your Git repository. Describe one focused unit of work
+          as a task, let the agents design, implement and review it, then approve the pull request.
+          Nothing is final until you say so.
+        </p>
+        <div class="flex items-center gap-3 mt-5 flex-wrap">
+          <button data-action-click="focus_new_task"
+                  class="flex items-center gap-2 bg-app-accent-1 hover:brightness-110 text-white text-xs font-bold uppercase tracking-widest px-5 py-2.5 rounded-lg transition-all shadow-lg cursor-pointer">
+            <svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-4 h-4" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#plus-icon" />
+      </svg>
+            Create your first task
+          </button>
+          <button data-action-click="toggle_assistant"
+                  class="flex items-center gap-2 bg-app-surface hover:bg-app-bg px-5 py-2.5 rounded-lg border border-app-border text-app-text text-xs font-bold uppercase tracking-widest transition-all cursor-pointer">
+            <svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-4 h-4" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#lightning-icon" />
+      </svg>
+            Ask the Assistant
+          </button>
+        </div>
+        <p class="text-[11px] text-app-muted mt-4">
+          Short on words? Paste a blueprint below, or let an agent turn a one-liner into a spec.
+        </p>
+      </div>
+    </section>
+  
+      
+    <section class="flex flex-col gap-4">
+      <div class="flex items-end justify-between gap-4 flex-wrap">
+        <div>
+          <h3 class="text-xl font-bold text-app-text flex items-center gap-2">
+            <span class="text-app-accent-2"><svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-4.5 h-4.5" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#lightning-icon" />
+      </svg></span>
+            Jump-start a new project
+          </h3>
+          <p class="text-sm text-app-muted mt-1">
+            No code yet? Expand a blueprint, copy the prompt and paste it into the Assistant
+            or the Interactive Coding Agent. It creates the ajapopaja tasks that scaffold the
+            project layout and the build, lint, test and serve commands.
+          </p>
+        </div>
+        <button data-action-click="toggle_assistant"
+                class="shrink-0 flex items-center gap-2 bg-app-bg hover:bg-app-surface px-4 py-2 rounded-lg border border-app-border text-app-muted hover:text-app-accent-2 transition-all cursor-pointer">
+          <svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-3.5 h-3.5" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#lightning-icon" />
+      </svg>
+          <span class="text-xs font-bold uppercase tracking-widest">Open Assistant</span>
+        </button>
+      </div>
+      <div class="grid grid-cols-1 2xl:grid-cols-3 gap-3">
+        
+    <details class="group/blueprint rounded-xl border border-app-border bg-app-bg overflow-hidden transition-colors hover:border-app-accent-2/40">
+      <summary class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none p-4 flex items-start gap-4">
+        <span class="shrink-0 w-10 h-10 rounded-lg bg-app-accent-2/10 border border-app-accent-2/20 text-app-accent-2 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-5 h-5" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#lightning-icon" />
+      </svg>
+        </span>
+        <span class="min-w-0 flex-1">
+          <span class="flex items-center justify-between gap-3">
+            <span class="font-bold text-app-text">React single-page app</span>
+            <span class="text-app-muted transition-transform duration-200 group-open/blueprint:rotate-180">
+              <svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-4 h-4" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#chevron-down-icon" />
+      </svg>
+            </span>
+          </span>
+          <span class="block text-xs text-app-muted mt-1">Vite + TypeScript + React + Tailwind</span>
+          <span class="flex flex-wrap gap-1.5 mt-2"><span class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border border-app-border text-app-muted bg-app-surface">Vite</span><span class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border border-app-border text-app-muted bg-app-surface">TypeScript</span><span class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border border-app-border text-app-muted bg-app-surface">React</span><span class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border border-app-border text-app-muted bg-app-surface">Tailwind</span></span>
+        </span>
+      </summary>
+      <div class="border-t border-app-border p-4 bg-app-surface/40">
+        <div class="flex items-center justify-between gap-3 mb-2">
+          <span class="text-[10px] font-bold uppercase tracking-widest text-app-muted">Ready-to-use ajapopaja task prompt</span>
+          <button type="button"
+                  data-action-click="copy_project_prompt"
+                  data-copy-target="{{PROMPT_ID_PREFIX}}-react-spa"
+                  class="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-app-bg border border-app-border text-[10px] font-bold uppercase tracking-wider text-app-accent-2 hover:bg-app-accent-2/10 transition-all cursor-pointer">
+            <svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-3 h-3" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#copy-icon" />
+      </svg>
+            <span class="copy-label">Copy prompt</span>
+          </button>
+        </div>
+        <pre id="{{PROMPT_ID_PREFIX}}-react-spa" class="text-xs leading-relaxed text-app-text/90 whitespace-pre-wrap break-words font-mono bg-app-bg border border-app-border rounded-lg p-3 max-h-72 overflow-y-auto custom-scrollbar">Create ajapopaja tasks in this pipeline to bootstrap a brand-new React single-page application. Please create tasks in ajapopaja for each of the three steps below; use the ajapopaja task tools/skill and give every task a clear title and a detailed spec.
+
+Task 1 — Set up the React single-page app blueprint
+- Vite (latest) as the build tool and dev server
+- TypeScript in strict mode
+- React 18+ with function components and hooks
+- React Router for client-side routing
+- Tailwind CSS for styling
+- Vitest + React Testing Library for tests
+- ESLint + Prettier
+
+Task 2 — Create the project layout (directories and files)
+- Scaffold the app at the repository root
+- Configure TypeScript strict mode, path aliases and the Vite dev proxy if needed
+- Create a clean folder structure: src/components, src/pages, src/lib, src/styles
+
+Task 3 — Set up the tooling and a basic smoke test app
+- Configure the tooling for init/install, building, linting, testing and serving (HTTP) the stack
+- Build a small but polished smoke test app (for example a task list with add / complete / delete) that exercises state, routing and reusable components and renders in the browser
+- Deliver the exact commands for init/install, build, lint, test and serve (HTTP) so they can be pasted into the PipelineEditDialog&#039;s Build, Lint, Test and Serve configuration
+
+Create these ajapopaja tasks now. Keep each task small and independently reviewable, and do not commit node_modules/ or dist/.</pre>
+      </div>
+    </details>
+  
+    <details class="group/blueprint rounded-xl border border-app-border bg-app-bg overflow-hidden transition-colors hover:border-app-accent-2/40">
+      <summary class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none p-4 flex items-start gap-4">
+        <span class="shrink-0 w-10 h-10 rounded-lg bg-app-accent-2/10 border border-app-accent-2/20 text-app-accent-2 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-5 h-5" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#architecture-icon" />
+      </svg>
+        </span>
+        <span class="min-w-0 flex-1">
+          <span class="flex items-center justify-between gap-3">
+            <span class="font-bold text-app-text">React + Python API</span>
+            <span class="text-app-muted transition-transform duration-200 group-open/blueprint:rotate-180">
+              <svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-4 h-4" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#chevron-down-icon" />
+      </svg>
+            </span>
+          </span>
+          <span class="block text-xs text-app-muted mt-1">Vite/TypeScript/React frontend with a FastAPI backend</span>
+          <span class="flex flex-wrap gap-1.5 mt-2"><span class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border border-app-border text-app-muted bg-app-surface">Vite</span><span class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border border-app-border text-app-muted bg-app-surface">React</span><span class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border border-app-border text-app-muted bg-app-surface">FastAPI</span><span class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border border-app-border text-app-muted bg-app-surface">Python</span><span class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border border-app-border text-app-muted bg-app-surface">uv</span></span>
+        </span>
+      </summary>
+      <div class="border-t border-app-border p-4 bg-app-surface/40">
+        <div class="flex items-center justify-between gap-3 mb-2">
+          <span class="text-[10px] font-bold uppercase tracking-widest text-app-muted">Ready-to-use ajapopaja task prompt</span>
+          <button type="button"
+                  data-action-click="copy_project_prompt"
+                  data-copy-target="{{PROMPT_ID_PREFIX}}-fullstack"
+                  class="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-app-bg border border-app-border text-[10px] font-bold uppercase tracking-wider text-app-accent-2 hover:bg-app-accent-2/10 transition-all cursor-pointer">
+            <svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-3 h-3" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#copy-icon" />
+      </svg>
+            <span class="copy-label">Copy prompt</span>
+          </button>
+        </div>
+        <pre id="{{PROMPT_ID_PREFIX}}-fullstack" class="text-xs leading-relaxed text-app-text/90 whitespace-pre-wrap break-words font-mono bg-app-bg border border-app-border rounded-lg p-3 max-h-72 overflow-y-auto custom-scrollbar">Create ajapopaja tasks in this pipeline to bootstrap a brand-new full-stack web application. Please create tasks in ajapopaja for each of the three steps below; use the ajapopaja task tools/skill and give every task a clear title and a detailed spec.
+
+Task 1 — Set up the React + Python API blueprint
+Frontend (frontend/)
+- Vite + TypeScript + React
+- React Router and Tailwind CSS
+- A small typed API client with error handling
+- Vitest + React Testing Library
+Backend (backend/)
+- Python 3.11+ managed with uv (single workspace)
+- FastAPI + Uvicorn
+- Pydantic request/response models
+- CORS configured for the Vite dev server
+- An in-memory store behind a repository interface
+- pytest + httpx for API tests
+Endpoints
+- GET /api/health -&gt; { &quot;status&quot;: &quot;ok&quot; }
+- GET/POST/PUT/DELETE /api/items -&gt; a simple CRUD example
+
+Task 2 — Create the project layout (directories and files)
+- Create the frontend/ and backend/ structure plus shared root scripts
+- Wire the frontend to the backend (at least list and create) with a typed API contract on both sides
+- Add loading, empty and error states in the UI
+
+Task 3 — Set up the tooling and a basic smoke test app
+- Configure the tooling for init/install, building, linting, testing and serving (HTTP) both halves
+- Build a basic smoke test app that starts the stack, calls GET /api/health and lists/creates items end to end
+- Deliver the exact commands for init/install, build, lint, test and serve (HTTP) so they can be pasted into the PipelineEditDialog&#039;s Build, Lint, Test and Serve configuration
+
+Create these ajapopaja tasks now. Keep each task small and independently reviewable, and do not commit build artifacts.</pre>
+      </div>
+    </details>
+  
+    <details class="group/blueprint rounded-xl border border-app-border bg-app-bg overflow-hidden transition-colors hover:border-app-accent-2/40">
+      <summary class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none p-4 flex items-start gap-4">
+        <span class="shrink-0 w-10 h-10 rounded-lg bg-app-accent-2/10 border border-app-accent-2/20 text-app-accent-2 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-5 h-5" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#file-icon" />
+      </svg>
+        </span>
+        <span class="min-w-0 flex-1">
+          <span class="flex items-center justify-between gap-3">
+            <span class="font-bold text-app-text">Python CLI with Rich UI</span>
+            <span class="text-app-muted transition-transform duration-200 group-open/blueprint:rotate-180">
+              <svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-4 h-4" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#chevron-down-icon" />
+      </svg>
+            </span>
+          </span>
+          <span class="block text-xs text-app-muted mt-1">Typer + Rich command-line application</span>
+          <span class="flex flex-wrap gap-1.5 mt-2"><span class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border border-app-border text-app-muted bg-app-surface">Python</span><span class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border border-app-border text-app-muted bg-app-surface">Typer</span><span class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border border-app-border text-app-muted bg-app-surface">Rich</span><span class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border border-app-border text-app-muted bg-app-surface">pytest</span></span>
+        </span>
+      </summary>
+      <div class="border-t border-app-border p-4 bg-app-surface/40">
+        <div class="flex items-center justify-between gap-3 mb-2">
+          <span class="text-[10px] font-bold uppercase tracking-widest text-app-muted">Ready-to-use ajapopaja task prompt</span>
+          <button type="button"
+                  data-action-click="copy_project_prompt"
+                  data-copy-target="{{PROMPT_ID_PREFIX}}-python-cli"
+                  class="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-app-bg border border-app-border text-[10px] font-bold uppercase tracking-wider text-app-accent-2 hover:bg-app-accent-2/10 transition-all cursor-pointer">
+            <svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-3 h-3" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#copy-icon" />
+      </svg>
+            <span class="copy-label">Copy prompt</span>
+          </button>
+        </div>
+        <pre id="{{PROMPT_ID_PREFIX}}-python-cli" class="text-xs leading-relaxed text-app-text/90 whitespace-pre-wrap break-words font-mono bg-app-bg border border-app-border rounded-lg p-3 max-h-72 overflow-y-auto custom-scrollbar">Create ajapopaja tasks in this pipeline to bootstrap a brand-new Python command-line application. Please create tasks in ajapopaja for each of the three steps below; use the ajapopaja task tools/skill and give every task a clear title and a detailed spec.
+
+Task 1 — Set up the Python CLI with Rich UI blueprint
+- Python 3.11+ managed with uv (single pyproject.toml)
+- typer for the command-line interface
+- rich for tables, panels, progress bars, trees and colours
+- pydantic-settings for configuration
+- pytest for tests
+- ruff for linting and formatting
+
+Task 2 — Create the project layout (directories and files)
+- Create the package under src/&lt;package_name&gt;/ with a thin __main__.py and a cli module exposing the Typer app
+- Add example commands that showcase Rich output: hello NAME -&gt; a panel greeting, list -&gt; a formatted table, sync -&gt; a live progress bar
+- Add a --verbose flag, a --version flag and environment-based configuration
+- Separate pure business logic from presentation so the core is unit-testable
+
+Task 3 — Set up the tooling and a basic smoke test app
+- Configure the tooling for init/install, building, linting, testing and serving (HTTP) the project
+- Build a basic smoke test app that exercises the CLI end to end, including at least one invocation via typer.testing.CliRunner
+- Deliver the exact commands for init/install, build, lint, test and serve (HTTP) so they can be pasted into the PipelineEditDialog&#039;s Build, Lint, Test and Serve configuration
+
+Create these ajapopaja tasks now. Keep each task small and independently reviewable, and do not commit __pycache__/ or build artifacts.</pre>
+      </div>
+    </details>
+  
+      </div>
+    </section>
+  
+      
+    <section class="flex flex-col gap-4">
+      <div>
+        <h3 class="text-xl font-bold text-app-text flex items-center gap-2">
+          <span class="text-app-accent-2"><svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-4.5 h-4.5" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#plus-icon" />
+      </svg></span>
+          Create tasks in seconds
+        </h3>
+        <p class="text-sm text-app-muted mt-1">A task is one focused change. Small tasks give the agents a clear target and produce better results.</p>
+      </div>
+      
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        
+    <div class="rounded-xl border border-app-border bg-app-bg p-4 flex flex-col gap-2 min-w-0">
+      <div class="flex items-center gap-2">
+        <span class="shrink-0 w-8 h-8 rounded-lg bg-app-accent-2/10 border border-app-accent-2/20 text-app-accent-2 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-4 h-4" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#edit-icon" />
+      </svg>
+        </span>
+        <h4 class="font-bold text-app-text text-sm">Type it in the header</h4>
+      </div>
+      <p class="text-xs text-app-muted leading-relaxed">Use the <span class="text-app-text font-semibold">What needs to be done?</span> box at the top. Press Enter and the task appears in the Backlog — no forms, no setup.</p>
+    </div>
+  
+        
+    <div class="rounded-xl border border-app-border bg-app-bg p-4 flex flex-col gap-2 min-w-0">
+      <div class="flex items-center gap-2">
+        <span class="shrink-0 w-8 h-8 rounded-lg bg-app-accent-2/10 border border-app-accent-2/20 text-app-accent-2 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-4 h-4" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#lightning-icon" />
+      </svg>
+        </span>
+        <h4 class="font-bold text-app-text text-sm">Ask the Assistant</h4>
+      </div>
+      <p class="text-xs text-app-muted leading-relaxed">The dashboard Assistant (Ctrl/Cmd+Alt+A) can create and edit tasks for you. Describe the outcome and it takes care of the rest.</p>
+    </div>
+  
+        
+    <div class="rounded-xl border border-app-border bg-app-bg p-4 flex flex-col gap-2 min-w-0">
+      <div class="flex items-center gap-2">
+        <span class="shrink-0 w-8 h-8 rounded-lg bg-app-accent-2/10 border border-app-accent-2/20 text-app-accent-2 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-4 h-4" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#documentation-icon" />
+      </svg>
+        </span>
+        <h4 class="font-bold text-app-text text-sm">Pair with the agent</h4>
+      </div>
+      <p class="text-xs text-app-muted leading-relaxed">The <span class="text-app-text font-semibold">Coding Agent</span> tab is pinned to the tip of the main branch. It reads your latest code and can create and edit tasks through the bundled ajapopaja skill.</p>
+    </div>
+  
+      </div>
+    
+    </section>
+  
+      
+    <section class="flex flex-col gap-4">
+      <div>
+        <h3 class="text-xl font-bold text-app-text flex items-center gap-2">
+          <span class="text-app-accent-2"><svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-4.5 h-4.5" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#git-pull-request-icon" />
+      </svg></span>
+          The agent workflow
+        </h3>
+        <p class="text-sm text-app-muted mt-1">A proven loop from idea to merged change. Run every step by hand, or let the bots hand off to each other.</p>
+      </div>
+      
+      <div class="flex flex-col gap-3">
+        
+    <div class="flex items-start gap-4 p-5 rounded-xl border border-app-border bg-app-bg">
+      <div class="shrink-0">
+        <span class="w-9 h-9 rounded-full bg-app-accent-1/10 border border-app-accent-1/30 text-app-accent-1 font-black flex items-center justify-center text-sm">1</span>
+      </div>
+      <div class="min-w-0">
+        <h3 class="font-bold text-app-text flex items-center gap-2">
+          <span class="text-app-accent-2"><svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-4 h-4" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#edit-icon" />
+      </svg></span>
+          Sharpen the spec with SpecBot
+        </h3>
+        <div class="text-sm text-app-muted mt-1.5 leading-relaxed">
+    <p>You don't need a perfect spec. Write a short description, then let SpecBot expand it.</p>
+    <p class="mt-2">SpecBot proposes an elaborated specification inline; you accept or reject it, and the accepted text becomes the task's spec.</p>
+  </div>
+      </div>
+    </div>
+  
+        
+    <div class="flex items-start gap-4 p-5 rounded-xl border border-app-border bg-app-bg">
+      <div class="shrink-0">
+        <span class="w-9 h-9 rounded-full bg-app-accent-1/10 border border-app-accent-1/30 text-app-accent-1 font-black flex items-center justify-center text-sm">2</span>
+      </div>
+      <div class="min-w-0">
+        <h3 class="font-bold text-app-text flex items-center gap-2">
+          <span class="text-app-accent-2"><svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-4 h-4" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#architecture-icon" />
+      </svg></span>
+          Design with ArchBot
+        </h3>
+        <div class="text-sm text-app-muted mt-1.5 leading-relaxed">
+    <p>Tick <span class="text-app-text font-semibold">design document</span> when the change deserves a plan. ArchBot turns the spec into a structured design doc.</p>
+    <p class="mt-2">Design docs are <span class="text-app-text font-semibold">versioned</span> on every write — yours or the AI's — so you can always compare and roll back to an earlier revision.</p>
+  </div>
+      </div>
+    </div>
+  
+        
+    <div class="flex items-start gap-4 p-5 rounded-xl border border-app-border bg-app-bg">
+      <div class="shrink-0">
+        <span class="w-9 h-9 rounded-full bg-app-accent-1/10 border border-app-accent-1/30 text-app-accent-1 font-black flex items-center justify-center text-sm">3</span>
+      </div>
+      <div class="min-w-0">
+        <h3 class="font-bold text-app-text flex items-center gap-2">
+          <span class="text-app-accent-2"><svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-4 h-4" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#lightning-icon" />
+      </svg></span>
+          Implement with CoderBot
+        </h3>
+        <div class="text-sm text-app-muted mt-1.5 leading-relaxed">
+    <p>Schedule the task and CoderBot implements it in an isolated sandbox and opens a pull request.</p>
+    <p class="mt-2">Tasks sent to CoderBot are <span class="text-app-text font-semibold">queued and executed sequentially</span>, so parallel requests never race on the same working copy.</p>
+  </div>
+      </div>
+    </div>
+  
+        
+    <div class="flex items-start gap-4 p-5 rounded-xl border border-app-border bg-app-bg">
+      <div class="shrink-0">
+        <span class="w-9 h-9 rounded-full bg-app-accent-1/10 border border-app-accent-1/30 text-app-accent-1 font-black flex items-center justify-center text-sm">4</span>
+      </div>
+      <div class="min-w-0">
+        <h3 class="font-bold text-app-text flex items-center gap-2">
+          <span class="text-app-accent-2"><svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-4 h-4" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#git-pull-request-icon" />
+      </svg></span>
+          Review with ReviewBot, then iterate
+        </h3>
+        <div class="text-sm text-app-muted mt-1.5 leading-relaxed">
+    <p>ReviewBot inspects the spec, the design doc and the diff, and stores a technical review on the task.</p>
+    <p class="mt-2">Use its findings to create the next tasks. Accept the pull request to land the change, then start the next iteration.</p>
+  </div>
+      </div>
+    </div>
+  
+      </div>
+      <div class="mt-3 flex items-start gap-2 text-xs rounded-lg border border-app-accent-2/30 bg-app-accent-2/10 text-app-text/90 p-3">
+        <span class="mt-0.5 text-app-accent-2"><svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-3.5 h-3.5" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#settings-icon" />
+      </svg></span>
+        <span>
+          Choose which model each bot uses in the pipeline properties
+          (<span class="text-app-text font-semibold">Ctrl/Cmd+Shift+P</span> or the edit icon next to the pipeline name)
+          — e.g. a fast model for quick specs and a stronger model for implementation.
+        </span>
+      </div>
+    
+    </section>
+  
+      
+    <section class="flex flex-col gap-4">
+      <div>
+        <h3 class="text-xl font-bold text-app-text flex items-center gap-2">
+          <span class="text-app-accent-2"><svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-4.5 h-4.5" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#refresh-icon" />
+      </svg></span>
+          How tasks move through the pipeline
+        </h3>
+        <p class="text-sm text-app-muted mt-1">The UI mirrors the feature implementation process. Watch each column light up as the work progresses.</p>
+      </div>
+      
+      <div class="rounded-xl border border-app-border bg-app-bg p-4">
+        <div class="flex items-center gap-2 overflow-x-auto custom-scrollbar">
+          
+    <div class="flex flex-col items-center text-center gap-1 shrink-0 min-w-[8.5rem]">
+      <span class="text-[10px] font-black uppercase tracking-widest whitespace-nowrap px-2.5 py-1 rounded-full border border-app-border text-app-muted bg-app-surface">Backlog</span>
+      <span class="text-[10px] text-app-muted leading-tight whitespace-nowrap">Created; elaborate spec*</span>
+    </div>
+  <span class="text-app-muted/50 shrink-0"><svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-3.5 h-3.5" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#arrow-right-icon" />
+      </svg></span>
+    <div class="flex flex-col items-center text-center gap-1 shrink-0 min-w-[8.5rem]">
+      <span class="text-[10px] font-black uppercase tracking-widest whitespace-nowrap px-2.5 py-1 rounded-full border border-purple-500/40 text-purple-300 bg-purple-500/10">Proposed design</span>
+      <span class="text-[10px] text-app-muted leading-tight whitespace-nowrap">Design doc awaiting approval*</span>
+    </div>
+  <span class="text-app-muted/50 shrink-0"><svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-3.5 h-3.5" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#arrow-right-icon" />
+      </svg></span>
+    <div class="flex flex-col items-center text-center gap-1 shrink-0 min-w-[8.5rem]">
+      <span class="text-[10px] font-black uppercase tracking-widest whitespace-nowrap px-2.5 py-1 rounded-full border border-blue-500/40 text-blue-300 bg-blue-500/10">Scheduled</span>
+      <span class="text-[10px] text-app-muted leading-tight whitespace-nowrap">Queued for CoderBot</span>
+    </div>
+  <span class="text-app-muted/50 shrink-0"><svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-3.5 h-3.5" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#arrow-right-icon" />
+      </svg></span>
+    <div class="flex flex-col items-center text-center gap-1 shrink-0 min-w-[8.5rem]">
+      <span class="text-[10px] font-black uppercase tracking-widest whitespace-nowrap px-2.5 py-1 rounded-full border border-amber-500/40 text-amber-300 bg-amber-500/10">In progress</span>
+      <span class="text-[10px] text-app-muted leading-tight whitespace-nowrap">CoderBot is implementing</span>
+    </div>
+  <span class="text-app-muted/50 shrink-0"><svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-3.5 h-3.5" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#arrow-right-icon" />
+      </svg></span>
+    <div class="flex flex-col items-center text-center gap-1 shrink-0 min-w-[8.5rem]">
+      <span class="text-[10px] font-black uppercase tracking-widest whitespace-nowrap px-2.5 py-1 rounded-full border border-emerald-500/40 text-emerald-300 bg-emerald-500/10">Submitted</span>
+      <span class="text-[10px] text-app-muted leading-tight whitespace-nowrap">Pull request awaiting your review</span>
+    </div>
+  
+        </div>
+        <p class="mt-3 text-[10px] text-app-muted">* Optional step — a task can be scheduled without an elaborated spec or a design document.</p>
+      </div>
+    
+    </section>
+  
+      
+    <section class="flex flex-col gap-4">
+      <div>
+        <h3 class="text-xl font-bold text-app-text flex items-center gap-2">
+          <span class="text-app-accent-2"><svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-4.5 h-4.5" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#copy-rects-icon" />
+      </svg></span>
+          Your workbench
+        </h3>
+        <p class="text-sm text-app-muted mt-1">Four tools around the same repository, always one click away. Your selection and scroll position survive tab switches.</p>
+      </div>
+      
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        
+    <div class="rounded-xl border border-app-border bg-app-bg p-4 flex flex-col gap-2 min-w-0">
+      <div class="flex items-center gap-2">
+        <span class="shrink-0 w-8 h-8 rounded-lg bg-app-accent-2/10 border border-app-accent-2/20 text-app-accent-2 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-4 h-4" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#edit-icon" />
+      </svg>
+        </span>
+        <h4 class="font-bold text-app-text text-sm">Task editor</h4>
+      </div>
+      <p class="text-xs text-app-muted leading-relaxed">Open any task to read and edit its spec and design doc. SpecBot and ArchBot assist right where you work, and you approve every change before it is used.</p>
+    </div>
+  
+        
+    <div class="rounded-xl border border-app-border bg-app-bg p-4 flex flex-col gap-2 min-w-0">
+      <div class="flex items-center gap-2">
+        <span class="shrink-0 w-8 h-8 rounded-lg bg-app-accent-2/10 border border-app-accent-2/20 text-app-accent-2 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-4 h-4" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#documentation-icon" />
+      </svg>
+        </span>
+        <h4 class="font-bold text-app-text text-sm">Coding Agent</h4>
+      </div>
+      <p class="text-xs text-app-muted leading-relaxed">An interactive session pinned to the tip of the main branch. Explore the code, ask questions, and create or edit tasks through the ajapopaja MCP skill.</p>
+    </div>
+  
+        
+    <div class="rounded-xl border border-app-border bg-app-bg p-4 flex flex-col gap-2 min-w-0">
+      <div class="flex items-center gap-2">
+        <span class="shrink-0 w-8 h-8 rounded-lg bg-app-accent-2/10 border border-app-accent-2/20 text-app-accent-2 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-4 h-4" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#folder-open-icon" />
+      </svg>
+        </span>
+        <h4 class="font-bold text-app-text text-sm">File Browser</h4>
+      </div>
+      <p class="text-xs text-app-muted leading-relaxed">Browse the repository without a session and preview syntax-highlighted files. Use the filename search to jump straight to a file.</p>
+    </div>
+  
+        
+    <div class="rounded-xl border border-app-border bg-app-bg p-4 flex flex-col gap-2 min-w-0">
+      <div class="flex items-center gap-2">
+        <span class="shrink-0 w-8 h-8 rounded-lg bg-app-accent-2/10 border border-app-accent-2/20 text-app-accent-2 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-4 h-4" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#clock-icon" />
+      </svg>
+        </span>
+        <h4 class="font-bold text-app-text text-sm">Commits</h4>
+      </div>
+      <p class="text-xs text-app-muted leading-relaxed">See the changes in the repository, newest first, and open any commit in an inline DiffView before you accept the change.</p>
+    </div>
+  
+      </div>
+    
+    </section>
+  
+      
+    <section class="flex flex-col gap-4">
+      <div>
+        <h3 class="text-xl font-bold text-app-text flex items-center gap-2">
+          <span class="text-app-accent-2"><svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-4.5 h-4.5" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#architecture-icon" />
+      </svg></span>
+          Bring your own agent
+        </h3>
+        <p class="text-sm text-app-muted mt-1">Everything the UI can do with tasks is also exposed over the Model Context Protocol.</p>
+      </div>
+      
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        
+    <div class="rounded-xl border border-app-border bg-app-bg p-4 flex flex-col gap-2 min-w-0">
+      <div class="flex items-center gap-2">
+        <span class="shrink-0 w-8 h-8 rounded-lg bg-app-accent-2/10 border border-app-accent-2/20 text-app-accent-2 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-4 h-4" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#documentation-icon" />
+      </svg>
+        </span>
+        <h4 class="font-bold text-app-text text-sm">ajapopaja MCP in the Coding Agent</h4>
+      </div>
+      <p class="text-xs text-app-muted leading-relaxed">The Coding Agent tab already speaks MCP through the bundled ajapopaja skill, so it can search, read, create and schedule tasks for this pipeline.</p>
+    </div>
+  
+        
+    <div class="rounded-xl border border-app-border bg-app-bg p-4 flex flex-col gap-2 min-w-0">
+      <div class="flex items-center gap-2">
+        <span class="shrink-0 w-8 h-8 rounded-lg bg-app-accent-2/10 border border-app-accent-2/20 text-app-accent-2 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" 
+           class="w-4 h-4" 
+            
+           viewBox="0 0 24 24" 
+           fill="none" 
+           stroke="currentColor" 
+           stroke-width="2" 
+           stroke-linecap="round" 
+           stroke-linejoin="round" 
+           aria-hidden="true" 
+           >
+        <use href="/icons.svg#architecture-icon" />
+      </svg>
+        </span>
+        <h4 class="font-bold text-app-text text-sm">External coding agents</h4>
+      </div>
+      <p class="text-xs text-app-muted leading-relaxed">Point any MCP-capable agent (Claude, Cursor, VS Code, …) at the server and let it read and implement tasks from outside the dashboard. See the skill in <code class="text-app-accent-2">.pi/skills/ajapopaja</code>.</p>
+    </div>
+  
+      </div>
+    
+    </section>
+  
+    </div>

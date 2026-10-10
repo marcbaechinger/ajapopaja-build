@@ -22,7 +22,11 @@ import { PipelineEditDialog } from '../components/dialogs/PipelineEditDialog.ts'
 import { Icon } from '../components/common/Icon.ts';
 import { PipelineItemView } from '../components/pipeline/PipelineItemView.ts';
 import { SessionManagerButton } from '../components/session/SessionManagerButton.ts';
-import { GettingStartedDialog, renderGettingStartedGuide } from './GettingStartedGuide.ts';
+import {
+  GettingStartedDialog,
+  renderGettingStartedGuide,
+  renderGettingStartedLoading,
+} from './GettingStartedGuide.ts';
 
 // Sort weight per pipeline status. Lower weight renders first.
 // Unknown/non-conforming statuses fall back to 3 (last).
@@ -176,7 +180,13 @@ export class DashboardView extends View {
       if (header) header.classList.toggle('hidden', pipelines.length === 0);
 
       if (pipelines.length === 0) {
-        listContainer.innerHTML = renderGettingStartedGuide('inline');
+        listContainer.innerHTML = renderGettingStartedLoading();
+        try {
+          listContainer.innerHTML = await renderGettingStartedGuide('inline');
+        } catch (error) {
+          console.error('Failed to load the getting started guide:', error);
+          listContainer.innerHTML = `<p class="text-red-400">Failed to load the getting started guide.</p>`;
+        }
         return;
       }
 

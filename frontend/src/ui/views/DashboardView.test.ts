@@ -17,6 +17,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { DashboardView } from './DashboardView.ts';
 import { PipelineStatus, TaskStatus } from '../../core/domain.ts';
+import {
+  installGettingStartedFetchMock,
+  flushPromises,
+} from './gettingStartedTestFixtures.ts';
+import { resetGettingStartedGuideCache } from './GettingStartedGuide.ts';
 
 // Mock components
 const mockShow = vi.fn().mockResolvedValue(true);
@@ -82,6 +87,8 @@ describe('DashboardView', () => {
 
     vi.stubGlobal('location', { hash: '' });
     vi.stubGlobal('alert', vi.fn());
+    resetGettingStartedGuideCache();
+    installGettingStartedFetchMock();
   });
 
   afterEach(() => {
@@ -335,7 +342,7 @@ describe('DashboardView', () => {
     expect(button.querySelector('.copy-label')?.textContent).toBe('Copied!');
   });
 
-  it('should open the getting-started overlay from the guide action', () => {
+  it('should open the getting-started overlay from the guide action', async () => {
     // JSDOM does not implement the native dialog methods.
     HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) {
       this.open = true;
@@ -347,6 +354,7 @@ describe('DashboardView', () => {
     new DashboardView(mockContext);
     const openAction = mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === 'open_getting_started')[1];
     openAction(undefined, document.body);
+    await flushPromises();
 
     const dialogs = Array.from(document.querySelectorAll('dialog'));
     expect(dialogs.length).toBeGreaterThan(0);
@@ -354,6 +362,8 @@ describe('DashboardView', () => {
     expect(document.body.textContent).toContain('Build your first pipeline');
     // The overlay routes its primary button through a dedicated action.
     expect(document.querySelector('[data-action-click="create_pipeline_from_guide"]')).toBeTruthy();
+    // Close it so the shared BaseDialog singleton does not leak into other tests.
+    (dialogs[0].querySelector('#dialog-close-btn') as HTMLElement).click();
   });
 
   it('should cleanup subscriptions on unmount', () => {

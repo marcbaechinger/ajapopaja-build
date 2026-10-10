@@ -2,6 +2,10 @@
 @plugin "@tailwindcss/typography";
 @import "easymde/dist/easymde.min.css";
 
+/* The getting-started markup lives in static HTML files that are fetched at
+ * runtime, so Tailwind must scan them to keep their utility classes. */
+@source "../public/getting-started";
+
 @theme {
   /* Define custom theme colors that map to our CSS variables */
   --color-app-bg: var(--app-bg);
