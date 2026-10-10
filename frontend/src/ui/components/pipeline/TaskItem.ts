@@ -24,6 +24,17 @@ import { renderDesignDocSection } from './DesignDocSection.ts';
 import { Icon } from '../common/Icon.ts';
 import { escapeHtml } from '../utils/html.ts';
 
+/**
+ * A single heading extracted from a design document, used to build the table of
+ * contents popup of the design-document section.
+ */
+export interface DesignDocHeading {
+  /** Heading level 1..6, i.e. the number of leading ``#`` characters. */
+  level: number;
+  /** Heading text with the leading ``#`` markers and any closing ``#``s removed. */
+  text: string;
+}
+
 export class TaskItem {
   /**
    * Updates only the title-related DOM of an already-rendered TaskItem in
@@ -187,6 +198,161 @@ export class TaskItem {
       { once: true }
     );
   }
+
+  /** Id of the single, currently open table-of-contents popup (if any). */
+  private static readonly TOC_OVERLAY_ID = 'design-doc-toc-overlay';
+
+  /** The overlay element that is currently open, or ``null``. */
+  private static openTocOverlay: HTMLElement | null = null;
+
+  /** The ``TOC`` button the currently open overlay was opened from. */
+  private static openTocAnchor: HTMLElement | null = null;
+
+  /**
+   * Extracts the ATX headings (``#`` – ``######``) from a Markdown document in
+   * document order. Headings inside fenced code blocks (``` or ~~~) are ignored
+   * so example snippets do not pollute the table of contents.
+   */
+  static extractDesignDocHeadings(markdown: string): DesignDocHeading[] {
+    const headings: DesignDocHeading[] = [];
+    if (!markdown) return headings;
+
+    let fence: string | null = null;
+    for (const line of markdown.split(/\r?\n/)) {
+      const fenceMatch = line.match(/^\s*(`{3,}|~{3,})/);
+      if (fenceMatch) {
+        const marker = fenceMatch[1][0];
+        if (fence === null) fence = marker;
+        else if (fence === marker) fence = null;
+        continue;
+      }
+      if (fence !== null) continue;
+
+      const match = line.match(/^\s{0,3}(#{1,6})\s+(.*?)(?:\s+#+)?\s*$/);
+      if (!match) continue;
+      const text = (match[2] || '').trim();
+      if (!text) continue;
+      headings.push({ level: match[1].length, text });
+    }
+    return headings;
+  }
+
+  /**
+   * Renders the inner HTML of the table-of-contents popup: a header with the
+   * title and a close icon plus the (indented) list of headings. The list is
+   * plain, selectable text so the user can copy it out of the overlay.
+   */
+  static renderDesignDocToc(headings: DesignDocHeading[]): string {
+    const items = headings.length
+      ? headings
+          .map(
+            heading =>
+              `<li class="leading-snug py-0.5" style="padding-left: ${(heading.level - 1) * 12}px">${escapeHtml(heading.text)}</li>`
+          )
+          .join('')
+      : '<li class="italic text-app-muted py-0.5">No headings found.</li>';
+
+    return `
+      <div class="flex items-center justify-between gap-3 border-b border-app-border bg-app-bg px-3 py-2">
+        <span class="text-[10px] font-bold uppercase tracking-widest text-app-accent-2">Table of Contents</span>
+        <button type="button" data-toc-close
+                class="p-0.5 text-app-muted hover:text-app-text hover:bg-app-surface rounded transition-colors cursor-pointer"
+                title="Close table of contents" aria-label="Close table of contents">
+          ${Icon.render('close', { size: 14 })}
+        </button>
+      </div>
+      <ul class="max-h-[60vh] overflow-y-auto px-3 py-2 text-xs text-app-text list-none">${items}</ul>
+    `;
+  }
+
+  /**
+   * Opens (or closes) the table-of-contents popup for a design document.
+   *
+   * Clicking the same ``anchor`` again toggles the popup closed. Clicking
+   * anywhere outside the popup also closes it, while clicking inside it leaves
+   * it open so the user can select and copy the heading text. The popup is
+   * attached to the design-document container (falling back to ``body``) so it
+   * stays with the card it belongs to.
+   */
+  static toggleDesignDocToc(
+    anchor: HTMLElement,
+    markdown: string
+  ): HTMLElement | null {
+    const alreadyOpen =
+      TaskItem.openTocOverlay !== null && TaskItem.openTocAnchor === anchor;
+    TaskItem.closeDesignDocToc();
+    if (alreadyOpen) return null;
+
+    const overlay = document.createElement('div');
+    overlay.id = TaskItem.TOC_OVERLAY_ID;
+    overlay.className =
+      'design-doc-toc-overlay fixed z-50 w-64 max-w-[80vw] cursor-default select-text rounded-lg border border-app-border bg-app-surface text-xs shadow-xl';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-label', 'Design document table of contents');
+    overlay.innerHTML = TaskItem.renderDesignDocToc(
+      TaskItem.extractDesignDocHeadings(markdown)
+    );
+
+    const host = anchor.closest('.design-doc-container') ?? document.body;
+    host.appendChild(overlay);
+
+    // Position just below the button, clamped so the popup stays in the viewport.
+    const anchorRect = anchor.getBoundingClientRect();
+    const overlayRect = overlay.getBoundingClientRect();
+    let left = anchorRect.left;
+    if (left + overlayRect.width > window.innerWidth - 8) {
+      left = Math.max(8, window.innerWidth - overlayRect.width - 8);
+    }
+    let top = anchorRect.bottom + 4;
+    if (top + overlayRect.height > window.innerHeight - 8) {
+      top = Math.max(8, anchorRect.top - overlayRect.height - 4);
+    }
+    overlay.style.left = `${left}px`;
+    overlay.style.top = `${top}px`;
+
+    overlay
+      .querySelector('[data-toc-close]')
+      ?.addEventListener('click', event => {
+        event.stopPropagation();
+        TaskItem.closeDesignDocToc();
+      });
+
+    TaskItem.openTocOverlay = overlay;
+    TaskItem.openTocAnchor = anchor;
+    document.addEventListener('click', TaskItem.handleTocOutsideClick, true);
+    document.addEventListener('keydown', TaskItem.handleTocKeydown, true);
+    return overlay;
+  }
+
+  /** Closes the table-of-contents popup, if one is open. */
+  static closeDesignDocToc(): void {
+    document.removeEventListener('click', TaskItem.handleTocOutsideClick, true);
+    document.removeEventListener('keydown', TaskItem.handleTocKeydown, true);
+    TaskItem.openTocOverlay?.remove();
+    TaskItem.openTocOverlay = null;
+    TaskItem.openTocAnchor = null;
+  }
+
+  /** Closes the popup on any click that lands outside of it (and its button). */
+  private static readonly handleTocOutsideClick = (event: MouseEvent): void => {
+    const overlay = TaskItem.openTocOverlay;
+    if (!overlay) return;
+    const target = event.target as Node | null;
+    if (
+      target &&
+      (overlay.contains(target) || TaskItem.openTocAnchor?.contains(target))
+    ) {
+      return;
+    }
+    TaskItem.closeDesignDocToc();
+  };
+
+  /** Closes the popup on Escape. */
+  private static readonly handleTocKeydown = (event: KeyboardEvent): void => {
+    if (event.key !== 'Escape') return;
+    event.stopPropagation();
+    TaskItem.closeDesignDocToc();
+  };
 
   private static readonly STATUS_COLORS: Record<string, string> = {
     [TaskStatus.CREATED]: 'bg-slate-600 text-slate-300',

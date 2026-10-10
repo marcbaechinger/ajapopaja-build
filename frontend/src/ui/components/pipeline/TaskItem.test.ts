@@ -605,4 +605,157 @@ describe('TaskItem', () => {
       expect(body.querySelector('[data-action-click="cancel_progress"]')).toBeNull();
     });
   });
+
+  describe('design document table of contents', () => {
+    afterEach(() => {
+      TaskItem.closeDesignDocToc();
+      document.body.innerHTML = '';
+    });
+
+    it('renders a TOC button next to the design-document label', () => {
+      const html = TaskItem.render({ ...mockTask, design_doc: '# Design' } as any);
+      expect(html).toContain('data-action-click="toggle_design_doc_toc"');
+      expect(html).toContain('data-task-id="1"');
+      expect(html).toContain('TOC');
+    });
+
+    it('extends the design-document actions with a TOC action on every task', () => {
+      const container = document.createElement('div');
+      container.innerHTML = TaskItem.render({ ...mockTask } as any);
+      expect(
+        container.querySelector('[data-action-click="toggle_design_doc_toc"]')
+      ).not.toBeNull();
+    });
+
+    describe('extractDesignDocHeadings', () => {
+      it('extracts ATX headings h1..h6 in document order', () => {
+        const markdown = [
+          '# One',
+          '## Two',
+          '### Three',
+          '#### Four',
+          '##### Five',
+          '###### Six',
+        ].join('\n');
+        expect(TaskItem.extractDesignDocHeadings(markdown)).toEqual([
+          { level: 1, text: 'One' },
+          { level: 2, text: 'Two' },
+          { level: 3, text: 'Three' },
+          { level: 4, text: 'Four' },
+          { level: 5, text: 'Five' },
+          { level: 6, text: 'Six' },
+        ]);
+      });
+
+      it('strips trailing closing hashes and ignores non-headings', () => {
+        const markdown = '## Heading ##\nNot a heading\n####### Too many\n# C#';
+        expect(TaskItem.extractDesignDocHeadings(markdown)).toEqual([
+          { level: 2, text: 'Heading' },
+          { level: 1, text: 'C#' },
+        ]);
+      });
+
+      it('ignores headings inside fenced code blocks', () => {
+        const markdown = ['# Real', '```md', '# Not real', '```', '## Also real'].join('\n');
+        expect(TaskItem.extractDesignDocHeadings(markdown)).toEqual([
+          { level: 1, text: 'Real' },
+          { level: 2, text: 'Also real' },
+        ]);
+      });
+
+      it('returns an empty list for an empty document', () => {
+        expect(TaskItem.extractDesignDocHeadings('')).toEqual([]);
+      });
+    });
+
+    describe('toggleDesignDocToc', () => {
+      const mount = (markdown: string) => {
+        const container = document.createElement('div');
+        container.className = 'design-doc-container';
+        container.innerHTML = TaskItem.render({
+          ...mockTask,
+          design_doc: markdown,
+        } as any);
+        document.body.appendChild(container);
+        const button = container.querySelector<HTMLElement>(
+          '[data-action-click="toggle_design_doc_toc"]'
+        )!;
+        return { container, button };
+      };
+
+      it('opens an overlay with all headings rendered as text', () => {
+        const { container, button } = mount('# Alpha\n## Beta');
+        const overlay = TaskItem.toggleDesignDocToc(button, '# Alpha\n## Beta');
+
+        expect(overlay).not.toBeNull();
+        expect(container.querySelector('.design-doc-toc-overlay')).toBe(overlay);
+        expect(overlay!.textContent).toContain('Table of Contents');
+        expect(overlay!.textContent).toContain('Alpha');
+        expect(overlay!.textContent).toContain('Beta');
+      });
+
+      it('shows an empty state when there are no headings', () => {
+        const { button } = mount('plain text');
+        const overlay = TaskItem.toggleDesignDocToc(button, 'plain text');
+        expect(overlay!.textContent).toContain('No headings found.');
+      });
+
+      it('toggles the overlay closed when the same button is clicked again', () => {
+        const markdown = '# Alpha';
+        const { button } = mount(markdown);
+
+        TaskItem.toggleDesignDocToc(button, markdown);
+        expect(document.getElementById('design-doc-toc-overlay')).not.toBeNull();
+
+        expect(TaskItem.toggleDesignDocToc(button, markdown)).toBeNull();
+        expect(document.getElementById('design-doc-toc-overlay')).toBeNull();
+      });
+
+      it('stays open when the overlay itself is clicked', () => {
+        const markdown = '# Alpha';
+        const { button } = mount(markdown);
+        const overlay = TaskItem.toggleDesignDocToc(button, markdown)!;
+
+        overlay.querySelector('li')!.dispatchEvent(
+          new MouseEvent('click', { bubbles: true })
+        );
+
+        expect(document.getElementById('design-doc-toc-overlay')).toBe(overlay);
+      });
+
+      it('closes when a click lands outside the overlay', () => {
+        const markdown = '# Alpha';
+        const { button } = mount(markdown);
+        TaskItem.toggleDesignDocToc(button, markdown);
+
+        document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        expect(document.getElementById('design-doc-toc-overlay')).toBeNull();
+      });
+
+      it('closes when the close icon is clicked', () => {
+        const markdown = '# Alpha';
+        const { button } = mount(markdown);
+        const overlay = TaskItem.toggleDesignDocToc(button, markdown)!;
+
+        overlay
+          .querySelector<HTMLElement>('[data-toc-close]')!
+          .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        expect(document.getElementById('design-doc-toc-overlay')).toBeNull();
+      });
+
+      it('replaces a previously opened overlay', () => {
+        const first = mount('# Alpha');
+        const second = mount('# Beta');
+
+        TaskItem.toggleDesignDocToc(first.button, '# Alpha');
+        const overlay = TaskItem.toggleDesignDocToc(second.button, '# Beta');
+
+        expect(document.querySelectorAll('.design-doc-toc-overlay').length).toBe(1);
+        expect(overlay!.textContent).toContain('Beta');
+        expect(overlay!.textContent).not.toContain('Alpha');
+      });
+    });
+  });
 });

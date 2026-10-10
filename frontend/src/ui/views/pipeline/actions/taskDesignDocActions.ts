@@ -17,6 +17,7 @@
 import { ConfirmationDialog } from '../../../components/dialogs/ConfirmationDialog.ts';
 import { DesignDocDialog } from '../../../components/dialogs/DesignDocDialog.ts';
 import { DesignDocDiffDialog } from '../../../components/dialogs/DesignDocDiffDialog.ts';
+import { TaskItem } from '../../../components/pipeline/TaskItem.ts';
 import EasyMDE from 'easymde';
 import type { PipelineDetailCtx } from '../PipelineDetailCtx.ts';
 
@@ -27,8 +28,8 @@ export interface TaskDesignDocActionsDeps {}
  * Registers the design-document actions on the shared action registry:
  * `view_design_doc`, `view_design_doc_history`, `edit_design_doc`,
  * `toggle_edit_design_doc_expand`, `toggle_design_doc_expand`,
- * `copy_design_doc`, `cancel_design_doc`, `save_design_doc`, `accept_design`
- * and `reject_design`.
+ * `toggle_design_doc_toc`, `copy_design_doc`, `cancel_design_doc`,
+ * `save_design_doc`, `accept_design` and `reject_design`.
  *
  * The handlers were extracted verbatim from `PipelineDetailView` (P9b). They
  * only need `ctx`: task state comes from `ctx.state.allLoadedTasks`, the
@@ -122,6 +123,15 @@ export function registerTaskDesignDocActions(
 
     const isExpanded = display.classList.toggle('expanded');
     el.textContent = isExpanded ? 'Show Less' : 'Show More';
+  });
+
+  actionRegistry.register('toggle_design_doc_toc', async (_e, el) => {
+    const container = el.closest('.design-doc-container') as HTMLElement | null;
+    const taskId = container?.getAttribute('data-task-id');
+    const task = taskId
+      ? ctx.state.allLoadedTasks.find(t => t.id === taskId)
+      : undefined;
+    TaskItem.toggleDesignDocToc(el, task?.design_doc ?? '');
   });
 
   actionRegistry.register('copy_design_doc', async (_e, el) => {

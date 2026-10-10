@@ -22,6 +22,7 @@ import type { ActionHandler } from '../../../../core/ActionRegistry.ts';
 import { ConfirmationDialog } from '../../../components/dialogs/ConfirmationDialog.ts';
 import { DesignDocDialog } from '../../../components/dialogs/DesignDocDialog.ts';
 import { DesignDocDiffDialog } from '../../../components/dialogs/DesignDocDiffDialog.ts';
+import { TaskItem } from '../../../components/pipeline/TaskItem.ts';
 import EasyMDE from 'easymde';
 
 vi.mock('../../../components/dialogs/ConfirmationDialog.ts', () => ({
@@ -166,7 +167,7 @@ describe('registerTaskDesignDocActions', () => {
     vi.restoreAllMocks();
   });
 
-  it('registers all ten design-document actions', () => {
+  it('registers all eleven design-document actions', () => {
     expect([...registry.keys()].sort()).toEqual(
       [
         'accept_design',
@@ -176,6 +177,7 @@ describe('registerTaskDesignDocActions', () => {
         'reject_design',
         'save_design_doc',
         'toggle_design_doc_expand',
+        'toggle_design_doc_toc',
         'toggle_edit_design_doc_expand',
         'view_design_doc',
         'view_design_doc_history',
@@ -329,6 +331,35 @@ describe('registerTaskDesignDocActions', () => {
       await getAction('toggle_design_doc_expand')(noEvent, button);
       expect(display.classList.contains('expanded')).toBe(false);
       expect(button.textContent).toBe('Show More');
+    });
+  });
+
+  describe('toggle_design_doc_toc', () => {
+    afterEach(() => {
+      TaskItem.closeDesignDocToc();
+    });
+
+    it('opens the table of contents for the task design doc', async () => {
+      ctx.state.allLoadedTasks = [task('t1', '# Alpha\n## Beta')];
+      const { button } = buildContainer({ taskId: 't1' });
+
+      await getAction('toggle_design_doc_toc')(noEvent, button);
+
+      const overlay = document.getElementById('design-doc-toc-overlay');
+      expect(overlay).not.toBeNull();
+      expect(overlay!.textContent).toContain('Alpha');
+      expect(overlay!.textContent).toContain('Beta');
+    });
+
+    it('opens an empty table of contents when the task has no design doc', async () => {
+      ctx.state.allLoadedTasks = [task('t1')];
+      const { button } = buildContainer({ taskId: 't1' });
+
+      await getAction('toggle_design_doc_toc')(noEvent, button);
+
+      const overlay = document.getElementById('design-doc-toc-overlay');
+      expect(overlay).not.toBeNull();
+      expect(overlay!.textContent).toContain('No headings found.');
     });
   });
 

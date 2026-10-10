@@ -37,7 +37,14 @@ export function renderDesignDocSection(task: Task, isProposed: boolean): string 
          data-task-id="${taskId}" data-version="${task.version}">
       <div class="design-doc-view group">
         <div class="flex justify-between items-center mb-1">
-          <span class="font-bold text-app-accent-2">${isProposed ? 'Proposed Design' : 'Design Document'}</span>
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="font-bold text-app-accent-2">${isProposed ? 'Proposed Design' : 'Design Document'}</span>
+            <button data-action-click="toggle_design_doc_toc" data-task-id="${taskId}"
+                    title="Show table of contents"
+                    class="text-[9px] bg-app-bg text-app-accent-2 border border-app-border hover:border-app-accent-2/50 hover:bg-app-accent-2/10 px-1.5 py-0.5 rounded font-bold uppercase tracking-tight transition-all cursor-pointer">
+              TOC
+            </button>
+          </div>
           <div class="flex items-center gap-2">
             ${canTriggerArchBot ? `
               <button data-action-click="trigger_archbot" data-task-id="${taskId}" 
