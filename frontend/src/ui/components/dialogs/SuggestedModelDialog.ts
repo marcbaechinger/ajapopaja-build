@@ -72,7 +72,10 @@ export class SuggestedModelDialog extends BaseDialog<string> {
 
   private renderOptions(): string {
     const current = this.current || '';
-    const values = [...this.models];
+    // BaseDialog calls renderBody() from within super(), i.e. before this
+    // subclass's field initializers run, so `this.models` is still undefined on
+    // the very first render. Treat it as an empty catalog instead of crashing.
+    const values = [...(this.models ?? [])];
     if (current && !values.includes(current)) {
       values.unshift(current);
     }
