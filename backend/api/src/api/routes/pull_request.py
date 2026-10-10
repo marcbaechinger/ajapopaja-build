@@ -475,6 +475,19 @@ async def accept_pull_request(
         repo = git_utils.get_repo(workspace_path)
         await validate_workspace_clean(repo, workspace_path)
 
+        gitea_pr = _is_gitea_pr_mode(pipeline)
+
+        # In Gitea-PR mode the change is committed onto the feature branch, not
+        # the default branch. Rejection never reverts the default branch, so
+        # committing there would leak rejected work into later CoderBot sessions
+        # (which fall back to branching from the default branch when there is no
+        # OPEN predecessor to chain onto). Branch off the clean default branch
+        # before applying the patch.
+        default_branch: Optional[str] = None
+        if gitea_pr:
+            default_branch = git_utils.current_default_branch(repo)
+            git_utils.ensure_feature_branch(repo, pr.branch_name)
+
         try:
             await apply_patch(repo, pr)
             await format_workspace(workspace_path)
@@ -492,7 +505,6 @@ async def accept_pull_request(
 
             # Step 3b: Submit to the remote repo. In gitea_pr mode we push a
             # feature branch and create a Gitea pull request instead of merging.
-            gitea_pr = _is_gitea_pr_mode(pipeline)
             remote_pr_url: Optional[str] = None
             if gitea_pr:
                 remote_pr_url = await _submit_as_gitea_pr(
@@ -514,6 +526,11 @@ async def accept_pull_request(
                     "Resetting workspace."
                 )
                 try:
+                    # We may have branched onto the feature branch (gitea_pr
+                    # mode); restore the default branch before resetting so the
+                    # workspace is left on its clean default branch.
+                    if default_branch:
+                        repo.git.checkout(default_branch)
                     repo.git.reset("--hard", "HEAD")
                     repo.git.clean("-fd")
                 except Exception as reset_err:

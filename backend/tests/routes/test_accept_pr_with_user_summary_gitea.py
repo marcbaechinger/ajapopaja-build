@@ -168,6 +168,14 @@ async def test_accept_pr_with_user_summary_gitea(
         assert commit_message == "Add new feature"
         assert commit_message != pr.summary
 
+        # The default branch must remain clean (still only the initial commit)
+        # so that a later CoderBot session falling back to the default branch
+        # (no OPEN predecessor to chain onto) does not inherit this commit if
+        # the PR is rejected.
+        repo.git.checkout("main")
+        assert repo.head.commit.message.strip() == "initial commit"
+        assert "Add new feature" not in repo.git.log()
+
         # PR was submitted for external review (not merged to default branch).
         updated_pr = await PullRequest.get(pr.id)
         assert updated_pr.status == PullRequestStatus.SUBMITTED
