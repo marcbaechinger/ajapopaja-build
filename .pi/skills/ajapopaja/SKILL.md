@@ -152,13 +152,17 @@ The command prints the created PR URL, branch, base branch and commit hash.
 The following actions support the main workflow but are not part of the core loop.
 
 ### List Available Tools
+
 Check what the MCP server currently supports.
+
 ```bash
 python3 ./mcp_client.py --url http://localhost:${PORT:-8081} list
 ```
 
 ### Search for Tasks
+
 Search tasks by keywords, status, or pipeline.
+
 ```bash
 # Search by keyword
 python3 ./mcp_client.py --url http://localhost:${PORT:-8081} search-tasks --keywords "search term"
@@ -171,25 +175,29 @@ python3 ./mcp_client.py --url http://localhost:${PORT:-8081} search-tasks --limi
 ```
 
 ### Get Task Status
+
 Check the current status and verification results for a task.
+
 ```bash
 python3 ./mcp_client.py --url http://localhost:${PORT:-8081} get-task-status <task_id>
 ```
 
 ### Update Task Specification
+
 Update the specification for a task.
+
 ```bash
 python3 ./mcp_client.py --url http://localhost:${PORT:-8081} update-task-spec <task_id> --spec "new spec" --version <v>
 ```
 
 ## Troubleshooting
+
 - If you get a `307 Redirect` or `405 Method Not Allowed`, ensure the URL ends with `/mcp/` or use the `--url http://localhost:${PORT:-8081}` default which handles it.
 - Ensure the FastAPI server is running on the specified port (default `8081`, configurable via `$PORT`).
 
 ## Running a Dev Server
 
-CoderBot and interactive sessions run inside a Docker container. A dev server
-started in the container is only reachable from the host if it:
+A dev server started in the container is only reachable from the host if it:
 
 1. **Binds to `0.0.0.0`, not `127.0.0.1`/`localhost`.** Binding to loopback
    makes the server reachable only from inside the container.
