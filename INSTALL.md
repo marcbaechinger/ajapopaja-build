@@ -420,6 +420,68 @@ sudo systemctl restart ajapopaja-build-staging
 sudo journalctl -u ajapopaja-build-staging -f
 ```
 
+### 7.5 Friendly domain names (ajapopaja / ajapopaja.stage)
+
+Both instances are also reachable by name, so you only have to remember one
+URL per environment:
+
+| Name              | Environment | Resolves to     |
+| ----------------- | ----------- | --------------- |
+| `http://ajapopaja`        | production  | `127.0.0.1:8081` |
+| `http://ajapopaja.stage`  | staging     | `127.0.0.1:8082` |
+
+**Included approach (least effort): `/etc/hosts`** — no extra service needed.
+
+- `scripts/setup-hostnames.sh` writes a managed block containing both names
+  into `/etc/hosts`. It is **idempotent**: re-running replaces the block in
+  place and never duplicates lines. `--remove` deletes the block.
+- `deploy-local.sh` already installs the script to
+  `/usr/local/bin/setup-hostnames.sh` and runs it once, and both systemd units
+  re-run it via `ExecStartPost` after the container starts, so the entries are
+  restored automatically after e.g. a `/etc/hosts` reset.
+
+```bash
+sudo /usr/local/bin/setup-hostnames.sh            # install/update entries
+sudo /usr/local/bin/setup-hostnames.sh --remove   # remove entries
+```
+
+The unit test lives in `scripts/test_setup_hostnames.sh`:
+
+```bash
+bash scripts/test_setup_hostnames.sh
+```
+
+**Alternative: nginx reverse proxy (port 80).** If you prefer routing by
+`server_name` (e.g. the app should also be reachable from other LAN
+machines), nginx on the Host can forward both names to the right ports:
+
+```bash
+sudo cp deploy/ajapopaja-nginx.conf /etc/nginx/conf.d/ajapopaja.conf
+sudo nginx -t && sudo nginx -s reload   # remove the conf file again to undo
+```
+
+The template in [`deploy/ajapopaja-nginx.conf`](deploy/ajapopaja-nginx.conf)
+proxies `ajapopaja` → `127.0.0.1:8081` and `ajapopaja.stage` →
+`127.0.0.1:8082` with the usual `X-Real-IP` / `X-Forwarded-For` headers.
+Use only **one** of the two mechanisms at a time (both end up at the same
+place, but mixing them complicates troubleshooting).
+
+**Alternative: local DNS (dnsmasq / systemd-resolved).** A local nameserver
+that answers `ajapopaja` and `ajapopaja.stage` → `127.0.0.1` works identically
+to the hosts-file approach but adds a service to keep running; the static
+`/etc/hosts` entry is simpler for a single machine and was chosen by default.
+
+**Manual (least automated).** Append the two lines to `/etc/hosts` by hand:
+
+```
+127.0.0.1  ajapopaja
+127.0.0.1  ajapopaja.stage
+```
+
+Works, but the script above does exactly this idempotently and keeps it
+around reboots and redeploys.
+
+
 ---
 
 ## 8. Troubleshooting

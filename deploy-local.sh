@@ -80,6 +80,14 @@ echo "3. Exporting shared image to $DEST_DIR/$IMAGE_NAME.tar..."
 docker save -o "$DEST_DIR/$IMAGE_NAME.tar" "$IMAGE_NAME:$VERSION"
 sudo chmod 644 "$DEST_DIR/$IMAGE_NAME.tar"
 
+echo "2e. Installing friendly hostnames (ajapopaja / ajapopaja.stage)..."
+sudo cp scripts/setup-hostnames.sh /usr/local/bin/setup-hostnames.sh
+sudo chmod 755 /usr/local/bin/setup-hostnames.sh
+# Best effort: the service unit also runs this on every start via
+# ExecStartPost, so a failure here must not abort an otherwise valid deploy.
+sudo /usr/local/bin/setup-hostnames.sh \
+  || echo "WARNING: could not install hostname entries (fix with: sudo /usr/local/bin/setup-hostnames.sh)" >&2
+
 echo "4. Installing systemd service..."
 sudo cp "$SERVICE_TEMPLATE" /etc/systemd/system/
 sudo systemctl daemon-reload

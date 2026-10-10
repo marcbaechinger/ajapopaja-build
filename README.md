@@ -101,6 +101,12 @@ git pull && ./deploy-local.sh staging \
 See [INSTALL.md §7](INSTALL.md#7-run-an-isolated-staging-instance) for the full
 staging workflow and the list of isolated dependencies.
 
+**Friendly domain names:** once deployed, production is on
+`http://ajapopaja` (port 8081) and staging on `http://ajapopaja.stage` (port
+8082). `deploy-local.sh` adds the corresponding `/etc/hosts` entries
+automatically via `scripts/setup-hostnames.sh`; the nginx reverse-proxy and
+dnsmasq alternatives are documented in [INSTALL.md §7.5](INSTALL.md#75-friendly-domain-names-ajapopaja--ajapopajastage).
+
 **Quick local dev setup:**
 
 ```bash

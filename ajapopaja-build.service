@@ -17,6 +17,9 @@ ExecStartPre=/usr/bin/docker load -i /data/ajapopaja/docker/ajapopaja-build.tar
 # container runs. With `-d` the command exits immediately and Restart=always
 # would tear the container down and recreate it in an endless loop.
 ExecStart=/usr/bin/docker compose up
+# (Re)install the friendly hostname entries in /etc/hosts after the container
+# is up. `-` makes failure non-fatal on hosts without /usr/local/bin access.
+ExecStartPost=-/usr/local/bin/setup-hostnames.sh
 ExecStop=/usr/bin/docker compose down
 
 [Install]
