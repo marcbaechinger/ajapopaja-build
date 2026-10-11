@@ -27,6 +27,8 @@ export interface DevServerStatus {
   run_id: string | null;
   port: number;
   target?: string | null;
+  task_id?: string | null;
+  branch?: string | null;
 }
 
 /** Select-list data for the pipeline model configuration dialog. */
@@ -171,6 +173,14 @@ export class PipelineClient extends BaseClient {
     const response = await this.fetch(`${this.baseUrl}/pipelines/${id}/dev/stop`, {
       method: 'POST',
     });
+    return await response.json();
+  }
+
+  async resetDevServerToDefaultBranch(id: string): Promise<DevServerStatus> {
+    const response = await this.fetch(
+      `${this.baseUrl}/pipelines/${id}/dev/default-branch`,
+      { method: 'POST' },
+    );
     return await response.json();
   }
 }

@@ -28,6 +28,7 @@ export class DevServerDialog extends BaseDialog<void> {
   private context: AppContext;
   private pipelineId: string;
   private processIoView: ProcessIoView | null = null;
+  private resetButton: HTMLButtonElement | null = null;
 
   constructor(context: AppContext, pipelineId: string) {
     super({
@@ -56,6 +57,14 @@ export class DevServerDialog extends BaseDialog<void> {
         this.close();
       });
 
+    this.resetButton = footerContainer.querySelector(
+      '#dev-server-dialog-default-branch-btn',
+    ) as HTMLButtonElement | null;
+    this.resetButton?.addEventListener('click', () => {
+      void this.resetToDefaultBranch();
+    });
+    void this.refreshResetButtonVisibility();
+
     const mount = bodyContainer.querySelector(
       '#dev-server-pioview-mount',
     ) as HTMLElement;
@@ -73,12 +82,67 @@ export class DevServerDialog extends BaseDialog<void> {
 
   protected renderFooter(): string {
     return `
-      <div class="p-3 border-t border-app-border flex justify-end items-center bg-app-surface/50">
+      <div class="p-3 border-t border-app-border flex justify-between items-center bg-app-surface/50">
+        <button id="dev-server-dialog-default-branch-btn" type="button" class="hidden px-4 py-1.5 rounded text-xs font-bold bg-app-accent-2 text-white hover:bg-app-accent-2/80 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+          Back to default branch
+        </button>
         <button id="dev-server-dialog-close-btn" class="px-4 py-1.5 rounded text-xs font-bold bg-app-bg border border-app-border text-app-text hover:bg-app-surface transition-colors cursor-pointer">
           Close
         </button>
       </div>
     `;
+  }
+
+  /** Shows the reset button only when the server is running on another branch. */
+  private async refreshResetButtonVisibility(): Promise<void> {
+    if (!this.resetButton) return;
+    try {
+      const status = await this.context.pipelineClient.getDevServerStatus(
+        this.pipelineId,
+      );
+      const onAnotherBranch = Boolean(status.task_id || status.target);
+      this.resetButton.classList.toggle('hidden', !onAnotherBranch);
+    } catch (error) {
+      console.error('DevServerDialog: failed to read dev server status', error);
+      this.resetButton.classList.add('hidden');
+    }
+  }
+
+  /** Transitions the dev server back onto the pipeline's default branch. */
+  private async resetToDefaultBranch(): Promise<void> {
+    const button = this.resetButton;
+    if (!button) return;
+
+    const original = button.textContent ?? '';
+    button.disabled = true;
+    button.textContent = 'Switching…';
+    try {
+      await this.context.pipelineClient.resetDevServerToDefaultBranch(
+        this.pipelineId,
+      );
+      button.classList.add('hidden');
+      // The old process stream has ended; re-mount the view so it tails the
+      // freshly started default-branch process.
+      this.recreateProcessIoView();
+    } catch (error) {
+      console.error('DevServerDialog: failed to reset dev server branch', error);
+      button.disabled = false;
+      button.textContent = original;
+    }
+  }
+
+  private recreateProcessIoView(): void {
+    if (this.processIoView) {
+      this.processIoView.destroy();
+      this.processIoView = null;
+    }
+    const mount = this.dialog.querySelector(
+      '#dev-server-pioview-mount',
+    ) as HTMLElement | null;
+    if (mount) {
+      this.processIoView = new ProcessIoView(mount, this.context, this.pipelineId);
+      this.processIoView.render();
+    }
   }
 
   protected close(result: any = null) {

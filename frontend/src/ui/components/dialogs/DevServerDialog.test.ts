@@ -37,7 +37,11 @@ describe('DevServerDialog composition', () => {
     vi.clearAllMocks();
     mockContext = {
       devProcessService: { subscribe: vi.fn(() => () => {}) },
-      pipelineClient: { stopDevServer: vi.fn() },
+      pipelineClient: {
+        stopDevServer: vi.fn(),
+        getDevServerStatus: vi.fn().mockResolvedValue({}),
+        resetDevServerToDefaultBranch: vi.fn().mockResolvedValue({}),
+      },
     };
   });
 
@@ -68,5 +72,41 @@ describe('DevServerDialog composition', () => {
 
     (dialog as any).close('done');
     expect(instance.destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the default-branch button when running on another branch', async () => {
+    mockContext.pipelineClient.getDevServerStatus.mockResolvedValue({
+      task_id: 't1',
+      target: 'coderbot/t1',
+    });
+
+    const dialog = new DevServerDialog(mockContext, 'p1');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const button = dialog['dialog'].querySelector(
+      '#dev-server-dialog-default-branch-btn',
+    );
+    expect(button).not.toBeNull();
+    expect(button?.classList.contains('hidden')).toBe(false);
+  });
+
+  it('resets the dev server to the default branch on button click', async () => {
+    mockContext.pipelineClient.getDevServerStatus.mockResolvedValue({
+      task_id: 't1',
+      target: 'coderbot/t1',
+    });
+
+    const dialog = new DevServerDialog(mockContext, 'p1');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const button = dialog['dialog'].querySelector(
+      '#dev-server-dialog-default-branch-btn',
+    ) as HTMLButtonElement;
+    button.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(
+      mockContext.pipelineClient.resetDevServerToDefaultBranch,
+    ).toHaveBeenCalledWith('p1');
   });
 });

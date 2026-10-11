@@ -74,17 +74,19 @@ async def dev_start(pipeline_id: str, current_user: User = Depends(get_current_u
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/restart", response_model=dict)
-async def dev_restart(pipeline_id: str, current_user: User = Depends(get_current_user)):
-    """Restart the pipeline's dev process (stop then start).
+async def _stop_and_start_on_default(pipeline_id: str, username: str):
+    """Stop any running dev process and start it on the default branch.
 
-    The response includes the published dev-server ``port``.
+    The default branch is the pipeline's own workspace: for remote pipelines
+    ``start`` resolves and fast-forwards that checkout to ``origin``'s default
+    branch, and for local pipelines it is the workspace the pipeline already
+    points at. Shared by ``restart`` and ``default-branch``.
     """
     manager = DevProcessManager.instance()
     try:
         await manager.stop(pipeline_id)
     except DevProcessNotFoundError:
-        # Nothing running: restart behaves like start.
+        # Nothing running: the start below behaves like a fresh start.
         pass
 
     pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
@@ -95,11 +97,34 @@ async def dev_restart(pipeline_id: str, current_user: User = Depends(get_current
             detail="No serve commands configured",
         )
     try:
-        return await manager.start(pipeline_id, commands, current_user.username)
+        return await manager.start(pipeline_id, commands, username)
     except DevProcessAlreadyRunningError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except DevProcessError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/restart", response_model=dict)
+async def dev_restart(pipeline_id: str, current_user: User = Depends(get_current_user)):
+    """Restart the pipeline's dev process (stop then start).
+
+    The response includes the published dev-server ``port``.
+    """
+    return await _stop_and_start_on_default(pipeline_id, current_user.username)
+
+
+@router.post("/default-branch", response_model=dict)
+async def dev_default_branch(
+    pipeline_id: str, current_user: User = Depends(get_current_user)
+):
+    """Transition the dev process back onto the pipeline's default branch.
+
+    Useful when the server is running on a pull-request branch: this stops the
+    PR-scoped process and starts the pipeline's ``serve_commands`` in the
+    default workspace again. The response includes the published dev-server
+    ``port``.
+    """
+    return await _stop_and_start_on_default(pipeline_id, current_user.username)
 
 
 @router.post("/stop", response_model=dict)

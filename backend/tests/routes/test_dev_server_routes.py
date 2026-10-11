@@ -165,6 +165,67 @@ async def test_dev_restart_stops_then_starts(async_client, init_mock_db):
     assert start_args[2] == "testuser"
 
 
+@pytest.mark.asyncio
+async def test_dev_default_branch_stops_then_starts_on_default(
+    async_client, init_mock_db
+):
+    pipeline = Pipeline(name="Serve", serve_commands=[["sh", "-c", "sleep 30"]])
+    await pipeline.insert()
+
+    with (
+        patch.object(DevProcessManager, "stop", new_callable=AsyncMock) as mock_stop,
+        patch.object(DevProcessManager, "start", new_callable=AsyncMock) as mock_start,
+    ):
+        mock_start.return_value = {
+            "status": "started",
+            "run_id": "new",
+            "pid": 7,
+            "port": 1224,
+            "target": None,
+            "task_id": None,
+        }
+        response = await async_client.post(
+            f"/api/pipelines/{pipeline.id}/dev/default-branch"
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["port"] == 1224
+    mock_stop.assert_awaited_once()
+    mock_start.assert_awaited_once()
+    start_args = mock_start.await_args.args
+    assert start_args[0] == str(pipeline.id)
+    assert start_args[2] == "testuser"
+    # The default-branch start never overrides the workspace/target/task.
+    assert "workspace" not in mock_start.await_args.kwargs
+    assert "target" not in mock_start.await_args.kwargs
+    assert "task_id" not in mock_start.await_args.kwargs
+
+
+@pytest.mark.asyncio
+async def test_dev_default_branch_ignores_stop_not_found(async_client, init_mock_db):
+    pipeline = Pipeline(name="Serve", serve_commands=[["sh", "-c", "sleep 30"]])
+    await pipeline.insert()
+
+    with (
+        patch.object(DevProcessManager, "stop", new_callable=AsyncMock) as mock_stop,
+        patch.object(DevProcessManager, "start", new_callable=AsyncMock) as mock_start,
+    ):
+        mock_stop.side_effect = DevProcessNotFoundError("none")
+        mock_start.return_value = {
+            "status": "started",
+            "run_id": "new",
+            "pid": 7,
+            "port": 1224,
+        }
+        response = await async_client.post(
+            f"/api/pipelines/{pipeline.id}/dev/default-branch"
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    mock_stop.assert_awaited_once()
+    mock_start.assert_awaited_once()
+
+
 # ---------------------------------------------------------------------------
 # Pull-request-scoped dev-server start
 # ---------------------------------------------------------------------------
