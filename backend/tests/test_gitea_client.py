@@ -213,3 +213,76 @@ async def test_create_issue_posts_assignees():
         "body": "desc",
         "assignees": ["alice", "bob"],
     }
+
+
+@pytest.mark.asyncio
+async def test_ensure_pr_state_webhook_posts_push_and_pr_events():
+    client = GiteaClient("https://host", "tok")
+
+    list_response = MagicMock()
+    list_response.status_code = 200
+    list_response.json.return_value = []
+
+    create_response = MagicMock()
+    create_response.status_code = 201
+    create_response.json.return_value = {"id": 1, "config": {"url": "target"}}
+
+    with patch.object(
+        client._client,
+        "request",
+        new=AsyncMock(side_effect=[list_response, create_response]),
+    ) as mock_req:
+        result = await client.ensure_pr_state_webhook(
+            "owner",
+            "repo",
+            pipeline_id="pipe-1",
+            public_base_url="https://ajapopaja.example",
+            secret="s3cret",
+        )
+
+    assert result == {"id": 1, "config": {"url": "target"}}
+    assert mock_req.await_count == 2
+    # First call lists hooks, second creates the hook.
+    create_args, create_kwargs = mock_req.await_args_list[1]
+    assert create_args[0] == "POST"
+    assert create_args[1] == "https://host/api/v1/repos/owner/repo/hooks"
+    assert create_kwargs["json"] == {
+        "type": "gitea",
+        "active": True,
+        "events": ["push", "pull_request"],
+        "config": {
+            "url": "https://ajapopaja.example/api/git_hosting/pipelines/pipe-1/pr-state",
+            "content_type": "json",
+            "secret": "s3cret",
+        },
+    }
+
+
+@pytest.mark.asyncio
+async def test_ensure_pr_state_webhook_skips_existing_target():
+    client = GiteaClient("https://host", "tok")
+    target = "https://ajapopaja.example/api/git_hosting/pipelines/pipe-1/pr-state"
+
+    list_response = MagicMock()
+    list_response.status_code = 200
+    list_response.json.return_value = [
+        {"id": 7, "config": {"url": target}},
+    ]
+
+    with patch.object(
+        client._client,
+        "request",
+        new=AsyncMock(return_value=list_response),
+    ) as mock_req:
+        result = await client.ensure_pr_state_webhook(
+            "owner",
+            "repo",
+            pipeline_id="pipe-1",
+            public_base_url="https://ajapopaja.example",
+            secret="s3cret",
+        )
+
+    assert result == {"id": 7, "config": {"url": target}}
+    # Only the list call happened; no POST.
+    assert mock_req.await_count == 1
+    assert mock_req.await_args.args[0] == "GET"

@@ -249,6 +249,26 @@ REMOTE_PR_MODE = os.getenv("REMOTE_PR_MODE", "direct").lower()
 if REMOTE_PR_MODE not in ("direct", "gitea_pr"):
     raise RuntimeError("REMOTE_PR_MODE must be 'direct' or 'gitea_pr'")
 
+# Public base URL used when registering a Gitea webhook that reports PR state
+# (merge/reject) back to Ajapopaja. The per-pipeline webhook target URL is
+# ``{AJAPOPAJA_PUBLIC_URL}/api/git_hosting/pipelines/{pipeline_id}/pr-state``.
+AJAPOPAJA_PUBLIC_URL = os.getenv("AJAPOPAJA_PUBLIC_URL", "")
+
+# Shared secret used to authenticate Gitea webhook deliveries (HMAC-SHA256 over
+# the raw request body, delivered in the ``X-Gitea-Signature`` header). When
+# empty the signature check is skipped (development only) and a warning is
+# logged on every delivery.
+GITEA_WEBHOOK_SECRET = os.getenv("GITEA_WEBHOOK_SECRET", "")
+
+# Optional polling reconciler that mirrors remote Gitea PR state onto local
+# PRs/tasks without webhooks. Disabled by default.
+GITEA_PR_POLL_ENABLED = os.getenv("GITEA_PR_POLL_ENABLED", "false").lower() == "true"
+
+try:
+    GITEA_PR_POLL_INTERVAL = int(os.getenv("GITEA_PR_POLL_INTERVAL", "60"))
+except ValueError as e:  # pragma: no cover - defensive
+    raise RuntimeError("GITEA_PR_POLL_INTERVAL must be an integer") from e
+
 # Port on which a user-started pipeline dev server is expected to listen inside
 # the container. It is published to the host via docker-compose.yml and injected
 # into the dev-process environment by DevProcessManager. Must be an integer.

@@ -1,7 +1,7 @@
 # Design Document: Task-Chain Lifecycle and Pull-Request Rejection
 
 **Task ID:** 6ac6aa15bd8a2b256aff5496
-**Status:** PARTIALLY IMPLEMENTED (fix 4 from §10 landed; fixes 1–3 remain open)
+**Status:** IMPLEMENTED (fixes 1–4 from §10 landed)
 **Related design:** Task-chain problem design (version 18, "Solve the task chain problem when making PRs")
 
 ## 1. Goal
@@ -291,19 +291,20 @@ landed so far; the rest remain open.
 1. **Re-chain or invalidate descendants on reject.** When `PR1` is rejected,
    detect sessions/PRs already chained onto `c1` and either mark them stale or
    re-chain them from `M`. At minimum, block acceptance of a pending PR whose
-   ancestor was rejected. — **Not implemented.** Fix 4 only stops rejected work
-   from leaking through `R.main`; a descendant already chained onto `c1` in its
-   retained sandbox is not re-parented or blocked.
+   ancestor was rejected. — **Implemented** (the accept route now blocks a
+   descendant whose chained predecessor PR is `REJECTED` with a `409` via
+   ``find_rejected_predecessor_pr``, rather than a silent partial apply).
 2. **Treat `SUBMITTED` as pending.** Extend the predecessor-eligibility query and
    the §3.6 ordering guard to consider `SUBMITTED` PRs, not only `OPEN` ones, so
-   `gitea_pr` mode participates in chaining consistently. — **Not implemented**
-   (`_has_open_pull_request` and `find_older_open_pull_request` still test only
-   `status == OPEN`).
+   `gitea_pr` mode participates in chaining consistently. — **Implemented**
+   (`_has_open_pull_request` and `find_older_open_pull_request` now treat
+   `SUBMITTED` as pending).
 3. **Reconcile remote status.** Add a webhook or polling step that mirrors the
    Gitea PR state (`merged` / `closed`) onto the local `PullRequest` and `Task`, so
-   a remote reject flips the local state and stops the chain. — **Not
-   implemented** (no webhook handler and no polling of
-   `GiteaClient.get_pull_request`).
+   a remote reject flips the local state and stops the chain. — **Implemented**
+   (the `POST /api/git_hosting/pipelines/{pipeline_id}/pr-state` webhook receiver
+   and the optional `GITEA_PR_POLL_ENABLED` reconciler; see
+   `design/git/dd_git_hosting.md` §5.4).
 4. **Revisit the `gitea_pr` accept side effect.** Consider not committing `c1'` to
    `R.main` at accept time, so a remote rejection can actually undo the change
    locally and feature branches stop stacking. — **Implemented** (commits

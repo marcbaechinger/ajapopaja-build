@@ -550,6 +550,10 @@ class PullRequest(Document):
     patch: str  # The git diff output
     status: PullRequestStatus = PullRequestStatus.OPEN
     remote_pr_url: Optional[str] = None  # set only in gitea_pr mode
+    # Target/base branch the pull request was submitted against (set in
+    # gitea_pr mode). Used to match an incoming Gitea webhook/poll event to the
+    # correct local PR when reconciling remote merge/reject state.
+    base_branch: Optional[str] = None
     # How accepting this PR will apply the change, resolved at read time by the
     # pull-request routes based on the pipeline's repo_uri and the global
     # REMOTE_PR_MODE:

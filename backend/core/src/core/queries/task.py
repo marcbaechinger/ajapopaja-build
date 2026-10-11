@@ -59,6 +59,9 @@ ALLOWED_TRANSITIONS: Dict[TaskStatus, set] = {
     },
     TaskStatus.SUBMITTED: {
         TaskStatus.IMPLEMENTED,
+        # A remotely rejected Gitea pull request flips the task back to the
+        # backlog so it can be reworked (mirrors the local reject path).
+        TaskStatus.CREATED,
     },
     TaskStatus.IMPLEMENTED: set(),
     TaskStatus.DISCARDED: set(),

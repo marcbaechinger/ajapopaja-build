@@ -291,7 +291,51 @@ Gitea UI or through the batch `accept_pull_request` route.
 
 ---
 
-## 6. Decision summary
+## 5.4 Reconciling remote PR state back into Ajapopaja
+
+`gitea_pr` mode leaves the local `PullRequest`/`Task` in `SUBMITTED` awaiting
+external review. A **webhook** (primary) and an optional **polling** reconciler
+(fallback) observe the remote outcome and mirror it back:
+
+| Remote event | Local PR | Local task |
+|---|---|---|
+| PR **merged** (push to the base branch) | `ACCEPTED` | `IMPLEMENTED`, `commit_hash` = merge result |
+| PR **closed without merge** (remote reject) | `REJECTED` | `CREATED` (mirrors the local reject) |
+
+### Receiver endpoint
+
+`POST /api/git_hosting/pipelines/{pipeline_id}/pr-state` (no user JWT; HMAC
+protected). It accepts Gitea's native `push` or `pull_request` payloads, or a
+minimal normalised body `{ "repo": "owner/name", "branch": "main",
+"commit_hash": "<sha>", "state": "merged" | "closed" }`. The endpoint
+**syncs the pipeline clone with the calling remote and verifies any reported
+commit is present and reachable before mirroring** state, so a stale or forged
+payload cannot flip a task. Non-actionable events return `202
+{"status":"ignored"}`; `busy` / `sync_failed` / `commit_not_found` also return
+`202` with the reason, while `mirrored` returns `200`.
+
+### Webhook registration
+
+On remote-pipeline creation Ajapopaja calls `GiteaClient.ensure_pr_state_webhook`
+(best-effort) to register a repository webhook subscribed to **both** `push` and
+`pull_request` events, with a per-pipeline target URL embedding the pipeline ID.
+
+### Polling fallback
+
+Set `GITEA_PR_POLL_ENABLED=true` to have Ajapopaja periodically read every
+`SUBMITTED` PR's remote state via `GiteaClient.get_pull_request` and feed the
+same reconciler. Interval is `GITEA_PR_POLL_INTERVAL` (seconds, default `60`).
+
+### Configuration
+
+| Env var | Default | Meaning |
+|---|---|---|
+| `AJAPOPAJA_PUBLIC_URL` | `""` | Public base URL used to build the webhook target |
+| `GITEA_WEBHOOK_SECRET` | `""` | HMAC shared secret for webhook signature verification |
+| `GITEA_PR_POLL_ENABLED` | `false` | Enable the polling reconciler |
+| `GITEA_PR_POLL_INTERVAL` | `60` | Poll interval in seconds |
+
+
 
 | Concern | Choice |
 |---------|--------|

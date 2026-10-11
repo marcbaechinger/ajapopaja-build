@@ -24,6 +24,7 @@ import git
 from enum import Enum
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from beanie.operators import In
 
 from api.auth import get_current_user
 from api.coderbot.manager import coderbot_manager
@@ -32,6 +33,7 @@ from api.git_hosting.pull_requests import create_pipeline_pull_request
 from api.websocket_manager import WSMessage, manager as ws_manager
 from core import config
 from core.models.models import (
+    PiSession,
     Pipeline,
     PullRequest,
     PullRequestStatus,
@@ -107,25 +109,71 @@ def validate_patch(patch: Optional[str]) -> str:
 
 
 async def find_older_open_pull_request(pr: PullRequest) -> Optional[PullRequest]:
-    """Return the oldest still-open PR of the same pipeline created before ``pr``.
+    """Return the oldest still-pending PR of the same pipeline created before ``pr``.
 
     Ordered branch chaining makes pull requests a linear sequence; applying
     their deltas out of order can still conflict (line-by-line patching is
     inherently order-sensitive). This lookup lets the accept endpoint warn the
-    caller before that happens. Returns ``None`` when there is no older open PR.
+    caller before that happens. Returns ``None`` when there is no older pending
+    PR.
+
+    Both ``OPEN`` and ``SUBMITTED`` count as pending: a ``SUBMITTED`` PR is a
+    Gitea pull request awaiting external review and is still a valid chaining
+    predecessor that has not yet landed.
     """
     if not pr.pipeline_id or pr.created_at is None:
         return None
     return (
         await PullRequest.find(
             PullRequest.pipeline_id == pr.pipeline_id,
-            PullRequest.status == PullRequestStatus.OPEN,
+            In(
+                PullRequest.status,
+                [PullRequestStatus.OPEN, PullRequestStatus.SUBMITTED],
+            ),
             PullRequest.id != pr.id,
             PullRequest.created_at < pr.created_at,
         )
         .sort("created_at")
         .first_or_none()
     )
+
+
+async def find_rejected_predecessor_pr(pr: PullRequest) -> Optional[PullRequest]:
+    """Return the rejected predecessor PR a chained PR is stacked on top of.
+
+    A chained PR's patch is a delta relative to its predecessor's commit. When
+    that predecessor was rejected (locally or by a remote Gitea close) the
+    delta has no valid base to apply onto, so acceptance must be blocked rather
+    than silently producing a partial ``git apply --3way``. Returns ``None``
+    when the PR is not chained, the predecessor cannot be resolved, or the
+    predecessor PR was not rejected.
+    """
+    if not pr.pi_session_uid:
+        return None
+    try:
+        session = await PiSession.find_one(PiSession.uid == pr.pi_session_uid)
+    except Exception:
+        return None
+    if session is None or not session.chained_from_session_uid:
+        return None
+    try:
+        predecessor = await PiSession.find_one(
+            PiSession.uid == session.chained_from_session_uid
+        )
+    except Exception:
+        return None
+    if predecessor is None:
+        return None
+    for pr_id in predecessor.pull_request_ids or []:
+        if not pr_id:
+            continue
+        try:
+            candidate = await PullRequest.get(pr_id)
+        except Exception:
+            candidate = None
+        if candidate is not None and candidate.status == PullRequestStatus.REJECTED:
+            return candidate
+    return None
 
 
 async def _resolve_chained_start_point(
@@ -414,6 +462,7 @@ async def _submit_as_gitea_pr(repo, pipeline, pr, commit_message: str) -> str:
     pushed. Returns the Gitea PR web URL.
     """
     base = git_utils.current_default_branch(repo)
+    pr.base_branch = base
     git_utils.ensure_feature_branch(repo, pr.branch_name)
     try:
         return await create_pipeline_pull_request(
@@ -493,8 +542,8 @@ async def accept_pull_request(
         validate_pull_request_status(pr)
 
         # Step 1b: Chained PRs must be accepted in creation order. Warn (409)
-        # when an older PR of the same pipeline is still open unless the caller
-        # explicitly forces the out-of-order acceptance.
+        # when an older PR of the same pipeline is still pending unless the
+        # caller explicitly forces the out-of-order acceptance.
         if not (request.force if request else False):
             older = await find_older_open_pull_request(pr)
             if older is not None:
@@ -506,6 +555,20 @@ async def accept_pull_request(
                         "force=true to accept this one out of order."
                     ),
                 )
+
+        # Step 1c: A chained PR whose predecessor was rejected (locally or by a
+        # remote Gitea close) has no valid base for its delta patch. Block it
+        # rather than silently applying a partial ``git apply --3way``.
+        rejected_predecessor = await find_rejected_predecessor_pr(pr)
+        if rejected_predecessor is not None:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "This pull request is chained on a rejected predecessor "
+                    f"(PR {rejected_predecessor.id}). Re-chain or rework the "
+                    "task before accepting it."
+                ),
+            )
 
         pipeline = await Pipeline.get(pr.pipeline_id)
         workspace_path = validate_pipeline(

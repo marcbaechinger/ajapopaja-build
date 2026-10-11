@@ -97,9 +97,14 @@ async def _is_initial_batch_run(record: PiSession) -> bool:
 
 
 async def _has_open_pull_request(record: PiSession) -> bool:
-    """Whether at least one pull request linked to ``record`` is still OPEN."""
+    """Whether at least one pull request linked to ``record`` is still pending.
+
+    Both ``OPEN`` and ``SUBMITTED`` count as pending: a ``SUBMITTED`` PR is a
+    Gitea pull request awaiting external review and is still a valid chaining
+    predecessor (its work is not yet merged or rejected).
+    """
     for pr in await _load_linked_pull_requests(record):
-        if pr.status == PullRequestStatus.OPEN:
+        if pr.status in (PullRequestStatus.OPEN, PullRequestStatus.SUBMITTED):
             return True
     return False
 

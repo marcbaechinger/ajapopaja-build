@@ -56,10 +56,12 @@ from api.coderbot.manager import coderbot_manager
 from api.coderbot.router import router as coderbot_router
 from api.coderbot.session_title import register_session_title_hooks
 from api.routes.pull_request import router as pull_request_router
+from api.routes.git_hosting import router as git_hosting_router
 from api.routes.pipeline import router as pipeline_router
 from api.routes.system import router as system_router
 from api.routes.task import pipeline_task_router, task_router
 from api.websocket_manager import manager
+from api.git_hosting.pr_poller import PrStatePoller
 from core import __version__, config
 from core.db import init_db
 from core.exceptions import (
@@ -103,6 +105,10 @@ for logger_name in ["uvicorn.access", "uvicorn.error"]:
     logging.getLogger(logger_name).addFilter(TokenRedactionFilter())
 
 
+# Optional background reconciler for Gitea PR state (disabled by default).
+pr_state_poller = PrStatePoller()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Application starting up...")
@@ -124,8 +130,11 @@ async def lifespan(app: FastAPI):
     register_specagent_actions()
     initialize_oneprompt()
     register_session_title_hooks()
+    if config.GITEA_PR_POLL_ENABLED:
+        pr_state_poller.start()
     yield
     logger.info("Shutting down...")
+    await pr_state_poller.stop()
     await DevProcessManager.instance().stop_all()
 
 
@@ -299,6 +308,7 @@ api_router.include_router(archbot_router)
 api_router.include_router(specagent_router)
 api_router.include_router(coderbot_router)
 api_router.include_router(pull_request_router)
+api_router.include_router(git_hosting_router)
 api_router.include_router(dev_server_router)
 api_router.include_router(pr_dev_router)
 api_router.include_router(file_browser_router)

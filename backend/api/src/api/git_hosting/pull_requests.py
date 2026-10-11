@@ -81,3 +81,43 @@ async def create_pipeline_pull_request(
         )
     finally:
         await client.aclose()
+
+
+async def ensure_pr_state_webhook_best_effort(pipeline: Pipeline) -> None:
+    """Register the PR-state webhook for a remote pipeline (best effort).
+
+    The webhook reports Gitea ``push``/``pull_request`` events back to the
+    ``/api/git_hosting/pipelines/{pipeline_id}/pr-state`` endpoint so a remote
+    merge/reject can be reconciled onto local state. Registration is skipped
+    when the pipeline is local or the public URL / webhook secret are not
+    configured, and any failure is logged without failing pipeline creation.
+    """
+    if not pipeline.repo_uri or not config.AJAPOPAJA_PUBLIC_URL:
+        return
+    if not config.GITEA_WEBHOOK_SECRET:
+        logger.warning(
+            "Skipping PR-state webhook registration for pipeline %s: "
+            "GITEA_WEBHOOK_SECRET is not configured",
+            pipeline.id,
+        )
+        return
+    try:
+        base_url, owner, repo_name = git_utils.resolve_gitea_repo(pipeline.repo_uri)
+        token = pipeline.repo_token or config.GIT_PUSH_TOKEN
+        client = GiteaClient(base_url, token)
+        try:
+            await client.ensure_pr_state_webhook(
+                owner,
+                repo_name,
+                pipeline_id=str(pipeline.id),
+                public_base_url=config.AJAPOPAJA_PUBLIC_URL,
+                secret=config.GITEA_WEBHOOK_SECRET,
+            )
+        finally:
+            await client.aclose()
+    except Exception:
+        logger.warning(
+            "Failed to register PR-state webhook for pipeline %s",
+            pipeline.id,
+            exc_info=True,
+        )

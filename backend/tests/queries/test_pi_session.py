@@ -137,12 +137,11 @@ async def test_skips_non_completed_sessions(init_mock_db, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_skips_sessions_without_open_pull_request(init_mock_db, tmp_path):
+async def test_skips_sessions_without_pending_pull_request(init_mock_db, tmp_path):
     ws = _make_workspace(tmp_path / "s1")
     for status in (
         PullRequestStatus.ACCEPTED,
         PullRequestStatus.REJECTED,
-        PullRequestStatus.SUBMITTED,
     ):
         pr = await _insert_pr("p1", status=status)
         await _insert_session(
@@ -154,6 +153,28 @@ async def test_skips_sessions_without_open_pull_request(init_mock_db, tmp_path):
 
     found = await pi_session_queries.find_previous_pending_batch_session("p1")
     assert found is None
+
+
+@pytest.mark.asyncio
+async def test_submitted_pull_request_is_pending(init_mock_db, tmp_path):
+    """A SUBMITTED PR (awaiting external Gitea review) is a valid chaining
+    predecessor, not a completed/closed one."""
+    ws = _make_workspace(tmp_path / "s1")
+    base = datetime(2026, 1, 1, tzinfo=UTC)
+    pr = await _insert_pr(
+        "p1", status=PullRequestStatus.SUBMITTED, created_at=base + timedelta(seconds=1)
+    )
+    await _insert_session(
+        "p1",
+        uid="u-submitted",
+        workspace_path=str(ws),
+        pull_request_ids=[str(pr.id)],
+        created_at=base,
+    )
+
+    found = await pi_session_queries.find_previous_pending_batch_session("p1")
+    assert found is not None
+    assert found.uid == "u-submitted"
 
 
 @pytest.mark.asyncio

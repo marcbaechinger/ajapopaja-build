@@ -214,5 +214,53 @@ class GiteaClient:
         """GET /repos/{owner}/{repo}/pulls/{index} -> single pull request."""
         return await self._get_json(f"/repos/{owner}/{repo}/pulls/{index}")
 
+    async def list_webhooks(self, owner: str, repo: str) -> list:
+        """GET /repos/{owner}/{repo}/hooks -> the repository's webhooks."""
+        return await self._get_json(f"/repos/{owner}/{repo}/hooks")
+
+    async def ensure_pr_state_webhook(
+        self,
+        owner: str,
+        repo: str,
+        *,
+        pipeline_id: str,
+        public_base_url: str,
+        secret: str,
+    ) -> dict:
+        """Register (idempotently) the PR-state webhook for a repository.
+
+        The webhook subscribes to both ``push`` and ``pull_request`` events so a
+        merge (delivered as a push to the base branch) and a close-without-merge
+        (remote reject) are both observed. The target URL embeds the pipeline ID
+        so the receiver can resolve the pipeline by primary key. Returns the
+        existing hook when one already targets the URL, otherwise the newly
+        created hook.
+        """
+        base_url = public_base_url.rstrip("/")
+        target_url = f"{base_url}/api/git_hosting/pipelines/{pipeline_id}/pr-state"
+
+        existing = await self.list_webhooks(owner, repo)
+        for hook in existing or []:
+            config_block = hook.get("config") if isinstance(hook, dict) else None
+            if isinstance(config_block, dict) and config_block.get("url") == target_url:
+                return hook
+
+        payload = {
+            "type": "gitea",
+            "active": True,
+            "events": ["push", "pull_request"],
+            "config": {
+                "url": target_url,
+                "content_type": "json",
+                "secret": secret,
+            },
+        }
+        response = await self._request(
+            "POST",
+            f"/repos/{owner}/{repo}/hooks",
+            json=payload,
+        )
+        return response.json()
+
     async def aclose(self) -> None:
         await self._client.aclose()

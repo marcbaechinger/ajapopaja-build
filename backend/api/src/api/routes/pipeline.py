@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from api.auth import get_current_user
+from api.git_hosting.pull_requests import ensure_pr_state_webhook_best_effort
 from api.websocket_manager import WSMessage, manager
 from core.exceptions import EntityNotFoundError
 from core.models.models import (
@@ -89,6 +90,10 @@ async def create_pipeline(
     await manager.broadcast(
         WSMessage(type="PIPELINE_CREATED", payload=new_pipeline.model_dump(mode="json"))
     )
+    # Best-effort: register the Gitea PR-state webhook for remote pipelines so
+    # a later merge/reject can be reconciled back to local state. Never blocks
+    # pipeline creation on webhook registration failure.
+    await ensure_pr_state_webhook_best_effort(new_pipeline)
     return new_pipeline
 
 
