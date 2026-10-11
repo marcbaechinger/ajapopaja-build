@@ -482,7 +482,7 @@ export class TaskItem {
           </div>
           <div class="task-header-actions flex items-center justify-end gap-2 flex-shrink-0" data-action-click="none">
             ${!isProposed ? `
-              <button data-action-click="delete_task"
+              <button data-action-click="delete_task" tabindex="-1"
                       class="${headerButtonBase} text-app-muted hover:text-red-400 bg-app-surface hover:bg-red-500/20 border border-app-border"
                       title="Delete Task">
                 ${Icon.render('trash', { size: 14 })}

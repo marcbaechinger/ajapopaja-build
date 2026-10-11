@@ -505,6 +505,17 @@ describe('TaskItem', () => {
       expect(body.querySelector('[data-action-click="schedule_task"]')).toBeNull();
     });
 
+    it('removes the Delete button from the tab order', () => {
+      // The delete button is skipped when tabbing through the header actions
+      // (it can only be activated with a pointer), so it must carry tabindex="-1".
+      for (const status of [TaskStatus.CREATED, TaskStatus.SCHEDULED]) {
+        const container = parse(TaskItem.render({ ...mockTask, status } as any));
+        const deleteBtn = container.querySelector('[data-action-click="delete_task"]')!;
+        expect(deleteBtn).not.toBeNull();
+        expect(deleteBtn.getAttribute('tabindex')).toBe('-1');
+      }
+    });
+
     it('moves Delete and Cancel Schedule into the header action bar for SCHEDULED tasks', () => {
       const container = parse(TaskItem.render({ ...mockTask, status: TaskStatus.SCHEDULED } as any));
       const actions = container.querySelector('.task-header-actions')!;
