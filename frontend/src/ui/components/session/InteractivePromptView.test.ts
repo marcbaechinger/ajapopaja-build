@@ -254,6 +254,25 @@ describe('InteractivePromptView', () => {
     expect(document.activeElement).toBe(other);
   });
 
+  it('calls onEnabled when re-enabled after being disabled', () => {
+    const onEnabled = vi.fn();
+    const view = mount({ onEnabled });
+
+    view.setDisabled(true);
+    expect(onEnabled).not.toHaveBeenCalled();
+
+    view.setDisabled(false);
+    expect(onEnabled).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call onEnabled when enabled without a prior disable', () => {
+    const onEnabled = vi.fn();
+    const view = mount({ onEnabled });
+
+    view.setDisabled(false);
+    expect(onEnabled).not.toHaveBeenCalled();
+  });
+
   it('updates the placeholder and exposes the value', () => {
     const view = mount();
     view.setPlaceholder('Waiting…');

@@ -793,7 +793,7 @@ describe('ContentTabsController', () => {
       refresh,
     });
     subRoute = new PipelineSubRoute('p1');
-    controller = new ContentTabsController({ ctx, getHost: () => host, subRoute });
+    controller = new ContentTabsController({ ctx, getHost: () => host, subRoute, onAgentFinished: vi.fn() });
   });
 
   afterEach(() => {

@@ -817,6 +817,7 @@ export class PipelineDetailView extends View {
       ctx: this.ctx,
       getHost: () => this.container,
       subRoute: this.subRoute,
+      onAgentFinished: () => this.scheduleRefreshGitStatus(),
     });
     return this.contentTabs;
   }

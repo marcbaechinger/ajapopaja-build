@@ -213,6 +213,18 @@ describe('InteractiveCodingView', () => {
     expect(promptViewInstances[0].options.getPipelineId()).toBe('p1');
   });
 
+  it('forwards onAgentFinished to the prompt view onEnabled callback', () => {
+    const onAgentFinished = vi.fn();
+    const custom = new InteractiveCodingView(
+      service as unknown as InteractiveCodingService,
+      root,
+      { pipelineId: 'p1', onAgentFinished }
+    );
+    custom.render();
+
+    expect(promptViewInstances[0].options.onEnabled).toBe(onAgentFinished);
+  });
+
   it('sendMessage delegates to the prompt view submit', async () => {
     view.render();
     const prompt = promptViewInstances[0];

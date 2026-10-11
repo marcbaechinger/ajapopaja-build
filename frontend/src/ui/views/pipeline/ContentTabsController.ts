@@ -31,6 +31,8 @@ export interface ContentTabsControllerDeps {
   getHost(): HTMLElement | null;
   /** Shared pure hash I/O (P1). */
   subRoute: PipelineSubRoute;
+  /** Refreshes the header git-status badge after the agent finishes a turn. */
+  onAgentFinished(): void;
 }
 
 /**
@@ -283,6 +285,7 @@ export class ContentTabsController {
               onClick: () => this.startInteractiveSession(),
             }
           : undefined,
+        onAgentFinished: this.deps.onAgentFinished,
       }
     );
     this.interactiveViewAllowsStart = allowsStart;

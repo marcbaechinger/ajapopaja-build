@@ -35,6 +35,11 @@ export interface InteractivePromptViewOptions {
   /** Handlers for action-type commands, keyed by token (e.g. { '/clear': fn }). */
   actionHandlers?: Record<string, () => void>;
   placeholder?: string;
+  /**
+   * Invoked when the composer transitions from disabled back to enabled (i.e.
+   * after the agent has finished its turn and the user can type again).
+   */
+  onEnabled?(): void;
 }
 
 /**
@@ -105,6 +110,7 @@ export class InteractivePromptView {
       // Re-enabled after the agent finished its turn: restore focus so the
       // user can keep typing without clicking into the textarea first.
       this.focus();
+      this.options.onEnabled?.();
     }
   }
 

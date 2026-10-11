@@ -26,6 +26,8 @@ export interface InteractiveCodingViewOptions {
   onPause?: () => void;
   /** Optional action button rendered by the embedded PiView's empty state. */
   emptyStateAction?: EmptyStateAction;
+  /** Invoked after the agent finishes its turn (the composer is re-enabled). */
+  onAgentFinished?: () => void;
 }
 
 /**
@@ -209,6 +211,7 @@ export class InteractiveCodingView {
   private pipelineId: string;
   private onPause?: () => void;
   private emptyStateAction?: EmptyStateAction;
+  private onAgentFinished?: () => void;
   private piView: PiView | null = null;
   private promptView: InteractivePromptView | null = null;
   private scopedSession: PipelineScopedPiSession | null = null;
@@ -224,6 +227,7 @@ export class InteractiveCodingView {
     this.pipelineId = options.pipelineId;
     this.onPause = options.onPause;
     this.emptyStateAction = options.emptyStateAction;
+    this.onAgentFinished = options.onAgentFinished;
   }
 
   render(): void {
@@ -280,6 +284,7 @@ export class InteractiveCodingView {
         onSubmit: (text) => this.service.sendMessage(text),
         getPipelineId: () => this.pipelineId,
         actionHandlers: { '/clear': () => this.service.clearHistory() },
+        onEnabled: this.onAgentFinished,
       });
       this.promptView.render();
     }
