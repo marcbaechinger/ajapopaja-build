@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import asyncio
+from datetime import UTC, datetime
 
 import pytest
 
@@ -41,25 +41,39 @@ async def test_task_execution_order_fifo_scheduled(init_mock_db):
     await pipeline.insert()
     pid = str(pipeline.id)
 
-    # Task 1 created first
-    t1 = Task(title="Task 1", pipeline_id=pid, status=TaskStatus.CREATED, order=0)
+    # Task 1 created first (explicit, deterministic timestamps).
+    t1 = Task(
+        title="Task 1",
+        pipeline_id=pid,
+        status=TaskStatus.CREATED,
+        order=0,
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
     await t1.insert()
 
-    # Wait a bit to ensure different created_at
-    await asyncio.sleep(0.01)
-
-    # Task 2 created second
-    t2 = Task(title="Task 2", pipeline_id=pid, status=TaskStatus.CREATED, order=0)
+    # Task 2 created second.
+    t2 = Task(
+        title="Task 2",
+        pipeline_id=pid,
+        status=TaskStatus.CREATED,
+        order=0,
+        created_at=datetime(2026, 1, 2, tzinfo=UTC),
+    )
     await t2.insert()
 
-    # Schedule Task 2 FIRST
-    await task_queries.update_task_status(str(t2.id), TaskStatus.SCHEDULED, t2.version)
+    # Schedule Task 2 FIRST.
+    t2 = await task_queries.update_task_status(
+        str(t2.id), TaskStatus.SCHEDULED, t2.version
+    )
+    t2.scheduled_at = datetime(2026, 1, 3, tzinfo=UTC)
+    await t2.save()
 
-    # Wait a bit
-    await asyncio.sleep(0.01)
-
-    # Schedule Task 1 SECOND
-    await task_queries.update_task_status(str(t1.id), TaskStatus.SCHEDULED, t1.version)
+    # Schedule Task 1 SECOND.
+    t1 = await task_queries.update_task_status(
+        str(t1.id), TaskStatus.SCHEDULED, t1.version
+    )
+    t1.scheduled_at = datetime(2026, 1, 4, tzinfo=UTC)
+    await t1.save()
 
     # get_next_task should return Task 2 first, even though it was created later,
     # because it was scheduled first.

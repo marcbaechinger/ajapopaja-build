@@ -85,13 +85,15 @@ class FakeOllama:
         *,
         response: str = "expanded result",
         chunks: list[str] | None = None,
-        delay: float = 0.0,
         error: Exception | None = None,
+        block_event: asyncio.Event | None = None,
+        started_event: asyncio.Event | None = None,
     ) -> None:
         self.response = response
         self.chunks = list(chunks) if chunks is not None else ["Hel", "lo"]
-        self.delay = delay
         self.error = error
+        self.block_event = block_event
+        self.started_event = started_event
         self.calls: list[dict[str, Any]] = []
 
     async def chat(
@@ -105,8 +107,10 @@ class FakeOllama:
         self.calls.append(
             {"model": model, "messages": messages, "stream": stream, **kwargs}
         )
-        if self.delay:
-            await asyncio.sleep(self.delay)
+        if self.started_event is not None:
+            self.started_event.set()
+        if self.block_event is not None:
+            await self.block_event.wait()
         if self.error is not None:
             raise self.error
         if stream:
@@ -309,7 +313,7 @@ async def test_start_returns_immediately(tmp_path):
     sent: list[dict[str, Any]] = []
     runner = OnePromptRunner(
         registry=_registry(tmp_path),
-        ollama_client=FakeOllama(delay=0.2),
+        ollama_client=FakeOllama(),
         sender=sent.append,
     )
 
@@ -409,13 +413,16 @@ async def test_set_streaming_toggles_in_flight_run(tmp_path):
 
 async def test_cancel_in_flight_run(tmp_path):
     sent: list[dict[str, Any]] = []
+    started = asyncio.Event()
     runner = OnePromptRunner(
         registry=_registry(tmp_path),
-        ollama_client=FakeOllama(delay=5.0),
+        ollama_client=FakeOllama(
+            block_event=asyncio.Event(), started_event=started
+        ),
         sender=sent.append,
     )
     run = runner.start("greet", {"name": "Ada"}, run_id="run-cancel")
-    await asyncio.sleep(0)  # let the task start
+    await started.wait()
 
     assert runner.cancel("run-cancel") is True
     await run
@@ -435,13 +442,16 @@ async def test_cancel_unknown_run_returns_false(tmp_path):
 
 
 async def test_cancel_run_awaits_the_task(tmp_path):
+    started = asyncio.Event()
     runner = OnePromptRunner(
         registry=_registry(tmp_path),
-        ollama_client=FakeOllama(delay=5.0),
+        ollama_client=FakeOllama(
+            block_event=asyncio.Event(), started_event=started
+        ),
         sender=lambda message: None,
     )
     run = runner.start("greet", {"name": "Ada"}, run_id="run-cancel-2")
-    await asyncio.sleep(0)
+    await started.wait()
 
     assert await runner.cancel_run("run-cancel-2") is True
     assert run.status == STATUS_CANCELLED
@@ -456,7 +466,7 @@ async def test_run_times_out(tmp_path):
     sent: list[dict[str, Any]] = []
     runner = OnePromptRunner(
         registry=_registry(tmp_path),
-        ollama_client=FakeOllama(delay=1.0),
+        ollama_client=FakeOllama(block_event=asyncio.Event()),
         sender=sent.append,
         default_timeout=0.05,
     )
@@ -472,7 +482,7 @@ async def test_run_times_out(tmp_path):
 async def test_per_template_timeout_is_honoured(tmp_path):
     runner = OnePromptRunner(
         registry=_registry(tmp_path, timeout=0.05),
-        ollama_client=FakeOllama(delay=1.0),
+        ollama_client=FakeOllama(block_event=asyncio.Event()),
         default_timeout=60.0,
     )
 
@@ -484,7 +494,7 @@ async def test_per_template_timeout_is_honoured(tmp_path):
 async def test_explicit_timeout_overrides_template(tmp_path):
     runner = OnePromptRunner(
         registry=_registry(tmp_path, timeout=60.0),
-        ollama_client=FakeOllama(delay=1.0),
+        ollama_client=FakeOllama(block_event=asyncio.Event()),
     )
 
     run = await runner.run("greet", {"name": "Ada"}, timeout=0.05)
@@ -636,7 +646,7 @@ async def test_sender_failure_does_not_fail_the_run(tmp_path):
 async def test_in_flight_tracking(tmp_path):
     runner = OnePromptRunner(
         registry=_registry(tmp_path),
-        ollama_client=FakeOllama(delay=0.1),
+        ollama_client=FakeOllama(),
     )
     run = runner.start("greet", {"name": "Ada"}, run_id="run-track")
 

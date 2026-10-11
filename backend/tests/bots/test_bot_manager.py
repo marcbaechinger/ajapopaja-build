@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -23,22 +22,21 @@ from api.bot.manager import BotManager
 class MockSession:
     """A minimal mock session that mimics BaseBotSession for manager testing."""
 
-    def __init__(self, pipeline_id, task_id, delay=0.1, should_fail=False):
+    def __init__(self, pipeline_id, task_id, should_fail=False, order=None):
         self.pipeline_id = pipeline_id
         self.task_id = task_id
-        self.delay = delay
         self.should_fail = should_fail
         self.run_called = False
-        self.start_time = None
-        self.end_time = None
+        self.order = order
 
     async def run(self):
         self.run_called = True
-        self.start_time = asyncio.get_event_loop().time()
+        if self.order is not None:
+            self.order.append(("start", self.task_id))
         if self.should_fail:
             raise Exception("Bot failed")
-        await asyncio.sleep(self.delay)
-        self.end_time = asyncio.get_event_loop().time()
+        if self.order is not None:
+            self.order.append(("end", self.task_id))
 
 
 @pytest.mark.asyncio
@@ -50,8 +48,9 @@ async def test_bot_manager_serialization():
     ) as mock_ollama:
         mock_ollama.return_value = True
 
-        session1 = MockSession("p1", "t1", delay=0.2)
-        session2 = MockSession("p1", "t2", delay=0.1)
+        order = []
+        session1 = MockSession("p1", "t1", order=order)
+        session2 = MockSession("p1", "t2", order=order)
 
         await manager.enqueue(session1)
         await manager.enqueue(session2)
@@ -67,8 +66,13 @@ async def test_bot_manager_serialization():
         assert session1.run_called
         assert session2.run_called
 
-        # Ensure session 2 started after session 1 ended
-        assert session2.start_time >= session1.end_time
+        # Session 2 must not start until session 1 has finished.
+        assert order == [
+            ("start", "t1"),
+            ("end", "t1"),
+            ("start", "t2"),
+            ("end", "t2"),
+        ]
 
 
 @pytest.mark.asyncio
@@ -97,7 +101,7 @@ async def test_bot_manager_error_resilience():
         mock_ollama.return_value = True
 
         session1 = MockSession("p1", "t1", should_fail=True)
-        session2 = MockSession("p1", "t2", delay=0.1)
+        session2 = MockSession("p1", "t2")
 
         await manager.enqueue(session1)
         await manager.enqueue(session2)

@@ -408,11 +408,12 @@ async def test_manager_tracks_active_session():
             self.pipeline_id = "p1"
             self.stop_called = False
             self.started_event = asyncio.Event()
+            self.finish_event = asyncio.Event()
 
         async def run(self):
             self.started_event.set()
-            # Simulate running
-            await asyncio.sleep(0.5)
+            # Block until the test cancels the worker, keeping the session active.
+            await self.finish_event.wait()
 
         def stop(self):
             self.stop_called = True
@@ -665,7 +666,7 @@ async def test_send_interactive_message_rejects_when_busy():
     manager._interactive_session = _interactive_session_mock()
 
     async def _never():
-        await asyncio.sleep(3600)
+        await asyncio.Event().wait()
 
     manager._interactive_turn_task = asyncio.create_task(_never())
     try:
