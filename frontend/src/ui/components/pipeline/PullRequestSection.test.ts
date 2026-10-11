@@ -66,11 +66,11 @@ describe('PullRequestSection', () => {
     expect(html).toContain('data-action-click="accept_pr"');
     expect(html).toContain('data-pr-id="pr1"');
     expect(html).toContain('data-task-id="t1"');
-    // Accept button is placed before Review
+    // Accept button is placed after Review
     const acceptIndex = html.indexOf('data-action-click="accept_pr"');
     const reviewIndex = html.indexOf('open_pr_dialog');
     expect(acceptIndex).toBeGreaterThan(-1);
-    expect(reviewIndex).toBeGreaterThan(acceptIndex);
+    expect(acceptIndex).toBeGreaterThan(reviewIndex);
   });
 
   it('renders an Iterate button with the expected action and data attributes for OPEN PRs', () => {
@@ -79,11 +79,11 @@ describe('PullRequestSection', () => {
     expect(html).toContain('data-pr-id="pr1"');
     expect(html).toContain('data-task-id="t1"');
     expect(html).toContain('Iterate');
-    // Iterate button is placed before Review
+    // Iterate button is placed after Review
     const iterateIndex = html.indexOf('data-action-click="iterate_pr"');
     const reviewIndex = html.indexOf('open_pr_dialog');
     expect(iterateIndex).toBeGreaterThan(-1);
-    expect(reviewIndex).toBeGreaterThan(iterateIndex);
+    expect(iterateIndex).toBeGreaterThan(reviewIndex);
   });
 
   it('renders no Accept button when there are no OPEN PRs', () => {
