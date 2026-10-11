@@ -637,6 +637,31 @@ def get_git_log(repo: git.Repo, limit: int = 50, offset: int = 0) -> list:
     ]
 
 
+def get_head_branch_and_commit(
+    workspace_path: str,
+) -> Tuple[Optional[str], Optional[str]]:
+    """Return the checked-out branch name and HEAD commit hash.
+
+    Both values are best-effort: a missing repository, a detached HEAD or an
+    unborn HEAD yields ``None`` for the unavailable field rather than raising.
+    """
+    branch: Optional[str] = None
+    commit: Optional[str] = None
+    try:
+        repo = get_repo(workspace_path)
+    except Exception:
+        return branch, commit
+    try:
+        branch = repo.active_branch.name
+    except Exception:
+        pass
+    try:
+        commit = repo.head.commit.hexsha
+    except Exception:
+        pass
+    return branch, commit
+
+
 def get_git_log_total(repo: git.Repo) -> int:
     """Return the total number of commits reachable from HEAD.
 

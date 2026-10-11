@@ -900,6 +900,29 @@ def test_get_git_log_total_unborn_head_returns_zero(tmp_path):
     assert git_utils.get_git_log_total(repo) == 0
 
 
+def test_get_head_branch_and_commit_returns_branch_and_hash(tmp_path):
+    ws = tmp_path / "workspace"
+    ws.mkdir()
+    _git(ws, ["init", "-b", "feature/x"])
+    (ws / "readme.md").write_text("readme\n")
+    _git(ws, ["add", "."])
+    _git(ws, ["commit", "-m", "Initial commit"])
+
+    branch, commit = git_utils.get_head_branch_and_commit(str(ws))
+
+    assert branch == "feature/x"
+    assert commit == git.Repo(str(ws)).head.commit.hexsha
+
+
+def test_get_head_branch_and_commit_missing_repo_returns_none(tmp_path):
+    branch, commit = git_utils.get_head_branch_and_commit(
+        str(tmp_path / "does-not-exist")
+    )
+
+    assert branch is None
+    assert commit is None
+
+
 @pytest.mark.asyncio
 async def test_get_pipeline_repo_readonly_missing_repository(tmp_path):
     pipeline = MagicMock()

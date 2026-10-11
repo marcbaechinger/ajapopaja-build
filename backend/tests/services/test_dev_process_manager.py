@@ -21,6 +21,7 @@ workspace resolution is patched).
 
 import asyncio
 import os
+import subprocess
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -48,6 +49,34 @@ def _patch_workspace(manager: DevProcessManager, workspace: str):
     return patch.object(
         manager, "_resolve_workspace", new=AsyncMock(return_value=workspace)
     )
+
+
+_RUN_GIT_ENV = {
+    "GIT_AUTHOR_NAME": "Test User",
+    "GIT_AUTHOR_EMAIL": "test@example.com",
+    "GIT_COMMITTER_NAME": "Test User",
+    "GIT_COMMITTER_EMAIL": "test@example.com",
+}
+
+
+def _git(cwd, args):
+    return subprocess.run(
+        ["git"] + args,
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        text=True,
+        env={**os.environ, **_RUN_GIT_ENV},
+    )
+
+
+def _make_repo(path, branch: str = "main"):
+    path.mkdir(parents=True, exist_ok=True)
+    _git(path, ["init", "-b", branch])
+    (path / "readme.md").write_text("readme\n")
+    _git(path, ["add", "."])
+    _git(path, ["commit", "-m", "Initial commit"])
+    return path
 
 
 async def test_start_status_stop(tmp_path):
@@ -382,3 +411,44 @@ async def test_stream_status_includes_target(tmp_path):
     events = [event async for event in manager.stream("p1", info.run_id)]
     assert events[0]["type"] == "status"
     assert events[0]["target"] == "coderbot/t2"
+
+
+async def test_start_resolves_branch_commit_and_task_id(tmp_path):
+    repo = _make_repo(tmp_path / "repo", branch="feature/x")
+    manager = DevProcessManager.instance()
+    with _patch_workspace(manager, str(repo)):
+        started = await manager.start(
+            "p1", [["sh", "-c", "sleep 30"]], task_id="t1"
+        )
+
+    assert started["task_id"] == "t1"
+    assert started["branch"] == "feature/x"
+    assert started["commit_hash"]
+
+    status = await manager.status("p1")
+    assert status["task_id"] == "t1"
+    assert status["branch"] == "feature/x"
+    assert status["commit_hash"] == started["commit_hash"]
+
+    info = manager._processes["p1"]
+    events = [event async for event in manager.stream("p1", info.run_id)]
+    assert events[0]["pipeline_id"] == "p1"
+    assert events[0]["task_id"] == "t1"
+    assert events[0]["branch"] == "feature/x"
+    assert events[0]["commit_hash"] == started["commit_hash"]
+    await manager.stop("p1")
+
+
+async def test_start_falls_back_to_target_when_detached(tmp_path):
+    manager = DevProcessManager.instance()
+    # A non-git workspace yields no branch/commit; the target label is used
+    # as the branch so the UI still shows where the server runs.
+    with _patch_workspace(manager, str(tmp_path)):
+        started = await manager.start(
+            "p1", [["sh", "-c", "sleep 30"]], target="coderbot/t1"
+        )
+
+    assert started["branch"] == "coderbot/t1"
+    assert started["commit_hash"] is None
+    assert started["task_id"] is None
+    await manager.stop("p1")

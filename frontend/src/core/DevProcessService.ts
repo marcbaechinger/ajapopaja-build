@@ -39,6 +39,9 @@ export interface DevProcessEvent {
   started_at?: number;
   commands?: string[][];
   exit_code?: number | null;
+  task_id?: string | null;
+  branch?: string | null;
+  commit_hash?: string | null;
 }
 
 /**

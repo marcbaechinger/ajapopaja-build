@@ -54,6 +54,9 @@ export class ProcessIoView {
   private currentPort: number | null = null;
   private currentRunId: string | null = null;
   private currentCommands: string[][] | null = null;
+  private currentTaskId: string | null = null;
+  private currentBranch = '';
+  private currentCommitHash: string | null = null;
   private startedAtMs: number | null = null;
 
   private unsubscribe: (() => void) | null = null;
@@ -144,6 +147,11 @@ export class ProcessIoView {
     if (typeof event.port === 'number') this.currentPort = event.port;
     if (event.run_id !== undefined) this.currentRunId = event.run_id ?? null;
     if (Array.isArray(event.commands)) this.currentCommands = event.commands;
+    if (event.task_id !== undefined) this.currentTaskId = event.task_id ?? null;
+    if (typeof event.branch === 'string') this.currentBranch = event.branch;
+    if (event.commit_hash !== undefined) {
+      this.currentCommitHash = event.commit_hash ?? null;
+    }
     if (typeof event.status === 'string') this.currentStatus = event.status;
     if (typeof event.started_at === 'number') {
       this.startedAtMs = event.started_at * 1000;
@@ -210,17 +218,25 @@ export class ProcessIoView {
     if (!header) return;
 
     const statusLabel = this.currentStatus || 'starting';
+    const branch = this.currentBranch || '—';
     header.innerHTML = `
       <div class="flex items-center gap-2 flex-wrap">
         <span class="text-[10px] font-bold uppercase tracking-wider text-app-muted">Dev Server</span>
         <span id="process-io-status" class="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${this.statusPillClass(statusLabel)}">${ProcessIoView.escape(statusLabel)}</span>
         <span id="process-io-elapsed" class="text-[10px] text-app-muted font-mono">0s</span>
       </div>
+      <div class="flex gap-1 min-w-0 text-[10px]">
+        <span class="uppercase font-bold text-app-muted shrink-0">Branch</span>
+        <span id="process-io-branch" class="text-app-text font-mono truncate" title="${ProcessIoView.escape(branch)}">${ProcessIoView.escape(branch)}</span>
+      </div>
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 text-[10px]">
         <div class="flex gap-1 min-w-0"><span class="uppercase font-bold text-app-muted shrink-0">PID</span><span id="process-io-pid" class="text-app-text font-mono truncate">${this.currentPid ?? '—'}</span></div>
         <div class="flex gap-1 min-w-0"><span class="uppercase font-bold text-app-muted shrink-0">User</span><span id="process-io-user" class="text-app-text truncate">${ProcessIoView.escape(this.currentUser || '—')}</span></div>
         <div class="flex gap-1 min-w-0"><span class="uppercase font-bold text-app-muted shrink-0">Port</span><span id="process-io-port" class="text-app-text font-mono truncate">${this.currentPort ?? '—'}</span></div>
         <div class="flex gap-1 min-w-0"><span class="uppercase font-bold text-app-muted shrink-0">Run</span><span id="process-io-run" class="text-app-text font-mono truncate" title="${ProcessIoView.escape(this.currentRunId ?? '')}">${ProcessIoView.escape(this.shortRunId())}</span></div>
+        <div class="flex gap-1 min-w-0"><span class="uppercase font-bold text-app-muted shrink-0">Pipeline</span><span id="process-io-pipeline" class="text-app-text font-mono truncate" title="${ProcessIoView.escape(this.pipelineId)}">${ProcessIoView.escape(this.pipelineId)}</span></div>
+        <div class="flex gap-1 min-w-0"><span class="uppercase font-bold text-app-muted shrink-0">Task</span><span id="process-io-task" class="text-app-text font-mono truncate" title="${ProcessIoView.escape(this.currentTaskId ?? '')}">${ProcessIoView.escape(this.currentTaskId || '—')}</span></div>
+        <div class="flex gap-1 min-w-0"><span class="uppercase font-bold text-app-muted shrink-0">Commit</span><span id="process-io-commit" class="text-app-text font-mono truncate" title="${ProcessIoView.escape(this.currentCommitHash ?? '')}">${ProcessIoView.escape(this.shortCommitHash())}</span></div>
       </div>
       <div class="flex gap-1 min-w-0 text-[10px]">
         <span class="uppercase font-bold text-app-muted shrink-0">Command</span>
@@ -313,6 +329,13 @@ export class ProcessIoView {
     return this.currentRunId.length > 8
       ? this.currentRunId.slice(0, 8)
       : this.currentRunId;
+  }
+
+  private shortCommitHash(): string {
+    if (!this.currentCommitHash) return '—';
+    return this.currentCommitHash.length > 8
+      ? this.currentCommitHash.slice(0, 8)
+      : this.currentCommitHash;
   }
 
   private formatCommands(): string {

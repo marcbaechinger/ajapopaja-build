@@ -75,6 +75,9 @@ describe('ProcessIoView', () => {
       run_id: 'abcdef1234567890',
       started_at: Date.now() / 1000,
       commands: [['sh', '-c', 'npm run dev']],
+      branch: 'feature/x',
+      task_id: 't1',
+      commit_hash: 'deadbeef12345678',
     });
 
     expect(mount.querySelector('#process-io-pid')!.textContent).toContain('123');
@@ -86,6 +89,14 @@ describe('ProcessIoView', () => {
     );
     expect(mount.querySelector('#process-io-status')!.textContent).toContain(
       'running',
+    );
+    expect(mount.querySelector('#process-io-branch')!.textContent).toContain(
+      'feature/x',
+    );
+    expect(mount.querySelector('#process-io-pipeline')!.textContent).toContain('p1');
+    expect(mount.querySelector('#process-io-task')!.textContent).toContain('t1');
+    expect(mount.querySelector('#process-io-commit')!.textContent).toContain(
+      'deadbeef',
     );
   });
 

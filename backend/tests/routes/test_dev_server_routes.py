@@ -233,6 +233,7 @@ async def test_dev_start_on_pr_resolves_workspace_and_target(
     kwargs = mock_start.await_args.kwargs
     assert kwargs["workspace"] == "/tmp/pr-ws"
     assert kwargs["target"] == "coderbot/t1"
+    assert kwargs["task_id"] == "t1"
 
 
 @pytest.mark.asyncio

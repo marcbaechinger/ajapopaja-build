@@ -152,6 +152,10 @@ class ProcessInfo:
     started_at: float = field(default_factory=time.time)
     status: str = "starting"
     target: Optional[str] = None
+    workspace: Optional[str] = None
+    task_id: Optional[str] = None
+    branch: Optional[str] = None
+    commit_hash: Optional[str] = None
 
 
 #: Signature of the optional lifecycle event sink. It receives the event type
@@ -243,7 +247,7 @@ class DevProcessManager:
     def _is_running(info: ProcessInfo) -> bool:
         return info.task is not None and not info.task.done()
 
-    def _info_public(self, info: ProcessInfo) -> Dict:
+    def _info_public(self, info: ProcessInfo, pipeline_id: str) -> Dict:
         """Public view of a process used by the streaming bridge header."""
         running = self._is_running(info)
         pid = (
@@ -252,6 +256,7 @@ class DevProcessManager:
             else None
         )
         return {
+            "pipeline_id": pipeline_id,
             "run_id": info.run_id,
             "pid": pid,
             "user": info.user,
@@ -260,6 +265,9 @@ class DevProcessManager:
             "started_at": info.started_at,
             "commands": info.commands,
             "target": info.target,
+            "task_id": info.task_id,
+            "branch": info.branch,
+            "commit_hash": info.commit_hash,
         }
 
     async def _resolve_workspace(self, pipeline_id: str) -> str:
@@ -285,6 +293,7 @@ class DevProcessManager:
         *,
         workspace: Optional[str] = None,
         target: Optional[str] = None,
+        task_id: Optional[str] = None,
     ) -> Dict:
         """Starts the dev process for ``pipeline_id``.
 
@@ -299,6 +308,8 @@ class DevProcessManager:
         pull-request-scoped dev server to run in a PR checkout); when ``None``
         the pipeline workspace is resolved as usual. ``target`` is a
         human-readable label (e.g. a branch name) surfaced to the UI.
+        ``task_id`` is an optional task identifier (default ``None``) surfaced
+        to the UI alongside the branch.
 
         Raises :class:`DevProcessAlreadyRunningError` when a process is already
         running for the pipeline.
@@ -321,11 +332,22 @@ class DevProcessManager:
                 workspace if workspace is not None
                 else await self._resolve_workspace(pipeline_id)
             )
+            branch, commit_hash = git_utils.get_head_branch_and_commit(
+                resolved_workspace
+            )
+            # A patch-applied PR worktree may be detached; fall back to the
+            # logical branch label so the UI still shows where the server runs.
+            if branch is None:
+                branch = target
             info = ProcessInfo(
                 run_id=uuid.uuid4().hex,
                 commands=list(commands),
                 user=user,
                 target=target,
+                workspace=resolved_workspace,
+                task_id=task_id,
+                branch=branch,
+                commit_hash=commit_hash,
             )
             self._processes[pipeline_id] = info
             info.task = asyncio.create_task(
@@ -356,6 +378,9 @@ class DevProcessManager:
                 "user": info.user,
                 "started_at": info.started_at,
                 "target": info.target,
+                "task_id": info.task_id,
+                "branch": info.branch,
+                "commit_hash": info.commit_hash,
             }
 
     async def _run_commands(
@@ -414,6 +439,9 @@ class DevProcessManager:
                             "user": info.user,
                             "status": "running",
                             "target": info.target,
+                            "task_id": info.task_id,
+                            "branch": info.branch,
+                            "commit_hash": info.commit_hash,
                         },
                     )
 
@@ -485,7 +513,7 @@ class DevProcessManager:
             yield {"type": "exit", "exit_code": None}
             return
 
-        yield {"type": "status", **self._info_public(info)}
+        yield {"type": "status", **self._info_public(info, pipeline_id)}
         seq = 0
         while True:
             for chunk in info.buffer.snapshot(seq):
@@ -516,6 +544,9 @@ class DevProcessManager:
                 "user": "",
                 "started_at": None,
                 "target": None,
+                "task_id": None,
+                "branch": None,
+                "commit_hash": None,
             }
         running = self._is_running(info)
         pid = (
@@ -534,6 +565,9 @@ class DevProcessManager:
             "user": info.user,
             "started_at": info.started_at,
             "target": info.target,
+            "task_id": info.task_id,
+            "branch": info.branch,
+            "commit_hash": info.commit_hash,
         }
 
     async def stop(self, pipeline_id: str) -> Dict:

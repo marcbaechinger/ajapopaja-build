@@ -188,6 +188,7 @@ async def dev_start_on_pr(
             current_user.username,
             workspace=workspace,
             target=target,
+            task_id=str(pr.task_id),
         )
     except DevProcessAlreadyRunningError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
