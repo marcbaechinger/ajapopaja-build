@@ -188,6 +188,40 @@ rows.
 
 ---
 
+## Generating a database overview dashboard
+
+[`scripts/generate_db_overview.py`](scripts/generate_db_overview.py) produces a
+self-contained, static HTML dashboard that gives an admin a bird's-eye view of
+every collection in a MongoDB database, the storage it consumes, and the shape
+of the data it holds. It puts extra emphasis on pipelines, tasks, pull requests
+and Pi sessions while still listing every collection generically (document
+counts, storage/index sizes, inferred fields, indexes and sample documents).
+Sensitive fields such as tokens and passwords are always redacted.
+
+The generated page is a single `.html` file with all CSS and JavaScript inlined,
+so it can be opened offline, emailed, or archived.
+
+**Prerequisites:** a running MongoDB (e.g. `mongodb://localhost:27017`).
+
+```bash
+# Use the defaults (localhost MongoDB + ajapopaja_build_prod + db_overview.html)
+python scripts/generate_db_overview.py
+
+# Point at a remote MongoDB and a custom output file
+python scripts/generate_db_overview.py --uri mongodb://host:27017 --db prod \
+    --output /tmp/overview.html
+```
+
+**Options:**
+
+- `--uri` – MongoDB connection string (default: `mongodb://localhost:27017`).
+- `--db` – database name to inspect (default: `ajapopaja_build_prod`).
+- `--output` / `-o` – output HTML file (default: `db_overview.html`).
+- `--sample-size` – how many documents per collection to sample for field
+  inference and preview (default: `20`).
+
+---
+
 ## Release history
 
 See [**`RELEASENOTES.md`**](RELEASENOTES.md). The current release is **0.3.0**.
