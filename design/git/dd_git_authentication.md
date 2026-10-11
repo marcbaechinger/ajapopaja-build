@@ -151,7 +151,16 @@ precedence over the global env token.
 
 ### 4.3 Push with credentials
 
-Add a helper in `core/utils/git_utils.py` that resolves credentials and pushes:
+> **Note (updated):** the implementation deviates slightly from the original
+> proposal below. Instead of rewriting the push URL, `push_with_auth()` and
+> `push_branch_with_auth()` in `core/utils/git_utils.py` send an
+> `Authorization: Basic` header through git's `http.extraHeader` config (injected
+> via the `GIT_CONFIG_PARAMETERS` environment variable). The stored `repo_uri`
+> stays clean and the token never appears in the URL. `_inject_credentials()` is
+> still used, but only by `verify_remote_repo()` (`git ls-remote` reachability
+> check), not by the push helpers.
+
+A helper in `core/utils/git_utils.py` resolves credentials and pushes:
 
 ```python
 def push_with_auth(repo: git.Repo, pipeline: Pipeline) -> None:
@@ -160,16 +169,27 @@ def push_with_auth(repo: git.Repo, pipeline: Pipeline) -> None:
         return
     username, token = _resolve_credentials(pipeline)  # pipeline -> global -> None
     if token:
-        url = _inject_credentials(pipeline.repo_uri, username, token)
-        repo.git.push("origin", "HEAD", push_url=url)
+        user = username or token  # fall back to the token when no user is given
+        auth_pair = f"{user}:{token}".encode("utf-8")
+        auth_header = (
+            f"Authorization: Basic {base64.b64encode(auth_pair).decode('ascii')}"
+        )
+        env_config = f"'http.extraHeader={auth_header}'"
+        with repo.git.custom_environment(GIT_CONFIG_PARAMETERS=env_config):
+            repo.git.push("origin", "HEAD")
     else:
         repo.git.push("origin", "HEAD")
 ```
 
+`push_branch_with_auth(repo, pipeline, branch)` is the equivalent for pushing a
+named feature branch (used by the Gitea-PR submit flow); it targets
+`refs/heads/{branch}:refs/heads/{branch}` so `origin`'s default branch is never
+touched.
+
 `_resolve_credentials()` returns the pipeline's `repo_username`/`repo_token` if
-set, otherwise the global `GIT_PUSH_USERNAME`/`GIT_PUSH_TOKEN`. `_inject_credentials()`
-parses the `repo_uri` and inserts `<user>:<token>@` into the URL (or uses a
-credential helper). The credentials are **not persisted** in the repo config.
+set, otherwise the global `GIT_PUSH_USERNAME`/`GIT_PUSH_TOKEN`. The credentials
+are injected only for the push call and are **not persisted** in the repo
+config or the stored `repo_uri`.
 
 ### 4.4 Wire into PR acceptance
 
@@ -276,7 +296,7 @@ Per-pipeline overrides are stored on the `Pipeline` model as `repo_username` /
 | Global default | `GIT_PUSH_USERNAME` / `GIT_PUSH_TOKEN` env vars via `env_file` |
 | Per-pipeline override | `repo_username` / `repo_token` fields on `Pipeline` |
 | Resolution order | pipeline fields → global env → none |
-| Push mechanism | `push_with_auth()` rewrites the push URL with credentials |
+| Push mechanism | `push_with_auth()` / `push_branch_with_auth()` inject an `Authorization: Basic` header via `http.extraHeader` (`GIT_CONFIG_PARAMETERS`), keeping the URL clean |
 | SSH alternative | **Not implemented** (future work) |
 | Hosts supported | GitHub, Gitea, GitLab (HTTPS + token) |
 | Not recommended | GitHub App (overkill), credentials baked into the image |

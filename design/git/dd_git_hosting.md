@@ -198,7 +198,8 @@ Ajapopaja supports two ways to deliver accepted changes to a **remote** pipeline
 In `gitea_pr` mode the pull request is **not** merged by Ajapopaja; it is created
 and left for external review/merging in the Gitea web UI. The Gitea PR URL is
 persisted on the `PullRequest` row (`remote_pr_url`) and surfaced in the UI, and
-the task stays in `PULL_REQUEST_AVAILABLE` until the change is merged externally.
+the task transitions to `SUBMITTED` (recording `commit_hash` and `review_md`) to
+await that external review; Ajapopaja does not watch for the merge.
 
 ### Submission Flow & Commit History
 
