@@ -118,13 +118,16 @@ forwarded into the container by `env_file` (see INSTALL.md §3.3) **and** is
 available for `${...}` interpolation, so the container-side value and the published
 host port always agree.
 
-### 2.6 Deploy/docs (`INSTALL.md`, `deploy-local.sh`, `Dockerfile` comment)
+### 2.6 Deploy/docs (`INSTALL.md`, env templates, `PipelineEditDialog.ts`)
 
 - `INSTALL.md` §3.1 example env file and §3.2 variable reference: add
   `DEV_SERVER_PORT` (No; default `1224`; *port published to the host on which a
   user-started pipeline dev server listens*).
 - `INSTALL.md` §4.2 compose snippet: add the new `ports` line.
-- `deploy-local.sh`: seed `DEV_SERVER_PORT=1224` in the generated env file.
+- `deploy/prod.env.example` and `deploy/staging.env.example`: seed
+  `DEV_SERVER_PORT` (`1224` for prod, `1225` for staging so both instances can run
+  simultaneously). `deploy-local.sh` copies the matching template to the
+  per-instance env file on first deploy.
 - The Serve-commands hint in `PipelineEditDialog.ts` mentions the port is injected
   as `$DEV_SERVER_PORT` / `$PORT`.
 
