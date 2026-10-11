@@ -94,10 +94,10 @@ delivers the change. It depends on `pipeline.repo_uri` and the global
 ```mermaid
 flowchart TD
     A["Accept PR (OPEN)"] --> B{pipeline.repo_uri set?}
-    B -->|"no (local)"| M["mode = merge\napply + commit on default branch\nno push\n→ PR accepted, task IMPLEMENTED"]
+    B -->|"no (local)"| M["mode = merge\napply + commit on default branch\nno push\n-> PR accepted, task IMPLEMENTED"]
     B -->|"yes (remote)"| C{REMOTE_PR_MODE}
-    C -->|"direct"| P["mode = push\napply + commit on default branch\npush HEAD to origin\n→ PR accepted, task IMPLEMENTED"]
-    C -->|"gitea_pr"| S["mode = submit\ncommit on coderbot/&lt;task_id&gt;\npush feature branch + create Gitea PR\n→ PR submitted, task SUBMITTED"]
+    C -->|"direct"| P["mode = push\napply + commit on default branch\npush HEAD to origin\n-> PR accepted, task IMPLEMENTED"]
+    C -->|"gitea_pr"| S["mode = submit\ncommit on coderbot/&lt;task_id&gt;\npush feature branch + create Gitea PR\n-> PR submitted, task SUBMITTED"]
 ```
 
 The `apply_mode` is resolved at *read time* and returned on the PR documents so
@@ -119,13 +119,13 @@ sequenceDiagram
 
     U->>MGR: POST /coderbot/trigger/{task_id}
     MGR->>DB: create PiSession (kind=CODERBOT, STARTING)
-    Note over MGR: task CREATED|SCHEDULED → INPROGRESS (at enqueue)
+    Note over MGR: task CREATED|SCHEDULED -> INPROGRESS (at enqueue)
     MGR->>MGR: enqueue CoderBotSession
-    MGR->>S: run() → setup_sandbox()
+    MGR->>S: run() -> setup_sandbox()
     S->>R: git clone R → S
     S->>S: checkout -b coderbot/<task_id>  (or fetch predecessor + branch)
     S->>S: spawn Pi, run task, edit files
-    S->>S: git add -A; git commit -m "CoderBot (Pi): …" --no-verify  (commit c)
+    S->>S: git add -A; git commit -m 'CoderBot (Pi): ...' --no-verify (commit c)
     S->>S: git diff HEAD~1 HEAD --binary  (or empty-tree / base diff)  → patch
     S->>DB: insert/update PullRequest (status=OPEN)
     Note over DB: task → PULL_REQUEST_AVAILABLE
