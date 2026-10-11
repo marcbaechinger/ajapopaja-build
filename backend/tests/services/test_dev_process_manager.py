@@ -431,11 +431,13 @@ async def test_start_resolves_branch_commit_and_task_id(tmp_path):
     assert status["commit_hash"] == started["commit_hash"]
 
     info = manager._processes["p1"]
-    events = [event async for event in manager.stream("p1", info.run_id)]
-    assert events[0]["pipeline_id"] == "p1"
-    assert events[0]["task_id"] == "t1"
-    assert events[0]["branch"] == "feature/x"
-    assert events[0]["commit_hash"] == started["commit_hash"]
+    stream = manager.stream("p1", info.run_id)
+    status_event = await anext(stream)
+    assert status_event["pipeline_id"] == "p1"
+    assert status_event["task_id"] == "t1"
+    assert status_event["branch"] == "feature/x"
+    assert status_event["commit_hash"] == started["commit_hash"]
+    await stream.aclose()
     await manager.stop("p1")
 
 

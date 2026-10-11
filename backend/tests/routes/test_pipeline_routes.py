@@ -125,7 +125,7 @@ async def test_delete_pipeline_unauthenticated(async_client, init_mock_db):
 
 
 @pytest.mark.asyncio
-async def test_pipeline_serialization_never_exposes_repo_token():
+async def test_pipeline_serialization_never_exposes_repo_token(init_mock_db):
     """repo_token must never appear in serialized output; has_repo_token reflects it."""
     from core.models.models import Pipeline
 
@@ -299,7 +299,7 @@ async def test_update_pipeline_sets_test_commands(init_mock_db):
         assert stored.test_commands == []
 
 
-def test_pipeline_model_rejects_empty_argv_strings():
+def test_pipeline_model_rejects_empty_argv_strings(init_mock_db):
     """Each argv element must be a non-empty string."""
     from core.models.models import Pipeline
 
@@ -333,7 +333,7 @@ async def test_update_pipeline_sets_lint_commands(init_mock_db):
         assert stored.lint_commands == []
 
 
-def test_pipeline_model_rejects_empty_argv_strings_lint():
+def test_pipeline_model_rejects_empty_argv_strings_lint(init_mock_db):
     """Each lint command argv element must be a non-empty string."""
     from core.models.models import Pipeline
 
@@ -411,7 +411,7 @@ async def test_update_pipeline_sets_serve_commands(init_mock_db):
         assert stored.serve_commands == []
 
 
-def test_pipeline_model_rejects_empty_argv_strings_serve():
+def test_pipeline_model_rejects_empty_argv_strings_serve(init_mock_db):
     """Each serve command argv element must be a non-empty string."""
     from core.models.models import Pipeline
 
@@ -487,7 +487,7 @@ async def test_update_pipeline_sets_build_commands(init_mock_db):
         assert stored.build_commands == []
 
 
-def test_pipeline_model_rejects_empty_argv_strings_build():
+def test_pipeline_model_rejects_empty_argv_strings_build(init_mock_db):
     """Each build command argv element must be a non-empty string."""
     from core.models.models import Pipeline
 
@@ -495,7 +495,7 @@ def test_pipeline_model_rejects_empty_argv_strings_build():
         Pipeline(name="Bad", build_commands=[[""]])
 
 
-def test_validate_pipeline_input_local():
+def test_validate_pipeline_input_local(init_mock_db):
     """Query-level validation: local pipelines pass (workspace optional)."""
     from core.models.models import Pipeline
     from core.queries.pipeline import validate_pipeline_input
@@ -504,7 +504,7 @@ def test_validate_pipeline_input_local():
     validate_pipeline_input(Pipeline(name="Local", workspace_path="./proj"))
 
 
-def test_validate_pipeline_input_local_with_credentials_fails():
+def test_validate_pipeline_input_local_with_credentials_fails(init_mock_db):
     from core.exceptions import ValidationError
     from core.models.models import Pipeline
     from core.queries.pipeline import validate_pipeline_input
@@ -515,7 +515,7 @@ def test_validate_pipeline_input_local_with_credentials_fails():
         )
 
 
-def test_validate_pipeline_input_remote_pass():
+def test_validate_pipeline_input_remote_pass(init_mock_db):
     from core.models.models import Pipeline
     from core.queries.pipeline import validate_pipeline_input
 
@@ -529,7 +529,7 @@ def test_validate_pipeline_input_remote_pass():
     )
 
 
-def test_validate_pipeline_input_remote_with_workspace_fails():
+def test_validate_pipeline_input_remote_with_workspace_fails(init_mock_db):
     from core.exceptions import ValidationError
     from core.models.models import Pipeline
     from core.queries.pipeline import validate_pipeline_input

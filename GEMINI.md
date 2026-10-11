@@ -34,6 +34,7 @@ This document provides a condensed, high-signal context for Gemini CLI and other
 | **Start MCP** | `cd backend && uv run --package ajapopaja-mcp python mcp/src/ajapopaja_mcp/server.py` |
 | **Start SPA** | `cd frontend && npm run dev` |
 | **Run Python Tests** | `cd backend && uv run pytest` |
+| **Run Python Tests (serial)** | `cd backend && uv run pytest -n0` |
 | **Watch Python Tests**| `cd backend && uv run ptw` |
 | **Run JS Tests**     | `cd frontend && CI=true npm run test` |
 | **Run JS Build/Lint** | `cd frontend && npm run build` |

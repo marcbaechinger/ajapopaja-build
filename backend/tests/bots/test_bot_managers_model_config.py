@@ -104,7 +104,7 @@ async def test_docbot_manager_passes_per_component_config(
 )
 @pytest.mark.asyncio
 async def test_archbot_manager_prefers_pipeline_model_override(
-    mock_get_pipeline, mock_cls, mock_enqueue, monkeypatch
+    mock_get_pipeline, mock_cls, mock_enqueue, monkeypatch, init_mock_db
 ):
     monkeypatch.setattr(config, "ARCHBOT_MODEL", "config-arch")
     mock_get_pipeline.return_value = Pipeline(name="p", archbot_model="pipe-arch")
@@ -124,7 +124,7 @@ async def test_archbot_manager_prefers_pipeline_model_override(
 )
 @pytest.mark.asyncio
 async def test_reviewbot_manager_uses_general_ollama_override(
-    mock_get_pipeline, mock_cls, mock_enqueue, monkeypatch
+    mock_get_pipeline, mock_cls, mock_enqueue, monkeypatch, init_mock_db
 ):
     monkeypatch.setattr(config, "REVIEWBOT_MODEL", "config-review")
     mock_get_pipeline.return_value = Pipeline(name="p", ollama_model="general-x")
@@ -143,7 +143,7 @@ async def test_reviewbot_manager_uses_general_ollama_override(
 )
 @pytest.mark.asyncio
 async def test_docbot_manager_falls_back_to_config_when_no_override(
-    mock_get_pipeline, mock_cls, mock_enqueue, monkeypatch
+    mock_get_pipeline, mock_cls, mock_enqueue, monkeypatch, init_mock_db
 ):
     monkeypatch.setattr(config, "DOCBOT_MODEL", "config-doc")
     mock_get_pipeline.return_value = Pipeline(name="p")
@@ -184,7 +184,7 @@ async def test_specagent_manager_passes_per_component_config(
 )
 @pytest.mark.asyncio
 async def test_specagent_manager_prefers_pipeline_model_override(
-    mock_get_pipeline, mock_cls, mock_enqueue, monkeypatch
+    mock_get_pipeline, mock_cls, mock_enqueue, monkeypatch, init_mock_db
 ):
     monkeypatch.setattr(config, "SPECAGENT_MODEL", "config-spec")
     mock_get_pipeline.return_value = Pipeline(name="p", specagent_model="pipe-spec")

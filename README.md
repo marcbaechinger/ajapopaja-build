@@ -141,12 +141,20 @@ environment variables and development guidelines.
 ## Testing
 
 ```bash
-# Backend
+# Backend (runs in parallel by default via pytest-xdist)
 cd backend && uv run pytest
+
+# Run serially when needed (e.g. debugging ordering-sensitive behavior)
+cd backend && uv run pytest -n0
 
 # Frontend
 cd frontend && CI=true npm run test
 ```
+
+Backend tests are configured with `pytest-xdist` and `addopts = -n auto` in
+`backend/pytest.ini`, so the default `uv run pytest` command distributes tests
+across all available CPU cores. Pass `-n0` to force single-process (serial)
+execution.
 
 ---
 

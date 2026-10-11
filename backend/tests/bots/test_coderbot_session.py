@@ -1260,7 +1260,7 @@ async def test_coderbot_iteration_prompt_includes_comments_and_instruction(
     assert "Current Patch Present as Unstaged Changes" not in initial
 
 
-def test_coderbot_iteration_instruction_mentions_unstaged_patch():
+def test_coderbot_iteration_instruction_mentions_unstaged_patch(init_mock_db):
     pr = PullRequest(
         pipeline_id="p1",
         task_id="t1",

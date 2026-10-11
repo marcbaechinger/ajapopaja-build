@@ -146,29 +146,29 @@ async def test_user_chat_and_messages(init_mock_db):
 
 
 @pytest.mark.asyncio
-async def test_invalid_task_status():
+async def test_invalid_task_status(init_mock_db):
     # Pydantic should catch invalid status strings
     with pytest.raises(ValidationError):
         Task(title="Invalid", pipeline_id="123", status="invalid_status")
 
 
-def test_task_suggested_model_normalizes_blank_to_none():
+def test_task_suggested_model_normalizes_blank_to_none(init_mock_db):
     assert Task(title="T", pipeline_id="123", suggested_model="gpt-oss:120").suggested_model == "gpt-oss:120"
     assert Task(title="T", pipeline_id="123", suggested_model="   ").suggested_model is None
     assert Task(title="T", pipeline_id="123").suggested_model is None
 
 
-def test_pipeline_workspace_abs_path_local():
+def test_pipeline_workspace_abs_path_local(init_mock_db):
     pipeline = Pipeline(name="Test", workspace_path="my-app")
     assert pipeline.workspace_abs_path == config.WORKSPACES_ROOT / "my-app"
 
 
-def test_pipeline_workspace_abs_path_remote():
+def test_pipeline_workspace_abs_path_remote(init_mock_db):
     pipeline = Pipeline(name="Test", repo_uri="https://host/org/my-app.git")
     assert pipeline.workspace_abs_path == config.REMOTE_WORKSPACES_ROOT / "my-app"
 
 
-def test_pipeline_workspace_abs_path_remote_derives_name():
+def test_pipeline_workspace_abs_path_remote_derives_name(init_mock_db):
     pipeline = Pipeline(name="my-app", repo_uri="https://host/org/my-app.git")
     assert pipeline.workspace_abs_path == config.REMOTE_WORKSPACES_ROOT / "my-app"
 
@@ -181,22 +181,22 @@ def test_repo_name_from_uri():
     assert repo_name_from_uri("https://host/org/my-app") == "my-app"
 
 
-def test_pipeline_repo_uri_valid_https():
+def test_pipeline_repo_uri_valid_https(init_mock_db):
     p = Pipeline(name="Test", repo_uri="https://github.com/org/repo.git")
     assert p.repo_uri == "https://github.com/org/repo.git"
 
 
-def test_pipeline_repo_uri_valid_scp_ssh():
+def test_pipeline_repo_uri_valid_scp_ssh(init_mock_db):
     p = Pipeline(name="Test", repo_uri="git@github.com:org/repo.git")
     assert p.repo_uri == "git@github.com:org/repo.git"
 
 
-def test_pipeline_repo_uri_none_or_empty():
+def test_pipeline_repo_uri_none_or_empty(init_mock_db):
     assert Pipeline(name="Test", repo_uri=None).repo_uri is None
     assert Pipeline(name="Test", repo_uri="").repo_uri == ""
 
 
-def test_pipeline_repo_uri_invalid():
+def test_pipeline_repo_uri_invalid(init_mock_db):
     with pytest.raises(ValidationError):
         Pipeline(name="Test", repo_uri="not a url")
 
