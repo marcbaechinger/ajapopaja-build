@@ -26,8 +26,8 @@ export class CoderBotDialog extends BaseDialog {
   constructor(coderBotService: CoderBotService) {
     super({
       title: 'CoderBot Activity Log',
-      maxWidth: 'max-w-4xl',
-      maxHeight: 'max-h-[85vh]',
+      maxWidth: 'max-w-6xl',
+      maxHeight: 'max-h-[90vh]',
       iconSvg: Icon.render('documentation', { size: 20 })
     });
     this.coderBotService = coderBotService;
