@@ -132,6 +132,27 @@ export function registerPullRequestActions(
     }
   });
 
+  actionRegistry.register('start_pr_dev_server', async (_e, el) => {
+    const prId = el.getAttribute('data-pr-id');
+    if (!prId) return;
+
+    const btn = el as HTMLButtonElement;
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Building...';
+    try {
+      await ctx.context.pipelineClient.startDevServerOnPr(ctx.pipelineId, prId);
+      // The header indicator is updated by the DEV_PROCESS_STARTED broadcast;
+      // switching to another PR's server is automatic on the backend.
+    } catch (error: any) {
+      console.error('Start PR dev server error:', error);
+      alert(`Failed to start dev server: ${error.message}`);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  });
+
   actionRegistry.register('toggle_pr_summary', (_e, el) => {
     const body = el.closest('[data-pr-card]')?.querySelector('.pr-summary');
     const icon = el.querySelector('svg.transform');

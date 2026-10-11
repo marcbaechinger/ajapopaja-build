@@ -188,10 +188,11 @@ export class PipelineRealtimeController {
           running: true,
           pid: typeof p?.pid === 'number' ? p.pid : null,
           port: typeof p?.port === 'number' ? p.port : null,
+          target: typeof p?.target === 'string' ? p.target : null,
         };
       },
       'DEV_PROCESS_EXITED': () => {
-        ctx.state.devProcessState = { running: false, pid: null, port: null };
+        ctx.state.devProcessState = { running: false, pid: null, port: null, target: null };
       },
       // Insert a newly created PR precisely into its container instead of
       // re-running the full task refresh (which re-renders the whole prep column

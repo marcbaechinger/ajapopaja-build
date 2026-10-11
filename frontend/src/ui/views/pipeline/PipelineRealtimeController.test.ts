@@ -336,10 +336,10 @@ describe('PipelineRealtimeController', () => {
       ctrl.start();
 
       handlers['ws:DEV_PROCESS_STARTED:p1']({ pid: 9, port: 1224, pipeline_id: 'p1' });
-      expect(ctx.state.devProcessState).toEqual({ running: true, pid: 9, port: 1224 });
+      expect(ctx.state.devProcessState).toEqual({ running: true, pid: 9, port: 1224, target: null });
 
       handlers['ws:DEV_PROCESS_EXITED:p1']({ pipeline_id: 'p1', exit_code: 0 });
-      expect(ctx.state.devProcessState).toEqual({ running: false, pid: null, port: null });
+      expect(ctx.state.devProcessState).toEqual({ running: false, pid: null, port: null, target: null });
     });
   });
 

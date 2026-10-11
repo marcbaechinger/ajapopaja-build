@@ -34,6 +34,7 @@ export interface DevProcessEvent {
   pid?: number | null;
   user?: string;
   port?: number;
+  target?: string | null;
   status?: string;
   started_at?: number;
   commands?: string[][];

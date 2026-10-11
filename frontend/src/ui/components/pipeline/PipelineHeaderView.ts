@@ -50,6 +50,7 @@ export interface DevProcessState {
   running: boolean;
   pid: number | null;
   port: number | null;
+  target?: string | null;
 }
 
 export interface PipelineHeaderViewProps {
@@ -153,6 +154,7 @@ export class PipelineHeaderView {
             <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
           </span>
           <span class="font-bold tracking-wide uppercase">Dev Server Running</span>
+          ${devProcessState.target ? `<span class="font-mono text-emerald-300/80">on ${devProcessState.target}</span>` : ''}
           ${devProcessState.port != null ? `<span class="font-mono text-emerald-300/80">:${devProcessState.port}</span>` : ''}
           <button data-action-click="open_dev_server_dialog" class="font-black underline hover:text-emerald-300 transition-colors cursor-pointer ml-1">Logs</button>
         </div>

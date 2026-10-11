@@ -74,6 +74,10 @@ export class PullRequestSection {
                ${Icon.render('git-pull-request', { size: 14 })}
                Iterate
              </button>
+             <button data-action-click="start_pr_dev_server" data-pr-id="${pr.id}" data-task-id="${pr.task_id}" class="px-4 py-2 bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-900/20 cursor-pointer flex items-center gap-2" title="Run the dev server on this pull request's branch">
+               ${Icon.render('lightning', { size: 14 })}
+               Start dev server
+             </button>
              <button data-action-click="open_pr_dialog" data-task-id="${pr.task_id}" data-pr-id="${pr.id}" class="px-4 py-2 bg-app-accent-2 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-app-accent-2/80 transition-all shadow-lg shadow-app-accent-2/20 cursor-pointer flex items-center gap-2">
                ${Icon.render('git-pull-request', { size: 14 })}
                Review

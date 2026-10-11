@@ -21,8 +21,9 @@ and other modules can drive the same process through the service API.
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from api.assistant.tools.command_runner import run_command_sequence
 from api.auth import get_current_user
-from core.models.models import User
+from core.models.models import PullRequest, PullRequestStatus, User
 from core.queries import pipeline as pipeline_queries
 from core.services.dev_process_manager import (
     DevProcessAlreadyRunningError,
@@ -30,8 +31,13 @@ from core.services.dev_process_manager import (
     DevProcessManager,
     DevProcessNotFoundError,
 )
+from core.utils import git_utils
 
 router = APIRouter(prefix="/pipelines/{pipeline_id}/dev", tags=["dev"])
+
+# Pull-request-scoped dev-server start endpoint. It uses a different prefix
+# because it is keyed by both a pipeline and one of its pull requests.
+pr_dev_router = APIRouter(tags=["dev"])
 
 
 @router.get("/status", response_model=dict)
@@ -103,3 +109,87 @@ async def dev_stop(pipeline_id: str, current_user: User = Depends(get_current_us
         return await DevProcessManager.instance().stop(pipeline_id)
     except DevProcessNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@pr_dev_router.post(
+    "/pipelines/{pipeline_id}/pull_requests/{pr_id}/dev/start",
+    response_model=dict,
+)
+async def dev_start_on_pr(
+    pipeline_id: str,
+    pr_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Start the pipeline's dev process on top of a pull request's branch.
+
+    The PR's code is resolved into a working directory (retained sandbox,
+    existing feature branch or patch fallback), the pipeline's ``build_commands``
+    are run there, and then the pipeline's ``serve_commands`` are started with
+    that directory as the working directory. A start always tears down any
+    currently-running dev process for the pipeline first (switch semantics).
+    """
+    pr = await PullRequest.get(pr_id)
+    if not pr:
+        raise HTTPException(status_code=404, detail="Pull Request not found")
+    if pr.pipeline_id != pipeline_id:
+        raise HTTPException(
+            status_code=404,
+            detail="Pull Request not found for this pipeline",
+        )
+    if pr.status not in (PullRequestStatus.OPEN, PullRequestStatus.SUBMITTED):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Dev server can only be started on OPEN or SUBMITTED "
+                "pull requests"
+            ),
+        )
+
+    pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
+    commands = pipeline.serve_commands or []
+    if not commands:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No serve commands configured",
+        )
+
+    workspace, target = await git_utils.resolve_pr_workspace(pipeline, pr)
+
+    # Build the freshly materialised checkout before serving. A failed build
+    # aborts the start (422) and leaves any previous server running.
+    build_commands = [
+        c for c in (pipeline.build_commands or []) if isinstance(c, list) and c
+    ]
+    if build_commands:
+        build_result = await run_command_sequence(
+            build_commands, workspace, kind="build"
+        )
+        if not build_result.get("passed", True):
+            output = "\n".join(
+                f"{c['cmd']}: exit {c['exit_code']}\n{c.get('output_tail', '')}"
+                for c in build_result.get("commands", [])
+            )
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"Build failed:\n{output}",
+            )
+
+    manager = DevProcessManager.instance()
+    try:
+        await manager.stop(pipeline_id)
+    except DevProcessNotFoundError:
+        # Nothing running: a PR-scoped start behaves like a fresh start.
+        pass
+
+    try:
+        return await manager.start(
+            pipeline_id,
+            commands,
+            current_user.username,
+            workspace=workspace,
+            target=target,
+        )
+    except DevProcessAlreadyRunningError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except DevProcessError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

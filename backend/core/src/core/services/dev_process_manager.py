@@ -151,6 +151,7 @@ class ProcessInfo:
     user: str = ""
     started_at: float = field(default_factory=time.time)
     status: str = "starting"
+    target: Optional[str] = None
 
 
 #: Signature of the optional lifecycle event sink. It receives the event type
@@ -258,6 +259,7 @@ class DevProcessManager:
             "status": info.status,
             "started_at": info.started_at,
             "commands": info.commands,
+            "target": info.target,
         }
 
     async def _resolve_workspace(self, pipeline_id: str) -> str:
@@ -276,7 +278,13 @@ class DevProcessManager:
         return str(workspace)
 
     async def start(
-        self, pipeline_id: str, commands: List[List[str]], user: str = ""
+        self,
+        pipeline_id: str,
+        commands: List[List[str]],
+        user: str = "",
+        *,
+        workspace: Optional[str] = None,
+        target: Optional[str] = None,
     ) -> Dict:
         """Starts the dev process for ``pipeline_id``.
 
@@ -286,6 +294,11 @@ class DevProcessManager:
 
         ``user`` is recorded on the process so the UI header can show who
         started it.
+
+        ``workspace`` optionally overrides the working directory (used by the
+        pull-request-scoped dev server to run in a PR checkout); when ``None``
+        the pipeline workspace is resolved as usual. ``target`` is a
+        human-readable label (e.g. a branch name) surfaced to the UI.
 
         Raises :class:`DevProcessAlreadyRunningError` when a process is already
         running for the pipeline.
@@ -304,13 +317,19 @@ class DevProcessManager:
                     f"A dev process is already running for pipeline {pipeline_id}"
                 )
 
-            workspace = await self._resolve_workspace(pipeline_id)
+            resolved_workspace = (
+                workspace if workspace is not None
+                else await self._resolve_workspace(pipeline_id)
+            )
             info = ProcessInfo(
-                run_id=uuid.uuid4().hex, commands=list(commands), user=user
+                run_id=uuid.uuid4().hex,
+                commands=list(commands),
+                user=user,
+                target=target,
             )
             self._processes[pipeline_id] = info
             info.task = asyncio.create_task(
-                self._run_commands(pipeline_id, commands, workspace)
+                self._run_commands(pipeline_id, commands, resolved_workspace)
             )
 
             # Wait briefly for the first process to spawn so the caller gets a
@@ -336,6 +355,7 @@ class DevProcessManager:
                 "port": config.DEV_SERVER_PORT,
                 "user": info.user,
                 "started_at": info.started_at,
+                "target": info.target,
             }
 
     async def _run_commands(
@@ -393,6 +413,7 @@ class DevProcessManager:
                             "port": config.DEV_SERVER_PORT,
                             "user": info.user,
                             "status": "running",
+                            "target": info.target,
                         },
                     )
 
@@ -494,6 +515,7 @@ class DevProcessManager:
                 "port": config.DEV_SERVER_PORT,
                 "user": "",
                 "started_at": None,
+                "target": None,
             }
         running = self._is_running(info)
         pid = (
@@ -511,6 +533,7 @@ class DevProcessManager:
             "port": config.DEV_SERVER_PORT,
             "user": info.user,
             "started_at": info.started_at,
+            "target": info.target,
         }
 
     async def stop(self, pipeline_id: str) -> Dict:

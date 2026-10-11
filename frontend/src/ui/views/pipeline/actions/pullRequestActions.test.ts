@@ -50,6 +50,7 @@ describe('registerPullRequestActions', () => {
   let deps: PullRequestActionsDeps;
   let acceptPullRequest: ReturnType<typeof vi.fn>;
   let iteratePullRequest: ReturnType<typeof vi.fn>;
+  let startDevServerOnPr: ReturnType<typeof vi.fn>;
 
   const getAction = (name: string): ActionHandler => {
     const handler = registry.get(name);
@@ -64,6 +65,7 @@ describe('registerPullRequestActions', () => {
     registry = new Map<string, ActionHandler>();
     acceptPullRequest = vi.fn().mockResolvedValue({});
     iteratePullRequest = vi.fn().mockResolvedValue({});
+    startDevServerOnPr = vi.fn().mockResolvedValue({});
 
     ctx = {
       context: {
@@ -73,6 +75,9 @@ describe('registerPullRequestActions', () => {
         pullRequestClient: {
           acceptPullRequest,
           iteratePullRequest,
+        },
+        pipelineClient: {
+          startDevServerOnPr,
         },
       },
       pipelineId: 'p1',
@@ -98,11 +103,12 @@ describe('registerPullRequestActions', () => {
     expect(registry.has('iterate_pr')).toBe(true);
   });
 
-  it('should register all four pull-request actions', () => {
+  it('should register all five pull-request actions', () => {
     expect([...registry.keys()].sort()).toEqual([
       'accept_pr',
       'iterate_pr',
       'open_pr_dialog',
+      'start_pr_dev_server',
       'toggle_pr_summary',
     ]);
   });
@@ -318,6 +324,48 @@ describe('registerPullRequestActions', () => {
 
       expect(deps.updateEngineSlot).not.toHaveBeenCalled();
       expect(alertSpy).toHaveBeenCalledWith('Failed to start iteration: nope');
+    });
+  });
+
+  describe('start_pr_dev_server', () => {
+    it('starts the dev server on the PR and restores the button', async () => {
+      const action = getAction('start_pr_dev_server');
+      const el = document.createElement('button');
+      el.setAttribute('data-pr-id', 'pr1');
+      el.textContent = 'Start dev server';
+
+      await action(noEvent, el);
+
+      expect(startDevServerOnPr).toHaveBeenCalledWith('p1', 'pr1');
+      expect(el.disabled).toBe(false);
+      expect(el.textContent).toBe('Start dev server');
+    });
+
+    it('does not start without data-pr-id', async () => {
+      const action = getAction('start_pr_dev_server');
+      const el = document.createElement('button');
+
+      await action(noEvent, el);
+
+      expect(startDevServerOnPr).not.toHaveBeenCalled();
+    });
+
+    it('surfaces the error and restores the button when the start fails', async () => {
+      const alertSpy = vi.fn();
+      vi.stubGlobal('alert', alertSpy);
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      startDevServerOnPr.mockRejectedValueOnce(new Error('build failed'));
+
+      const action = getAction('start_pr_dev_server');
+      const el = document.createElement('button');
+      el.setAttribute('data-pr-id', 'pr1');
+      el.textContent = 'Start dev server';
+
+      await action(noEvent, el);
+
+      expect(alertSpy).toHaveBeenCalledWith('Failed to start dev server: build failed');
+      expect(el.disabled).toBe(false);
+      expect(el.textContent).toBe('Start dev server');
     });
   });
 

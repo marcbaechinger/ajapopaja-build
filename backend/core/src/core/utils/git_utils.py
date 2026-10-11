@@ -14,20 +14,33 @@
 
 import base64
 import logging
+import os
 import re
+import shutil
 import subprocess
+import tempfile
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from urllib.parse import quote, urlsplit, urlunsplit
 
 import git
 
 from core import config
 from core.exceptions import EntityNotFoundError, ValidationError
-from core.models.models import Pipeline, RepoBootstrapStatus
+from core.models.models import (
+    Pipeline,
+    PiSession,
+    PullRequest,
+    RepoBootstrapStatus,
+)
+from core.queries import pi_session as pi_session_queries
 from core.queries import pipeline as pipeline_queries
 from core.queries import task as task_queries
-from core.utils.path_utils import get_workspace_path
+from core.utils.path_utils import (
+    get_workspace_path,
+    repo_name_from_uri,
+    safe_join,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -791,3 +804,253 @@ async def get_pipeline_git_log_total(pipeline_id: str) -> int:
     """Read-only total commit count for a pipeline repo."""
     _, repo = await get_pipeline_repo_readonly(pipeline_id)
     return get_git_log_total(repo)
+
+
+# ---------------------------------------------------------------------------
+# Pull-request dev-server workspace resolution
+# ---------------------------------------------------------------------------
+
+
+def _pr_worktree_path(pipeline: Pipeline, pr: PullRequest) -> Path:
+    """Return the stable, per-PR worktree path on ``R``'s filesystem.
+
+    Worktrees share ``R``'s object store, so they must live on the same
+    filesystem. Remote pipelines are cloned under ``REMOTE_WORKSPACES_ROOT`` and
+    local pipelines under ``WORKSPACES_ROOT``; both roots are used here so the
+    resulting ``<repo>.dev/<task_id>`` directory is always a sibling of ``R``.
+    """
+    task_id = str(pr.task_id)
+    if pipeline.repo_uri:
+        repo_name = repo_name_from_uri(pipeline.repo_uri) or pipeline.name
+        return safe_join(config.REMOTE_WORKSPACES_ROOT, f"{repo_name}.dev", task_id)
+    workspace = pipeline.workspace_path or pipeline.name
+    return safe_join(config.WORKSPACES_ROOT, f"{workspace}.dev", task_id)
+
+
+def _retained_sandbox_path(pr: PullRequest) -> Optional[Path]:
+    """Return the retained batch workspace for ``pr``'s session, if any."""
+    if not pr.pi_session_uid:
+        return None
+    return safe_join(config.PI_SESSIONS_ROOT, pr.pi_session_uid, "workspace")
+
+
+def _workspace_head_is_branch(workspace_path: Path, branch_name: str) -> bool:
+    """Whether ``workspace_path`` is a repo whose HEAD is on ``branch_name``."""
+    try:
+        repo = git.Repo(str(workspace_path))
+        return repo.active_branch.name == branch_name
+    except Exception:
+        return False
+
+
+def _branch_exists_local(repo: git.Repo, branch_name: str) -> bool:
+    """Whether ``branch_name`` exists as a local branch in ``repo``."""
+    try:
+        repo.git.rev_parse("--verify", f"refs/heads/{branch_name}")
+        return True
+    except git.exc.GitCommandError:
+        return False
+
+
+def _branch_exists_remote(repo: git.Repo, branch_name: str) -> bool:
+    """Whether ``branch_name`` exists as a remote-tracking branch in ``repo``."""
+    try:
+        repo.git.rev_parse("--verify", f"refs/remotes/origin/{branch_name}")
+        return True
+    except git.exc.GitCommandError:
+        return False
+
+
+def _remove_worktree(repo: git.Repo, wt_path: Path) -> None:
+    """Remove a worktree (and its directory) if it already exists.
+
+    Re-materialisation reuses the same stable per-PR path, so a previous
+    worktree must be torn down before a fresh one is created.
+    """
+    if not wt_path.exists():
+        return
+    try:
+        repo.git.worktree("remove", "--force", str(wt_path))
+    except git.exc.GitCommandError:
+        # The directory may exist without being registered (e.g. after a manual
+        # deletion of the worktree metadata); prune and remove the directory.
+        try:
+            repo.git.worktree("prune")
+        except git.exc.GitCommandError:
+            pass
+        shutil.rmtree(wt_path, ignore_errors=True)
+
+
+def _apply_patch_to_worktree(worktree_path: str, patch: Optional[str]) -> None:
+    """Apply a PR patch (``git apply --3way``) inside an existing worktree."""
+    if not patch or not patch.strip():
+        return
+    patch_content = patch if patch.endswith("\n") else patch + "\n"
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".patch", delete=False) as f:
+        f.write(patch_content)
+        patch_path = f.name
+    try:
+        repo = get_repo(worktree_path)
+        repo.git.apply("--3way", patch_path)
+    finally:
+        if os.path.exists(patch_path):
+            os.remove(patch_path)
+
+
+async def _find_chained_predecessor_pr(pr: PullRequest) -> Optional[PullRequest]:
+    """Return the predecessor PR a chained PR is stacked on top of.
+
+    Ordered branch chaining stores the predecessor session on
+    ``PiSession.chained_from_session_uid`` and each session references the pull
+    request(s) it produced. Returns ``None`` when ``pr`` is not chained or the
+    predecessor cannot be resolved.
+    """
+    if not pr.pi_session_uid:
+        return None
+    try:
+        session = await PiSession.find_one(PiSession.uid == pr.pi_session_uid)
+    except Exception:
+        return None
+    if session is None or not session.chained_from_session_uid:
+        return None
+    try:
+        predecessor = await PiSession.find_one(
+            PiSession.uid == session.chained_from_session_uid
+        )
+    except Exception:
+        return None
+    if predecessor is None:
+        return None
+    for pr_id in predecessor.pull_request_ids or []:
+        if not pr_id:
+            continue
+        try:
+            candidate = await PullRequest.get(pr_id)
+        except Exception:
+            candidate = None
+        if candidate is not None:
+            return candidate
+    return None
+
+
+async def _collect_patch_chain(pr: PullRequest) -> List[PullRequest]:
+    """Return the chain of PRs from oldest to ``pr`` (inclusive).
+
+    When a chained PR has to be re-materialised from its patch, every
+    predecessor patch must be applied first because each patch is a delta
+    relative to its predecessor's tip.
+    """
+    chain: List[PullRequest] = []
+    current: Optional[PullRequest] = pr
+    seen = set()
+    while current is not None and current.id not in seen:
+        seen.add(current.id)
+        chain.append(current)
+        current = await _find_chained_predecessor_pr(current)
+    chain.reverse()
+    return chain
+
+
+async def _resolve_chained_start_point_for_repo(
+    repo: git.Repo, pr: PullRequest
+) -> Optional[str]:
+    """Return the local branch a chained PR's patch fallback must start from."""
+    try:
+        branch = await pi_session_queries.find_chained_predecessor_branch(
+            pr.pi_session_uid
+        )
+    except Exception:
+        return None
+    if not branch:
+        return None
+    if _branch_exists_local(repo, branch):
+        return branch
+    return None
+
+
+def _default_branch_for_repo(repo: git.Repo, pipeline: Pipeline) -> str:
+    """Return the branch to base a patch fallback worktree on.
+
+    Remote clones have a well-known default branch; local pipelines use the
+    currently checked-out branch of ``R`` (there is no origin to consult).
+    """
+    if pipeline.repo_uri:
+        return current_default_branch(repo)
+    try:
+        return repo.active_branch.name
+    except Exception:
+        return current_default_branch(repo)
+
+
+async def resolve_pr_workspace(
+    pipeline: Pipeline, pr: PullRequest
+) -> Tuple[str, str]:
+    """Resolve where a pull request's code lives so a dev server can run there.
+
+    Returns ``(workspace_path, target_label)``. The resolution is layered,
+    cheapest/most-convenient first:
+
+    1. A retained CoderBot sandbox whose HEAD is on the PR's branch.
+    2. An existing feature branch in ``R``/``origin``, checked out into a
+       linked git worktree.
+    3. A worktree at the correct base branch with the PR patch (and, for a
+       chained PR, every predecessor patch) applied via ``git apply --3way``.
+
+    ``R``'s default branch is never checked out directly: worktrees and the
+    retained sandbox keep the accept/reject flow's clean-workspace invariant.
+    """
+    sandbox = _retained_sandbox_path(pr)
+    if sandbox is not None and _workspace_head_is_branch(sandbox, pr.branch_name):
+        return str(sandbox), pr.branch_name
+
+    if not pipeline.workspace_abs_path:
+        raise EntityNotFoundError(
+            f"Workspace path not found for pipeline {pipeline.id}"
+        )
+
+    await ensure_repo_cloned(pipeline)
+    repo = get_repo(str(pipeline.workspace_abs_path))
+    wt = _pr_worktree_path(pipeline, pr)
+
+    if _branch_exists_local(repo, pr.branch_name):
+        _remove_worktree(repo, wt)
+        repo.git.worktree("add", str(wt), pr.branch_name)
+        return str(wt), pr.branch_name
+
+    if _branch_exists_remote(repo, pr.branch_name):
+        _remove_worktree(repo, wt)
+        repo.git.worktree(
+            "add", "-b", pr.branch_name, str(wt), f"origin/{pr.branch_name}"
+        )
+        return str(wt), pr.branch_name
+
+    # Patch fallback: materialise the chain (oldest first) on top of the
+    # resolved base. A detached worktree avoids checking out ``R``'s already
+    # checked-out default branch.
+    chain = await _collect_patch_chain(pr)
+    first = chain[0]
+    base = await _resolve_chained_start_point_for_repo(repo, first)
+    if base is None:
+        base = _default_branch_for_repo(repo, pipeline)
+
+    _remove_worktree(repo, wt)
+    repo.git.worktree("add", "--detach", str(wt), base)
+    for item in chain:
+        _apply_patch_to_worktree(str(wt), item.patch)
+    return str(wt), pr.branch_name
+
+
+async def remove_pr_worktree(pipeline: Pipeline, pr: PullRequest) -> None:
+    """Remove the dev-server worktree created for a pull request, if any.
+
+    Called when a PR leaves the reviewable state (accepted/rejected) so worktrees
+    do not accumulate. The retained CoderBot sandbox is left untouched (it is
+    swept separately by the Pi-session workspace sweeper).
+    """
+    if not pipeline.workspace_abs_path:
+        return
+    try:
+        repo = get_repo(str(pipeline.workspace_abs_path))
+    except Exception:
+        return
+    _remove_worktree(repo, _pr_worktree_path(pipeline, pr))

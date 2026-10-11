@@ -602,6 +602,7 @@ async def accept_pull_request(
             await keep_task_pending_review(
                 task, new_commit_hash, pr.summary, remote_pr_url
             )
+            await git_utils.remove_pr_worktree(pipeline, pr)
             return {
                 "status": "success",
                 "message": "Pull Request submitted for review",
@@ -610,6 +611,7 @@ async def accept_pull_request(
 
         await update_pull_request_status(pr, PullRequestStatus.ACCEPTED)
         await update_task_status(task, new_commit_hash, pr.summary, pr_id)
+        await git_utils.remove_pr_worktree(pipeline, pr)
 
         return {
             "status": "success",
@@ -667,6 +669,15 @@ async def reject_pull_request(pr_id: str):
 
     pr.status = PullRequestStatus.REJECTED
     await pr.save()
+
+    try:
+        pipeline = await Pipeline.get(pr.pipeline_id)
+        if pipeline is not None:
+            await git_utils.remove_pr_worktree(pipeline, pr)
+    except Exception as e:
+        logger.warning(
+            "Failed to remove PR dev-server worktree for %s: %s", pr.id, e
+        )
 
     task = await Task.get(pr.task_id)
     if task and task.status == TaskStatus.PULL_REQUEST_AVAILABLE:

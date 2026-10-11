@@ -44,7 +44,7 @@ from api.dev_server_ws import register_dev_process_ws
 from api.notifications import register_notification_handlers
 from api.notifications.router import router as notifications_router
 from api.routes.auth import router as auth_router
-from api.routes.dev_server import router as dev_server_router
+from api.routes.dev_server import pr_dev_router, router as dev_server_router
 from api.routes.docbot import router as docbot_router
 from api.routes.editor_commands import router as editor_router
 from api.routes.file_browser import router as file_browser_router
@@ -300,6 +300,7 @@ api_router.include_router(specagent_router)
 api_router.include_router(coderbot_router)
 api_router.include_router(pull_request_router)
 api_router.include_router(dev_server_router)
+api_router.include_router(pr_dev_router)
 api_router.include_router(file_browser_router)
 api_router.include_router(notifications_router)
 

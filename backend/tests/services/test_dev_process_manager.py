@@ -341,3 +341,44 @@ async def test_status_reports_failed_after_nonzero_exit(tmp_path):
     assert info.status == "failed"
     assert info.exit_code == 3
     assert "hello" not in info.stdout
+
+
+async def test_workspace_override_changes_cwd_and_target_is_surfaced(tmp_path):
+    manager = DevProcessManager.instance()
+    custom = tmp_path / "custom"
+    custom.mkdir()
+
+    with patch.object(
+        manager, "_resolve_workspace", new_callable=AsyncMock
+    ) as mock_resolve:
+        started = await manager.start(
+            "p1",
+            [["sh", "-c", "pwd"]],
+            workspace=str(custom),
+            target="coderbot/t1",
+        )
+
+    mock_resolve.assert_not_called()
+    assert started["target"] == "coderbot/t1"
+
+    info = manager._processes["p1"]
+    await asyncio.wait_for(info.task, timeout=5)
+    assert str(custom) in info.stdout
+
+    status = await manager.status("p1")
+    assert status["target"] == "coderbot/t1"
+    assert status["port"] == config.DEV_SERVER_PORT
+
+
+async def test_stream_status_includes_target(tmp_path):
+    manager = DevProcessManager.instance()
+    with _patch_workspace(manager, str(tmp_path)):
+        await manager.start(
+            "p1", [["sh", "-c", "exit 0"]], target="coderbot/t2"
+        )
+
+    info = manager._processes["p1"]
+    await asyncio.wait_for(info.task, timeout=5)
+    events = [event async for event in manager.stream("p1", info.run_id)]
+    assert events[0]["type"] == "status"
+    assert events[0]["target"] == "coderbot/t2"

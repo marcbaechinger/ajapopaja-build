@@ -30,6 +30,7 @@ export interface DevProcessState {
   running: boolean;
   pid: number | null;
   port: number | null;
+  target?: string | null;
 }
 
 /**
