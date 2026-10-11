@@ -165,11 +165,14 @@ async def start(
 - `target` is stored on `ProcessInfo` and surfaced in `_info_public()`,
   `start()`, and `status()` responses (alongside the existing `port`) so the
   header can render *"Running on coderbot/t123"* instead of just a port.
-- Single-instance semantics stay **per pipeline**: starting a PR's dev server
-  while another dev process for the same pipeline is running raises
-  `DevProcessAlreadyRunningError` (the caller stops the previous one first, or
-  the UI surfaces "stop before switching branch"). No change to locking,
-  output capture, or process-group termination.
+- Single-instance semantics stay **per pipeline** (the manager still raises
+  `DevProcessAlreadyRunningError` if two processes are ever started
+  concurrently). The PR-scoped *endpoint* turns this into **switch semantics**:
+  it stops the currently running process for the pipeline (ignoring
+  not-found) before starting the new one, so clicking "Start dev server" on PR1
+  while PR2 is being served automatically tears down PR2 and starts PR1 — no
+  `409`, no manual stop. No change to locking, output capture, or process-group
+  termination.
 
 ### 5.2 Resolve the PR's working directory
 
@@ -215,12 +218,21 @@ Flow:
 1. Load the `PullRequest` (must be `OPEN` or `SUBMITTED` — see §9).
 2. Load the pipeline's `serve_commands` (reject with `400` if empty, as today).
 3. `workspace, target = resolve_pr_workspace(pipeline, pr)`.
-4. `DevProcessManager.instance().start(pipeline_id, commands, user,
+4. **Build** the checkout (see §5.6): run `pipeline.build_commands` in
+   `workspace`; a non-zero exit aborts with `422` + build output and leaves the
+   previous server (if any) running.
+5. **Switch**: `manager.stop()` for the pipeline, ignoring
+   `DevProcessNotFoundError` (mirrors the existing `/restart` endpoint's
+   stop-then-start).
+6. `DevProcessManager.instance().start(pipeline_id, commands, user,
    workspace=workspace, target=target)`.
+
+Steps 5–6 give the automatic PR1↔PR2 switching (§5.1): a "start" is always a
+stop-then-start, never a `409`.
 
 The response is the same shape as `dev/start`, with the additional `target`.
 
-A matching convenience is not strictly required for `stop`: the existing
+`stop` needs no PR-scoped variant: the existing
 `POST /pipelines/{pipeline_id}/dev/stop` stops whichever dev process that pipeline
 has, regardless of branch.
 
@@ -237,9 +249,10 @@ has, regardless of branch.
   the existing *View Task / Accept / Iterate / Review* buttons, carrying
   `data-action-click="start_pr_dev_server" data-pr-id="…" data-task-id="…"`.
 - `pullRequestActions.ts`: register `start_pr_dev_server` to call the client and
-  refresh the dev-server indicator. If the pipeline already has a dev server
-  running on another branch, the UI asks/forces a stop first (the manager
-  enforces single-instance), or surfaces the `409`.
+  refresh the dev-server indicator. Switching is **automatic** (the endpoint
+  stops the previous process and starts the new one, §5.3), so no manual stop or
+  `409` handling is needed; the UI only disables the button while a build/start
+  is in flight and surfaces build errors (§5.6).
 
 The existing `DEV_PROCESS_STARTED` broadcast already drives the header
 indicator; we add `target` to its payload so the header can say which branch is
@@ -252,6 +265,35 @@ being served (see §5.1).
 `_info_public()`, the `DEV_PROCESS_STARTED` payload, and the `DEV_PROCESS_STATUS`
 stream header already carry `port`; add `target` so the UI can display the
 branch without an extra round-trip. No new message types are needed.
+
+### 5.6 Build before serve
+
+`backend/api/src/api/assistant/tools/command_runner.py`,
+`backend/api/src/api/routes/pipeline.py`
+
+A freshly materialised PR checkout is frequently **not built** (no frontend
+bundle, no compiled assets), yet the serve command depends on those artifacts.
+So the start flow runs the pipeline's **`build_commands`** in the resolved
+`workspace` *before* serving, reusing `run_command_sequence(commands,
+workspace_path)` — the same primitive behind
+`POST /pipelines/{pipeline_id}/run/build` and the `run_build` tool, but pointed at
+the PR checkout rather than `R`.
+
+- `build_commands` is optional: when empty/`None` the step is skipped and serve
+  starts directly (many serve commands build/watch themselves).
+- A non-zero exit **aborts the start** with `422` and the build output, so the
+  user is never left with a half-built app behind the served port.
+- Because the build runs *before* the switch (§5.3 step 4 vs 5), a failed build
+  leaves the previous server running — the user can keep using the old branch
+  until the build is fixed.
+- The build is **synchronous** in the start flow (serve must not begin until it
+  succeeds). Long builds therefore block the request; acceptable for a review
+  action, with streaming build progress as a follow-up.
+
+The UI should **encourage filling in `build_commands`**: the pipeline edit dialog
+already has a *Build* tab ("Commands run to build the project… Leave empty to
+skip building"), and the PR *Start dev server* action can surface a hint when
+`build_commands` is empty.
 
 ## 6. End-to-end flow
 
@@ -267,7 +309,7 @@ sequenceDiagram
 
     U->>UI: click "Start dev server" on PR item
     UI->>API: POST /pipelines/{pid}/pull_requests/{pr_id}/dev/start
-    API->>API: load PullRequest + pipeline.serve_commands
+    API->>API: load PullRequest + pipeline.serve_commands + build_commands
     API->>Util: resolve_pr_workspace(pipeline, pr)
     alt retained sandbox exists
         Util-->>API: workspace = PI_SESSIONS_ROOT/<uid>/workspace
@@ -278,6 +320,12 @@ sequenceDiagram
         Util->>WT: worktree at base + git apply --3way patch
         Util-->>API: workspace = <wt>
     end
+    opt build_commands present
+        API->>WT: run build_commands (cwd=workspace)
+        WT-->>API: passed / failed
+        API-->>UI: 422 on build failure (previous server keeps running)
+    end
+    API->>Mgr: stop() -- switch: stop previous process (ignore not-found)
     API->>Mgr: start(pid, commands, user, workspace=…, target=…)
     Mgr->>WT: spawn serve_commands (cwd=workspace, PORT/DEV_SERVER_PORT injected)
     Mgr-->>API: {status, pid, port, target, …}
@@ -324,9 +372,13 @@ cleanup to avoid unbounded growth:
 - **Global port / single instance.** The port (`1224`) is global and the manager
   is single-instance **per pipeline**. Starting a PR dev server for pipeline A
   while pipeline B has one running still collides on the port (a pre-existing
-  limitation, not introduced here). Within a pipeline, the UI must stop the
-  current dev server before switching branch; the `409` from the manager is the
-  backstop.
+  limitation, not introduced here). Within a pipeline, switching is automatic:
+  the PR-scoped endpoint stops the running process before starting the new one
+  (§5.3), so no `409` and no manual stop.
+- **Build failure aborts the start.** A non-zero `build_commands` exit stops the
+  flow before the switch, returning `422` + build output and leaving the
+  previous server running (§5.6). A pipeline with no `build_commands` skips the
+  step entirely.
 - **`R` must stay clean.** Never `checkout` in `R`; always use a worktree or the
   retained sandbox (see §4). This preserves `validate_workspace_clean` for
   accept/reject.
@@ -371,8 +423,9 @@ cleanup to avoid unbounded growth:
   `target` is recorded and surfaced in `start`/`status`/`_info_public`; parent
   env still not mutated; single-instance still enforced.
 - **Routes**: `POST …/pull_requests/{pr_id}/dev/start` returns `{port, target}`,
-  rejects empty `serve_commands` (`400`), and returns `409` when a dev process is
-  already running for the pipeline.
+  rejects empty `serve_commands` (`400`), runs `build_commands` in the resolved
+  checkout before serve (aborting `422` on failure), and **switches** (stops the
+  previous process) when another dev process is already running for the pipeline.
 - **WebSocket**: `DEV_PROCESS_STARTED` / `DEV_PROCESS_STATUS` carry `target`.
 - **Frontend**: the PR button posts to the PR-scoped route and the header renders
   the branch label.
@@ -385,4 +438,4 @@ cleanup to avoid unbounded growth:
   reused.
 - The PR button is a new UI affordance on existing PR cards; no data migration is
   required (the `patch`, `branch_name`, and `pi_session_uid` fields already exist
-  on `PullRequest`).
+  on `PullRequest`, and `build_commands` already exists on `Pipeline`).
