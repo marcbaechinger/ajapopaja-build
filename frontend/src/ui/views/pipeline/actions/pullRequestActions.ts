@@ -17,6 +17,7 @@
 import { ConfirmationDialog } from '../../../components/dialogs/ConfirmationDialog.ts';
 import { IteratePullRequestDialog } from '../../../components/dialogs/IteratePullRequestDialog.ts';
 import { PullRequestDialog } from '../../../components/dialogs/PullRequestDialog.ts';
+import { DevServerStartErrorDialog } from '../../../components/dialogs/DevServerStartErrorDialog.ts';
 import type { PipelineDetailCtx } from '../PipelineDetailCtx.ts';
 
 export interface PullRequestActionsDeps {
@@ -146,7 +147,20 @@ export function registerPullRequestActions(
       // switching to another PR's server is automatic on the backend.
     } catch (error: any) {
       console.error('Start PR dev server error:', error);
-      alert(`Failed to start dev server: ${error.message}`);
+      const pr = ctx.state.pullRequests.find((candidate) => candidate.id === prId);
+      const taskId = el.getAttribute('data-task-id') ?? pr?.task_id ?? null;
+      const task = taskId
+        ? ctx.state.allLoadedTasks.find((candidate) => candidate.id === taskId)
+        : undefined;
+      void new DevServerStartErrorDialog({
+        pipelineId: ctx.pipelineId,
+        prId: prId,
+        prSubject: pr?.subject ?? null,
+        branch: pr?.branch_name ?? null,
+        taskId,
+        taskTitle: task?.title ?? null,
+        error: error?.message ?? String(error),
+      }).show();
     } finally {
       btn.disabled = false;
       btn.textContent = original;

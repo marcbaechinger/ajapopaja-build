@@ -22,6 +22,7 @@ import type { ActionHandler } from '../../../../core/ActionRegistry.ts';
 import { ConfirmationDialog } from '../../../components/dialogs/ConfirmationDialog.ts';
 import { IteratePullRequestDialog } from '../../../components/dialogs/IteratePullRequestDialog.ts';
 import { PullRequestDialog } from '../../../components/dialogs/PullRequestDialog.ts';
+import { DevServerStartErrorDialog } from '../../../components/dialogs/DevServerStartErrorDialog.ts';
 
 vi.mock('../../../components/dialogs/ConfirmationDialog.ts', () => ({
   ConfirmationDialog: vi.fn(function ConfirmationDialog() {
@@ -37,6 +38,12 @@ vi.mock('../../../components/dialogs/IteratePullRequestDialog.ts', () => ({
 
 vi.mock('../../../components/dialogs/PullRequestDialog.ts', () => ({
   PullRequestDialog: vi.fn(function PullRequestDialog() {
+    return { show: vi.fn().mockResolvedValue(undefined) };
+  }),
+}));
+
+vi.mock('../../../components/dialogs/DevServerStartErrorDialog.ts', () => ({
+  DevServerStartErrorDialog: vi.fn(function DevServerStartErrorDialog() {
     return { show: vi.fn().mockResolvedValue(undefined) };
   }),
 }));
@@ -81,6 +88,10 @@ describe('registerPullRequestActions', () => {
         },
       },
       pipelineId: 'p1',
+      state: {
+        pullRequests: [],
+        allLoadedTasks: [],
+      },
     } as unknown as PipelineDetailCtx;
 
     deps = {
@@ -350,20 +361,39 @@ describe('registerPullRequestActions', () => {
       expect(startDevServerOnPr).not.toHaveBeenCalled();
     });
 
-    it('surfaces the error and restores the button when the start fails', async () => {
-      const alertSpy = vi.fn();
-      vi.stubGlobal('alert', alertSpy);
+    it('surfaces the error in a dedicated dialog and restores the button when the start fails', async () => {
       vi.spyOn(console, 'error').mockImplementation(() => {});
       startDevServerOnPr.mockRejectedValueOnce(new Error('build failed'));
+      (ctx.state as any).pullRequests = [
+        {
+          id: 'pr1',
+          task_id: 't1',
+          subject: 'Implement feature',
+          branch_name: 'feature/x',
+        },
+      ];
+      (ctx.state as any).allLoadedTasks = [
+        { id: 't1', title: 'Build the thing' },
+      ];
 
       const action = getAction('start_pr_dev_server');
       const el = document.createElement('button');
       el.setAttribute('data-pr-id', 'pr1');
+      el.setAttribute('data-task-id', 't1');
       el.textContent = 'Start dev server';
 
       await action(noEvent, el);
 
-      expect(alertSpy).toHaveBeenCalledWith('Failed to start dev server: build failed');
+      expect(DevServerStartErrorDialog).toHaveBeenCalledTimes(1);
+      expect((DevServerStartErrorDialog as any).mock.calls[0][0]).toMatchObject({
+        pipelineId: 'p1',
+        prId: 'pr1',
+        prSubject: 'Implement feature',
+        branch: 'feature/x',
+        taskId: 't1',
+        taskTitle: 'Build the thing',
+        error: 'build failed',
+      });
       expect(el.disabled).toBe(false);
       expect(el.textContent).toBe('Start dev server');
     });
