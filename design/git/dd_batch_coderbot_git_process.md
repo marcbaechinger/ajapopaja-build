@@ -125,7 +125,7 @@ sequenceDiagram
     S->>R: git clone R → S
     S->>S: checkout -b coderbot/<task_id>  (or fetch predecessor + branch)
     S->>S: spawn Pi, run task, edit files
-    S->>S: git add -A; git commit -m 'CoderBot (Pi): ...' --no-verify (commit c)
+    S->>S: git add -A#59; git commit -m 'CoderBot (Pi): ...' --no-verify (commit c)
     S->>S: git diff HEAD~1 HEAD --binary  (or empty-tree / base diff)  → patch
     S->>DB: insert/update PullRequest (status=OPEN)
     Note over DB: task → PULL_REQUEST_AVAILABLE
@@ -134,7 +134,7 @@ sequenceDiagram
     Note over U,DB: later, the user reviews the PR
     U->>MGR: POST /pull_requests/{pr_id}/accept  (or /reject, /iterate)
     MGR->>R: validate workspace clean, apply patch (git apply --3way)
-    MGR->>R: git add -A; git commit -m <subject> --no-verify  (commit c')
+    MGR->>R: git add -A#59; git commit -m <subject> --no-verify  (commit c')
     alt mode = merge
         Note over R: done (commit stays local)
     else mode = push
@@ -144,7 +144,7 @@ sequenceDiagram
         MGR->>G: push refs/heads/coderbot/<task_id> + POST Gitea PR
         MGR->>R: checkout default branch (kept clean)
     end
-    MGR->>DB: PR → accepted|submitted; task → IMPLEMENTED|SUBMITTED
+    MGR->>DB: PR → accepted|submitted#59; task → IMPLEMENTED|SUBMITTED
 ```
 
 ---
