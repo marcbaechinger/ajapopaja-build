@@ -109,8 +109,8 @@ Publish the dev-server port alongside the API port:
 
 ```yaml
 ports:
-  - "${PORT:-8081}:${PORT:-8081}"
-  - "${DEV_SERVER_PORT:-1224}:${DEV_SERVER_PORT:-1224}"
+  - "127.0.0.1:${PORT:-8081}:${PORT:-8081}"
+  - "127.0.0.1:${DEV_SERVER_PORT:-1224}:${DEV_SERVER_PORT:-1224}"
 ```
 
 Since `DEV_SERVER_PORT` is present in `/etc/ajapopaja-build.env`, it is already
@@ -131,11 +131,13 @@ host port always agree.
 ### 2.7 Security / exposure note
 
 Publishing the dev port makes whatever the user runs reachable on the host
-network. Because `docker-compose.yml` currently publishes the API port on all
-interfaces, we match that behavior for consistency; a hardening option is to bind
-to loopback only (`"127.0.0.1:${DEV_SERVER_PORT:-1224}:${DEV_SERVER_PORT:-1224}"`).
-This is documented rather than enforced to avoid changing existing API exposure
-semantics.
+network. Because `docker-compose.yml` previously published the API port on all
+interfaces, we matched that behavior for consistency. Both mappings are now bound
+to loopback only (`"127.0.0.1:${PORT:-8081}:${PORT:-8081}"` and
+`"127.0.0.1:${DEV_SERVER_PORT:-1224}:${DEV_SERVER_PORT:-1224}"`) so the host's
+nginx reverse proxy is the single entry point and Docker's IPv6 publishing cannot
+expose the app. This is a deliberate change to the previous all-interfaces API
+exposure.
 
 ## 3. Alternatives Considered
 

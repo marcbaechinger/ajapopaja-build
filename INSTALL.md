@@ -225,8 +225,8 @@ services:
     env_file:
       - ${AJAPOPAJA_ENV_FILE:-/etc/ajapopaja-build.env}
     ports:
-      - "${PORT:-8081}:${PORT:-8081}"
-      - "${DEV_SERVER_PORT:-1224}:${DEV_SERVER_PORT:-1224}"
+      - "127.0.0.1:${PORT:-8081}:${PORT:-8081}"
+      - "127.0.0.1:${DEV_SERVER_PORT:-1224}:${DEV_SERVER_PORT:-1224}"
     volumes:
       - /home:/home
       - /Users:/Users
@@ -558,7 +558,8 @@ A dev server started from the dashboard listens inside the container. Make sure:
   `docker-compose.yml` (or run `deploy-local.sh`) and restart the service after
   upgrading.
 
-Then open `http://<host>:1224` from the Docker host. Note that the port is
-published on all host interfaces; restrict it to loopback by changing the
-compose mapping to
-`"127.0.0.1:${DEV_SERVER_PORT:-1224}:${DEV_SERVER_PORT:-1224}"` if needed.
+Then open `http://<host>:1224` from the Docker host. The port is published on
+loopback only (`"127.0.0.1:${DEV_SERVER_PORT:-1224}:${DEV_SERVER_PORT:-1224}"`),
+so it is reachable from the host (and from other processes on the host) but not
+from other machines on the LAN. If you need LAN access to a dev server, change
+the mapping back to `"${DEV_SERVER_PORT:-1224}:${DEV_SERVER_PORT:-1224}"`.

@@ -31,7 +31,14 @@ def test_dockerfile_declares_dev_server_port():
 
 def test_compose_publishes_dev_server_port():
     compose = (REPO_ROOT / "docker-compose.yml").read_text()
-    assert "${DEV_SERVER_PORT:-1224}:${DEV_SERVER_PORT:-1224}" in compose
+    assert "127.0.0.1:${DEV_SERVER_PORT:-1224}:${DEV_SERVER_PORT:-1224}" in compose
+
+
+def test_compose_binds_ports_to_loopback():
+    """Both published ports must bind to loopback so nginx is the only entry point."""
+    compose = (REPO_ROOT / "docker-compose.yml").read_text()
+    assert "127.0.0.1:${PORT:-8081}:${PORT:-8081}" in compose
+    assert "127.0.0.1:${DEV_SERVER_PORT:-1224}:${DEV_SERVER_PORT:-1224}" in compose
 
 
 def test_deploy_templates_seed_dev_server_port():
