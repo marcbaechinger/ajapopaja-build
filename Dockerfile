@@ -28,7 +28,7 @@ RUN git config --global user.name "Ajapopaja Build" \
 
 # Install Node.js (pi requires Node >= 22.19.0) and the pi coding agent
 ARG PI_VERSION=1.1.0
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && npm install -g --ignore-scripts @earendil-works/pi-coding-agent@${PI_VERSION} \
     && rm -rf /var/lib/apt/lists/*
