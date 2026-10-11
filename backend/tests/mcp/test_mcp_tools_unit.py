@@ -70,7 +70,8 @@ async def test_search_tasks_invalid_pipeline_id():
 
 @pytest.mark.asyncio
 async def test_search_tasks_invalid_status():
-    result = await search_tasks(statuses=["invalid-status"])
+    with patch("ajapopaja_mcp.tools.init_db", new_callable=AsyncMock):
+        result = await search_tasks(statuses=["invalid-status"])
     assert "error" in result
     assert "Invalid status provided" in result["error"]
 

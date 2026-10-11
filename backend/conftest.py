@@ -12,17 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import uuid
 from pathlib import Path
 
 import pytest
 from beanie import init_beanie
 from httpx import ASGITransport, AsyncClient
-from pymongo import AsyncMongoClient
+from mongomock.database import Database as MongoMockDatabase
+from mongomock_motor import AsyncMongoMockClient
 
 from api.main import app
-from core import config
+from core import config, db
 from core.models.models import (
     DesignDocHistory,
     Pipeline,
@@ -75,13 +75,32 @@ def isolate_auth_cookie_name(monkeypatch):
 
 
 @pytest.fixture
-async def init_mock_db():
-    mongodb_uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
+async def init_mock_db(monkeypatch):
+    # mongomock doesn't accept the authorizedCollections/nameOnly kwargs that
+    # Beanie passes to Database.list_collection_names(), so strip them out.
+    orig_list = MongoMockDatabase.list_collection_names
+
+    def _patched_list_collection_names(self, *args, **kwargs):
+        kwargs.pop("authorizedCollections", None)
+        kwargs.pop("nameOnly", None)
+        return orig_list(self, *args, **kwargs)
+
+    monkeypatch.setattr(
+        MongoMockDatabase, "list_collection_names", _patched_list_collection_names
+    )
+
     test_db_name = f"test_db_{uuid.uuid4().hex}"
-    client = AsyncMongoClient(mongodb_uri, tz_aware=True)
-    db = client[test_db_name]
+    client = AsyncMongoMockClient(tz_aware=True)
+    database = client[test_db_name]
+
+    # Point the shared core.db bootstrap at the same in-memory client so any
+    # code path that lazily calls ``core.db.init_db()`` (e.g. the MCP tools)
+    # reuses it instead of creating a real MongoDB client.
+    db._is_initialized = False
+    db._client = client
+
     await init_beanie(
-        database=db,
+        database=database,
         document_models=[
             Pipeline,
             Task,
@@ -94,7 +113,9 @@ async def init_mock_db():
     )
     yield test_db_name
     await client.drop_database(test_db_name)
-    await client.close()
+    client.close()
+    db._is_initialized = False
+    db._client = None
 
 
 @pytest.fixture
