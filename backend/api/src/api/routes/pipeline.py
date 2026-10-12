@@ -12,12 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from api.auth import get_current_user
+from api.git_hosting.branch_notifier import PrStateNotifier
+from api.git_hosting.pr_poller import reconcile_pipeline_pull_requests
 from api.git_hosting.pull_requests import ensure_pr_state_webhook_best_effort
 from api.websocket_manager import WSMessage, manager
 from core.exceptions import EntityNotFoundError
@@ -32,6 +35,8 @@ from core.queries import pipeline as pipeline_queries
 from core.queries import task as task_queries
 from core.services.model_resolver import list_coderbot_models, list_ollama_models
 from core.utils import git_utils
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/pipelines", tags=["pipelines"])
 
@@ -272,6 +277,45 @@ async def drop_top_commit(
     """Drop the topmost local commit that has not been pushed to the remote."""
     msg = await git_utils.drop_top_commit(pipeline_id)
     return {"status": "ok", "message": msg}
+
+
+@router.post("/{pipeline_id}/pull_requests/sync", response_model=dict)
+async def sync_pipeline_pull_requests(
+    pipeline_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Force an outbound reconciliation of this pipeline's Gitea PR state.
+
+    Webhook delivery is not durable, so a merge/reject on Gitea can be missed
+    while the backend restarts or when a hook is misconfigured. This endpoint
+    lets a user pull the current remote state on demand and mirror it onto the
+    local ``PullRequest``/``Task`` records. It reuses the same notifier/poller
+    code path as the background reconciler and only acts on ``SUBMITTED`` PRs,
+    so it is safe to call repeatedly.
+
+    Returns a JSON summary (``up_to_date`` and a per-PR ``reconciled`` list) or
+    a clear status such as ``busy`` / ``already_running`` / ``sync_failed``
+    instead of a 500 when the reconciliation could not proceed.
+    """
+    notifier = PrStateNotifier()
+    try:
+        result = await reconcile_pipeline_pull_requests(notifier, pipeline_id)
+    except Exception as exc:
+        logger.error(
+            "On-demand PR sync failed for pipeline %s: %s",
+            pipeline_id,
+            exc,
+            exc_info=True,
+        )
+        return {
+            "status": "sync_failed",
+            "up_to_date": False,
+            "reconciled": [],
+        }
+
+    if result.get("status") == "not_found":
+        raise HTTPException(status_code=404, detail="Pipeline not found")
+    return result
 
 
 @router.post("/{pipeline_id}/pull", response_model=dict)

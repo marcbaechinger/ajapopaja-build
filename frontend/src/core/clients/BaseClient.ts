@@ -16,6 +16,24 @@
 
 import { AuthService } from '../AuthService.ts';
 
+/**
+ * Error thrown for a non-2xx API response. It preserves the HTTP status so
+ * callers can make decisions based on a specific code (e.g. the 409
+ * "older pull request is still open" conflict) while still carrying the
+ * server-provided `detail` in `message` for existing alert() call sites.
+ */
+export class ApiError extends Error {
+  readonly status: number;
+  readonly detail: string;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.detail = message;
+  }
+}
+
 export class BaseClient {
   protected authService: AuthService;
 
@@ -46,7 +64,10 @@ export class BaseClient {
 
     if (!response.ok && response.status !== 401) {
       const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-      throw new Error(error.detail || `HTTP error! status: ${response.status}`);
+      throw new ApiError(
+        error.detail || `HTTP error! status: ${response.status}`,
+        response.status,
+      );
     }
 
     return response;

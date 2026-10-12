@@ -20,6 +20,7 @@ import type { AppContext } from '../../../core/AppContext.ts';
 import { Icon } from '../common/Icon.ts';
 import { DiffView } from '../common/DiffView.ts';
 import { escapeHtml } from '../utils/html.ts';
+import { showPullRequestSyncToast } from '../utils/prSync.ts';
 
 export interface PullRequestDialogProps {
   taskId: string;
@@ -35,6 +36,12 @@ export class PullRequestDialog extends BaseDialog<void> {
   private pr: PullRequest | null = null;
   private loading: boolean = true;
   private diffView: DiffView | null = null;
+  /**
+   * Set after a 409 "older pull request is still open" accept response. It
+   * swaps the footer for a choice between syncing the latest Gitea state and
+   * accepting out of order (force).
+   */
+  private conflict: boolean = false;
 
   constructor(props: PullRequestDialogProps) {
     super({
@@ -169,6 +176,26 @@ export class PullRequestDialog extends BaseDialog<void> {
     `;
     }
 
+    if (this.conflict) {
+      return `
+      <div class="p-4 border-t border-amber-500/40 bg-amber-500/10 rounded-b-2xl">
+        <div class="flex items-start gap-2 mb-3 text-amber-500">
+          ${Icon.render('alert', { size: 18 })}
+          <p class="text-xs text-app-text/80">An older pull request for this pipeline is still open. Sync the latest Gitea state to clear it, or accept this one out of order.</p>
+        </div>
+        <div class="flex justify-end gap-3">
+          <button id="pr-accept-anyway-btn" class="px-4 py-2 rounded text-xs font-bold uppercase tracking-widest text-app-text border border-app-border hover:bg-app-surface transition-all cursor-pointer">
+            Accept anyway
+          </button>
+          <button id="pr-sync-retry-btn" class="px-6 py-2 rounded bg-app-accent-2 text-white text-xs font-black uppercase tracking-widest hover:bg-app-accent-2/80 transition-all cursor-pointer shadow-lg shadow-app-accent-2/20 inline-flex items-center gap-2">
+            ${Icon.render('refresh', { size: 16 })}
+            Sync from Gitea & retry
+          </button>
+        </div>
+      </div>
+    `;
+    }
+
     return `
       <div class="flex justify-between items-center p-4 border-t border-app-border bg-app-surface/50 rounded-b-2xl">
         <button id="pr-reject-btn" class="px-4 py-2 rounded text-xs font-bold uppercase tracking-widest text-red-500 hover:bg-red-500/10 transition-all cursor-pointer flex items-center gap-2">
@@ -212,6 +239,8 @@ export class PullRequestDialog extends BaseDialog<void> {
     this.dialog.querySelector('#pr-close-fallback-btn')?.addEventListener('click', () => this.close());
     this.dialog.querySelector('#pr-accept-btn')?.addEventListener('click', () => this.handleAccept());
     this.dialog.querySelector('#pr-reject-btn')?.addEventListener('click', () => this.handleReject());
+    this.dialog.querySelector('#pr-accept-anyway-btn')?.addEventListener('click', () => this.handleAccept(true));
+    this.dialog.querySelector('#pr-sync-retry-btn')?.addEventListener('click', () => this.handleSyncAndRetry());
 
     const summaryInput = this.dialog.querySelector('#pr-summary-input') as HTMLTextAreaElement;
     if (summaryInput) {
@@ -225,9 +254,24 @@ export class PullRequestDialog extends BaseDialog<void> {
     }
   }
 
-  private async handleAccept() {
+  /**
+   * Whether an accept failure is the 409 ordering conflict. Accepts both the
+   * structured {@link ApiError} status and the raw detail text so it also works
+   * with plain Errors (e.g. from tests or older clients).
+   */
+  private isOlderPrConflict(error: any): boolean {
+    if (error && typeof error.status === 'number' && error.status === 409) {
+      return true;
+    }
+    const message = typeof error?.message === 'string' ? error.message : '';
+    return /older pull request[\s\S]*still open/i.test(message);
+  }
+
+  private async handleAccept(force: boolean = false) {
     if (!this.pr) return;
-    const acceptBtn = this.dialog.querySelector('#pr-accept-btn') as HTMLButtonElement;
+    const acceptBtn = this.dialog.querySelector(
+      force ? '#pr-accept-anyway-btn' : '#pr-accept-btn'
+    ) as HTMLButtonElement | null;
     const summaryInput = this.dialog.querySelector('#pr-summary-input') as HTMLTextAreaElement;
     const strategySelect = this.dialog.querySelector('#pr-failure-strategy') as HTMLSelectElement;
     const acceptLabel = pullRequestAcceptLabel(this.pr);
@@ -236,19 +280,62 @@ export class PullRequestDialog extends BaseDialog<void> {
       summaryInput?.value || this.pr.subject || this.pr.summary;
     const failureStrategy = strategySelect?.value || 'revert';
 
-    acceptBtn.disabled = true;
-    acceptBtn.textContent = 'Applying...';
+    if (acceptBtn) {
+      acceptBtn.disabled = true;
+      acceptBtn.textContent = 'Applying...';
+    }
 
     try {
-      await this.props.context.pullRequestClient.acceptPullRequest(this.pr.id!, commitMessage, failureStrategy);
+      await this.props.context.pullRequestClient.acceptPullRequest(
+        this.pr.id!,
+        commitMessage,
+        failureStrategy,
+        force,
+      );
       if (this.props.onAccept) this.props.onAccept();
       this.close();
     } catch (error: any) {
       console.error('Accept PR error:', error);
+      // The safe choice when an older PR is still open: offer to sync the
+      // latest Gitea state (and retry) instead of the dead-end alert.
+      if (!force && this.isOlderPrConflict(error)) {
+        this.conflict = true;
+        this.reRender();
+        return;
+      }
       alert(`Failed to accept Pull Request: ${error.message}`);
-      acceptBtn.disabled = false;
-      acceptBtn.textContent = acceptLabel;
+      if (acceptBtn) {
+        acceptBtn.disabled = false;
+        acceptBtn.textContent = force ? 'Accept anyway' : acceptLabel;
+      }
     }
+  }
+
+  /**
+   * Sync the pipeline's pull requests from Gitea, report the summary, then
+   * retry the accept now that a stale local PR may have been reconciled.
+   */
+  private async handleSyncAndRetry() {
+    if (!this.pr) return;
+    const syncBtn = this.dialog.querySelector('#pr-sync-retry-btn') as HTMLButtonElement | null;
+    if (syncBtn) {
+      syncBtn.disabled = true;
+      syncBtn.textContent = 'Syncing...';
+    }
+    try {
+      const result = await this.props.context.pullRequestClient.syncPullRequests(
+        this.props.pipelineId,
+      );
+      showPullRequestSyncToast(result);
+    } catch (error: any) {
+      console.error('Sync from Gitea error:', error);
+      alert(`Failed to sync from Gitea: ${error.message}`);
+    }
+    // Retry the normal accept: a remotely closed older PR is now rejected, so
+    // no force is needed. If it is still open the conflict choice reappears.
+    this.conflict = false;
+    this.reRender();
+    await this.handleAccept(false);
   }
 
   private async handleReject() {

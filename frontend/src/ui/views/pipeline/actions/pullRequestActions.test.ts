@@ -23,6 +23,7 @@ import { ConfirmationDialog } from '../../../components/dialogs/ConfirmationDial
 import { IteratePullRequestDialog } from '../../../components/dialogs/IteratePullRequestDialog.ts';
 import { PullRequestDialog } from '../../../components/dialogs/PullRequestDialog.ts';
 import { DevServerStartErrorDialog } from '../../../components/dialogs/DevServerStartErrorDialog.ts';
+import { showPullRequestSyncToast } from '../../../components/utils/prSync.ts';
 
 vi.mock('../../../components/dialogs/ConfirmationDialog.ts', () => ({
   ConfirmationDialog: vi.fn(function ConfirmationDialog() {
@@ -48,6 +49,10 @@ vi.mock('../../../components/dialogs/DevServerStartErrorDialog.ts', () => ({
   }),
 }));
 
+vi.mock('../../../components/utils/prSync.ts', () => ({
+  showPullRequestSyncToast: vi.fn(),
+}));
+
 /** The four handlers never read the event; a placeholder keeps the signature. */
 const noEvent = null as unknown as Event;
 
@@ -58,6 +63,7 @@ describe('registerPullRequestActions', () => {
   let acceptPullRequest: ReturnType<typeof vi.fn>;
   let iteratePullRequest: ReturnType<typeof vi.fn>;
   let startDevServerOnPr: ReturnType<typeof vi.fn>;
+  let syncPullRequests: ReturnType<typeof vi.fn>;
 
   const getAction = (name: string): ActionHandler => {
     const handler = registry.get(name);
@@ -73,6 +79,11 @@ describe('registerPullRequestActions', () => {
     acceptPullRequest = vi.fn().mockResolvedValue({});
     iteratePullRequest = vi.fn().mockResolvedValue({});
     startDevServerOnPr = vi.fn().mockResolvedValue({});
+    syncPullRequests = vi.fn().mockResolvedValue({
+      status: 'ok',
+      up_to_date: false,
+      reconciled: [],
+    });
 
     ctx = {
       context: {
@@ -82,6 +93,7 @@ describe('registerPullRequestActions', () => {
         pullRequestClient: {
           acceptPullRequest,
           iteratePullRequest,
+          syncPullRequests,
         },
         pipelineClient: {
           startDevServerOnPr,
@@ -114,12 +126,13 @@ describe('registerPullRequestActions', () => {
     expect(registry.has('iterate_pr')).toBe(true);
   });
 
-  it('should register all five pull-request actions', () => {
+  it('should register all pull-request actions', () => {
     expect([...registry.keys()].sort()).toEqual([
       'accept_pr',
       'iterate_pr',
       'open_pr_dialog',
       'start_pr_dev_server',
+      'sync_from_gitea',
       'toggle_pr_summary',
     ]);
   });
@@ -396,6 +409,49 @@ describe('registerPullRequestActions', () => {
       });
       expect(el.disabled).toBe(false);
       expect(el.textContent).toBe('Start dev server');
+    });
+  });
+
+  describe('sync_from_gitea', () => {
+    it('calls the client, shows the summary toast and refreshes the lists', async () => {
+      const summary = {
+        status: 'ok',
+        up_to_date: false,
+        reconciled: [
+          { pr_id: 'p', gitea_pr: 350, remote_state: 'merged', outcome: 'accepted' },
+        ],
+      };
+      syncPullRequests.mockResolvedValueOnce(summary);
+
+      const action = getAction('sync_from_gitea');
+      const el = document.createElement('button');
+      el.textContent = 'Sync';
+
+      await action(noEvent, el);
+
+      expect(syncPullRequests).toHaveBeenCalledWith('p1');
+      expect(showPullRequestSyncToast).toHaveBeenCalledWith(summary);
+      expect(deps.refreshPullRequests).toHaveBeenCalled();
+      expect(el.disabled).toBe(false);
+      expect(el.textContent).toBe('Sync');
+    });
+
+    it('restores the button and surfaces the error when the sync fails', async () => {
+      const alertSpy = vi.fn();
+      vi.stubGlobal('alert', alertSpy);
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      syncPullRequests.mockRejectedValueOnce(new Error('boom'));
+
+      const action = getAction('sync_from_gitea');
+      const el = document.createElement('button');
+      el.textContent = 'Sync';
+
+      await action(noEvent, el);
+
+      expect(alertSpy).toHaveBeenCalledWith('Failed to sync from Gitea: boom');
+      expect(el.disabled).toBe(false);
+      expect(el.textContent).toBe('Sync');
+      expect(showPullRequestSyncToast).not.toHaveBeenCalled();
     });
   });
 

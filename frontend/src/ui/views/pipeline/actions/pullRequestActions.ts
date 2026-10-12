@@ -18,6 +18,7 @@ import { ConfirmationDialog } from '../../../components/dialogs/ConfirmationDial
 import { IteratePullRequestDialog } from '../../../components/dialogs/IteratePullRequestDialog.ts';
 import { PullRequestDialog } from '../../../components/dialogs/PullRequestDialog.ts';
 import { DevServerStartErrorDialog } from '../../../components/dialogs/DevServerStartErrorDialog.ts';
+import { showPullRequestSyncToast } from '../../../components/utils/prSync.ts';
 import type { PipelineDetailCtx } from '../PipelineDetailCtx.ts';
 
 export interface PullRequestActionsDeps {
@@ -31,6 +32,12 @@ export interface PullRequestActionsDeps {
   refreshPullRequests(): void;
   /** Re-sync the compact engine Pi slot after starting an iteration (P3). */
   updateEngineSlot(): void;
+  /**
+   * Optional full task refresh after a sync changes several task statuses at
+   * once. When omitted, the notifier's TASK_STATUS_UPDATED broadcasts still
+   * update the open clients live.
+   */
+  refreshTasks?(): void;
 }
 
 /**
@@ -164,6 +171,27 @@ export function registerPullRequestActions(
     } finally {
       btn.disabled = false;
       btn.textContent = original;
+    }
+  });
+
+  actionRegistry.register('sync_from_gitea', async (_e, el) => {
+    const btn = el as HTMLButtonElement;
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = 'Syncing...';
+    try {
+      const result = await ctx.context.pullRequestClient.syncPullRequests(
+        ctx.pipelineId,
+      );
+      showPullRequestSyncToast(result);
+      deps.refreshPullRequests();
+      deps.refreshTasks?.();
+    } catch (error: any) {
+      console.error('Sync from Gitea error:', error);
+      alert(`Failed to sync from Gitea: ${error.message}`);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
     }
   });
 

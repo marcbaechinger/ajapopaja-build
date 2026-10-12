@@ -40,7 +40,13 @@ export class PullRequestSection {
                 <p class="text-[10px] font-bold text-app-muted uppercase tracking-widest">Awaiting Review</p>
              </div>
           </div>
-          <span class="bg-app-accent-2/20 text-app-accent-2 text-[10px] font-black px-2.5 py-1 rounded-full border border-app-accent-2/30 shadow-sm">${openPrs.length}</span>
+          <div class="flex items-center gap-2">
+            <button id="pr-sync-from-gitea-btn" data-action-click="sync_from_gitea" class="px-3 py-2 bg-app-surface text-app-text text-[10px] font-black uppercase tracking-widest rounded-xl border border-app-border hover:border-app-accent-2/40 hover:text-app-accent-2 transition-all shadow-sm cursor-pointer flex items-center gap-2" title="Fetch the latest pull-request state from Gitea and mirror it locally">
+              ${Icon.render('refresh', { size: 14 })}
+              Sync
+            </button>
+            <span class="bg-app-accent-2/20 text-app-accent-2 text-[10px] font-black px-2.5 py-1 rounded-full border border-app-accent-2/30 shadow-sm">${openPrs.length}</span>
+          </div>
         </div>
         
         <div class="space-y-4">

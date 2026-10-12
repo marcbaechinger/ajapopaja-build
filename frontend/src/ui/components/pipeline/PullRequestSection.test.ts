@@ -86,6 +86,12 @@ describe('PullRequestSection', () => {
     expect(iterateIndex).toBeGreaterThan(reviewIndex);
   });
 
+  it('renders a Sync from Gitea control in the section header', () => {
+    const html = PullRequestSection.render([makePr()]);
+    expect(html).toContain('data-action-click="sync_from_gitea"');
+    expect(html).toContain('Sync');
+  });
+
   it('renders no Accept button when there are no OPEN PRs', () => {
     const html = PullRequestSection.render([makePr({ status: PullRequestStatus.SUBMITTED, remote_pr_url: 'https://host/o/r/pull/1' })]);
     expect(html).toBe('');

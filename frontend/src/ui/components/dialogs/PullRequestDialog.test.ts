@@ -249,6 +249,120 @@ describe('PullRequestDialog', () => {
     acceptBtn.click();
 
     await vi.waitFor(() => expect(acceptPullRequest).toHaveBeenCalled());
-    expect(acceptPullRequest).toHaveBeenCalledWith('pr5', 'Add new feature', 'revert');
+    expect(acceptPullRequest).toHaveBeenCalledWith('pr5', 'Add new feature', 'revert', false);
+  });
+
+  const conflictPr = {
+    _id: 'pr-conflict',
+    pipeline_id: 'p1',
+    task_id: 't1',
+    summary: 'summary',
+    subject: 'subject',
+    branch_name: 'feature/x',
+    patch: 'patch',
+    status: PullRequestStatus.OPEN,
+  };
+
+  const makeConflictContext = (acceptPullRequest: any, syncPullRequests: any) => ({
+    pullRequestClient: {
+      getPullRequestByTask: vi.fn().mockResolvedValue(new PullRequest(conflictPr)),
+      getPullRequest: vi.fn().mockResolvedValue(new PullRequest(conflictPr)),
+      acceptPullRequest,
+      syncPullRequests,
+    },
+  }) as any;
+
+  it('offers Sync from Gitea & retry and Accept anyway on a 409 ordering conflict', async () => {
+    const conflict = Object.assign(
+      new Error('An older pull request for this pipeline is still open (PR old).'),
+      { status: 409 },
+    );
+    const acceptPullRequest = vi.fn().mockRejectedValueOnce(conflict);
+    const syncPullRequests = vi.fn().mockResolvedValue({ up_to_date: true, reconciled: [] });
+    const context = makeConflictContext(acceptPullRequest, syncPullRequests);
+
+    const dialog = new PullRequestDialog({
+      taskId: 't1',
+      pipelineId: 'p1',
+      context,
+    });
+
+    await vi.waitFor(() => expect(dialog['pr']).not.toBeNull());
+    (dialog['dialog'].querySelector('#pr-accept-btn') as HTMLButtonElement).click();
+
+    await vi.waitFor(() => {
+      expect(dialog['dialog'].querySelector('#pr-sync-retry-btn')).not.toBeNull();
+    });
+    expect(dialog['dialog'].textContent).toContain('Sync from Gitea & retry');
+    expect(dialog['dialog'].textContent).toContain('Accept anyway');
+  });
+
+  it('Sync from Gitea & retry syncs then re-attempts the accept', async () => {
+    const conflict = Object.assign(
+      new Error('An older pull request for this pipeline is still open (PR old).'),
+      { status: 409 },
+    );
+    const acceptPullRequest = vi
+      .fn()
+      .mockRejectedValueOnce(conflict)
+      .mockResolvedValueOnce(undefined);
+    const syncPullRequests = vi.fn().mockResolvedValue({
+      status: 'ok',
+      up_to_date: false,
+      reconciled: [
+        { pr_id: 'old', gitea_pr: 349, remote_state: 'closed', outcome: 'rejected' },
+      ],
+    });
+    const context = makeConflictContext(acceptPullRequest, syncPullRequests);
+
+    const dialog = new PullRequestDialog({
+      taskId: 't1',
+      pipelineId: 'p1',
+      context,
+    });
+
+    await vi.waitFor(() => expect(dialog['pr']).not.toBeNull());
+    (dialog['dialog'].querySelector('#pr-accept-btn') as HTMLButtonElement).click();
+    await vi.waitFor(() =>
+      expect(dialog['dialog'].querySelector('#pr-sync-retry-btn')).not.toBeNull(),
+    );
+
+    (dialog['dialog'].querySelector('#pr-sync-retry-btn') as HTMLButtonElement).click();
+
+    await vi.waitFor(() => expect(syncPullRequests).toHaveBeenCalledWith('p1'));
+    await vi.waitFor(() => expect(acceptPullRequest).toHaveBeenCalledTimes(2));
+    // The retry is a normal accept (no force).
+    expect(acceptPullRequest).toHaveBeenLastCalledWith('pr-conflict', expect.anything(), 'revert', false);
+  });
+
+  it('Accept anyway resends the accept with force=true', async () => {
+    const conflict = Object.assign(
+      new Error('An older pull request for this pipeline is still open (PR old).'),
+      { status: 409 },
+    );
+    const acceptPullRequest = vi
+      .fn()
+      .mockRejectedValueOnce(conflict)
+      .mockResolvedValueOnce(undefined);
+    const syncPullRequests = vi.fn();
+    const context = makeConflictContext(acceptPullRequest, syncPullRequests);
+
+    const dialog = new PullRequestDialog({
+      taskId: 't1',
+      pipelineId: 'p1',
+      context,
+    });
+
+    await vi.waitFor(() => expect(dialog['pr']).not.toBeNull());
+    (dialog['dialog'].querySelector('#pr-accept-btn') as HTMLButtonElement).click();
+    await vi.waitFor(() =>
+      expect(dialog['dialog'].querySelector('#pr-accept-anyway-btn')).not.toBeNull(),
+    );
+
+    (dialog['dialog'].querySelector('#pr-accept-anyway-btn') as HTMLButtonElement).click();
+
+    await vi.waitFor(() => expect(acceptPullRequest).toHaveBeenCalledTimes(2));
+    expect(acceptPullRequest).toHaveBeenLastCalledWith('pr-conflict', expect.anything(), 'revert', true);
+    expect(syncPullRequests).not.toHaveBeenCalled();
   });
 });
