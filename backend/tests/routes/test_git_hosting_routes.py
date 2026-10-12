@@ -125,8 +125,13 @@ async def test_pr_state_wrong_signature_401(async_client, init_mock_db, monkeypa
 
 
 @pytest.mark.asyncio
-async def test_pr_state_non_actionable_event_202(async_client, init_mock_db):
-    raw = json.dumps({"action": "opened", "pull_request": {}}).encode("utf-8")
+async def test_pr_state_non_actionable_event_202(
+    async_client, init_mock_db, monkeypatch
+):
+    # Sign the request with a pinned secret so this test is independent of the
+    # ambient GITEA_WEBHOOK_SECRET in the test environment.
+    monkeypatch.setattr(config, "GITEA_WEBHOOK_SECRET", SECRET)
+    raw, sig = _sign({"action": "opened", "pull_request": {}})
 
     with patch(
         "api.routes.git_hosting.PrStateNotifier.on_pr_state",
@@ -135,7 +140,10 @@ async def test_pr_state_non_actionable_event_202(async_client, init_mock_db):
         response = await async_client.post(
             "/api/git_hosting/pipelines/pipe-1/pr-state",
             content=raw,
-            headers={"Content-Type": "application/json"},
+            headers={
+                "Content-Type": "application/json",
+                "X-Gitea-Signature": sig,
+            },
         )
 
     assert response.status_code == 202
