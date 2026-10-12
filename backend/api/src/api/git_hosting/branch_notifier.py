@@ -17,9 +17,12 @@
 :class:`PrStateNotifier.on_pr_state` always mirrors the remote state onto the
 local pull requests and tasks (and broadcasts it), fetching remote-tracking
 refs first so a reported ``merged`` commit can be verified. Only the
-working-tree ``git pull`` is gated on the pipeline being idle: while a coding
-session is active the DB mirror still applies and a one-click "Pull now"
-notification is offered instead of touching the checkout.
+working-tree ``git pull`` is gated: it runs while the pipeline is idle, and
+only when the event actually reconciled local state (a merge/reject matched a
+``SUBMITTED`` PR). While a coding session is active the DB mirror still
+applies and a one-click "Pull now" notification is offered instead of
+touching the checkout. Events that mirror nothing (e.g. the feature-branch
+push Ajapopaja itself creates when a PR is accepted) never prompt or pull.
 """
 
 import logging
@@ -253,13 +256,57 @@ class PrStateNotifier:
             return list(prs)
         return [pr for pr in prs if pr.base_branch == target]
 
-    async def on_pr_state(self, pipeline_id: str, event: PrStateEvent) -> NotifyResult:
-        """Fetch, verify, mirror and (when idle) pull the remote PR state.
+    def _event_target_branch(self, event: PrStateEvent) -> Optional[str]:
+        """Branch an event reconciled to (the PR base, or the pushed branch).
 
-        The DB mirror and broadcast always run, even while a session is active;
-        only the working-tree ``git pull`` is deferred (with a "Pull now"
-        notification) in that case. Busy pipelines are therefore never reported
-        back as ``busy`` by this method.
+        A pull only makes sense when this is the clone's checked-out branch: a
+        push to a feature branch must never disturb the checkout of the default
+        branch.
+        """
+        return event.base_branch or event.branch
+
+    def _event_targets_tracked_branch(
+        self, pipeline: Pipeline, event: PrStateEvent
+    ) -> bool:
+        """Whether an event concerns the clone's checked-out (tracked) branch.
+
+        Read-only and best-effort: it never fetches or mutates the repository.
+        When the branch cannot be determined it returns ``True`` so the
+        historical pull behaviour is preserved rather than skipping a pull that
+        might be needed.
+        """
+        target = self._event_target_branch(event)
+        if not target:
+            return True
+        workspace = pipeline.workspace_abs_path
+        if not workspace:
+            return True
+        try:
+            repo = git_utils.get_repo(str(workspace))
+        except Exception:
+            return True
+        try:
+            branch = repo.active_branch.name
+        except (TypeError, ValueError, git.exc.GitCommandError):
+            try:
+                branch = git_utils.current_default_branch(repo)
+            except Exception:
+                return True
+        if not isinstance(branch, str):
+            # A mocked/undetermined branch: keep the pre-existing behaviour.
+            return True
+        return target == branch
+
+    async def on_pr_state(self, pipeline_id: str, event: PrStateEvent) -> NotifyResult:
+        """Fetch, verify, mirror and (when idle and reconciled) pull.
+
+        The DB mirror and broadcast always run, even while a session is active.
+        The working-tree ``git pull`` only runs when idle, when the event
+        actually reconciled local state (``affected_task_ids`` is non-empty)
+        and when it targets the clone's checked-out branch. While a session is
+        active a reconciled event instead defers the pull with a "Pull now"
+        notification. Busy pipelines are therefore never reported back as
+        ``busy`` by this method.
         """
         pipeline = await self.get_pipeline(pipeline_id)
         if pipeline is None:
@@ -332,12 +379,15 @@ class PrStateNotifier:
             )
             affected_task_ids.append(str(task.id))
 
-        # The DB mirror is applied; only the working-tree update is gated on a
-        # session being idle.
-        pull_deferred = busy and bool(pipeline.repo_uri)
+        # The DB mirror is applied; the working-tree update is gated both on a
+        # session being idle and on an event that actually reconciled local
+        # state. A feature-branch push (e.g. the one Ajapopaja itself creates
+        # when a PR is accepted) matches no local PR, mirrors nothing and must
+        # therefore neither prompt nor pull.
+        pull_deferred = busy and bool(pipeline.repo_uri) and bool(affected_task_ids)
         if pull_deferred:
             await self._notify_pull_deferred(pipeline)
-        else:
+        elif not busy and self._event_targets_tracked_branch(pipeline, event):
             await self.pull_pipeline_repo(pipeline)
 
         return NotifyResult(

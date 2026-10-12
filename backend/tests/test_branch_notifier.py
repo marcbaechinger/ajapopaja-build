@@ -489,3 +489,266 @@ async def test_on_pr_state_only_matching_base_branch_mirrors(init_mock_db):
     assert (await PullRequest.get(pr_main.id)).status == PullRequestStatus.ACCEPTED
     # The develop-based PR is untouched.
     assert (await PullRequest.get(pr_dev.id)).status == PullRequestStatus.SUBMITTED
+
+
+def _push_event(branch: str, commit_hash: str = "push-sha") -> PrStateEvent:
+    """A Gitea ``push`` event: ``base_branch`` is the pushed branch."""
+    return PrStateEvent(
+        repo_full_name="org/repo",
+        branch=branch,
+        state="merged",
+        commit_hash=commit_hash,
+        base_branch=branch,
+    )
+
+
+def _mock_repo(branch: str = "main", head: str = "commit-sha") -> MagicMock:
+    repo = MagicMock()
+    repo.active_branch.name = branch
+    repo.head.commit.hexsha = head
+    return repo
+
+
+@pytest.mark.asyncio
+async def test_on_pr_state_feature_branch_push_busy_does_not_prompt(init_mock_db):
+    """Our own feature-branch push (e.g. on PR acceptance) must not prompt.
+
+    It targets ``coderbot/t1``, which matches no ``SUBMITTED`` PR (those carry
+    ``base_branch = "main"``), so nothing is mirrored and the clone is left
+    alone even though a session is active.
+    """
+    pipeline = await _make_pipeline()
+    await _make_pr_and_task(pipeline, base_branch="main")
+    await PiSession(
+        uid="uid-1",
+        kind=PiSessionKind.CODERBOT,
+        status=PiSessionStatus.RUNNING,
+        pipeline_id=str(pipeline.id),
+    ).insert()
+
+    notifier = PrStateNotifier()
+    with (
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.ensure_repo_fetched",
+            new=AsyncMock(return_value=1),
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.get_repo",
+            return_value=_mock_repo("main", "feature-sha"),
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.validate_commit_hash",
+            return_value=True,
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.ws_manager.broadcast",
+            new=AsyncMock(),
+        ) as mock_broadcast,
+        patch.object(
+            PrStateNotifier, "pull_pipeline_repo", new=AsyncMock()
+        ) as mock_pull,
+        patch(
+            "api.git_hosting.branch_notifier.notification_manager.notify_actions",
+            new=AsyncMock(),
+        ) as mock_notify,
+    ):
+        result = await notifier.on_pr_state(
+            str(pipeline.id), _push_event("coderbot/t1")
+        )
+
+    assert result.status == "mirrored"
+    assert result.affected_task_ids == []
+    assert result.pull_deferred is False
+    mock_broadcast.assert_not_awaited()
+    mock_pull.assert_not_awaited()
+    mock_notify.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_on_pr_state_busy_no_match_does_not_pull_or_prompt(init_mock_db):
+    """A busy pipeline is never pulled when an event mirrors nothing."""
+    pipeline = await _make_pipeline()
+    await _make_pr_and_task(pipeline, base_branch="main")
+    await PiSession(
+        uid="uid-1",
+        kind=PiSessionKind.CODERBOT,
+        status=PiSessionStatus.RUNNING,
+        pipeline_id=str(pipeline.id),
+    ).insert()
+
+    notifier = PrStateNotifier()
+    with (
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.ensure_repo_fetched",
+            new=AsyncMock(return_value=1),
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.get_repo",
+            return_value=_mock_repo(),
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.validate_commit_hash",
+            return_value=True,
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.ws_manager.broadcast",
+            new=AsyncMock(),
+        ),
+        patch.object(
+            PrStateNotifier, "pull_pipeline_repo", new=AsyncMock()
+        ) as mock_pull,
+        patch(
+            "api.git_hosting.branch_notifier.notification_manager.notify_actions",
+            new=AsyncMock(),
+        ) as mock_notify,
+    ):
+        result = await notifier.on_pr_state(
+            str(pipeline.id), _push_event("unrelated/branch")
+        )
+
+    assert result.affected_task_ids == []
+    assert result.pull_deferred is False
+    mock_pull.assert_not_awaited()
+    mock_notify.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_on_pr_state_direct_push_tracked_branch_busy_does_not_prompt(
+    init_mock_db,
+):
+    """Decision: the gate is the DB mirror (``affected_task_ids``), so a direct
+    push to the tracked branch that matches no local PR does not prompt."""
+    pipeline = await _make_pipeline()
+    await PiSession(
+        uid="uid-1",
+        kind=PiSessionKind.CODERBOT,
+        status=PiSessionStatus.RUNNING,
+        pipeline_id=str(pipeline.id),
+    ).insert()
+
+    notifier = PrStateNotifier()
+    with (
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.ensure_repo_fetched",
+            new=AsyncMock(return_value=1),
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.get_repo",
+            return_value=_mock_repo(),
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.validate_commit_hash",
+            return_value=True,
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.ws_manager.broadcast",
+            new=AsyncMock(),
+        ),
+        patch.object(
+            PrStateNotifier, "pull_pipeline_repo", new=AsyncMock()
+        ) as mock_pull,
+        patch(
+            "api.git_hosting.branch_notifier.notification_manager.notify_actions",
+            new=AsyncMock(),
+        ) as mock_notify,
+    ):
+        result = await notifier.on_pr_state(str(pipeline.id), _push_event("main"))
+
+    assert result.affected_task_ids == []
+    assert result.pull_deferred is False
+    mock_pull.assert_not_awaited()
+    mock_notify.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_on_pr_state_feature_branch_push_idle_does_not_pull(init_mock_db):
+    """An idle feature-branch push must not update the checkout either."""
+    pipeline = await _make_pipeline()
+    await _make_pr_and_task(pipeline, base_branch="main")
+
+    notifier = PrStateNotifier()
+    with (
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.ensure_repo_fetched",
+            new=AsyncMock(return_value=1),
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.get_repo",
+            return_value=_mock_repo("main", "feature-sha"),
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.validate_commit_hash",
+            return_value=True,
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.ws_manager.broadcast",
+            new=AsyncMock(),
+        ),
+        patch.object(
+            PrStateNotifier, "pull_pipeline_repo", new=AsyncMock()
+        ) as mock_pull,
+        patch(
+            "api.git_hosting.branch_notifier.notification_manager.notify_actions",
+            new=AsyncMock(),
+        ) as mock_notify,
+    ):
+        result = await notifier.on_pr_state(
+            str(pipeline.id), _push_event("coderbot/t1")
+        )
+
+    assert result.status == "mirrored"
+    assert result.pull_deferred is False
+    mock_pull.assert_not_awaited()
+    mock_notify.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_on_pr_state_second_event_of_merge_prompts_once(init_mock_db):
+    """A merge delivers a ``push`` and a ``pull_request`` event; only the first
+    finds a ``SUBMITTED`` PR and prompts, the second neither prompts nor pulls."""
+    pipeline = await _make_pipeline()
+    await _make_pr_and_task(pipeline, base_branch="main")
+    await PiSession(
+        uid="uid-1",
+        kind=PiSessionKind.CODERBOT,
+        status=PiSessionStatus.RUNNING,
+        pipeline_id=str(pipeline.id),
+    ).insert()
+
+    notifier = PrStateNotifier()
+    with (
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.ensure_repo_fetched",
+            new=AsyncMock(return_value=1),
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.get_repo",
+            return_value=_mock_repo(),
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.validate_commit_hash",
+            return_value=True,
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.ws_manager.broadcast",
+            new=AsyncMock(),
+        ),
+        patch.object(
+            PrStateNotifier, "pull_pipeline_repo", new=AsyncMock()
+        ) as mock_pull,
+        patch(
+            "api.git_hosting.branch_notifier.notification_manager.notify_actions",
+            new=AsyncMock(),
+        ) as mock_notify,
+    ):
+        first = await notifier.on_pr_state(str(pipeline.id), _push_event("main"))
+        second = await notifier.on_pr_state(
+            str(pipeline.id), _event(base_branch="main")
+        )
+
+    assert first.pull_deferred is True
+    assert first.affected_task_ids != []
+    assert second.pull_deferred is False
+    assert second.affected_task_ids == []
+    mock_notify.assert_awaited_once()
+    mock_pull.assert_not_awaited()

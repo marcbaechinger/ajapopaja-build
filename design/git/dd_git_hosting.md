@@ -328,9 +328,23 @@ session.
    (unchanged semantics). If the fetch failed while a session is active the
    HMAC-authenticated payload is trusted and mirrored without verification.
 3. `pull_pipeline_repo()` (`git pull --ff-only origin <branch>`) runs only when
-   no session is active.
+   no session is active, the event matched at least one still-`SUBMITTED` PR
+   (``affected_task_ids`` is non-empty) and the event targets the clone's
+   checked-out branch. A push to a feature branch (for example the branch
+   Ajapopaja itself pushes when a PR is accepted) matches no local PR, so it
+   neither prompts nor pulls — the `push` webhook it triggers is a no-op for the
+   clone. The branch check is read-only and best-effort: when it cannot be
+   determined the historical pull behaviour is preserved.
 
-When the pull is skipped, a `confirmation`/`actions` notification with a
+**Decision (gate):** the strict ``affected_task_ids`` check is used rather than
+an additional "is the clone behind ``origin/<branch>``?" test. The clone-behind
+check cannot be combined with the requirement that a remotely *rejected* PR
+still prompts (a reject produces no new commit), and — because the pull stays
+deferred after the first event of a merge — it would re-prompt on the merge's
+second event. The strict gate makes the prompt mean "a transition reconciled
+local state", which is the intended semantics.
+
+When the pull is skipped because a session is active, a `confirmation`/`actions` notification with a
 `pull_remote` **"Pull now"** action is delivered, keyed by a stable id
 (`pull_remote:<pipeline_id>`) so re-delivered events do not stack prompts.
 Confirming runs `git_utils.pull`; dismissing is a no-op and the clone is
