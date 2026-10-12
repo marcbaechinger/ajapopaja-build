@@ -26,6 +26,7 @@ import asyncio
 import logging
 import os
 import signal
+import time
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from core import config
@@ -73,12 +74,17 @@ def _verification_timeout() -> float:
 async def run_single_command(entry: List[str], workspace_path: str) -> Dict[str, Any]:
     """Runs a single argv list as a command under a timeout.
 
-    Returns a command result dict with an exit code and an output tail. A
-    ``None`` exit code signals a timeout or spawn failure (so the aggregate
-    run is flagged as failed).
+    Returns a command result dict with an exit code, an output tail and the
+    wall-clock ``duration_ms`` the command took. A ``None`` exit code signals a
+    timeout or spawn failure (so the aggregate run is flagged as failed).
     """
     cmd_str = " ".join(entry)
     proc = None
+    started = time.monotonic()
+
+    def _elapsed_ms() -> int:
+        return int((time.monotonic() - started) * 1000)
+
     try:
         proc = await asyncio.create_subprocess_exec(
             *entry,
@@ -92,15 +98,18 @@ async def run_single_command(entry: List[str], workspace_path: str) -> Dict[str,
         out, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
         tail = out.decode(errors="replace")[-2000:]
         exit_code = proc.returncode
+        duration_ms = _elapsed_ms()
         logger.info(
-            "Command '%s' finished with exit code %s.",
+            "Command '%s' finished with exit code %s in %dms.",
             cmd_str,
             exit_code,
+            duration_ms,
         )
         return {
             "cmd": cmd_str,
             "exit_code": exit_code,
             "output_tail": tail,
+            "duration_ms": duration_ms,
         }
     except asyncio.TimeoutError:
         logger.error(
@@ -117,6 +126,7 @@ async def run_single_command(entry: List[str], workspace_path: str) -> Dict[str,
                 f"Command timed out after {_verification_timeout()}s "
                 f"and was terminated."
             ),
+            "duration_ms": _elapsed_ms(),
         }
     except Exception as e:
         logger.error(
@@ -129,6 +139,7 @@ async def run_single_command(entry: List[str], workspace_path: str) -> Dict[str,
             "cmd": cmd_str,
             "exit_code": None,
             "output_tail": str(e)[-2000:],
+            "duration_ms": _elapsed_ms(),
         }
 
 
@@ -139,9 +150,10 @@ async def run_command_sequence(
 ) -> Dict[str, Any]:
     """Runs an ordered sequence of argv lists and aggregates the result.
 
-    Returns a dict ``{"commands": [...], "passed": bool}`` where each command
-    entry contains the argv, the exit code and the tail of its output. The run
-    is only ``passed`` when every command exited with code 0.
+    Returns a dict ``{"commands": [...], "passed": bool, "duration_ms": int}``
+    where each command entry contains the argv, the exit code, the tail of its
+    output and how long it took. The run is only ``passed`` when every command
+    exited with code 0.
 
     Args:
         commands: Ordered argv lists to run. ``None``/empty runs nothing.
@@ -150,12 +162,13 @@ async def run_command_sequence(
             When set, every command entry is tagged with it via a ``kind``
             field so callers can group the results by category.
     """
-    results: Dict[str, Any] = {"commands": [], "passed": True}
+    results: Dict[str, Any] = {"commands": [], "passed": True, "duration_ms": 0}
     for entry in commands or []:
         result = await run_single_command(entry, workspace_path)
         if kind is not None:
             result["kind"] = kind
         results["commands"].append(result)
+        results["duration_ms"] += result.get("duration_ms", 0)
         if result["exit_code"] != 0:
             results["passed"] = False
     return results
@@ -171,16 +184,26 @@ async def run_verification_sequence(
     ``build -> lint -> test``) and every configured category is run even when an
     earlier one fails, so one run reports the full picture. The aggregate keeps
     the same ``{"commands": [...], "passed": bool}`` shape as
-    :func:`run_command_sequence` and tags each command entry with its category.
+    :func:`run_command_sequence` (plus a ``duration_ms`` total) and tags each
+    command entry with its category. The per-category wall-clock duration is
+    recorded under ``durations`` (keyed by category) so callers can report how
+    long the build, lint and test runs each took.
 
     A category with no commands is skipped and does not affect ``passed``.
     """
-    aggregate: Dict[str, Any] = {"commands": [], "passed": True}
+    aggregate: Dict[str, Any] = {
+        "commands": [],
+        "passed": True,
+        "duration_ms": 0,
+        "durations": {},
+    }
     for kind, commands in categories or []:
         if not commands:
             continue
         partial = await run_command_sequence(commands, workspace_path, kind=kind)
         aggregate["commands"].extend(partial["commands"])
+        aggregate["duration_ms"] += partial.get("duration_ms", 0)
+        aggregate["durations"][kind] = partial.get("duration_ms", 0)
         if not partial["passed"]:
             aggregate["passed"] = False
     return aggregate

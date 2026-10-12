@@ -625,9 +625,12 @@ class CoderBotSession(PiRpcProcess):
         as failed).
 
         Returns:
-            A dict ``{"commands": [...], "passed": bool}`` where each command
-            entry contains the argv, its category (``kind``), the exit code and
-            the tail of its output.
+            A dict ``{"commands": [...], "passed": bool, "duration_ms": int,
+            "durations": {...}}`` where each command entry contains the argv,
+            its category (``kind``), the exit code and the tail of its output.
+            ``duration_ms`` is the total wall-clock time of the run and
+            ``durations`` maps each category (build/lint/test) to how long it
+            took, so PiView can show the timing of every run.
         """
         categories: list = []
         build_commands = self.get_resolved_build_commands()

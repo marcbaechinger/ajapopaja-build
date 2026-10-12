@@ -227,6 +227,34 @@ describe('CoderBotService RPC stream', () => {
     expect(LAST(verif).sub?.join('\n')).toContain('FAILURES!');
   });
 
+  it('renders verification timing from the broadcast payload', () => {
+    ws.dispatch('CODERBOT_VERIFICATION', {
+      task_id: 't1',
+      pipeline_id: 'p1',
+      bot_type: 'coderbot',
+      result: {
+        passed: true,
+        duration_ms: 5000,
+        durations: { test: 5000 },
+        commands: [
+          {
+            cmd: 'cd backend && uv run pytest',
+            exit_code: 0,
+            duration_ms: 5000,
+            kind: 'test',
+          },
+        ],
+      },
+    });
+    const verif = history.filter((b) => b.kind === 'verification');
+    expect(verif).toHaveLength(1);
+    expect(LAST(verif).text).toContain('PASSED');
+    expect(LAST(verif).text).toContain('5s');
+    const sub = (LAST(verif).sub ?? []).join('\n');
+    expect(sub).toContain('test verification (5s):');
+    expect(sub).toContain('exit code 0 (5s)');
+  });
+
   it('ignores CODERBOT_VERIFICATION for non-coderbot bot types', () => {
     ws.dispatch('CODERBOT_VERIFICATION', {
       task_id: 't1',

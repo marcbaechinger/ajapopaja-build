@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+import { formatMs } from '../ui/components/utils/duration.ts';
+
 export type BlockKind =
   | 'text'
   | 'thinking'
@@ -217,7 +219,10 @@ export class PiLogReducer {
    * Builds a single `verification`-kind block summarizing the command suite.
    *
    * Commands are grouped by their category (`kind`) in the order the backend
-   * executed them (build -> lint -> test).
+   * executed them (build -> lint -> test). The wall-clock duration reported for
+   * each command/category (``duration_ms``) is rendered alongside its exit code
+   * and in the group header, and the overall run duration is shown in the
+   * headline so PiView surfaces how long the build, lint and test runs took.
    */
   public addVerificationBlock(result: any) {
     const passed = !!result?.passed;
@@ -239,13 +244,32 @@ export class PiLogReducer {
       group.push(entry);
     }
 
+    // Per-command durations are authoritative; fall back to the aggregate the
+    // backend reports per category for entries without their own duration.
+    const categoryDurations: Record<string, number> = result?.durations ?? {};
+    const commandDuration = (entry: any): number =>
+      typeof entry?.duration_ms === 'number' ? entry.duration_ms : 0;
+
     const sub: string[] = [];
+    let totalDuration = 0;
     for (const kind of order) {
-      sub.push(`${kind} verification:`);
-      for (const entry of groups.get(kind)!) {
+      const entries = groups.get(kind)!;
+      const commandTotal = entries.reduce(
+        (sum, entry) => sum + commandDuration(entry),
+        0
+      );
+      const groupDuration =
+        commandTotal || (typeof categoryDurations[kind] === 'number' ? categoryDurations[kind] : 0);
+      totalDuration += groupDuration;
+
+      const suffix = groupDuration > 0 ? ` (${formatMs(groupDuration)})` : '';
+      sub.push(`${kind} verification${suffix}:`);
+      for (const entry of entries) {
         const cmd = entry?.cmd ?? '';
         const exitCode = entry?.exit_code;
-        sub.push(`- ${cmd}  → exit code ${exitCode}`);
+        const duration = commandDuration(entry);
+        const durationSuffix = duration > 0 ? ` (${formatMs(duration)})` : '';
+        sub.push(`- ${cmd}  → exit code ${exitCode}${durationSuffix}`);
         // Append the (truncated) output tail only for failed commands, matching
         // the backend's PR summary annotation.
         if (!passed && exitCode !== 0 && entry?.output_tail) {
@@ -254,9 +278,16 @@ export class PiLogReducer {
       }
     }
 
+    // Prefer the backend's explicit total; otherwise use the sum of the groups.
+    if (typeof result?.duration_ms === 'number') {
+      totalDuration = result.duration_ms;
+    }
+    const totalSuffix =
+      totalDuration > 0 ? ` (${formatMs(totalDuration)})` : '';
+
     this.addBlock({
       kind: 'verification',
-      text: passed ? '● Verification: PASSED' : '● Verification: FAILED',
+      text: `${passed ? '● Verification: PASSED' : '● Verification: FAILED'}${totalSuffix}`,
       sub,
       error: !passed,
     });

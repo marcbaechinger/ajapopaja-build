@@ -171,6 +171,43 @@ describe('PiLogReducer', () => {
     expect(sub).toBe('test verification:\n- pytest  → exit code 0');
   });
 
+  it('renders command, category and total durations in a verification block', () => {
+    const reducer = new PiLogReducer();
+    reducer.addVerificationBlock({
+      passed: true,
+      duration_ms: 3500,
+      durations: { build: 1000, test: 2500 },
+      commands: [
+        { cmd: 'make build', exit_code: 0, kind: 'build', duration_ms: 1000 },
+        { cmd: 'make test', exit_code: 0, kind: 'test', duration_ms: 2500 },
+      ],
+    });
+    const verif = reducer.getBlocks().filter((b) => b.kind === 'verification');
+    expect(verif).toHaveLength(1);
+    // Total duration appears in the headline...
+    expect(LAST(verif).text).toContain('PASSED');
+    expect(LAST(verif).text).toContain('3s');
+    // ...and per-command/per-category durations appear in the body.
+    const sub = (LAST(verif).sub ?? []).join('\n');
+    expect(sub).toContain('build verification (1s):');
+    expect(sub).toContain('test verification (2s):');
+    expect(sub).toContain('make build  → exit code 0 (1s)');
+    expect(sub).toContain('make test  → exit code 0 (2s)');
+  });
+
+  it('falls back to summing command durations when no aggregate is given', () => {
+    const reducer = new PiLogReducer();
+    reducer.addVerificationBlock({
+      passed: true,
+      commands: [
+        { cmd: 'make build', exit_code: 0, kind: 'build', duration_ms: 1000 },
+        { cmd: 'make test', exit_code: 0, kind: 'test', duration_ms: 2000 },
+      ],
+    });
+    const verif = reducer.getBlocks().filter((b) => b.kind === 'verification');
+    expect(LAST(verif).text).toContain('3s');
+  });
+
   it('marks a streamed block complete on message_end and emits once per boundary', () => {
     const reducer = new PiLogReducer();
     reducer.handleEvent({

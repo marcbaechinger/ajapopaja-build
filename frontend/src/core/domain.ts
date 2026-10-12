@@ -58,11 +58,17 @@ export interface VerificationCommandResult {
   output_tail?: string;
   /** Command category, e.g. "build" | "lint" | "test". */
   kind?: string;
+  /** Wall-clock time the command took, in milliseconds. */
+  duration_ms?: number;
 }
 
 export interface VerificationResult {
   commands: VerificationCommandResult[];
   passed: boolean;
+  /** Total wall-clock time of the whole verification run, in milliseconds. */
+  duration_ms?: number;
+  /** Per-category wall-clock time (e.g. ``{ build: 1234, test: 5678 }``). */
+  durations?: Record<string, number>;
 }
 
 export interface StateTransition {

@@ -694,6 +694,46 @@ async def test_coderbot_run_verification_aggregates_exit_codes():
 
 
 @pytest.mark.asyncio
+async def test_coderbot_run_verification_reports_timing():
+    """Every command, category and the whole run report wall-clock timing so
+    PiView can display how long build/lint/test took."""
+    session = CoderBotSession(pipeline_id="p1", task_id="t1")
+    session.helper = MagicMock()
+    session.helper.sandbox_path = "/tmp/sandbox"
+    session.pipeline = MagicMock(
+        build_commands=[
+            ["make", "build"],
+            ["make", "build-all"],
+        ],
+        lint_commands=[],
+        test_commands=[["make", "test"]],
+    )
+
+    def _ok_proc():
+        proc = AsyncMock()
+        proc.communicate = AsyncMock(return_value=(b"ok\n", b""))
+        proc.returncode = 0
+        return proc
+
+    with patch(
+        "api.assistant.tools.command_runner.asyncio.create_subprocess_exec",
+        new_callable=AsyncMock,
+        side_effect=[_ok_proc(), _ok_proc(), _ok_proc()],
+    ):
+        results = await session._run_verification()
+
+    # Per-command timing is present and non-negative.
+    assert all("duration_ms" in c for c in results["commands"])
+    assert all(c["duration_ms"] >= 0 for c in results["commands"])
+    # Aggregate + per-category timing is present.
+    assert results["duration_ms"] >= 0
+    assert set(results["durations"]) == {"build", "test"}
+    assert results["duration_ms"] == (
+        results["durations"]["build"] + results["durations"]["test"]
+    )
+
+
+@pytest.mark.asyncio
 async def test_coderbot_run_verification_timeout_terminates_process_group():
     """A command that exceeds the timeout is killed (whole process group) and
     reported as a failure instead of hanging forever."""
