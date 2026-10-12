@@ -61,6 +61,38 @@ describe('SpecSection', () => {
       const html = renderSpecSection(makeTask({ status: 'implemented' }), true);
       expect(html).not.toContain('trigger_specagent');
     });
+
+    it('renders a copy icon-button next to the Specification label', () => {
+      const html = renderSpecSection(makeTask(), true);
+      expect(html).toContain('data-action-click="copy_spec"');
+      expect(html).toContain('title="Copy Specification"');
+      expect(html).toContain('icons.svg#copy-icon');
+    });
+
+    it('omits the copy icon-button when there is no specification', () => {
+      const html = renderSpecSection(makeTask({ spec: '' }), true);
+      expect(html).not.toContain('data-action-click="copy_spec"');
+    });
+
+    it('removes the "Click to edit" affordance from the header', () => {
+      const html = renderSpecSection(makeTask(), true);
+      expect(html).not.toContain('Click to edit');
+    });
+
+    it('renders the expand toggle in the header, before the Elaborate button', () => {
+      const container = document.createElement('div');
+      container.innerHTML = renderSpecSection(makeTask(), true);
+      const header = container.querySelector('.spec-view > div')!;
+      const toggle = header.querySelector('[data-action-click="toggle_spec_expand"]')!;
+      const elaborate = header.querySelector('[data-action-click="trigger_specagent"]')!;
+
+      expect(toggle).not.toBeNull();
+      expect(elaborate).not.toBeNull();
+      expect(
+        toggle.compareDocumentPosition(elaborate) & Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+      expect(toggle.textContent).toContain('Show Less');
+    });
   });
 
   describe('renderSpecProposalResult', () => {

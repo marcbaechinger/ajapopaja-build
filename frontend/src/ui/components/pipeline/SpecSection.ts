@@ -162,16 +162,40 @@ export function renderSpecSection(task: Task, isSpecExpanded: boolean): string {
       </button>
     `;
 
+  // Copy button shown next to the "Specification" label in read-only mode.
+  const copySpecButton = task.spec
+    ? `
+      <button data-action-click="copy_spec"
+              class="p-1 hover:bg-app-bg text-app-muted hover:text-app-accent-2 rounded transition-all cursor-pointer group/copy-spec"
+              title="Copy Specification">
+        ${Icon.render('copy', { size: 12, className: 'group-hover/copy-spec:scale-110 transition-transform' })}
+      </button>
+    `
+    : '';
+
+  // The collapse/expand control lives in the section header, to the left of
+  // the "Elaborate" button, so the read-only view keeps a single action row.
+  const specExpandButton = task.spec
+    ? `
+      <button data-action-click="toggle_spec_expand" class="text-[10px] text-app-accent-1 hover:underline cursor-pointer">
+        ${isSpecExpanded ? 'Show Less' : 'Show More'}
+      </button>
+    `
+    : '';
+
   return `
     <div class="spec-container w-full text-xs bg-app-surface p-3 rounded-lg border border-app-border transition-all"
          data-task-id="${taskId}" data-version="${task.version}" data-oneprompt-target>
       <div class="spec-view ${isCompleted ? '' : 'cursor-pointer group'}" ${isCompleted ? '' : 'data-action-click="edit_spec"'}>
         <div class="flex justify-between items-center mb-1">
-          <span class="font-bold text-app-muted">Specification</span>
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="font-bold text-app-muted">Specification</span>
+            ${copySpecButton}
+          </div>
           <div class="flex items-center gap-2">
+            ${specExpandButton}
             ${elaborateButton}
             ${task.want_design_doc ? '<span class="text-[9px] bg-purple-500/20 text-purple-400 border border-purple-500/30 px-1.5 py-0.5 rounded font-bold uppercase tracking-tighter">Wants Design Doc</span>' : ''}
-            ${isCompleted ? '' : '<span class="text-[10px] text-app-muted opacity-0 group-hover:opacity-100 transition-opacity">Click to edit</span>'}
           </div>
         </div>
         <div class="spec-display prose-theme prose-xs max-w-none text-app-text/70 overflow-hidden relative transition-all duration-300 ${isSpecExpanded ? 'expanded' : ''}">
@@ -179,11 +203,6 @@ export function renderSpecSection(task: Task, isSpecExpanded: boolean): string {
           ${task.spec ? '<div class="expand-overlay absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-app-surface to-transparent pointer-events-none"></div>' : ''}
         </div>
       </div>
-      ${task.spec ? `
-        <button data-action-click="toggle_spec_expand" class="mt-2 text-[10px] text-app-accent-1 hover:underline cursor-pointer">
-          ${isSpecExpanded ? 'Show Less' : 'Show More'}
-        </button>
-      ` : ''}
 
       <div class="spec-edit hidden flex flex-col gap-3">
         <span class="font-bold text-app-muted mb-1">Editing Specification</span>

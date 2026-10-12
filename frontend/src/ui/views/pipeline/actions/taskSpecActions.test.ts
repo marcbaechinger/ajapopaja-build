@@ -63,6 +63,7 @@ describe('registerTaskSpecActions', () => {
   let ctx: PipelineDetailCtx;
   let deps: TaskSpecActionsDeps;
   let updateDetails: ReturnType<typeof vi.fn>;
+  let clipboardWrite: ReturnType<typeof vi.fn>;
 
   const getAction = (name: string): ActionHandler => {
     const handler = registry.get(name);
@@ -76,6 +77,8 @@ describe('registerTaskSpecActions', () => {
 
     registry = new Map<string, ActionHandler>();
     updateDetails = vi.fn().mockResolvedValue({ id: 't1' });
+    clipboardWrite = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText: clipboardWrite } });
     vi.stubGlobal('alert', vi.fn());
 
     const state = createPipelineDetailState();
@@ -119,6 +122,7 @@ describe('registerTaskSpecActions', () => {
       [
         'cancel_spec_edit',
         'cancel_title_edit',
+        'copy_spec',
         'edit_spec',
         'edit_title',
         'save_spec',
@@ -391,6 +395,66 @@ describe('registerTaskSpecActions', () => {
     it('is a no-op without a .spec-container ancestor', () => {
       const el = document.createElement('button');
       expect(() => getAction('toggle_spec_expand')(noEvent, el)).not.toThrow();
+    });
+  });
+
+  describe('copy_spec', () => {
+    const makeCopyContainer = (taskId: string, spec = 'old spec') => {
+      const container = makeSpecContainer(taskId, spec);
+      const button = document.createElement('button');
+      button.setAttribute('data-action-click', 'copy_spec');
+      button.innerHTML = 'ORIGINAL';
+      container.querySelector('.spec-view')!.appendChild(button);
+      return { container, button };
+    };
+
+    it('copies the cached task spec to the clipboard and reverts the icon', async () => {
+      vi.useFakeTimers();
+      ctx.state.allLoadedTasks = [
+        { id: 't1', title: 'Task', spec: '# Spec', version: 1 } as any,
+      ];
+      const { button } = makeCopyContainer('t1');
+
+      await getAction('copy_spec')(noEvent, button);
+
+      expect(clipboardWrite).toHaveBeenCalledWith('# Spec');
+      expect(button.innerHTML).toContain('text-green-500');
+
+      vi.advanceTimersByTime(2000);
+      expect(button.innerHTML).toBe('ORIGINAL');
+      vi.useRealTimers();
+    });
+
+    it('falls back to the editor textarea when the task is not cached', async () => {
+      ctx.state.allLoadedTasks = [];
+      const { button } = makeCopyContainer('t1', 'from textarea');
+
+      await getAction('copy_spec')(noEvent, button);
+
+      expect(clipboardWrite).toHaveBeenCalledWith('from textarea');
+    });
+
+    it('is a no-op when the task has no specification', async () => {
+      ctx.state.allLoadedTasks = [{ id: 't1', title: 'Task', version: 1 } as any];
+      const { button } = makeCopyContainer('t1', '');
+
+      await getAction('copy_spec')(noEvent, button);
+
+      expect(clipboardWrite).not.toHaveBeenCalled();
+    });
+
+    it('logs and leaves the icon untouched when the clipboard write fails', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      clipboardWrite.mockRejectedValueOnce(new Error('denied'));
+      ctx.state.allLoadedTasks = [
+        { id: 't1', title: 'Task', spec: '# Spec', version: 1 } as any,
+      ];
+      const { button } = makeCopyContainer('t1');
+
+      await getAction('copy_spec')(noEvent, button);
+
+      expect(errorSpy).toHaveBeenCalledWith('Failed to copy specification:', expect.any(Error));
+      expect(button.innerHTML).toBe('ORIGINAL');
     });
   });
 });

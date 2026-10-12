@@ -30,7 +30,7 @@ export interface TaskSpecActionsDeps {
 /**
  * Registers the task title / specification editing actions on the shared
  * action registry: `edit_title`, `cancel_title_edit`, `save_title`, `edit_spec`,
- * `cancel_spec_edit`, `save_spec` and `toggle_spec_expand`.
+ * `cancel_spec_edit`, `save_spec`, `toggle_spec_expand` and `copy_spec`.
  *
  * The handlers were extracted verbatim from `PipelineDetailView` (P9a). The
  * shared state they touch (`pendingSpecEditTaskId`, `collapsedSpecs`) comes
@@ -174,6 +174,34 @@ export function registerTaskSpecActions(
       ctx.state.collapsedSpecs.delete(taskId);
     } else {
       ctx.state.collapsedSpecs.add(taskId);
+    }
+  });
+
+  // Copies the task's raw Markdown specification to the clipboard. The spec is
+  // read from the task cache when available and falls back to the (hidden)
+  // editor textarea, which always carries the raw Markdown, so the action also
+  // works for cards rendered outside the pipeline detail view (e.g. search
+  // results). The button swaps to a check icon for two seconds to confirm the
+  // copy, mirroring the other icon-only copy buttons.
+  actionRegistry.register('copy_spec', async (_e, el) => {
+    const container = el.closest('.spec-container') as HTMLElement;
+    if (!container) return;
+    const taskId = container.getAttribute('data-task-id');
+    const task = taskId
+      ? ctx.state.allLoadedTasks.find(t => t.id === taskId)
+      : undefined;
+    const spec = task?.spec ?? container.querySelector('textarea')?.value ?? '';
+    if (!spec) return;
+
+    try {
+      await navigator.clipboard.writeText(spec);
+      const originalHtml = el.innerHTML;
+      el.innerHTML = `<svg class="w-3 h-3 text-green-500 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`;
+      setTimeout(() => {
+        el.innerHTML = originalHtml;
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to copy specification:', err);
     }
   });
 }
