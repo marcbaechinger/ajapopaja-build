@@ -168,7 +168,7 @@ async def test_sync_endpoint_merged_pr_is_accepted(async_client, init_mock_db):
         patch("api.git_hosting.pr_poller.GiteaClient", new=lambda *a, **k: fake),
         patch.object(
             PrStateNotifier,
-            "sync_pipeline_repo",
+            "fetch_pipeline_repo",
             new=AsyncMock(return_value=SyncResult(status="synced")),
         ),
         patch(
@@ -207,7 +207,7 @@ async def test_sync_endpoint_closed_pr_is_rejected(async_client, init_mock_db):
     with (
         patch("api.git_hosting.pr_poller.GiteaClient", new=lambda *a, **k: fake),
         patch(
-            "api.git_hosting.branch_notifier.PrStateNotifier.sync_pipeline_repo",
+            "api.git_hosting.branch_notifier.PrStateNotifier.fetch_pipeline_repo",
             new=AsyncMock(return_value=SyncResult(status="synced")),
         ),
     ):
@@ -275,7 +275,7 @@ async def test_sync_endpoint_commit_not_found_is_sync_failed(
         patch("api.git_hosting.pr_poller.GiteaClient", new=lambda *a, **k: fake),
         patch.object(
             PrStateNotifier,
-            "sync_pipeline_repo",
+            "fetch_pipeline_repo",
             new=AsyncMock(return_value=SyncResult(status="synced")),
         ),
         patch(

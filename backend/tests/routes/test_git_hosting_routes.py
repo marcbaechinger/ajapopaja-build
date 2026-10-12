@@ -78,7 +78,43 @@ async def test_pr_state_valid_signed_pull_request(
     assert body["pipeline_id"] == "pipe-1"
     assert body["branch"] == "main"
     assert body["state"] == "merged"
+    assert body["pull_deferred"] is False
     mock_notify.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_pr_state_mirrored_with_deferred_pull(
+    async_client, init_mock_db, monkeypatch
+):
+    monkeypatch.setattr(config, "GITEA_WEBHOOK_SECRET", SECRET)
+    raw, sig = _sign(_pr_payload())
+
+    with patch(
+        "api.routes.git_hosting.PrStateNotifier.on_pr_state",
+        new=AsyncMock(
+            return_value=NotifyResult(
+                status="mirrored",
+                branch="main",
+                commit_hash="merge-sha",
+                pipeline_id="pipe-1",
+                affected_task_ids=["task-1"],
+                pull_deferred=True,
+            )
+        ),
+    ):
+        response = await async_client.post(
+            "/api/git_hosting/pipelines/pipe-1/pr-state",
+            content=raw,
+            headers={
+                "Content-Type": "application/json",
+                "X-Gitea-Signature": sig,
+            },
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "mirrored"
+    assert body["pull_deferred"] is True
 
 
 @pytest.mark.asyncio
@@ -158,9 +194,7 @@ async def test_pr_state_busy_202(async_client, init_mock_db, monkeypatch):
 
     with patch(
         "api.routes.git_hosting.PrStateNotifier.on_pr_state",
-        new=AsyncMock(
-            return_value=NotifyResult(status="busy", branch="main")
-        ),
+        new=AsyncMock(return_value=NotifyResult(status="busy", branch="main")),
     ):
         response = await async_client.post(
             "/api/git_hosting/pipelines/pipe-1/pr-state",

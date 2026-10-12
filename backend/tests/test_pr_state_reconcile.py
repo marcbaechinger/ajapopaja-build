@@ -159,7 +159,7 @@ async def test_merge_push_reconciles_to_implemented(remote_repo, mongomock_db):
     }
 
     with patch(
-        "api.git_hosting.branch_notifier.git_utils.ensure_repo_cloned",
+        "api.git_hosting.branch_notifier.git_utils.ensure_repo_fetched",
         new=AsyncMock(),
     ):
         async with AsyncClient(
@@ -269,7 +269,7 @@ async def test_close_without_merge_reconciles_to_rejected_and_blocks_descendant(
     }
 
     with patch(
-        "api.git_hosting.branch_notifier.git_utils.ensure_repo_cloned",
+        "api.git_hosting.branch_notifier.git_utils.ensure_repo_fetched",
         new=AsyncMock(),
     ):
         async with AsyncClient(

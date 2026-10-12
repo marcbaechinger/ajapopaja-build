@@ -94,6 +94,9 @@ async def reconcile_pr_state(pipeline_id: str, request: Request):
             "state": event.state,
             "commit_hash": result.commit_hash,
             "affected_task_ids": result.affected_task_ids,
+            # ``True`` when the DB mirror applied but the working-tree pull was
+            # deferred because a session is active.
+            "pull_deferred": result.pull_deferred,
         }
 
     # ignored, busy, sync_failed, commit_not_found — accepted but not mirrored.

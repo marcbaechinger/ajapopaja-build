@@ -114,6 +114,27 @@ async def ensure_repo_cloned(pipeline: Pipeline) -> None:
             repo.git.reset("--hard", f"origin/{default}")
 
 
+async def ensure_repo_fetched(pipeline: Pipeline) -> int:
+    """Clone the repo if missing, then fetch remote-tracking refs only.
+
+    Unlike :func:`ensure_repo_cloned` this never pulls, fast-forwards, resets or
+    otherwise mutates the checked-out branch/working tree, so it is safe to run
+    while a coding session may hold uncommitted work. A fresh clone already has
+    current remote-tracking refs. Returns the number of refs fetched (0 for
+    local pipelines and for a clone performed here).
+    """
+    if not pipeline.repo_uri:
+        return 0
+    target = pipeline.workspace_abs_path
+    if not target:
+        return 0
+    if ensure_repo_present(pipeline) is RepoBootstrapStatus.CLONED:
+        return 0
+    repo = git.Repo(str(Path(target)))
+    _sync_origin_url(repo, pipeline.repo_uri)
+    return len(repo.remotes.origin.fetch())
+
+
 def ensure_repo_present(pipeline: Pipeline) -> Optional[RepoBootstrapStatus]:
     """Clone the pipeline's remote repo if it is not present locally.
 
@@ -1007,9 +1028,7 @@ def _default_branch_for_repo(repo: git.Repo, pipeline: Pipeline) -> str:
         return current_default_branch(repo)
 
 
-async def resolve_pr_workspace(
-    pipeline: Pipeline, pr: PullRequest
-) -> Tuple[str, str]:
+async def resolve_pr_workspace(pipeline: Pipeline, pr: PullRequest) -> Tuple[str, str]:
     """Resolve where a pull request's code lives so a dev server can run there.
 
     Returns ``(workspace_path, target_label)``. The resolution is layered,

@@ -308,11 +308,35 @@ external review. A **webhook** (primary) and an optional **polling** reconciler
 protected). It accepts Gitea's native `push` or `pull_request` payloads, or a
 minimal normalised body `{ "repo": "owner/name", "branch": "main",
 "commit_hash": "<sha>", "state": "merged" | "closed" }`. The endpoint
-**syncs the pipeline clone with the calling remote and verifies any reported
+**fetches the pipeline clone's remote-tracking refs and verifies any reported
 commit is present and reachable before mirroring** state, so a stale or forged
 payload cannot flip a task. Non-actionable events return `202
-{"status":"ignored"}`; `busy` / `sync_failed` / `commit_not_found` also return
+{"status":"ignored"}`; `sync_failed` / `commit_not_found` also return
 `202` with the reason, while `mirrored` returns `200`.
+
+#### Deferred pull during active coding sessions
+
+Interactive Pi/CoderBot sessions are active very often, and the only step of the
+reconciliation that can disturb one is the working-tree update. The receiver
+therefore **always applies the DB mirror and broadcasts `TASK_STATUS_UPDATED`**
+and only gates the working-tree pull on the session being idle:
+
+1. `fetch_pipeline_repo()` clones if needed and runs `origin.fetch()`; it never
+touches the working tree or the checked-out branch, so it is safe during a
+session.
+2. The reported `merged` commit is verified against the fetched `origin/<branch>`
+   (unchanged semantics). If the fetch failed while a session is active the
+   HMAC-authenticated payload is trusted and mirrored without verification.
+3. `pull_pipeline_repo()` (`git pull --ff-only origin <branch>`) runs only when
+   no session is active.
+
+When the pull is skipped, a `confirmation`/`actions` notification with a
+`pull_remote` **"Pull now"** action is delivered, keyed by a stable id
+(`pull_remote:<pipeline_id>`) so re-delivered events do not stack prompts.
+Confirming runs `git_utils.pull`; dismissing is a no-op and the clone is
+reconciled by the next webhook, the on-demand sync or the poller. The `200`
+`mirrored` body carries `pull_deferred: true` so callers can tell that the DB is
+current while the clone lags. `busy` is no longer returned by the receiver.
 
 ### Webhook registration
 

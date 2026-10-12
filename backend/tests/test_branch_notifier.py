@@ -102,8 +102,93 @@ async def test_on_pr_state_repo_mismatch_is_ignored(init_mock_db):
 
 
 @pytest.mark.asyncio
-async def test_on_pr_state_busy_returns_busy(init_mock_db):
+async def test_on_pr_state_busy_mirrors_and_defers_pull(init_mock_db):
     pipeline = await _make_pipeline()
+    pr, task = await _make_pr_and_task(pipeline)
+    await PiSession(
+        uid="uid-1",
+        kind=PiSessionKind.CODERBOT,
+        status=PiSessionStatus.RUNNING,
+        pipeline_id=str(pipeline.id),
+    ).insert()
+
+    mock_repo = MagicMock()
+    mock_repo.active_branch.name = "main"
+    mock_repo.head.commit.hexsha = "commit-sha"
+
+    notifier = PrStateNotifier()
+    with (
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.ensure_repo_fetched",
+            new=AsyncMock(return_value=1),
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.get_repo",
+            return_value=mock_repo,
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.validate_commit_hash",
+            return_value=True,
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.ws_manager.broadcast",
+            new=AsyncMock(),
+        ) as mock_broadcast,
+        patch.object(
+            PrStateNotifier, "pull_pipeline_repo", new=AsyncMock()
+        ) as mock_pull,
+        patch(
+            "api.git_hosting.branch_notifier.notification_manager.notify_actions",
+            new=AsyncMock(),
+        ) as mock_notify,
+    ):
+        result = await notifier.on_pr_state(str(pipeline.id), _event())
+
+    # The DB mirror is applied even though a session is active.
+    assert result.status == "mirrored"
+    assert result.pull_deferred is True
+    assert result.affected_task_ids == [str(task.id)]
+    assert (await PullRequest.get(pr.id)).status == PullRequestStatus.ACCEPTED
+    updated_task = await Task.get(task.id)
+    assert updated_task.status == TaskStatus.IMPLEMENTED
+    assert updated_task.commit_hash == "commit-sha"
+
+    # ...but the working tree is not pulled; a "Pull now" action is offered.
+    mock_pull.assert_not_awaited()
+    mock_notify.assert_awaited_once()
+    assert mock_notify.await_args.kwargs["id"] == f"pull_remote:{pipeline.id}"
+    action = mock_notify.await_args.kwargs["actions"][0]
+    assert action.name == "pull_remote"
+    assert action.label == "Pull now"
+    assert action.data == {"pipeline_id": str(pipeline.id)}
+    assert action.style == "primary"
+
+    status_msgs = [
+        c
+        for c in mock_broadcast.await_args_list
+        if isinstance(c.args[0], WSMessage) and c.args[0].type == "TASK_STATUS_UPDATED"
+    ]
+    assert len(status_msgs) == 1
+
+
+@pytest.mark.asyncio
+async def test_on_pr_state_sync_failure(init_mock_db):
+    pipeline = await _make_pipeline()
+    notifier = PrStateNotifier()
+    with patch(
+        "api.git_hosting.branch_notifier.git_utils.ensure_repo_fetched",
+        new=AsyncMock(side_effect=RuntimeError("boom")),
+    ):
+        result = await notifier.on_pr_state(str(pipeline.id), _event())
+    assert result.status == "sync_failed"
+
+
+@pytest.mark.asyncio
+async def test_on_pr_state_busy_fetch_failure_still_mirrors(init_mock_db):
+    """Decision (a): a signed payload is mirrored even if the safe fetch fails
+    while a session is active (only the pull is deferred)."""
+    pipeline = await _make_pipeline()
+    pr, task = await _make_pr_and_task(pipeline)
     await PiSession(
         uid="uid-1",
         kind=PiSessionKind.CODERBOT,
@@ -112,20 +197,68 @@ async def test_on_pr_state_busy_returns_busy(init_mock_db):
     ).insert()
 
     notifier = PrStateNotifier()
-    result = await notifier.on_pr_state(str(pipeline.id), _event())
-    assert result.status == "busy"
+    with (
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.ensure_repo_fetched",
+            new=AsyncMock(side_effect=RuntimeError("network down")),
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.ws_manager.broadcast",
+            new=AsyncMock(),
+        ),
+        patch.object(PrStateNotifier, "pull_pipeline_repo", new=AsyncMock()),
+        patch(
+            "api.git_hosting.branch_notifier.notification_manager.notify_actions",
+            new=AsyncMock(),
+        ) as mock_notify,
+    ):
+        result = await notifier.on_pr_state(str(pipeline.id), _event())
+
+    assert result.status == "mirrored"
+    assert result.pull_deferred is True
+    assert result.affected_task_ids == [str(task.id)]
+    assert (await PullRequest.get(pr.id)).status == PullRequestStatus.ACCEPTED
+    assert (await Task.get(task.id)).status == TaskStatus.IMPLEMENTED
+    mock_notify.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_on_pr_state_sync_failure(init_mock_db):
+async def test_on_pr_state_busy_closed_still_rejects(init_mock_db):
     pipeline = await _make_pipeline()
+    pr, task = await _make_pr_and_task(pipeline)
+    await PiSession(
+        uid="uid-1",
+        kind=PiSessionKind.CODERBOT,
+        status=PiSessionStatus.RUNNING,
+        pipeline_id=str(pipeline.id),
+    ).insert()
+
     notifier = PrStateNotifier()
-    with patch(
-        "api.git_hosting.branch_notifier.git_utils.ensure_repo_cloned",
-        new=AsyncMock(side_effect=RuntimeError("boom")),
+    with (
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.ensure_repo_fetched",
+            new=AsyncMock(),
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.ws_manager.broadcast",
+            new=AsyncMock(),
+        ),
+        patch.object(
+            PrStateNotifier, "pull_pipeline_repo", new=AsyncMock()
+        ) as mock_pull,
+        patch(
+            "api.git_hosting.branch_notifier.notification_manager.notify_actions",
+            new=AsyncMock(),
+        ) as mock_notify,
     ):
-        result = await notifier.on_pr_state(str(pipeline.id), _event())
-    assert result.status == "sync_failed"
+        result = await notifier.on_pr_state(str(pipeline.id), _event(state="closed"))
+
+    assert result.status == "mirrored"
+    assert result.pull_deferred is True
+    assert (await PullRequest.get(pr.id)).status == PullRequestStatus.REJECTED
+    assert (await Task.get(task.id)).status == TaskStatus.CREATED
+    mock_pull.assert_not_awaited()
+    mock_notify.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -141,7 +274,7 @@ async def test_on_pr_state_merged_mirrors_pr_and_task(init_mock_db):
     notifier = PrStateNotifier()
     with (
         patch(
-            "api.git_hosting.branch_notifier.git_utils.ensure_repo_cloned",
+            "api.git_hosting.branch_notifier.git_utils.ensure_repo_fetched",
             new=AsyncMock(),
         ),
         patch(
@@ -156,12 +289,25 @@ async def test_on_pr_state_merged_mirrors_pr_and_task(init_mock_db):
             "api.git_hosting.branch_notifier.ws_manager.broadcast",
             new=AsyncMock(),
         ) as mock_broadcast,
+        patch.object(
+            PrStateNotifier, "pull_pipeline_repo", new=AsyncMock()
+        ) as mock_pull,
+        patch(
+            "api.git_hosting.branch_notifier.notification_manager.notify_actions",
+            new=AsyncMock(),
+        ) as mock_notify,
     ):
         result = await notifier.on_pr_state(str(pipeline.id), _event())
 
     assert result.status == "mirrored"
+    assert result.pull_deferred is False
     assert result.commit_hash == "commit-sha"
     assert result.affected_task_ids == [str(task.id)]
+
+    # No session: the working tree is pulled immediately and no notification is
+    # sent.
+    mock_pull.assert_awaited_once()
+    mock_notify.assert_not_awaited()
 
     updated_pr = await PullRequest.get(pr.id)
     assert updated_pr.status == PullRequestStatus.ACCEPTED
@@ -196,7 +342,7 @@ async def test_on_pr_state_merged_unreachable_commit(init_mock_db):
     notifier = PrStateNotifier()
     with (
         patch(
-            "api.git_hosting.branch_notifier.git_utils.ensure_repo_cloned",
+            "api.git_hosting.branch_notifier.git_utils.ensure_repo_fetched",
             new=AsyncMock(),
         ),
         patch(
@@ -231,7 +377,7 @@ async def test_on_pr_state_closed_rejects(init_mock_db):
     notifier = PrStateNotifier()
     with (
         patch(
-            "api.git_hosting.branch_notifier.git_utils.ensure_repo_cloned",
+            "api.git_hosting.branch_notifier.git_utils.ensure_repo_fetched",
             new=AsyncMock(),
         ),
         patch(
@@ -243,9 +389,7 @@ async def test_on_pr_state_closed_rejects(init_mock_db):
             new=AsyncMock(),
         ) as mock_broadcast,
     ):
-        result = await notifier.on_pr_state(
-            str(pipeline.id), _event(state="closed")
-        )
+        result = await notifier.on_pr_state(str(pipeline.id), _event(state="closed"))
 
     assert result.status == "mirrored"
     assert result.affected_task_ids == [str(task.id)]
@@ -282,7 +426,7 @@ async def test_on_pr_state_skips_task_not_submitted(init_mock_db):
     notifier = PrStateNotifier()
     with (
         patch(
-            "api.git_hosting.branch_notifier.git_utils.ensure_repo_cloned",
+            "api.git_hosting.branch_notifier.git_utils.ensure_repo_fetched",
             new=AsyncMock(),
         ),
         patch(
@@ -321,7 +465,7 @@ async def test_on_pr_state_only_matching_base_branch_mirrors(init_mock_db):
     notifier = PrStateNotifier()
     with (
         patch(
-            "api.git_hosting.branch_notifier.git_utils.ensure_repo_cloned",
+            "api.git_hosting.branch_notifier.git_utils.ensure_repo_fetched",
             new=AsyncMock(),
         ),
         patch(

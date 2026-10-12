@@ -342,6 +342,52 @@ def test_ensure_repo_present_none_without_workspace():
 
 
 @pytest.mark.asyncio
+async def test_ensure_repo_fetched_local_returns_zero():
+    pipeline = MagicMock()
+    pipeline.repo_uri = None
+    with patch("core.utils.git_utils.git") as mock_git:
+        assert await git_utils.ensure_repo_fetched(pipeline) == 0
+        mock_git.Repo.clone_from.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_ensure_repo_fetched_clones_when_missing(tmp_path):
+    pipeline = MagicMock()
+    pipeline.repo_uri = "https://host/org/my-app.git"
+    pipeline.workspace_abs_path = tmp_path / "my-app"
+
+    with patch("core.utils.git_utils.git") as mock_git:
+        assert await git_utils.ensure_repo_fetched(pipeline) == 0
+        mock_git.Repo.clone_from.assert_called_once_with(
+            "https://host/org/my-app.git", str(tmp_path / "my-app")
+        )
+        # A fresh clone needs no extra Repo/fetch and must never pull.
+        mock_git.Repo.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_ensure_repo_fetched_present_fetches_without_pulling(tmp_path):
+    pipeline = MagicMock()
+    pipeline.repo_uri = "https://host/org/my-app.git"
+    target = tmp_path / "my-app"
+    target.mkdir(parents=True)
+    pipeline.workspace_abs_path = target
+
+    with patch("core.utils.git_utils.git") as mock_git:
+        mock_repo = MagicMock()
+        mock_repo.remotes.origin.url = "https://host/org/my-app.git"
+        mock_repo.remotes.origin.fetch.return_value = [1, 2]
+        mock_git.Repo.return_value = mock_repo
+
+        assert await git_utils.ensure_repo_fetched(pipeline) == 2
+
+        mock_repo.remotes.origin.fetch.assert_called_once()
+        mock_repo.git.pull.assert_not_called()
+        mock_repo.git.reset.assert_not_called()
+        mock_git.Repo.clone_from.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_get_repo_for_pipeline_remote_calls_ensure_cloned():
     pipeline_id = "p1"
     mock_pipeline = MagicMock()
