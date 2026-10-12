@@ -15,6 +15,7 @@
  */
 
 import { TaskItem } from '../../components/pipeline/TaskItem.ts';
+import { ExecutionEngineView } from '../../components/pipeline/ExecutionEngineView.ts';
 import type { Task } from '../../../core/domain.ts';
 import type { PipelineDetailCtx } from './PipelineDetailCtx.ts';
 
@@ -49,8 +50,9 @@ export class SelectedTaskController {
    * - a title-only change patches the title in place,
    * - a status-only change patches just the TaskItem header in place (so an open
    *   Specification/Design-Doc editor in the body survives the server-driven
-   *   state transition) while the backlog / execution engine are refreshed
-   *   because the task may have moved between sections,
+   *   state transition) while the backlog is refreshed and the execution engine
+   *   is reconciled in place (falling back to a full repaint only when the
+   *   affected row cannot be located),
    * - anything else repaints the backlog, the execution engine and, only when
    *   the updated task is the selected one, the selected task view.
    *
@@ -84,14 +86,25 @@ export class SelectedTaskController {
       }
 
       // A status transition only affects the card header (badge + action
-      // toolbar) from the card's perspective; the sidebar sections are still
-      // refreshed because the task may have moved between them. Patch the header
-      // in place instead of re-rendering the whole card, so an open
-      // Specification/Design-Doc editor in the body is not discarded.
+      // toolbar) from the card's perspective; the sidebar sections may still
+      // change because the task can move between them. Patch the header in place
+      // instead of re-rendering the whole card so an open Specification/Design-Doc
+      // editor in the body is not discarded.
       if (this.isStatusChange(prev, task)) {
         this.updateHeaderOnly(task);
         ctx.refresh.backlog();
-        ctx.refresh.executionEngine();
+        // Move just the affected sidebar row. This keeps the CoderBot PiView
+        // mount and the other sections (and their scroll state) intact; only
+        // fall back to a full engine repaint when the layout is unknown.
+        const engine = this.deps
+          .getHost()
+          ?.querySelector<HTMLElement>('#execution-engine-view');
+        const reconciled = engine
+          ? ExecutionEngineView.reconcileTask(engine, task, prev.status)
+          : false;
+        if (!reconciled) {
+          ctx.refresh.executionEngine();
+        }
         return;
       }
 

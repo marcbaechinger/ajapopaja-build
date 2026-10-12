@@ -21,6 +21,7 @@ import { createPipelineDetailCtx, type PipelineDetailCtx, type PipelineDetailRef
 import { LocalStorageManager } from '../../../core/LocalStorageManager.ts';
 import { TaskStatus, type Task } from '../../../core/domain.ts';
 import { TaskItem } from '../../components/pipeline/TaskItem.ts';
+import { ExecutionEngineView } from '../../components/pipeline/ExecutionEngineView.ts';
 import type { AppContext } from '../../../core/AppContext.ts';
 
 // Mock components to avoid deep rendering issues in the shell-backed integration
@@ -601,6 +602,43 @@ describe('SelectedTaskController', () => {
       expect(specEdit.classList.contains('hidden')).toBe(false);
       expect(textarea.value).toBe('unsaved spec draft');
       expect(ctx.state.selectedTask!.status).toBe(TaskStatus.PULL_REQUEST_AVAILABLE);
+    });
+
+    it('reconciles the engine incrementally for a status change instead of repainting it', () => {
+      const engineContainer = document.createElement('div');
+      engineContainer.id = 'execution-engine-view';
+      engineContainer.innerHTML = ExecutionEngineView.render({
+        tasks: [makeTask({ id: 'c1', status: TaskStatus.INPROGRESS })],
+      });
+      host.appendChild(engineContainer);
+
+      ctx.state.selectedTask = makeTask({ status: TaskStatus.INPROGRESS });
+      ctx.state.allLoadedTasks = [makeTask({ status: TaskStatus.INPROGRESS })];
+
+      controller.update(makeTask({ status: TaskStatus.PULL_REQUEST_AVAILABLE, version: 2 }));
+
+      // The engine was reconciled in place: no full repaint hook fired.
+      expect(refresh.backlog).toHaveBeenCalledTimes(1);
+      expect(refresh.executionEngine).not.toHaveBeenCalled();
+      expect(engineContainer.querySelectorAll('[data-engine-section="inprogress"] [data-view-id]').length).toBe(0);
+      expect(engineContainer.querySelector('[data-engine-count="inprogress"]')!.textContent).toBe('0');
+    });
+
+    it('falls back to a full engine repaint when the engine row cannot be reconciled', () => {
+      const engineContainer = document.createElement('div');
+      engineContainer.id = 'execution-engine-view';
+      engineContainer.innerHTML = ExecutionEngineView.render({
+        tasks: [makeTask({ id: 'other', status: TaskStatus.INPROGRESS })],
+      });
+      host.appendChild(engineContainer);
+
+      ctx.state.selectedTask = makeTask({ id: 'c1', status: TaskStatus.INPROGRESS });
+      ctx.state.allLoadedTasks = [makeTask({ id: 'c1', status: TaskStatus.INPROGRESS })];
+
+      controller.update(makeTask({ id: 'c1', status: TaskStatus.PULL_REQUEST_AVAILABLE, version: 2 }));
+
+      expect(refresh.backlog).toHaveBeenCalledTimes(1);
+      expect(refresh.executionEngine).toHaveBeenCalledTimes(1);
     });
 
     it('does a full repaint (backlog + selected view + engine) for a non-title change', () => {

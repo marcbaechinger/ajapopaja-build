@@ -16,6 +16,7 @@
 
 import { Task, TaskStatus } from '../../../core/domain.ts';
 import { ExecutionEngineItemView } from './ExecutionEngineItemView.ts';
+import { HistoryItemView } from './HistoryItemView.ts';
 import { PipelineHistoryView } from './PipelineHistoryView.ts';
 
 export interface ExecutionEngineViewProps {
@@ -23,6 +24,16 @@ export interface ExecutionEngineViewProps {
   historyTasks?: Task[];
   historyPage?: number;
 }
+
+/** The right-sidebar bucket a task is rendered in, based on its status. */
+export type EngineBucket = 'inprogress' | 'queue' | 'history' | 'none';
+
+/** Statuses that belong to the paged History Feed. */
+const HISTORY_STATUSES: TaskStatus[] = [
+  TaskStatus.IMPLEMENTED,
+  TaskStatus.SUBMITTED,
+  TaskStatus.DISCARDED,
+];
 
 /**
  * ExecutionEngineView renders the right side panel of the PipelineDetailView.
@@ -94,6 +105,54 @@ export class ExecutionEngineView {
   }
 
   /**
+   * Classifies a status into the bucket the engine panel renders it in.
+   * Anything the panel does not show maps to `none`.
+   */
+  static bucketFor(status: TaskStatus): EngineBucket {
+    if (status === TaskStatus.INPROGRESS) return 'inprogress';
+    if (status === TaskStatus.SCHEDULED) return 'queue';
+    if (HISTORY_STATUSES.includes(status)) return 'history';
+    return 'none';
+  }
+
+  /**
+   * Moves a single task between engine buckets in place, touching only the
+   * affected rows and section counts. The stable `#engine-piview-mount` and the
+   * other sections (and their scroll state) are left untouched.
+   *
+   * Returns `false` whenever the current layout cannot be reconciled
+   * confidently (missing node / unknown structure); the caller then falls back
+   * to a full `ExecutionEngineView.render` repaint.
+   */
+  static reconcileTask(container: HTMLElement, task: Task, prevStatus: TaskStatus): boolean {
+    const taskId = task.id;
+    if (!taskId) return false;
+
+    const prev = ExecutionEngineView.bucketFor(prevStatus);
+    const next = ExecutionEngineView.bucketFor(task.status);
+    if (prev === 'none') return false;
+
+    const node = ExecutionEngineView.findItem(container, prev, taskId);
+    if (!node) return false;
+
+    if (prev === next) {
+      // Same bucket: swap just this row with a freshly rendered one.
+      node.outerHTML = ExecutionEngineView.renderItem(prev, task);
+      return true;
+    }
+
+    // Validate the destination before mutating so a missing section cannot
+    // silently drop the task. `none` only removes the old row.
+    if (next !== 'none' && !ExecutionEngineView.sectionFor(container, next)) {
+      return false;
+    }
+
+    if (!ExecutionEngineView.removeItem(container, prev, taskId)) return false;
+    if (next === 'none') return true;
+    return ExecutionEngineView.insertItem(container, next, task);
+  }
+
+  /**
    * Removes a single task from the rendered In Progress section in place,
    * keeping the rest of the ExecutionEngineView DOM (PiView mount, queue, history)
    * untouched. Used when a task transitions out of IN_PROGRESS (e.g. to
@@ -101,28 +160,119 @@ export class ExecutionEngineView {
    * the item was found and removed.
    */
   static removeInProgressItem(container: HTMLElement, taskId: string): boolean {
-    const list = container.querySelector('[data-engine-section="inprogress"]');
+    return ExecutionEngineView.removeItem(container, 'inprogress', taskId);
+  }
+
+  /** Locates a task's rendered row in a bucket. */
+  private static findItem(
+    container: HTMLElement,
+    bucket: EngineBucket,
+    taskId: string
+  ): Element | null {
+    if (bucket === 'history') {
+      const list = container.querySelector('#completed-task-list');
+      return list?.querySelector(`[data-view-type="history"][data-task-id="${taskId}"]`) ?? null;
+    }
+    if (bucket === 'inprogress' || bucket === 'queue') {
+      const list = container.querySelector(`[data-engine-section="${bucket}"]`);
+      return list?.querySelector(`[data-view-id="${taskId}"]`) ?? null;
+    }
+    return null;
+  }
+
+  /** Returns the list element backing a bucket, or null when it is absent. */
+  private static sectionFor(container: HTMLElement, bucket: EngineBucket): Element | null {
+    if (bucket === 'history') return container.querySelector('#completed-task-list');
+    if (bucket === 'inprogress' || bucket === 'queue') {
+      return container.querySelector(`[data-engine-section="${bucket}"]`);
+    }
+    return null;
+  }
+
+  private static renderItem(bucket: EngineBucket, task: Task): string {
+    return bucket === 'history'
+      ? HistoryItemView.render(task)
+      : ExecutionEngineItemView.render(task);
+  }
+
+  /** Removes a row, updates the section count and restores its empty state. */
+  private static removeItem(
+    container: HTMLElement,
+    bucket: EngineBucket,
+    taskId: string
+  ): boolean {
+    const node = ExecutionEngineView.findItem(container, bucket, taskId);
+    if (!node) return false;
+
+    const list = node.parentElement;
+    node.remove();
     if (!list) return false;
 
-    const item = list.querySelector(`[data-view-id="${taskId}"]`);
-    if (!item) return false;
-    item.remove();
-
-    const remaining = list.querySelectorAll('[data-view-id]').length;
-    const countEl = container.querySelector('[data-engine-count="inprogress"]');
-    if (countEl) {
-      countEl.textContent = String(remaining);
-    }
-
-    // Restore the empty state if the last in-progress item was just removed.
-    if (list.children.length === 0) {
-      list.innerHTML = `
-        <div class="px-1">
-          <p class="text-[10px] italic text-app-muted/50 text-center border border-dashed border-app-border/40 rounded-lg py-3">No active work.</p>
-        </div>
-      `;
+    if (!ExecutionEngineView.syncSectionCount(container, bucket, list)) {
+      list.innerHTML = ExecutionEngineView.emptyStateFor(bucket);
     }
     return true;
+  }
+
+  /** Inserts a row at its sort position and increments the section count. */
+  private static insertItem(container: HTMLElement, bucket: EngineBucket, task: Task): boolean {
+    const list = ExecutionEngineView.sectionFor(container, bucket);
+    if (!list) return false;
+
+    // Drop a rendered empty-state placeholder before adding the first row.
+    if (!list.querySelector('[data-view-id]')) {
+      list.innerHTML = '';
+    }
+
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = ExecutionEngineView.renderItem(bucket, task);
+    const node = wrapper.firstElementChild;
+    if (!node) return false;
+
+    const inserted = Array.from(list.children).some((child) => {
+      if (!ExecutionEngineView.comesBefore(bucket, node, child)) return false;
+      list.insertBefore(node, child);
+      return true;
+    });
+    if (!inserted) list.appendChild(node);
+
+    ExecutionEngineView.syncSectionCount(container, bucket, list);
+    return true;
+  }
+
+  /**
+   * Updates the section header count and returns whether any rows remain.
+   * The History Feed has no count chip, so this only tracks emptiness there.
+   */
+  private static syncSectionCount(
+    container: HTMLElement,
+    bucket: EngineBucket,
+    list: Element
+  ): boolean {
+    const remaining = list.querySelectorAll('[data-view-id]').length;
+    const countEl = container.querySelector(`[data-engine-count="${bucket}"]`);
+    if (countEl) countEl.textContent = String(remaining);
+    return remaining > 0;
+  }
+
+  /** Ordering predicate: ascending `order` for the engine, newest-first history. */
+  private static comesBefore(bucket: EngineBucket, node: Element, sibling: Element): boolean {
+    if (bucket === 'history') {
+      const nodeTime = new Date(node.getAttribute('data-updated-at') || 0).getTime();
+      const siblingTime = new Date(sibling.getAttribute('data-updated-at') || 0).getTime();
+      return nodeTime > siblingTime;
+    }
+    const nodeOrder = Number(node.getAttribute('data-order') ?? 0);
+    const siblingOrder = Number(sibling.getAttribute('data-order') ?? 0);
+    return nodeOrder < siblingOrder;
+  }
+
+  private static emptyStateFor(bucket: EngineBucket): string {
+    if (bucket === 'history') {
+      return `<p class="text-app-muted italic text-[10px] text-center py-3">No tasks completed yet.</p>`;
+    }
+    const message = bucket === 'queue' ? 'Nothing scheduled.' : 'No active work.';
+    return `<div class="px-1"><p class="text-[10px] italic text-app-muted/50 text-center border border-dashed border-app-border/40 rounded-lg py-3">${message}</p></div>`;
   }
 }
 

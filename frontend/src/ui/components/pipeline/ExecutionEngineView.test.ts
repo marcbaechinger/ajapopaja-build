@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { ExecutionEngineView } from './ExecutionEngineView.ts';
 import { Task, TaskStatus } from '../../../core/domain.ts';
 
@@ -131,5 +131,190 @@ describe('ExecutionEngineView', () => {
     expect(html).toContain('data-view-id="q1"');
     expect(html).toContain('data-view-id="q2"');
     expect(html).toContain('data-view-id="q3"');
+  });
+
+  describe('bucketFor()', () => {
+    it('maps each status to its sidebar bucket', () => {
+      expect(ExecutionEngineView.bucketFor(TaskStatus.INPROGRESS)).toBe('inprogress');
+      expect(ExecutionEngineView.bucketFor(TaskStatus.SCHEDULED)).toBe('queue');
+      expect(ExecutionEngineView.bucketFor(TaskStatus.IMPLEMENTED)).toBe('history');
+      expect(ExecutionEngineView.bucketFor(TaskStatus.SUBMITTED)).toBe('history');
+      expect(ExecutionEngineView.bucketFor(TaskStatus.DISCARDED)).toBe('history');
+      expect(ExecutionEngineView.bucketFor(TaskStatus.CREATED)).toBe('none');
+      expect(ExecutionEngineView.bucketFor(TaskStatus.PULL_REQUEST_AVAILABLE)).toBe('none');
+    });
+  });
+
+  describe('reconcileTask()', () => {
+    const mount = (tasks: Task[], historyTasks: Task[] = []) => {
+      const container = document.createElement('div');
+      container.id = 'execution-engine-view';
+      container.innerHTML = ExecutionEngineView.render({ tasks, historyTasks, historyPage: 0 });
+      document.body.appendChild(container);
+      return container;
+    };
+
+    const idsIn = (container: Element, selector: string) =>
+      Array.from(container.querySelectorAll(selector)).map((el) => el.getAttribute('data-view-id'));
+
+    afterEach(() => {
+      document.body.innerHTML = '';
+    });
+
+    it('replaces just the row in place for a same-bucket status change', () => {
+      const task = makeTask({ id: 'p1', status: TaskStatus.INPROGRESS, title: 'Old title' });
+      const container = mount([task, makeTask({ id: 'p2', status: TaskStatus.INPROGRESS })]);
+      const mountEl = container.querySelector('#engine-piview-mount');
+      const otherRow = container.querySelector('[data-view-id="p2"]');
+
+      const updated = { ...task, title: 'New title' };
+      const ok = ExecutionEngineView.reconcileTask(container, updated, TaskStatus.INPROGRESS);
+
+      expect(ok).toBe(true);
+      // The other row, the header count and the PiView mount survive.
+      expect(container.querySelector('[data-view-id="p2"]')).toBe(otherRow);
+      expect(container.querySelector('#engine-piview-mount')).toBe(mountEl);
+      expect(container.querySelector('[data-engine-count="inprogress"]')!.textContent).toBe('2');
+      expect(container.textContent).toContain('New title');
+      expect(container.textContent).not.toContain('Old title');
+    });
+
+    it('updates a history row for a history->history accept (SUBMITTED -> IMPLEMENTED)', () => {
+      const task = makeTask({ id: 'h1', status: TaskStatus.SUBMITTED, updated_at: '2026-02-01T00:00:00Z' });
+      const container = mount([], [task]);
+      const mountEl = container.querySelector('#engine-piview-mount');
+
+      const updated = { ...task, status: TaskStatus.IMPLEMENTED };
+      const ok = ExecutionEngineView.reconcileTask(container, updated, TaskStatus.SUBMITTED);
+
+      expect(ok).toBe(true);
+      expect(container.querySelector('#engine-piview-mount')).toBe(mountEl);
+      expect(container.querySelectorAll('#completed-task-list [data-view-type="history"]').length).toBe(1);
+      expect(container.querySelector('#completed-task-list [data-task-id="h1"]')!.textContent).toContain('implemented');
+    });
+
+    it('moves a queue task into in-progress in order and updates both counts', () => {
+      const queued = makeTask({ id: 'q1', status: TaskStatus.SCHEDULED, order: 3 });
+      const container = mount([
+        makeTask({ id: 'p1', status: TaskStatus.INPROGRESS, order: 10 }),
+        queued,
+      ]);
+      const mountEl = container.querySelector('#engine-piview-mount');
+
+      const ok = ExecutionEngineView.reconcileTask(
+        container,
+        { ...queued, status: TaskStatus.INPROGRESS },
+        TaskStatus.SCHEDULED
+      );
+
+      expect(ok).toBe(true);
+      expect(idsIn(container, '[data-engine-section="inprogress"] [data-view-id]')).toEqual(['q1', 'p1']);
+      expect(container.querySelector('[data-engine-count="inprogress"]')!.textContent).toBe('2');
+      expect(container.querySelectorAll('[data-engine-section="queue"] [data-view-id]').length).toBe(0);
+      expect(container.querySelector('[data-engine-count="queue"]')!.textContent).toBe('0');
+      expect(container.querySelector('[data-engine-section="queue"]')!.textContent).toContain('Nothing scheduled.');
+      expect(container.querySelector('#engine-piview-mount')).toBe(mountEl);
+    });
+
+    it('removes an in-progress task that moves to none and restores the empty state', () => {
+      const container = mount([
+        makeTask({ id: 'p1', status: TaskStatus.INPROGRESS }),
+        makeTask({ id: 'p2', status: TaskStatus.INPROGRESS }),
+      ]);
+      const mountEl = container.querySelector('#engine-piview-mount');
+
+      const ok = ExecutionEngineView.reconcileTask(
+        container,
+        makeTask({ id: 'p1', status: TaskStatus.PULL_REQUEST_AVAILABLE }),
+        TaskStatus.INPROGRESS
+      );
+
+      expect(ok).toBe(true);
+      expect(idsIn(container, '[data-engine-section="inprogress"] [data-view-id]')).toEqual(['p2']);
+      expect(container.querySelector('[data-engine-count="inprogress"]')!.textContent).toBe('1');
+      expect(container.querySelector('#engine-piview-mount')).toBe(mountEl);
+
+      const ok2 = ExecutionEngineView.reconcileTask(
+        container,
+        makeTask({ id: 'p2', status: TaskStatus.PULL_REQUEST_AVAILABLE }),
+        TaskStatus.INPROGRESS
+      );
+      expect(ok2).toBe(true);
+      expect(container.querySelector('[data-engine-count="inprogress"]')!.textContent).toBe('0');
+      expect(container.querySelector('[data-engine-section="inprogress"]')!.textContent).toContain('No active work.');
+    });
+
+    it('removes a history row on reject (history -> none)', () => {
+      const task = makeTask({ id: 'h1', status: TaskStatus.SUBMITTED });
+      const container = mount([], [task]);
+      const mountEl = container.querySelector('#engine-piview-mount');
+
+      const ok = ExecutionEngineView.reconcileTask(
+        container,
+        { ...task, status: TaskStatus.CREATED },
+        TaskStatus.SUBMITTED
+      );
+
+      expect(ok).toBe(true);
+      expect(container.querySelectorAll('#completed-task-list [data-view-type="history"]').length).toBe(0);
+      expect(container.querySelector('#completed-task-list')!.textContent).toContain('No tasks completed yet.');
+      expect(container.querySelector('#engine-piview-mount')).toBe(mountEl);
+    });
+
+    it('inserts a task into history by updated_at desc', () => {
+      const container = mount([
+        makeTask({ id: 'p1', status: TaskStatus.INPROGRESS, updated_at: '2026-04-01T00:00:00Z' }),
+      ], [
+        makeTask({ id: 'h2', status: TaskStatus.IMPLEMENTED, updated_at: '2026-03-01T00:00:00Z' }),
+        makeTask({ id: 'h1', status: TaskStatus.IMPLEMENTED, updated_at: '2026-01-01T00:00:00Z' }),
+      ]);
+
+      const ok = ExecutionEngineView.reconcileTask(
+        container,
+        makeTask({ id: 'p1', status: TaskStatus.DISCARDED, updated_at: '2026-04-01T00:00:00Z' }),
+        TaskStatus.INPROGRESS
+      );
+
+      expect(ok).toBe(true);
+      expect(idsIn(container, '#completed-task-list [data-view-type="history"]')).toEqual(['p1', 'h2', 'h1']);
+    });
+
+    it('returns false (fallback) when the source row is missing', () => {
+      const container = mount([makeTask({ id: 'p1', status: TaskStatus.INPROGRESS })]);
+
+      const ok = ExecutionEngineView.reconcileTask(
+        container,
+        makeTask({ id: 'missing', status: TaskStatus.PULL_REQUEST_AVAILABLE }),
+        TaskStatus.INPROGRESS
+      );
+
+      expect(ok).toBe(false);
+    });
+
+    it('returns false (fallback) when the layout is unknown', () => {
+      const container = document.createElement('div');
+      container.id = 'execution-engine-view';
+      document.body.appendChild(container);
+
+      const ok = ExecutionEngineView.reconcileTask(
+        container,
+        makeTask({ id: 'p1', status: TaskStatus.PULL_REQUEST_AVAILABLE }),
+        TaskStatus.INPROGRESS
+      );
+
+      expect(ok).toBe(false);
+    });
+
+    it('returns false when the source bucket itself is none', () => {
+      const container = mount([]);
+
+      const ok = ExecutionEngineView.reconcileTask(
+        container,
+        makeTask({ id: 'p1', status: TaskStatus.SCHEDULED }),
+        TaskStatus.CREATED
+      );
+
+      expect(ok).toBe(false);
+    });
   });
 });

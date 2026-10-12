@@ -39,7 +39,7 @@ export class HistoryItemView {
 
     return `
       <div class="bg-app-bg px-3 py-2 rounded-lg border border-app-border flex items-center justify-between gap-3 transition-all hover:border-app-accent-1/30 ${isSystem ? 'border-l-4 border-l-red-500' : ''} ${isLastCompleted ? 'border-app-accent-2/40 shadow-lg shadow-app-accent-2/5' : ''}"
-           data-view-type="history" data-view-id="${taskId}" data-action-click="select_task" title="Open in Task View" data-task-id="${taskId}" data-version="${task.version}">
+           data-view-type="history" data-view-id="${taskId}" data-action-click="select_task" title="Open in Task View" data-task-id="${taskId}" data-version="${task.version}" data-updated-at="${task.updated_at || ''}">
         <div class="flex items-center gap-2 min-w-0">
           ${task.commit_hash ? `
             <button data-action-click="open_diff_view" data-commit-hash="${task.commit_hash}"
