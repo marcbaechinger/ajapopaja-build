@@ -1166,6 +1166,34 @@ describe('PipelineEditDialog', () => {
       await showPromise;
     });
 
+    it('should sort the fetched model options alphabetically', async () => {
+      (mockProps.context.pipelineClient as any).getModelOptions = vi.fn().mockResolvedValue({
+        ollama: ['zeta:latest', 'alpha:latest', 'beta:7b'],
+        coderbot: ['qwen3.6:27b', 'llama3'],
+      });
+      const dialog = new PipelineEditDialog(mockProps);
+      const showPromise = dialog.show();
+      switchToCmdTab('models');
+
+      await vi.waitFor(() => {
+        const ollamaSelect = document.querySelector('select[name="archbot_model"]') as HTMLSelectElement;
+        expect(Array.from(ollamaSelect.options).map((o) => o.value)).toContain('zeta:latest');
+      });
+
+      const ollamaValues = Array.from(
+        (document.querySelector('select[name="archbot_model"]') as HTMLSelectElement).options
+      ).map((o) => o.value);
+      expect(ollamaValues.slice(1)).toEqual(['alpha:latest', 'beta:7b', 'zeta:latest']);
+
+      const coderbotValues = Array.from(
+        (document.querySelector('select[name="coderbot_model"]') as HTMLSelectElement).options
+      ).map((o) => o.value);
+      expect(coderbotValues.slice(1)).toEqual(['llama3', 'qwen3.6:27b']);
+
+      clickCancel();
+      await showPromise;
+    });
+
     it('should send null for a model left on the global default', async () => {
       const dialog = new PipelineEditDialog(mockProps);
       const showPromise = dialog.show();

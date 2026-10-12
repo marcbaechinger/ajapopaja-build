@@ -536,8 +536,11 @@ export class PipelineEditDialog extends BaseDialog<void> {
     const options = spec.source === 'coderbot' ? this.modelOptions.coderbot : this.modelOptions.ollama;
     const values = [...options];
     if (current && !values.includes(current)) {
-      values.unshift(current);
+      values.push(current);
     }
+    // Present the model IDs in a stable alphabetical order so the list is easy
+    // to scan regardless of the order returned by the catalog.
+    values.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
     const optionHtml = values
       .map((value) => {
         const selected = value === current ? ' selected' : '';
