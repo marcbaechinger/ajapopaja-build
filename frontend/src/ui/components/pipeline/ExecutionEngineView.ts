@@ -45,6 +45,36 @@ const HISTORY_STATUSES: TaskStatus[] = [
  */
 export class ExecutionEngineView {
   static render(props: ExecutionEngineViewProps): string {
+    return ExecutionEngineView.renderShell(ExecutionEngineView.renderSections(props));
+  }
+
+  /**
+   * The stable shell: a repaintable `#engine-sections` container plus the
+   * `#engine-piview-section` that owns `#engine-piview-mount`. The shell (and
+   * therefore the mounted PiView) is written once and survives full section
+   * repaints, so the CoderBot activity log is never torn down unnecessarily.
+   */
+  static renderShell(sectionsHtml: string = ''): string {
+    return `
+      <div class="flex flex-col min-h-0 h-full overflow-hidden pt-2">
+        <div id="engine-sections" class="flex flex-col flex-1 min-h-0">
+          ${sectionsHtml}
+        </div>
+
+        <div id="engine-piview-section" class="flex flex-col gap-1.5 mt-1">
+          <div id="engine-piview-mount" class="min-h-0">
+            <p class="text-[10px] italic text-app-muted/50 text-center border border-dashed border-app-border/40 rounded-lg py-3">Start a CoderBot to see its output here.</p>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * The repaintable section lists (In Progress, Queue and the History Feed).
+   * This is the only markup replaced by a full engine refresh.
+   */
+  static renderSections(props: ExecutionEngineViewProps): string {
     const { tasks = [] } = props;
     const historyTasks = props.historyTasks ?? [];
     const historyPage = props.historyPage ?? 0;
@@ -57,22 +87,14 @@ export class ExecutionEngineView {
       .sort((a, b) => orderSort(a, b));
 
     return `
-      <div class="flex flex-col min-h-0 h-full overflow-hidden pt-2">
-        ${ExecutionEngineView.sectionHeader('In Progress', inProgress.length, 'text-amber-400', 'inprogress')}
-        ${ExecutionEngineView.sectionBody(inProgress, 'No active work.', '', 'inprogress')}
+      ${ExecutionEngineView.sectionHeader('In Progress', inProgress.length, 'text-amber-400', 'inprogress')}
+      ${ExecutionEngineView.sectionBody(inProgress, 'No active work.', '', 'inprogress')}
 
-        <div id="engine-piview-section" class="flex flex-col gap-1.5 mt-1">
-          <div id="engine-piview-mount" class="min-h-0">
-            <p class="text-[10px] italic text-app-muted/50 text-center border border-dashed border-app-border/40 rounded-lg py-3">Start a CoderBot to see its output here.</p>
-          </div>
-        </div>
+      ${ExecutionEngineView.sectionHeader('Queue', queue.length, 'text-app-accent-1', 'queue')}
+      ${ExecutionEngineView.sectionBody(queue, 'Nothing scheduled.', 'max-h-48 overflow-y-auto', 'queue')}
 
-        ${ExecutionEngineView.sectionHeader('Queue', queue.length, 'text-app-accent-1', 'queue')}
-        ${ExecutionEngineView.sectionBody(queue, 'Nothing scheduled.', 'max-h-48 overflow-y-auto', 'queue')}
-
-        <div id="sidebar-history" class="flex-1 min-h-0 mt-2 flex flex-col overflow-hidden">
-          ${PipelineHistoryView.render(historyTasks, historyPage)}
-        </div>
+      <div id="sidebar-history" class="flex-1 min-h-0 mt-2 flex flex-col overflow-hidden">
+        ${PipelineHistoryView.render(historyTasks, historyPage)}
       </div>
     `;
   }

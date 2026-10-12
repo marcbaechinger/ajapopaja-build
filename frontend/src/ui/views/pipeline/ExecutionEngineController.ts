@@ -64,11 +64,22 @@ export class ExecutionEngineController {
         (a, b) =>
           new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime()
       );
-    el.innerHTML = ExecutionEngineView.render({
+    const props = {
       tasks: allLoadedTasks,
       historyTasks,
       historyPage,
-    });
+    };
+
+    // The shell (including the stable #engine-piview-section / #engine-piview-mount)
+    // is written once. Every later refresh repaints only #engine-sections, so a
+    // mounted PiView survives the repaint and its activity log is not reset.
+    if (!el.querySelector('#engine-piview-section')) {
+      el.innerHTML = ExecutionEngineView.renderShell();
+    }
+    const sections = el.querySelector('#engine-sections');
+    if (sections) {
+      sections.innerHTML = ExecutionEngineView.renderSections(props);
+    }
 
     // Re-render the engine Pi slot based on the current CoderBot session.
     this.updateSlot();

@@ -105,7 +105,7 @@ describe('ExecutionEngineController', () => {
       ctx.state.historyPage = 3;
       host.innerHTML = '<div id="execution-engine-view"></div>';
 
-      const renderSpy = vi.spyOn(ExecutionEngineView, 'render');
+      const renderSpy = vi.spyOn(ExecutionEngineView, 'renderSections');
       makeController().refresh();
 
       expect(renderSpy).toHaveBeenCalledTimes(1);
@@ -122,19 +122,58 @@ describe('ExecutionEngineController', () => {
       expect(renderSpy).not.toHaveBeenCalled();
     });
 
-    it('re-mounts the PiView after an engine re-render wipes the log DOM', () => {
+    it('preserves the mounted PiView across a full sections repaint', () => {
+      coderBotService.getCurrentSession.mockReturnValue({ pipelineId: 'p1', taskId: 't1', active: true });
+      host.innerHTML = '<div id="execution-engine-view"></div>';
+      const renderSpy = vi.spyOn(PiView.prototype, 'render');
+      const destroySpy = vi.spyOn(PiView.prototype, 'destroy');
+      const controller = makeController();
+
+      controller.refresh();
+      const mount = engineMount();
+      expect(mount.querySelector('#log-content-container')).not.toBeNull();
+      expect(renderSpy).toHaveBeenCalledTimes(1);
+      expect(coderBotService.reconnect).toHaveBeenCalledTimes(1);
+
+      // A full repaint only replaces #engine-sections; the stable PiView mount
+      // survives, so the mounted view is neither destroyed nor re-rendered.
+      controller.refresh();
+      expect(engineMount()).toBe(mount);
+      expect(engineMount().querySelector('#log-content-container')).not.toBeNull();
+      expect(renderSpy).toHaveBeenCalledTimes(1);
+      expect(destroySpy).not.toHaveBeenCalled();
+      expect(coderBotService.reconnect).toHaveBeenCalledTimes(2);
+    });
+
+    it('re-mounts the PiView when a refresh rebuilds a wiped shell', () => {
       coderBotService.getCurrentSession.mockReturnValue({ pipelineId: 'p1', taskId: 't1', active: true });
       host.innerHTML = '<div id="execution-engine-view"></div>';
       const renderSpy = vi.spyOn(PiView.prototype, 'render');
       const controller = makeController();
 
       controller.refresh();
-      expect(engineMount().querySelector('#log-content-container')).not.toBeNull();
       expect(renderSpy).toHaveBeenCalledTimes(1);
 
-      // A second refresh rebuilds #execution-engine-view from scratch, so the
-      // PiView must be re-mounted into the new slot.
+      // Wipe the stable shell entirely; the next refresh must rebuild it and
+      // mount a fresh PiView.
+      host.querySelector('#execution-engine-view')!.innerHTML = '';
       controller.refresh();
+      expect(engineMount().querySelector('#log-content-container')).not.toBeNull();
+      expect(renderSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('re-mounts the PiView when the session changes across a refresh', () => {
+      coderBotService.getCurrentSession.mockReturnValue({ pipelineId: 'p1', taskId: 't1', active: true });
+      host.innerHTML = '<div id="execution-engine-view"></div>';
+      const renderSpy = vi.spyOn(PiView.prototype, 'render');
+      const controller = makeController();
+
+      controller.refresh();
+      expect(renderSpy).toHaveBeenCalledTimes(1);
+
+      coderBotService.getCurrentSession.mockReturnValue({ pipelineId: 'p1', taskId: 't2', active: true });
+      controller.refresh();
+
       expect(engineMount().querySelector('#log-content-container')).not.toBeNull();
       expect(renderSpy).toHaveBeenCalledTimes(2);
     });

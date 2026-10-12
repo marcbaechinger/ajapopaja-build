@@ -84,7 +84,7 @@ describe('ExecutionEngineView', () => {
     expect((html.match(/bg-app-surface border border-app-border rounded-full/g) || []).length).toBe(2);
   });
 
-  it('should include a CoderBot PiView mount between In Progress and Queue', () => {
+  it('should render a stable CoderBot PiView mount outside the repainted sections', () => {
     const html = ExecutionEngineView.render({ tasks: [
       makeTask({ id: 'p', status: TaskStatus.INPROGRESS }),
       makeTask({ id: 'q', status: TaskStatus.SCHEDULED }),
@@ -94,9 +94,32 @@ describe('ExecutionEngineView', () => {
     const queueIdx = html.indexOf('>Queue<');
     expect(mountIdx).toBeGreaterThan(-1);
     expect(mountIdx).toBeGreaterThan(inProgIdx);
-    expect(mountIdx).toBeLessThan(queueIdx);
+    expect(mountIdx).toBeGreaterThan(queueIdx);
     expect(html).not.toContain('CoderBot Activity');
     expect(html).toContain('Start a CoderBot to see its output here.');
+
+    // The mount sits in #engine-piview-section, a sibling of the repaintable
+    // #engine-sections wrapper - never inside it.
+    const container = document.createElement('div');
+    container.innerHTML = html;
+    const sections = container.querySelector('#engine-sections')!;
+    const piviewSection = container.querySelector('#engine-piview-section')!;
+    expect(sections).not.toBeNull();
+    expect(piviewSection).not.toBeNull();
+    expect(sections.contains(piviewSection)).toBe(false);
+    expect(container.querySelector('#engine-piview-mount')).not.toBeNull();
+  });
+
+  it('should keep renderShell stable and renderSections repaintable', () => {
+    const shell = ExecutionEngineView.renderShell();
+    const sections = ExecutionEngineView.renderSections({
+      tasks: [makeTask({ id: 'p', status: TaskStatus.INPROGRESS })],
+    });
+    expect(shell).toContain('id="engine-piview-section"');
+    expect(shell).toContain('id="engine-piview-mount"');
+    expect(shell).not.toContain('data-view-id="p"');
+    expect(sections).not.toContain('engine-piview-mount');
+    expect(sections).toContain('data-view-id="p"');
   });
 
   it('should ignore deleted tasks', () => {
