@@ -51,9 +51,6 @@ export class ExecutionEngineView {
         ${ExecutionEngineView.sectionBody(inProgress, 'No active work.', '', 'inprogress')}
 
         <div id="engine-piview-section" class="flex flex-col gap-1.5 mt-1">
-          <div class="flex items-center justify-between px-1 pt-1">
-            <span class="text-[10px] font-black uppercase tracking-widest text-app-accent-2">CoderBot Activity</span>
-          </div>
           <div id="engine-piview-mount" class="min-h-0">
             <p class="text-[10px] italic text-app-muted/50 text-center border border-dashed border-app-border/40 rounded-lg py-3">Start a CoderBot to see its output here.</p>
           </div>

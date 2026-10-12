@@ -95,7 +95,7 @@ describe('ExecutionEngineView', () => {
     expect(mountIdx).toBeGreaterThan(-1);
     expect(mountIdx).toBeGreaterThan(inProgIdx);
     expect(mountIdx).toBeLessThan(queueIdx);
-    expect(html).toContain('CoderBot Activity');
+    expect(html).not.toContain('CoderBot Activity');
     expect(html).toContain('Start a CoderBot to see its output here.');
   });
 
