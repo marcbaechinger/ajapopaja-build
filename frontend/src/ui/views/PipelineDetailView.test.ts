@@ -127,11 +127,13 @@ describe('PipelineDetailView Layout', () => {
       taskClient: {
         listByPipeline: vi.fn().mockResolvedValue([]),
         listCompletedByPipeline: vi.fn().mockResolvedValue({ tasks: [], total_count: 0 }),
+        get: vi.fn().mockResolvedValue({ id: 't1' }),
         updateDetails: vi.fn().mockResolvedValue({ id: 't1' }),
       },
       pullRequestClient: {
         getPullRequestsByPipeline: vi.fn().mockResolvedValue([]),
         acceptPullRequest: vi.fn().mockResolvedValue({}),
+        syncPullRequests: vi.fn().mockResolvedValue({ status: 'ok', up_to_date: true, reconciled: [] }),
       },
       systemClient: {
         isOllamaAvailable: vi.fn().mockResolvedValue(true),
@@ -328,6 +330,67 @@ describe('PipelineDetailView Layout', () => {
     expect(mockContext.pullRequestClient.getPullRequestsByPipeline.mock.calls.length).toBe(prCallsBefore + 1);
     // ...without a full task refresh re-rendering the selected TaskItem (which
     // would discard any open Specification/Design-Doc editor).
+    expect(mockContext.taskClient.listByPipeline.mock.calls.length).toBe(listCallsBefore);
+    expect(selectedView.innerHTML).toBe(before);
+  });
+
+  it('syncing from Gitea repaints only the PR section and affected tasks, preserving the selected TaskItem', async () => {
+    const selectedTask: any = {
+      id: 't1',
+      title: 'Selected Task',
+      spec: 'a spec being edited',
+      status: TaskStatus.PULL_REQUEST_AVAILABLE,
+      deleted: false,
+      version: 1,
+      order: 0,
+      type: 'manual',
+      want_design_doc: false,
+      history: [],
+    };
+    mockContext.taskClient.listByPipeline.mockResolvedValue([selectedTask]);
+    mockContext.pullRequestClient.syncPullRequests.mockResolvedValue({
+      status: 'ok',
+      up_to_date: false,
+      reconciled: [
+        {
+          pr_id: 'pr1',
+          gitea_pr: 350,
+          remote_state: 'merged',
+          outcome: 'accepted',
+          task_id: 't1',
+          task_status: TaskStatus.IMPLEMENTED,
+        },
+      ],
+    });
+
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    view.mount(container);
+    container.innerHTML = view.render() as string;
+    await view.refreshTasks();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const selectAction = mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === 'select_task')![1];
+    const selectEl = document.createElement('div');
+    selectEl.setAttribute('data-view-id', 't1');
+    selectAction(new Event('click'), selectEl);
+
+    const selectedView = container.querySelector('#selected-task-view') as HTMLElement;
+    const before = selectedView.innerHTML;
+    expect(before).toContain('Selected Task');
+
+    const listCallsBefore = mockContext.taskClient.listByPipeline.mock.calls.length;
+    const prCallsBefore = mockContext.pullRequestClient.getPullRequestsByPipeline.mock.calls.length;
+
+    const syncAction = mockContext.actionRegistry.register.mock.calls.find((c: any) => c[0] === 'sync_from_gitea')![1];
+    const button = document.createElement('button');
+    await syncAction(new Event('click'), button);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // The PR section was refreshed in place and only the affected task was
+    // re-read, so the page was not re-rendered by a full task refresh.
+    expect(mockContext.pullRequestClient.syncPullRequests).toHaveBeenCalledWith('p1');
+    expect(mockContext.pullRequestClient.getPullRequestsByPipeline.mock.calls.length).toBe(prCallsBefore + 1);
+    expect(mockContext.taskClient.get).toHaveBeenCalledWith('t1');
     expect(mockContext.taskClient.listByPipeline.mock.calls.length).toBe(listCallsBefore);
     expect(selectedView.innerHTML).toBe(before);
   });

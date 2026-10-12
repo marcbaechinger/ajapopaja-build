@@ -312,11 +312,6 @@ export class PipelineDetailView extends View {
       // re-rendered by a full task refresh.
       refreshPullRequests: () => this.realtime?.refreshPullRequests(),
       updateEngineSlot: () => this.updateEnginePiSlot(),
-      // A sync can reconcile several tasks at once; refresh the task list from
-      // the updated local state in addition to the targeted PR repaint.
-      refreshTasks: () => {
-        void this.refreshTasks();
-      },
     });
 
     registerBotActions(this.ctx, {

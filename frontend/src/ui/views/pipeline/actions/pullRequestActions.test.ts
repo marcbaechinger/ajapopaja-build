@@ -436,6 +436,39 @@ describe('registerPullRequestActions', () => {
       expect(el.textContent).toBe('Sync');
     });
 
+    it('repaints only the reconciled tasks through the DataManager', async () => {
+      const freshTask = { id: 't1', status: 'implemented' };
+      const get = vi.fn().mockResolvedValue(freshTask);
+      const updateTask = vi.fn();
+      (ctx.context as any).taskClient = { get };
+      (ctx.context as any).dataManager = { updateTask };
+      syncPullRequests.mockResolvedValueOnce({
+        status: 'ok',
+        up_to_date: false,
+        reconciled: [
+          {
+            pr_id: 'p',
+            gitea_pr: 350,
+            remote_state: 'merged',
+            outcome: 'accepted',
+            task_id: 't1',
+            task_status: 'implemented',
+          },
+        ],
+      });
+
+      const action = getAction('sync_from_gitea');
+      const el = document.createElement('button');
+      el.textContent = 'Sync';
+
+      await action(noEvent, el);
+      await vi.waitFor(() => expect(updateTask).toHaveBeenCalledWith(freshTask));
+
+      // The affected task is re-read and pushed through the DataManager's
+      // incremental update path instead of triggering a full page re-render.
+      expect(get).toHaveBeenCalledWith('t1');
+    });
+
     it('restores the button and surfaces the error when the sync fails', async () => {
       const alertSpy = vi.fn();
       vi.stubGlobal('alert', alertSpy);

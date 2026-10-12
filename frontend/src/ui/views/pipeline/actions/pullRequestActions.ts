@@ -36,6 +36,9 @@ export interface PullRequestActionsDeps {
    * Optional full task refresh after a sync changes several task statuses at
    * once. When omitted, the notifier's TASK_STATUS_UPDATED broadcasts still
    * update the open clients live.
+   *
+   * Retained for backwards compatibility; the sync handler repaints only the
+   * reconciled tasks so it never triggers a full page re-render.
    */
   refreshTasks?(): void;
 }
@@ -185,7 +188,13 @@ export function registerPullRequestActions(
       );
       showPullRequestSyncToast(result);
       deps.refreshPullRequests();
-      deps.refreshTasks?.();
+      // Repaint only the tasks the sync actually reconciled (usually a handful).
+      // A full task refresh would rebuild the whole PipelineDetailView - header,
+      // backlog, execution engine and the selected TaskItem - discarding any open
+      // Specification/Design-Doc editor, even though only the toast is visible.
+      for (const entry of result.reconciled) {
+        void refreshTaskAfterMutation(entry.task_id ?? null);
+      }
     } catch (error: any) {
       console.error('Sync from Gitea error:', error);
       alert(`Failed to sync from Gitea: ${error.message}`);
