@@ -283,6 +283,72 @@ describe('ExecutionEngineController', () => {
     });
   });
 
+  describe('section collapse', () => {
+    it('collapses and expands all sections from the shell toggle', () => {
+      mountEngineShell();
+      makeController();
+      const sections = host.querySelector('#engine-sections') as HTMLElement;
+      const toggle = host.querySelector('#engine-sections-toggle') as HTMLButtonElement;
+
+      expect(sections.classList.contains('hidden')).toBe(false);
+
+      toggle.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      expect(sections.classList.contains('hidden')).toBe(true);
+      expect(toggle.getAttribute('aria-expanded')).toBe('false');
+
+      toggle.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      expect(sections.classList.contains('hidden')).toBe(false);
+      expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    });
+
+    it('grows the mounted PiView to the full sidebar height when collapsed', () => {
+      coderBotService.getCurrentSession.mockReturnValue({ pipelineId: 'p1', taskId: 't1', active: true });
+      mountEngineShell();
+      const controller = makeController();
+      controller.updateSlot();
+
+      const log = engineMount().querySelector('#log-content-container') as HTMLElement;
+      expect(log).not.toBeNull();
+
+      controller.setSectionsCollapsed(true);
+      expect(log.classList.contains('flex-1')).toBe(true);
+      expect(log.style.height).toBe('auto');
+      expect(
+        (host.querySelector('#engine-piview-section') as HTMLElement).classList.contains('flex-1')
+      ).toBe(true);
+
+      controller.setSectionsCollapsed(false);
+      expect(log.classList.contains('flex-1')).toBe(false);
+      expect(log.style.height).toBe('');
+    });
+
+    it('preserves the collapsed state across a full sections repaint', () => {
+      mountEngineShell();
+      const controller = makeController();
+      controller.setSectionsCollapsed(true);
+
+      controller.refresh();
+
+      const sections = host.querySelector('#engine-sections') as HTMLElement;
+      expect(sections.classList.contains('hidden')).toBe(true);
+      expect(
+        (host.querySelector('#engine-sections-toggle') as HTMLElement).getAttribute('aria-expanded')
+      ).toBe('false');
+    });
+
+    it('stops reacting to the toggle after destroy()', () => {
+      mountEngineShell();
+      const controller = makeController();
+      controller.destroy();
+
+      const toggle = host.querySelector('#engine-sections-toggle') as HTMLButtonElement;
+      toggle.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      expect(
+        (host.querySelector('#engine-sections') as HTMLElement).classList.contains('hidden')
+      ).toBe(false);
+    });
+  });
+
   describe('refreshSlot()', () => {
     it('refreshes the session through the service and re-syncs the slot', async () => {
       coderBotService.getCurrentSession.mockReturnValue({ pipelineId: 'p1', taskId: 't1', active: true });

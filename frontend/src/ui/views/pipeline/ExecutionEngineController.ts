@@ -41,9 +41,37 @@ export class ExecutionEngineController {
   private readonly deps: ExecutionEngineControllerDeps;
   private enginePiView: PiView | null = null;
   private enginePiMountedKey: string | null = null;
+  /** Whether all three engine sections are collapsed (shared for the group). */
+  private sectionsCollapsed: boolean = false;
 
   constructor(deps: ExecutionEngineControllerDeps) {
     this.deps = deps;
+    // The collapse toggle lives in the stable shell and is delegated from the
+    // host so it keeps working across section repaints and PiView re-mounts.
+    this.deps.host.addEventListener('click', this.handleClick);
+  }
+
+  /** Delegated click handler for the sections collapse toggle. */
+  private handleClick = (event: Event): void => {
+    const target = event.target as HTMLElement | null;
+    if (!target?.closest('#engine-sections-toggle')) return;
+    this.toggleSections();
+  };
+
+  /** Collapses or expands all three sections together. */
+  toggleSections(): void {
+    this.setSectionsCollapsed(!this.sectionsCollapsed);
+  }
+
+  /**
+   * Sets the shared section collapse state and applies it to the mounted DOM.
+   * Collapsed sections free their vertical space so the embedded PiView grows to
+   * the full sidebar height.
+   */
+  setSectionsCollapsed(collapsed: boolean): void {
+    this.sectionsCollapsed = collapsed;
+    const el = this.deps.host.querySelector('#execution-engine-view');
+    if (el) ExecutionEngineView.applySectionsCollapsed(el, collapsed);
   }
 
   /** Repaints the engine overview and then re-syncs the embedded Pi slot. */
@@ -74,7 +102,7 @@ export class ExecutionEngineController {
     // is written once. Every later refresh repaints only #engine-sections, so a
     // mounted PiView survives the repaint and its activity log is not reset.
     if (!el.querySelector('#engine-piview-section')) {
-      el.innerHTML = ExecutionEngineView.renderShell();
+      el.innerHTML = ExecutionEngineView.renderShell('', this.sectionsCollapsed);
     }
     const sections = el.querySelector('#engine-sections');
     if (sections) {
@@ -83,10 +111,20 @@ export class ExecutionEngineController {
 
     // Re-render the engine Pi slot based on the current CoderBot session.
     this.updateSlot();
+    // Re-assert the collapse state after the sections/PiView were (re)built.
+    ExecutionEngineView.applySectionsCollapsed(el, this.sectionsCollapsed);
   }
 
   /** Render the engine Pi slot based on the running session vs this pipeline. */
   updateSlot(): void {
+    this.syncSlot();
+    // Re-assert the collapse state so a freshly mounted PiView adopts the full
+    // height when the sections are collapsed.
+    const el = this.deps.host.querySelector('#execution-engine-view');
+    if (el) ExecutionEngineView.applySectionsCollapsed(el, this.sectionsCollapsed);
+  }
+
+  private syncSlot(): void {
     const mount = this.deps.host.querySelector('#engine-piview-mount') as HTMLElement | null;
     if (!mount) return;
 
@@ -125,7 +163,9 @@ export class ExecutionEngineController {
     }
   }
 
-  /** Refreshes the session from the service, then re-syncs the Pi slot. */
+  /**
+   * Refreshes the session from the service, then re-syncs the Pi slot.
+   */
   async refreshSlot(): Promise<void> {
     await this.deps.ctx.context.coderBotService?.refreshSession?.();
     this.updateSlot();
@@ -138,6 +178,15 @@ export class ExecutionEngineController {
       this.enginePiView = null;
     }
     this.enginePiMountedKey = null;
+  }
+
+  /**
+   * Full controller teardown: detaches the sections toggle listener in addition
+   * to tearing down the embedded PiView. Called when the host view unmounts.
+   */
+  destroy(): void {
+    this.deps.host.removeEventListener('click', this.handleClick);
+    this.teardown();
   }
 
   private mountCoderBotPiView(mount: HTMLElement): void {

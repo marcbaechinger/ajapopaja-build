@@ -762,7 +762,7 @@ export class PipelineDetailView extends View {
   unmount() {
     this.activeEditors.forEach(editor => editor.toTextArea());
     this.activeEditors.clear();
-    this.engine?.teardown();
+    this.engine?.destroy();
     this.engine = null;
     this.realtime?.stop();
     this.realtime = null;

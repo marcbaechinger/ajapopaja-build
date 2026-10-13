@@ -23,6 +23,14 @@ export interface ExecutionEngineViewProps {
   tasks: Task[];
   historyTasks?: Task[];
   historyPage?: number;
+  /**
+   * When true, all three sidebar sections (In Progress, Queue and the History
+   * Feed) are collapsed together. The sections are either all displayed or all
+   * collapsed; the embedded CoderBot PiView then fills the freed vertical space.
+   */
+  collapsed?: boolean;
+  /** Alias for {@link collapsed}. */
+  sectionsCollapsed?: boolean;
 }
 
 /** The right-sidebar bucket a task is rendered in, based on its status. */
@@ -39,13 +47,21 @@ const HISTORY_STATUSES: TaskStatus[] = [
  * ExecutionEngineView renders the right side panel of the PipelineDetailView.
  *
  * It lists the tasks currently handled by the execution engine, grouped into
- * sections - In Progress (IN_PROGRESS), Queue (SCHEDULED) and Failed (FAILED) -
- * each with a header showing the section type and the total number of tasks in
- * it. Tasks within a section are ordered by their execution order.
+ * sections - In Progress (IN_PROGRESS), Queue (SCHEDULED) and the paged History
+ * Feed - each with a header showing the section type and the total number of
+ * tasks in it. Tasks within a section are ordered by their execution order.
+ *
+ * The three sections collapse together: the shell renders a single master
+ * toggle that hides `#engine-sections` and lets the embedded CoderBot PiView
+ * grow to fill the freed sidebar height.
  */
 export class ExecutionEngineView {
   static render(props: ExecutionEngineViewProps): string {
-    return ExecutionEngineView.renderShell(ExecutionEngineView.renderSections(props));
+    const collapsed = props.collapsed ?? props.sectionsCollapsed ?? false;
+    return ExecutionEngineView.renderShell(
+      ExecutionEngineView.renderSections(props),
+      collapsed
+    );
   }
 
   /**
@@ -54,20 +70,93 @@ export class ExecutionEngineView {
    * therefore the mounted PiView) is written once and survives full section
    * repaints, so the CoderBot activity log is never torn down unnecessarily.
    */
-  static renderShell(sectionsHtml: string = ''): string {
+  static renderShell(sectionsHtml: string = '', collapsed: boolean = false): string {
+    const sectionsClass = collapsed
+      ? 'flex flex-col flex-1 min-h-0 hidden'
+      : 'flex flex-col flex-1 min-h-0';
     return `
       <div class="flex flex-col min-h-0 h-full overflow-hidden pt-2">
-        <div id="engine-sections" class="flex flex-col flex-1 min-h-0">
+        <!-- Master collapse toggle for the three sections below. It lives in the
+             stable shell (outside #engine-sections) so it survives every section
+             repaint and always stays reachable. -->
+        <div class="flex items-center justify-end px-1 pb-0.5 shrink-0">
+          <button id="engine-sections-toggle" data-engine-toggle="sections" type="button"
+            aria-controls="engine-sections" aria-expanded="${!collapsed}"
+            class="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest text-app-muted hover:text-app-text hover:bg-app-bg border border-transparent hover:border-app-border transition-colors cursor-pointer"
+            title="${collapsed ? 'Expand sections' : 'Collapse sections'}">
+            <span id="engine-sections-toggle-label">${collapsed ? 'Expand all' : 'Collapse all'}</span>
+            <span id="engine-sections-toggle-icon">${ExecutionEngineView.sectionToggleIcon(collapsed)}</span>
+          </button>
+        </div>
+
+        <div id="engine-sections" class="${sectionsClass}">
           ${sectionsHtml}
         </div>
 
         <div id="engine-piview-section" class="flex flex-col gap-1.5 mt-1">
-          <div id="engine-piview-mount" class="min-h-0">
+          <div id="engine-piview-mount" class="min-h-0 flex flex-col">
             <p class="text-[10px] italic text-app-muted/50 text-center border border-dashed border-app-border/40 rounded-lg py-3">Start a CoderBot to see its output here.</p>
           </div>
         </div>
       </div>
     `;
+  }
+
+  /** Chevron for the sections toggle (points the way the sections will move). */
+  static sectionToggleIcon(collapsed: boolean): string {
+    const points = collapsed ? '6 9 12 15 18 9' : '18 15 12 9 6 15';
+    return `<svg class="w-3 h-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="${points}"></polyline></svg>`;
+  }
+
+  /**
+   * Applies the shared collapsed state to a mounted engine view. When collapsed,
+   * all three section lists (`#engine-sections`) are hidden and the embedded
+   * CoderBot `PiView` is allowed to grow to the full sidebar height; when
+   * expanded, the PiView returns to its compact fixed height.
+   *
+   * Kept as a pure DOM helper (mirroring `PipelineDetailLayout.applySidebarState`)
+   * so the controller only owns the boolean state, not the layout details.
+   */
+  static applySectionsCollapsed(root: ParentNode, collapsed: boolean): void {
+    const sections = root.querySelector<HTMLElement>('#engine-sections');
+    sections?.classList.toggle('hidden', collapsed);
+
+    const piviewSection = root.querySelector<HTMLElement>('#engine-piview-section');
+    piviewSection?.classList.toggle('flex-1', collapsed);
+    piviewSection?.classList.toggle('min-h-0', collapsed);
+
+    const mount = root.querySelector<HTMLElement>('#engine-piview-mount');
+    mount?.classList.toggle('flex-1', collapsed);
+
+    // Let the mounted PiView log fill the freed space instead of its compact
+    // 38vh height. The inline height overrides the `h-[38vh]` utility class and
+    // is cleared again on expand so the compact height is restored.
+    const log = root.querySelector<HTMLElement>('#log-content-container');
+    if (log) {
+      log.classList.toggle('flex-1', collapsed);
+      log.classList.toggle('min-h-0', collapsed);
+      log.style.height = collapsed ? 'auto' : '';
+    }
+
+    const toggle = root.querySelector<HTMLElement>('#engine-sections-toggle');
+    if (toggle) {
+      toggle.setAttribute('aria-expanded', String(!collapsed));
+      toggle.setAttribute('title', collapsed ? 'Expand sections' : 'Collapse sections');
+      const label = toggle.querySelector<HTMLElement>('#engine-sections-toggle-label');
+      if (label) label.textContent = collapsed ? 'Expand all' : 'Collapse all';
+      const icon = toggle.querySelector<HTMLElement>('#engine-sections-toggle-icon');
+      if (icon) icon.innerHTML = ExecutionEngineView.sectionToggleIcon(collapsed);
+    }
+  }
+
+  /** Alias for {@link applySectionsCollapsed}, matching `applySidebarState`. */
+  static applySectionsState(root: ParentNode, collapsed: boolean): void {
+    ExecutionEngineView.applySectionsCollapsed(root, collapsed);
+  }
+
+  /** Alias for {@link applySectionsCollapsed}. */
+  static applyCollapsedState(root: ParentNode, collapsed: boolean): void {
+    ExecutionEngineView.applySectionsCollapsed(root, collapsed);
   }
 
   /**

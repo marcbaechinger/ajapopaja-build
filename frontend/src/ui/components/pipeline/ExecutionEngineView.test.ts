@@ -156,6 +156,55 @@ describe('ExecutionEngineView', () => {
     expect(html).toContain('data-view-id="q3"');
   });
 
+  describe('collapsible sections', () => {
+    it('renders a master toggle expanded by default', () => {
+      const html = ExecutionEngineView.render({ tasks: [] });
+      expect(html).toContain('id="engine-sections-toggle"');
+      expect(html).toContain('aria-expanded="true"');
+      expect(html).toContain('Collapse all');
+      expect(html).not.toContain('id="engine-sections" class="flex flex-col flex-1 min-h-0 hidden"');
+    });
+
+    it('hides all sections when rendered collapsed', () => {
+      const html = ExecutionEngineView.render({ tasks: [], collapsed: true });
+      expect(html).toContain('aria-expanded="false"');
+      expect(html).toContain('Expand all');
+      const container = document.createElement('div');
+      container.innerHTML = html;
+      expect(container.querySelector('#engine-sections')!.classList.contains('hidden')).toBe(true);
+    });
+
+    it('applies the shared collapsed state to the sections and the PiView height', () => {
+      const container = document.createElement('div');
+      container.innerHTML = ExecutionEngineView.render({ tasks: [] });
+      const log = document.createElement('div');
+      log.id = 'log-content-container';
+      log.className = 'h-[38vh]';
+      container.querySelector('#engine-piview-mount')!.appendChild(log);
+      document.body.appendChild(container);
+
+      ExecutionEngineView.applySectionsCollapsed(container, true);
+
+      expect(container.querySelector('#engine-sections')!.classList.contains('hidden')).toBe(true);
+      expect(container.querySelector('#engine-piview-section')!.classList.contains('flex-1')).toBe(true);
+      expect(log.classList.contains('flex-1')).toBe(true);
+      expect(log.style.height).toBe('auto');
+      expect(container.querySelector('#engine-sections-toggle')!.getAttribute('aria-expanded')).toBe('false');
+      expect(container.textContent).toContain('Expand all');
+
+      ExecutionEngineView.applySectionsCollapsed(container, false);
+
+      expect(container.querySelector('#engine-sections')!.classList.contains('hidden')).toBe(false);
+      expect(container.querySelector('#engine-piview-section')!.classList.contains('flex-1')).toBe(false);
+      expect(log.classList.contains('flex-1')).toBe(false);
+      expect(log.style.height).toBe('');
+      expect(container.querySelector('#engine-sections-toggle')!.getAttribute('aria-expanded')).toBe('true');
+      expect(container.textContent).toContain('Collapse all');
+
+      document.body.innerHTML = '';
+    });
+  });
+
   describe('bucketFor()', () => {
     it('maps each status to its sidebar bucket', () => {
       expect(ExecutionEngineView.bucketFor(TaskStatus.INPROGRESS)).toBe('inprogress');
