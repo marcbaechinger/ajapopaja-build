@@ -17,9 +17,10 @@ This document proposes a **standalone Pi process server** ("the server") that:
 - stores sessions on a controlled filesystem and bookkeeping in MongoDB,
 - authenticates users with tokens and controls per-session access.
 
-Because the Pi SDK is built for Node.js, the server is a TypeScript application
-and drives Pi through the SDK in-process (rather than the Python std-I/O
-approach). A subprocess transport remains available for isolation.
+Because the Pi SDK is built for Node.js, the server is a TypeScript application.
+It drives Pi through subprocesses over std-I/O (`pi --mode rpc`), preserving the
+process-isolation and multi-process model the Python backend uses today. The
+SDK's in-process API remains a possible later escape hatch for SDK-only features.
 
 ## 2. Goals & Non-Goals
 
@@ -63,8 +64,8 @@ flowchart TB
         WS["WebSocket gateway<br/>(session fan-out)"]
         AUTH["Auth & authorization"]
         MGR["SessionManager<br/>(registry, lifecycle, concurrency)"]
-        RUN["SessionRunner<br/>(Pi SDK in-process)"]
-        SUB["SubprocessRunner<br/>(pi --mode rpc, optional)"]
+        RUN["SessionRunner<br/>(pi --mode rpc subprocess)"]
+        SUB["SdkRunner<br/>(SDK in-process, future)"]
         EVT["EventBus<br/>(in-process pub/sub)"]
     end
 
@@ -95,12 +96,12 @@ flowchart TB
 | HTTP API layer | REST endpoints for the session lifecycle (§ REST doc), request validation, auth dependency. |
 | WebSocket gateway | Authenticates the handshake, manages subscriptions, fans out events only to clients with access. |
 | SessionManager | The analogue of `CoderBotManager`: a registry of `SessionHandle`s, the lifecycle state machine, the concurrency guard, startup reconciliation and archiving/GC. |
-| SessionRunner | Spawns/owns one Pi process and translates Pi SDK events into server events. Uses the SDK in-process by default. |
-| SubprocessRunner | Optional runner that spawns `pi --mode rpc` and speaks JSONL (port of `PiRpcProcess`) for isolation or cwd-per-process cases. |
+| SessionRunner | Spawns/owns one `pi --mode rpc` subprocess and translates Pi events into server events. Uses the SDK `RpcClient` (or a ported `PiRpcProcess`) over std-I/O by default. |
+| SdkRunner | Optional future runner that drives Pi through the SDK in-process, for SDK-only features (fork/import, session introspection, custom loaders). |
 | EventBus | In-process pub/sub that decouples runners from the WebSocket gateway and the event-log writer. |
 
-The `SessionRunner` interface is the seam that keeps the SDK in-process path and
-the subprocess path interchangeable:
+The `SessionRunner` interface is the seam that keeps the subprocess path and an
+in-process SDK path interchangeable:
 
 ```ts
 interface SessionRunner {
@@ -264,7 +265,7 @@ as `CODERBOT_RPC_EVENT` / `INTERACTIVE_RPC_EVENT` today.
 
 | Question | Current lean |
 |----------|--------------|
-| In-process SDK vs subprocess | Default SDK in-process; subprocess runner for cwd/isolation escape hatch. |
+| In-process SDK vs subprocess | Default subprocess (`pi --mode rpc` via `RpcClient`/`PiRpcProcess`) for isolation and multi-process; SDK in-process as a future escape hatch. |
 | Archive format | `tar.zst` (good compression + streaming); revisit if random-access needed. |
 | Multi-node | Single writer per session dir for v1; a shared volume + DB lock is the likely first step if scale requires. |
 | Compatibility with ajapopaja's existing WS types | Emit both namespaced `session.*`/`rpc.event` and legacy `INTERACTIVE_RPC_EVENT`-style aliases during migration (§ WS doc). |
