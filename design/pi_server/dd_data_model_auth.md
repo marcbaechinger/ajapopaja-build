@@ -92,8 +92,7 @@ erDiagram
 | `created_at` / `updated_at` | datetime | |
 
 The encrypted credential is the `password_hash`. We use **Argon2id** by default
-(bcrypt is an acceptable fallback for compatibility with the current backend,
-which uses bcrypt); never store or log the raw password.
+(bcrypt is an acceptable fallback); never store or log the raw password.
 
 ### 2.2 `api_tokens` (personal access tokens / service tokens)
 
@@ -114,12 +113,12 @@ value.
 
 ### 2.3 `sessions`
 
-The `PiSession` document, generalized from the current backend model:
+The session document:
 
 | Field | Type | Notes |
 |-------|------|-------|
 | `uid` | string | UUID v4, primary handle, unique index. |
-| `kind` | string | `interactive` \| `batch` (aliases the old `coderbot`). |
+| `kind` | string | `interactive` \| `batch`. |
 | `status` | string | lifecycle state (§ architecture). |
 | `owner` | string | username of the creating user. |
 | `label` | string \| null | human-readable name. |
@@ -131,7 +130,7 @@ The `PiSession` document, generalized from the current backend model:
 | `workspace_path` | string \| null | the session's git clone (working tree + `.git`). |
 | `model` | string \| null | model override. |
 | `skill_names` | string[] | skills staged for the session. |
-| `bot_type` | string | `interactive` (discriminator kept for WS compatibility). |
+| `bot_type` | string | `interactive` \| `batch` — discriminator used by the WebSocket gateway and clients to route a session's events (mirrors `kind`). |
 | `archive_path` | string \| null | path of the cold-storage bundle when `archived`. |
 | `resume_count` | int | |
 | `last_error` | string \| null | |
@@ -210,13 +209,15 @@ sequenceDiagram
     Note over U,S: access token expired -> refresh flow -> new access token
 ```
 
-Token-confusion guard (mirroring the current backend's `decode_token`): any
-token carrying a non-session `scope` (e.g. a raw-file token in ajapopaja) must
-never be accepted as a general access credential.
+Token-confusion guard: a token carries a `scope` (or a JWT `scopes` claim) that
+declares what it may do, and a token minted for one purpose (for example a
+scoped download token) must never be accepted as a general session credential.
+The auth layer checks the requested action against the token's scope before
+granting access.
 
 Configuration: `AUTH_JWT_SECRET` (or RS256 key), `AUTH_ACCESS_TTL`,
 `AUTH_REFRESH_TTL`, `AUTH_PAT_PREFIX`. A shared development secret triggers a
-startup warning (as today).
+startup warning.
 
 ## 4. Access control & session grants
 
@@ -242,9 +243,9 @@ Enforcement points:
 - **WebSocket**: the `subscribe` request is authorized; the gateway caches the
   granted session ids per connection and filters every outgoing message.
 
-The grant model is what makes the server multi-user and remotely usable by more
-than just the ajapopaja backend — the current backend only stores an optional
-`owner` and does not enforce scoping; this server makes it real.
+The grant model is what makes the server safely multi-user: a session can be
+shared with other users at a bounded level of access (`viewer`/`editor`) without
+handing over ownership or management rights.
 
 ## 5. Security notes
 
@@ -252,8 +253,7 @@ than just the ajapopaja backend — the current backend only stores an optional
 - PATs: random 256-bit values, SHA-256 hashed at rest, shown once, revocable,
   optional expiry + scopes.
 - JWTs: signed, short-lived, `jti` for revocation, algorithm pinned (reject `none`).
-- Event logs / `meta.json` must never contain tokens or secrets (the current
-  backend already documents this).
+- Event logs / `meta.json` must never contain tokens or secrets.
 - Archive bundles are stored unencrypted by default; an optional encryption key
   (`ARCHIVE_KEY`) can be added if the repo content is sensitive.
 - Git credentials (HTTPS PAT) are resolved per-session (`repo_username` /
