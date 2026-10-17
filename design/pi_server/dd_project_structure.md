@@ -7,8 +7,8 @@ The server is a Node.js / TypeScript application to stay close to the Pi SDK
 (via the SDK's `RpcClient`), manages each session's git workspace, and uses
 MongoDB for bookkeeping plus a small HTTP/WebSocket stack for the remote API.
 
-This is a **separate project** (not part of the current monorepo). The layout
-below is a first skeleton; implementation details can be filled in incrementally.
+The layout below is a first skeleton; implementation details can be filled in
+incrementally.
 
 ## 2. Runtime & language
 
