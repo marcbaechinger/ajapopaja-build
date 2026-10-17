@@ -3,8 +3,9 @@
 ## 1. Overview
 
 The server is a Node.js / TypeScript application to stay close to the Pi SDK
-(which is built for Node.js). It uses the SDK in-process for running Pi sessions,
-MongoDB for bookkeeping, and a small HTTP/WebSocket stack for the remote API.
+(which is built for Node.js). It drives Pi through `pi --mode rpc` subprocesses
+(via the SDK's `RpcClient`), manages each session's git workspace, and uses
+MongoDB for bookkeeping plus a small HTTP/WebSocket stack for the remote API.
 
 This is a **separate project** (not part of the current monorepo). The layout
 below is a first skeleton; implementation details can be filled in incrementally.
@@ -14,9 +15,9 @@ below is a first skeleton; implementation details can be filled in incrementally
 - **Runtime:** Node.js LTS (>= 20). ESM modules.
 - **Language:** TypeScript, strict mode.
 - **Package manager:** npm (pnpm optional).
-- **Primary dependency:** the Pi SDK (`@pi/agent` or equivalent package name
-  from https://pi.dev/docs/latest/sdk — pin the exact package at implementation
-  time).
+- **Primary dependency:** the Pi SDK package (for `RpcClient` over `pi --mode rpc`)
+  plus a runnable Pi CLI binary; pin the exact package at implementation time.
+- **Git:** `simple-git` (or `isomorphic-git`) for clone/commit/branch/sync.
 
 ## 3. Proposed layout
 
@@ -40,7 +41,10 @@ pi-process-server/
 │   │   │   ├── router.ts
 │   │   │   ├── auth.ts             # login/refresh/token endpoints
 │   │   │   ├── sessions.ts         # lifecycle endpoints
-│   │   │   └── grants.ts
+│   │   │   ├── grants.ts
+│   │   │   ├── git.ts              # git status/sync/commit endpoints
+│   │   │   ├── pull_requests.ts    # PR lifecycle endpoints
+│   │   │   └── hooks.ts            # Gitea pr-state webhook receiver
 │   │   ├── ws/
 │   │   │   ├── gateway.ts          # handshake, subscribe, fan-out
 │   │   │   └── protocol.ts         # message envelope + types
@@ -54,16 +58,25 @@ pi-process-server/
 │   │   └── reconcile.ts            # startup reconciliation
 │   ├── runner/
 │   │   ├── types.ts                # SessionRunner interface
-│   │   ├── sdk-runner.ts           # in-process Pi SDK
-│   │   ├── subprocess-runner.ts    # pi --mode rpc escape hatch
+│   │   ├── subprocess-runner.ts    # pi --mode rpc via RpcClient (default)
+│   │   ├── sdk-runner.ts           # in-process Pi SDK (future)
 │   │   └── events.ts               # PiEvent -> ServerEvent mapping
+│   ├── git/
+│   │   ├── service.ts              # clone/init, branch, commit, fetch/pull
+│   │   ├── status.ts               # working-tree status
+│   │   └── auth.ts                 # credential resolution (http.extraHeader)
+│   ├── pr/
+│   │   ├── manager.ts              # PullRequestManager (records + lifecycle)
+│   │   ├── submit.ts               # push + remote PR creation
+│   │   └── reconcile.ts            # webhook/poller state mirroring
 │   ├── store/
 │   │   ├── mongo.ts                # connection + collections
 │   │   ├── models/
 │   │   │   ├── user.ts
 │   │   │   ├── api-token.ts
 │   │   │   ├── session.ts
-│   │   │   └── grant.ts
+│   │   │   ├── grant.ts
+│   │   │   └── pull-request.ts
 │   │   └── queries/                # typed accessors
 │   ├── fs/
 │   │   ├── layout.ts               # PI_SERVER_ROOT layout helpers
@@ -88,19 +101,23 @@ pi-process-server/
 |--------|----------------|--------------------|
 | `session/manager.ts` | registry, concurrency guard, lifecycle ops, reconcile | `CoderBotManager` |
 | `session/lifecycle.ts` | state machine + transitions + guards | status enum logic |
-| `runner/sdk-runner.ts` | spawn Pi via SDK, capture identity, relay events | `PiRpcProcess` + `InteractivePiSession.start_interactive` |
-| `runner/subprocess-runner.ts` | spawn `pi --mode rpc`, JSONL framing, `get_state` | `PiRpcProcess` verbatim |
+| `runner/subprocess-runner.ts` | spawn `pi --mode rpc` via `RpcClient`, capture identity, relay events | `PiRpcProcess` verbatim |
+| `runner/sdk-runner.ts` | in-process Pi SDK (future) | `InteractivePiSession` |
 | `store/models/session.ts` | `PiSession` document | `PiSession` model |
 | `fs/layout.ts` + `fs/event-log.ts` + `fs/meta.ts` | on-disk layout, event replay, crash sidecar | `pi_session_store.py` |
 | `fs/archive.ts` | archive/restore bundles | new |
 | `server/ws/protocol.ts` | WS envelope + types + legacy aliases | `websocket_manager.py` + `WSMessage` |
 | `server/middleware/authn.ts` + `authz.ts` | token resolution + grant checks | `api/auth.py` |
+| `git/service.ts` + `git/status.ts` | workspace clone/commit/sync + status | `SandboxGitHelper` + `git_helper.py` |
+| `pr/manager.ts` + `pr/submit.ts` + `pr/reconcile.ts` | PR records, remote submission, reconciliation | `routes/pull_request.py` + `GiteaClient` |
+| `server/http/hooks.ts` | Gitea `pr-state` webhook receiver | `api/git_hosting/*` |
 
 ## 5. Dependencies (npm)
 
 Runtime:
 
-- `@pi/agent` (Pi SDK) — the core runner.
+- `@pi/agent` (Pi SDK) — `RpcClient` for the `pi --mode rpc` subprocess runner.
+- `simple-git` — clone/commit/branch/fetch/pull in the session workspace.
 - `fastify` (or `express`) + `@fastify/websocket` — HTTP + WS.
 - `mongodb` (official driver) or `mongoose` — Mongo access.
 - `argon2` — password hashing; `jsonwebtoken` (or `jose`) — JWT.
@@ -108,6 +125,7 @@ Runtime:
 - `pino` — logging.
 - `async-mutex` — per-lane locks.
 - `tar` + `zstd`/`zlib` — archive bundles.
+- `gitea-api` (or plain `fetch` against Gitea's REST API) — remote PR creation + webhook registration.
 
 Dev:
 
@@ -155,16 +173,22 @@ Build outputs to `dist/` (ESM, NodeNext). CI runs `lint` + `typecheck` + `test`
 | `PI_SESSION_AUTO_RESUME` | `false` | Restore newest interactive at startup. |
 | `PI_SESSION_MAX_RUNNING` | `2` | Running lanes (1 batch + 1 interactive). |
 | `ARCHIVE_KEY` | *(unset)* | Optional archive encryption key. |
+| `GIT_PUSH_USERNAME` | *(empty)* | Global username for push/PR to remote repos. |
+| `GIT_PUSH_TOKEN` | *(empty)* | Global token for push/PR (repo write scope). |
+| `GITEA_WEBHOOK_SECRET` | *(empty)* | HMAC secret for the `pr-state` webhook. |
+| `GITEA_PR_POLL_ENABLED` | `false` | Enable the polling PR reconciler. |
+| `GITEA_PR_POLL_INTERVAL` | `60` | Poll interval (seconds). |
+| `PI_SERVER_PUBLIC_URL` | *(empty)* | Public base URL used to build webhook targets. |
 
-## 8. Why in-process SDK (and when to use the subprocess runner)
+## 8. Why the subprocess runner (and when to use the SDK)
 
-- **In-process (`sdk-runner.ts`)** is the default: it matches the SDK's Node
-  platform, avoids JSONL framing/parsing code, and gives direct access to typed
-  events and commands (`get_state`, `get_messages`, prompts).
-- **Subprocess (`subprocess-runner.ts`)** is kept for two reasons: (1) a Pi
-  process has a fixed `cwd`, so isolation or a crashed process is easier to reason
-  about across a subprocess boundary; (2) it is a direct port of the proven
-  Python `PiRpcProcess`, so it is the low-risk fallback if the SDK API changes.
+- **Subprocess (`subprocess-runner.ts`)** is the default: it drives `pi --mode rpc`
+  over std-I/O (via the SDK `RpcClient` or a ported `PiRpcProcess`), which gives
+  OS-level process isolation, one process per session `cwd`, and parity with the
+  current Python backend — including the built-in codemode/MCP extensions the CLI
+  loads automatically.
+- **In-process (`sdk-runner.ts`)** is a future escape hatch for SDK-only features
+  (fork/import, session introspection, custom resource loaders).
 
 Both implement `SessionRunner`, so the manager is agnostic to the transport.
 
@@ -175,6 +199,7 @@ Both implement `SessionRunner`, so the manager is agnostic to the transport.
    parity with the current backend quickly; then `sdk-runner.ts`.
 3. **Manager + lifecycle:** registry, create/pause/resume, concurrency, reconcile.
 4. **Storage:** layout, event log, meta sidecar, archive/restore.
-5. **Auth + grants:** login/refresh, PATs, grant middleware.
-6. **WebSocket:** gateway, subscription, fan-out, legacy aliases.
-7. **Hardening:** tests, Dockerfile, docs.
+5. **Git + PR:** workspace clone/init, commit/sync, PR records, submit, webhook/poller reconcile.
+6. **Auth + grants:** login/refresh, PATs, grant middleware.
+7. **WebSocket:** gateway, subscription, fan-out, legacy aliases.
+8. **Hardening:** tests, Dockerfile, docs.

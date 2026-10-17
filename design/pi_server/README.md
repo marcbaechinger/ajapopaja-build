@@ -9,14 +9,14 @@ create, pause, resume, archive and delete Pi sessions that are executed, stored
 and archived by this server.
 
 The server is a Node.js / TypeScript application because the Pi SDK is built for
-Node.js; it uses the SDK in-process instead of the Python std-I/O `pi --mode rpc`
-approach.
+Node.js; it drives Pi through `pi --mode rpc` subprocesses over std-I/O.
 
 ## Documents
 
 | Document | Contents |
 |----------|----------|
 | [dd_architecture.md](dd_architecture.md) | Server architecture, components, session lifecycle state machine, on-disk layout. |
+| [dd_git_workflow.md](dd_git_workflow.md) | Git workspace + pull-request workflow: clone, commit, submit, reconcile, sync. |
 | [dd_rest_api.md](dd_rest_api.md) | Public REST API for remote session management. |
 | [dd_websocket_protocol.md](dd_websocket_protocol.md) | WebSocket protocol, message envelope, message types and PiView mapping. |
 | [dd_data_model_auth.md](dd_data_model_auth.md) | MongoDB collections/documents, token authentication, session access grants. |
@@ -24,17 +24,19 @@ approach.
 
 ## Scope
 
-The server is intentionally *focused*: it owns the Pi process lifecycle and the
-data needed to resume/render a session. It does **not** own ajapopaja's domain
-concepts (pipelines, tasks, pull requests, Gitea, etc.). Those are either passed
-through as opaque metadata on a session (e.g. `pipeline_id`, `task_id`) or live
-entirely in the calling application. This keeps the server reusable by any UI.
+The server is intentionally *focused*: it owns the Pi process lifecycle, the
+git workspace each session works in, and the pull requests produced from it.
+Ajapopaja's *pipeline/task* domain stays out of scope and is carried as opaque
+metadata on a session (e.g. `pipeline_id`, `task_id`). This keeps the server
+reusable by any UI.
 
 ## Key decisions (summary)
 
 - One Pi process per *running* session; the manager enforces a concurrency cap.
-- The Pi SDK is used **in-process**; a subprocess transport is kept as an
-  escape hatch for isolation and cwd-per-process constraints.
+- Pi is driven through `pi --mode rpc` subprocesses over std-I/O; the in-process
+  SDK is a future escape hatch.
+- Each session owns a git workspace cloned from a remote repo; commits become
+  pull requests (no patch blob in the DB), reconciled back via webhook.
 - Sessions are durable: a MongoDB record + an on-disk directory (native Pi
   session file, event log, workspace, metadata sidecar).
 - Archiving is a distinct lifecycle state that moves a session to cold storage

@@ -6,7 +6,8 @@ The server exposes a JSON REST API for remote session management. It is the
 superset of the endpoints the ajapopaja `coderbot` router offers today
 (`/coderbot/sessions`, `/coderbot/interactive/*`, `/coderbot/trigger/*`,
 `/coderbot/stop/*`), reorganized under a `/v1/sessions` resource and extended
-with archiving/restoring.
+with archiving/restoring and git workspace + pull-request management
+(see [dd_git_workflow.md](dd_git_workflow.md)).
 
 All endpoints require a bearer token (`Authorization: Bearer <token>`) except
 the auth/login and token-mint endpoints. Authorization is described in
@@ -35,6 +36,7 @@ Conventions:
   "pi_session_file": "/data/…/sessions/<uid>/pi-sessions/--cwd--/….jsonl",
   "session_dir": "/data/…/sessions/<uid>/pi-sessions",
   "cwd": "/repo/…",
+  "repo_uri": "https://gitea/org/repo.git",   // remote origin (when cloned)
   "workspace_path": "/data/…/sessions/<uid>/workspace",
   "model": "gpt-oss:120",
   "skill_names": ["ajapopaja"],
@@ -85,6 +87,32 @@ Conventions:
 | `PUT` | `/v1/sessions/{uid}/grants/{username}` | Grant `viewer`/`editor`/`owner` to a user. |
 | `DELETE` | `/v1/sessions/{uid}/grants/{username}` | Revoke a grant. |
 
+### 3.4 Git workspace
+
+| Method | Path | Purpose | Status codes |
+|--------|------|---------|--------------|
+| `GET` | `/v1/sessions/{uid}/git/status` | Working-tree status: branch, `HEAD`, ahead/behind vs `origin`, dirty files, recent commits, local `pi/*` branches. | `200`, `404`, `403` |
+| `POST` | `/v1/sessions/{uid}/git/sync` | `git fetch origin` (always) + fast-forward pull of the default branch when the session is idle. | `200`, `404`, `409`, `403` |
+| `POST` | `/v1/sessions/{uid}/git/commit` | Stage + commit the working tree on the feature branch (`message`, `branch_name`); returns the commit sha. | `200`, `404`, `409`, `403` |
+
+### 3.5 Pull requests
+
+| Method | Path | Purpose | Status codes |
+|--------|------|---------|--------------|
+| `GET` | `/v1/pull_requests` | List PRs (filter by `session_uid`, `status`, `repo_uri`). | `200` |
+| `GET` | `/v1/pull_requests/{pr_id}` | PR detail. | `200`, `404`, `403` |
+| `POST` | `/v1/pull_requests` | Create a PR from the session's current branch/commits (`session_uid`, `branch_name?`, `title`, `body?`). | `201`, `400`, `403`, `409` |
+| `PATCH` | `/v1/pull_requests/{pr_id}` | Update `title`/`body`. | `200`, `404`, `403` |
+| `POST` | `/v1/pull_requests/{pr_id}/submit` | Push the feature branch + create the remote PR → `submitted`. | `200`, `404`, `409`, `403` |
+| `POST` | `/v1/pull_requests/{pr_id}/reject` | Local reject → `rejected`. | `200`, `404`, `409`, `403` |
+| `GET` | `/v1/pull_requests/{pr_id}/diff` | Re-derived `git diff base_commit head_commit`. | `200`, `404`, `403` |
+
+### 3.6 Webhook (inbound)
+
+| Method | Path | Purpose | Status codes |
+|--------|------|---------|--------------|
+| `POST` | `/v1/hooks/gitea/pr-state` | Gitea PR/push event receiver (HMAC); mirrors remote PR state. No user JWT. | `200`, `202`, `400` |
+
 ## 4. Request/response examples
 
 ### Create
@@ -98,6 +126,7 @@ Content-Type: application/json
   "kind": "interactive",
   "label": "refactor parser",
   "cwd": "/repo/example",          // or pipeline_id, resolved server-side
+  "repo_uri": "https://gitea/org/example.git", // optional; cloned if set
   "model": "gpt-oss:120",          // optional; else server default
   "skill_names": ["ajapopaja"],
   "metadata": { "pipeline_id": "…", "task_id": "…" }  // opaque passthrough
@@ -140,6 +169,8 @@ POST /v1/sessions/3f6c.../archive
 | 409 | `already_running` | A running session blocks the operation. |
 | 409 | `invalid_state` | Operation not allowed in current state (e.g. pause an archived session). |
 | 429 | `rate_limited` | Too many requests / sessions. |
+| 409 | `git_dirty` | The working tree has uncommitted changes blocking the operation. |
+| 409 | `pr_not_submittable` | PR is not in `open` state / branch or commits are missing. |
 
 ## 6. Relationship to the current ajapopaja API
 

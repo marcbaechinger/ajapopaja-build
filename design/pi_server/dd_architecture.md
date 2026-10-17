@@ -12,6 +12,7 @@ archive independently and hard for other UIs to reuse.
 This document proposes a **standalone Pi process server** ("the server") that:
 
 - manages Pi processes and their durable sessions,
+- gives each session a git workspace and turns its commits into pull requests,
 - exposes the same lifecycle the `coderbot` router offers today, plus archiving,
 - streams live Pi output to remote clients over WebSockets,
 - stores sessions on a controlled filesystem and bookkeeping in MongoDB,
@@ -34,15 +35,20 @@ SDK's in-process API remains a possible later escape hatch for SDK-only features
    render the activity log unchanged.
 4. Persist native Pi conversations and retained workspaces so a session can be
    resumed later (or after a server restart).
-5. Provide token-based authentication and per-session access grants so more than
+5. Give each session a git workspace: clone/init a repository, let the agent
+   commit, and deliver those commits as pull requests to a remote host, keeping
+   the repository until the session is deleted (no patch blob in the DB).
+6. Provide token-based authentication and per-session access grants so more than
    one user (or service) can share the server safely.
-6. Use MongoDB for bookkeeping (users, tokens, sessions, grants) and the
-   filesystem for bulk/append-only artifacts.
+7. Use MongoDB for bookkeeping (users, tokens, sessions, grants, pull requests)
+   and the filesystem for bulk/append-only artifacts.
 
 ### Non-Goals
 
-- Re-implementing ajapopaja's pipelines, tasks, pull requests or Gitea logic.
-  These are carried as opaque metadata on a session.
+- Re-implementing ajapopaja's pipelines and tasks. Those are carried as opaque
+  metadata on a session; pull requests and the git workspace, however, are
+  first-class server concepts (see §8 and
+  [dd_git_workflow.md](dd_git_workflow.md)).
 - General-purpose job orchestration (retries, cron, fan-out). One Pi process per
   running session, bounded by a concurrency cap.
 - Horizontal multi-node execution in the first cut (single writer per session
@@ -66,12 +72,19 @@ flowchart TB
         MGR["SessionManager<br/>(registry, lifecycle, concurrency)"]
         RUN["SessionRunner<br/>(pi --mode rpc subprocess)"]
         SUB["SdkRunner<br/>(SDK in-process, future)"]
+        GIT["GitService<br/>(clone, branch, commit, sync)"]
+        PRM["PullRequestManager<br/>(records, submit, reconcile)"]
+        HOOK["WebhookReceiver<br/>(Gitea pr-state)"]
         EVT["EventBus<br/>(in-process pub/sub)"]
     end
 
     subgraph Store["Persistence"]
-        DB[("MongoDB<br/>users, tokens, sessions, grants")]
+        DB[("MongoDB<br/>users, tokens, sessions, grants, PRs")]
         FS[("PI_SERVER_ROOT<br/>per-session dirs, archives")]
+    end
+
+    subgraph Remote["Remote git host"]
+        GH[("Gitea / GitHub / GitLab")]
     end
 
     UI -->|"REST + WebSocket"| HTTP
@@ -79,12 +92,22 @@ flowchart TB
     HTTP --> AUTH
     WS --> AUTH
     HTTP --> MGR
+    HTTP --> PRM
     MGR --> RUN
     MGR --> SUB
+    MGR --> GIT
     MGR --> DB
     MGR --> FS
+    PRM --> GIT
+    PRM --> DB
+    GIT --> FS
+    GIT --> GH
+    PRM --> GH
+    GH -->|"webhook"| HOOK
+    HOOK --> PRM
     RUN --> EVT
     SUB --> EVT
+    PRM --> EVT
     EVT --> WS
     WS --> UI
 ```
@@ -98,7 +121,10 @@ flowchart TB
 | SessionManager | The analogue of `CoderBotManager`: a registry of `SessionHandle`s, the lifecycle state machine, the concurrency guard, startup reconciliation and archiving/GC. |
 | SessionRunner | Spawns/owns one `pi --mode rpc` subprocess and translates Pi events into server events. Uses the SDK `RpcClient` (or a ported `PiRpcProcess`) over std-I/O by default. |
 | SdkRunner | Optional future runner that drives Pi through the SDK in-process, for SDK-only features (fork/import, session introspection, custom loaders). |
-| EventBus | In-process pub/sub that decouples runners from the WebSocket gateway and the event-log writer. |
+| GitService | Owns the per-session workspace repo: clone/init, branch/commit, fetch/pull sync and status. |
+| PullRequestManager | Owns `pull_requests` records, submission to the remote host, and reconciliation of remote PR state. |
+| WebhookReceiver | HMAC-protected endpoint that receives host PR/push events and feeds the reconciler. |
+| EventBus | In-process pub/sub that decouples runners, the PR manager, the WebSocket gateway and the event-log writer. |
 
 The `SessionRunner` interface is the seam that keeps the subprocess path and an
 in-process SDK path interchangeable:
@@ -183,12 +209,12 @@ with a per-lane lock + `runningSessionId` bookkeeping (mirroring
 
 | Operation | Precondition | Effect |
 |-----------|--------------|--------|
-| `create` | valid repo/pipeline metadata | reserve `uid`, write record + dir, spawn Pi, capture identity, → `running`. |
+| `create` | valid repo/pipeline metadata | reserve `uid`, write record + dir, clone/init the git workspace, spawn Pi, capture identity, → `running`. |
 | `pause` | `running` | graceful `close()`, cancel in-flight turn, → `paused`, `last_active_at=now`. |
 | `resume` | `paused`/`completed`/`failed` | (optionally pause current) respawn Pi with stored session file + cwd, `resume_count++`, → `running`. |
 | `archive` | not `archived`/`deleting` | pause if running, compress `pi-sessions` + `events.jsonl` + `workspace` into `archive/<uid>.tar.zst`, delete hot dir, → `archived`. |
 | `restore` | `archived` | extract bundle back into `sessions/<uid>/`, → `paused` (resume to run). |
-| `delete` | any non-`deleting` | stop process if any, remove record + hot dir + archive, → gone. |
+| `delete` | any non-`deleting` | stop process if any, remove record + hot dir (incl. the git repo) + archive + PR records, → gone. |
 
 ### 4.3 Startup reconciliation
 
@@ -210,7 +236,7 @@ PI_SERVER_ROOT/                       # env PI_SERVER_ROOT (default ./data/pi-se
 │       ├── pi-sessions/              # passed to Pi as --session-dir (SDK sessionDir)
 │       │   └── --<cwd-slug>--/
 │       │       └── <timestamp>_<uuid>.jsonl
-│       └── workspace/                # retained working tree (batch sessions)
+│       └── workspace/                # the session's git clone (working tree + .git)
 ├── archive/                          # cold storage bundles
 │   └── <uid>.tar.zst                 # pi-sessions + events.jsonl + workspace + meta.json
 └── tmp/                              # transient staging (archive/restore)
@@ -227,6 +253,9 @@ Rules:
 - Absolute paths are persisted in the record (cwd, sessionFile, workspace). The
   server must run with the same `PI_SERVER_ROOT` across restarts so those paths
   stay valid (same constraint the current backend documents).
+- `workspace/` is a full git repository (working tree + `.git`). It is created by
+  clone/init at `create`, retained through pause/archive, and removed only on
+  `delete` (see [dd_git_workflow.md](dd_git_workflow.md)).
 
 ## 6. Event Model (server side)
 
@@ -244,7 +273,12 @@ type ServerEvent =
   | { type: "message.delta"; sessionId: string; delta: string }   // derived assistant text
   | { type: "turn.ended"; sessionId: string }
   | { type: "verification.started"; sessionId: string }
-  | { type: "verification.result"; sessionId: string; result: unknown };
+  | { type: "verification.result"; sessionId: string; result: unknown }
+  | { type: "pr.created"; sessionId: string; pr: PullRequestRecord }
+  | { type: "pr.submitted"; sessionId: string; pr: PullRequestRecord }
+  | { type: "pr.merged"; sessionId: string; pr: PullRequestRecord }
+  | { type: "pr.rejected"; sessionId: string; pr: PullRequestRecord }
+  | { type: "git.status"; sessionId: string; status: GitStatus };
 ```
 
 The `rpc.event` carries the raw Pi SDK event unchanged so the client can render it
@@ -261,7 +295,32 @@ as `CODERBOT_RPC_EVENT` / `INTERACTIVE_RPC_EVENT` today.
   `meta.json` best-effort, then broadcasts.
 - Archive/delete are idempotent and safe to retry.
 
-## 8. Open Questions
+## 8. Git workspace & pull requests
+
+Each session owns a self-contained git repository at its `workspace_path`. The
+server clones (or inits) it at `create`, lets the agent commit on a `pi/<pr_id>`
+feature branch, and turns those commits into `pull_requests` rows — **without**
+storing a patch blob: the PR references `branch_name` + `head_commit`, and its
+diff is re-derived with `git diff base_commit head_commit` whenever needed. The
+repository is retained for the whole session lifetime (hot or archived) and
+removed only on `delete`.
+
+The dedicated components are `GitService` (clone/init, branch/commit, fetch/pull
+sync, status), `PullRequestManager` (records, submission, reconciliation) and
+`WebhookReceiver` (HMAC-protected Gitea `pr-state` hook). PRs move through
+`open → submitted → merged | rejected` (plus `superseded` for iterations); a
+remote merge/close is mirrored back by webhook or poller, and the workspace is
+kept in sync with `origin` via fetch (always safe) + fast-forward pull (only when
+idle).
+
+The full workflow — repo creation, branches/commits, the `pull_requests` record,
+submission, remote-state reconciliation, sync and authentication — is specified
+in [dd_git_workflow.md](dd_git_workflow.md). The REST endpoints for PR and git
+status/sync management are in [dd_rest_api.md](dd_rest_api.md), the data model
+in [dd_data_model_auth.md](dd_data_model_auth.md), and the `pr.*` / `git.status`
+events in [dd_websocket_protocol.md](dd_websocket_protocol.md).
+
+## 9. Open Questions
 
 | Question | Current lean |
 |----------|--------------|
@@ -269,3 +328,4 @@ as `CODERBOT_RPC_EVENT` / `INTERACTIVE_RPC_EVENT` today.
 | Archive format | `tar.zst` (good compression + streaming); revisit if random-access needed. |
 | Multi-node | Single writer per session dir for v1; a shared volume + DB lock is the likely first step if scale requires. |
 | Compatibility with ajapopaja's existing WS types | Emit both namespaced `session.*`/`rpc.event` and legacy `INTERACTIVE_RPC_EVENT`-style aliases during migration (§ WS doc). |
+| Git PR chaining / ordering | Not needed for v1; one PR branches from the default branch. Revisit ordered chaining (and its rejection semantics) only if ordered multi-PR sessions are required (§ git doc). |

@@ -19,6 +19,7 @@ erDiagram
     users ||--o{ sessions : "owns"
     users ||--o{ grants : "receives"
     sessions ||--o{ grants : "has"
+    sessions ||--o{ pull_requests : "owns"
 
     users {
         string _id
@@ -47,6 +48,7 @@ erDiagram
         string owner
         string label
         string cwd
+        string repo_uri
         string model
         array skill_names
         string session_dir
@@ -54,6 +56,18 @@ erDiagram
         string workspace_path
         datetime archived_at
         datetime last_active_at
+    }
+    pull_requests {
+        string pr_id
+        string session_uid
+        string repo_uri
+        string branch_name
+        string base_branch
+        string base_commit
+        string head_commit
+        string status
+        string remote_pr_url
+        datetime created_at
     }
     grants {
         string session_uid
@@ -113,7 +127,8 @@ The `PiSession` document, generalized from the current backend model:
 | `pull_request_ids` | string[] | optional caller metadata. |
 | `pi_session_id` / `pi_session_file` / `session_dir` | string \| null | native Pi identity (from `get_state`). |
 | `cwd` | string \| null | working directory the process runs in. |
-| `workspace_path` | string \| null | retained working tree. |
+| `repo_uri` | string \| null | the remote `origin` the workspace tracks (when cloned). |
+| `workspace_path` | string \| null | the session's git clone (working tree + `.git`). |
 | `model` | string \| null | model override. |
 | `skill_names` | string[] | skills staged for the session. |
 | `bot_type` | string | `interactive` (discriminator kept for WS compatibility). |
@@ -136,6 +151,30 @@ Per-session access grants (see §4):
 | `created_at` | datetime | |
 
 Unique compound index on `(session_uid, user_id)`.
+
+### 2.5 `pull_requests`
+
+One document per PR created from a session. **No patch blob** — the record
+references the feature branch and commits in the session's workspace (see
+[dd_git_workflow.md](dd_git_workflow.md)).
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `pr_id` | string | short unique id (base62), used in branch names + URLs; unique index. |
+| `session_uid` | string | owning session; indexed. |
+| `repo_uri` | string | the `origin` the PR targets. |
+| `branch_name` | string | feature branch in `W` (default `pi/<pr_id>`). |
+| `base_branch` | string | target branch on `origin` (default: its default branch). |
+| `title` | string | PR subject. |
+| `body` | string \| null | markdown summary/description. |
+| `base_commit` | string | branch-point commit sha. |
+| `head_commit` | string | feature-tip commit sha. |
+| `status` | string | `open` \| `submitted` \| `merged` \| `rejected` \| `superseded`. |
+| `remote_pr_url` | string \| null | set when `submitted`. |
+| `remote_pr_number` | int \| null | set when `submitted`. |
+| `superseded_by` | string \| null | `pr_id` of a later PR replacing this one. |
+| `created_at` / `updated_at` | datetime | |
+| `submitted_at` / `merged_at` / `rejected_at` | datetime \| null | |
 
 ## 3. Authentication (token based)
 
@@ -217,3 +256,7 @@ than just the ajapopaja backend — the current backend only stores an optional
   backend already documents this).
 - Archive bundles are stored unencrypted by default; an optional encryption key
   (`ARCHIVE_KEY`) can be added if the repo content is sensitive.
+- Git credentials (HTTPS PAT) are resolved per-session (`repo_username` /
+  `repo_token`) → global (`GIT_PUSH_USERNAME` / `GIT_PUSH_TOKEN`) → none, and are
+  injected per-op via `http.extraHeader`, never stored in `repo_uri` or logs (see
+  [dd_git_workflow.md](dd_git_workflow.md) §11).

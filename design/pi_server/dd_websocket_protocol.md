@@ -13,6 +13,7 @@ migration.
 The client does **not** drive the session over the WebSocket; lifecycle actions
 stay on the REST API (single writer, idempotent, easily authenticated). The
 WebSocket is the *read* stream, plus a small set of subscribe/ping controls.
+Pull-request and git-status updates are streamed read-only the same way.
 
 ## 2. Transport & authentication
 
@@ -61,6 +62,11 @@ existing `WebSocketClient`/`WSHandler` code ports over with minimal change.
 | `verification.started` | `{ session_uid }` | Post-run verification began. |
 | `verification.result` | `{ session_uid, result }` | Verification outcome (commands, exit codes, durations). |
 | `subscribed` | `{ session_uid }` | Subscription acknowledged. |
+| `pr.created` | `{ session_uid, pr }` | A pull-request record was created or updated. |
+| `pr.submitted` | `{ session_uid, pr }` | The remote PR was created (branch pushed). |
+| `pr.merged` | `{ session_uid, pr }` | Remote PR merged (reconciled). |
+| `pr.rejected` | `{ session_uid, pr }` | Remote PR closed unmerged, or local reject. |
+| `git.status` | `{ session_uid, status }` | Git status refresh available (debounced). |
 | `error` | `{ code, message }` | Protocol-level error. |
 
 ### 4.2 Client → server
