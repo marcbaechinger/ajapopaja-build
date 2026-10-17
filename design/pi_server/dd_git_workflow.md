@@ -15,16 +15,12 @@ covers, end to end:
   optional poller),
 - keeping the workspace repo in sync with the remote.
 
-It adapts the ajapopaja git design docs
-(`design/git/dd_batch_coderbot_git_process.md`, `dd_git_hosting.md`,
-`dd_git_authentication.md`, `dd_task_chain_rejection_lifecycle.md`) to the
-session-centric standalone server, and is the git counterpart of
-[`dd_architecture.md`](dd_architecture.md). The REST endpoints it references are
-specified in [`dd_rest_api.md`](dd_rest_api.md), the data model in
-[`dd_data_model_auth.md`](dd_data_model_auth.md), and the WebSocket events in
-[`dd_websocket_protocol.md`](dd_websocket_protocol.md).
+It is the git counterpart of [`dd_architecture.md`](dd_architecture.md). The REST
+endpoints it references are specified in [`dd_rest_api.md`](dd_rest_api.md), the
+data model in [`dd_data_model_auth.md`](dd_data_model_auth.md), and the WebSocket
+events in [`dd_websocket_protocol.md`](dd_websocket_protocol.md).
 
-## 2. Core idea and the key difference from ajapopaja
+## 2. Core idea
 
 Each session owns its workspace as a **self-contained git repository**. The agent
 works inside that repository, producing commits on a feature branch. A
@@ -32,18 +28,10 @@ works inside that repository, producing commits on a feature branch. A
 **not** a copy of the diff. The repository is retained for the whole lifetime of
 the session (hot or archived) and only goes away when the session is deleted.
 
-| Concern | Ajapopaja (today) | Pi process server (this doc) |
-|---------|-------------------|------------------------------|
-| Workspace | Durable pipeline repo `R` **plus** a per-task sandbox `S` (clone of `R`) | The session's own `workspace` clone; no separate `R`/`S` split |
-| PR content | `patch` blob stored on the `PullRequest` document | No patch; the PR references `branch_name` + `head_commit` in the workspace |
-| Repo lifetime | `R` persists per pipeline; `S` is swept by TTL | The workspace lives as long as the session (hot or archive); deleted with the session |
-| Delivery | Apply patch + commit into `R`, optionally push / open Gitea PR | Push the feature branch and open a remote PR directly |
-| Remote outcome | Not observed (in the original design) | Reconciled back via webhook + poller |
-
-The "keep the repo as long as the session is not deleted" rule is the reason we
-can drop the patch blob: the commit objects stay in the workspace, so the PR can
-always re-derive its diff (`git diff <base_commit> <head_commit>`) instead of
-storing one.
+Because the commit objects stay in the workspace, the PR does not need to store a
+patch blob: its diff is always re-derivable with
+`git diff <base_commit> <head_commit>`. That is the concrete meaning of "keep a
+given repo as long as the session is not deleted."
 
 ## 3. Repositories and branches
 
@@ -54,18 +42,17 @@ storing one.
 | `origin` | The remote upstream the workspace tracks (e.g. `https://gitea/org/repo.git`). | remote | Exists independently of the server. |
 | `W` | The session's working repository. | `sessions/<uid>/workspace` | Created at session `create`; retained until `delete`; bundled on `archive`. |
 
-There is **no** separate durable pipeline repository. A session's `cwd` and
-`workspace_path` are the same directory: the Pi process runs *in* the workspace
-clone.
+There is **no** separate durable repository besides the workspace itself. A
+session's `cwd` and `workspace_path` are the same directory: the Pi process runs
+*in* the workspace clone.
 
 ### 3.2 Branches
 
 - **Default branch** — `origin`'s default (e.g. `main`). The workspace is kept in
   sync with it (fetch + fast-forward), and it is checked out whenever the session
   is idle.
-- **Feature branch** — one per PR, named `pi/<pr_id>` (a `coderbot/<task_id>`
-  name is accepted as an alias when the caller supplies `task_id` metadata). The
-  agent's commits for that PR live here.
+- **Feature branch** — one per PR, named `pi/<pr_id>`. The agent's commits for
+  that PR live here.
 - **`origin` mirror refs** — `refs/remotes/origin/*`, updated by fetch; used for
   sync and reconciliation without touching the working tree.
 
@@ -80,8 +67,7 @@ The agent edits files in `W`. Commits are produced in one of two ways:
    directly (typical for interactive sessions).
 2. **Server-created** — at the end of a batch run, the server stages and commits
    the working tree (`git add -A` + `git commit --no-verify`) on the feature
-   branch, mirroring ajapopaja's `_handle_agent_end()`. This guarantees a commit
-   exists even when the agent only edited files.
+   branch. This guarantees a commit exists even when the agent only edited files.
 
 Every PR records two commit points:
 
@@ -188,8 +174,8 @@ At session `create`:
 3. Optional remote bootstrap: when the caller asks to *create* a fresh remote
    (`create_remote: true`), the server calls the host API (e.g. Gitea
    `POST /api/v1/user/repos`) first, then clones from the returned `repo_uri`.
-   This is the "creation of a repo" step for pipelines that start empty rather
-   than cloning an existing one.
+   This is the "creation of a repo" step for callers that want to start empty
+   rather than clone an existing repository.
 
 Cloning is performed with the session's git credentials (§11). On `resume` and on
 webhook receipt the workspace is re-synced (§10).
@@ -222,9 +208,6 @@ resolved token (§11).
 - dirty/untracked file summary,
 - recent commits and the list of local `pi/*` branches.
 
-This is the debounced data the ajapopaja `PipelineDetailView` fetches today
-(`design/git/dd_git_status_debounce.md`).
-
 ### 10.2 Sync operations
 
 | Operation | Effect | Safe while running? |
@@ -235,8 +218,7 @@ This is the debounced data the ajapopaja `PipelineDetailView` fetches today
 
 Sync is triggered on demand (a `POST …/git/sync` endpoint) and by the webhook
 reconciler. A pull is **deferred** while a session is running; the DB mirror is
-always applied, and the client is offered a "pull now" action (mirroring
-ajapopaja's deferred-pull behaviour in `dd_git_hosting.md` §5.4).
+always applied, and the client is offered a "pull now" action.
 
 ### 10.3 Webhook receiver
 
@@ -273,7 +255,7 @@ poller covers missed or unregistered webhooks.
 
 ## 11. Git authentication
 
-Credentials are resolved the same way as ajapopaja's `dd_git_authentication.md`:
+Credentials are resolved as follows:
 
 - **HTTPS + Personal Access Token** is the primary mechanism.
 - Resolution order: **session-level `repo_username`/`repo_token` → global
@@ -337,7 +319,7 @@ The following `pr.*` events are emitted on the EventBus/WebSocket (full table in
 
 | Question | Current lean |
 |----------|--------------|
-| Chaining PRs | Not needed for v1; each PR branches from the default branch. Revisit ordered branch-chaining (and its rejection semantics from `dd_task_chain_rejection_lifecycle.md`) only if sessions need ordered multi-PR pipelines. |
+| Chaining PRs | Not needed for v1; each PR branches from the default branch. Revisit ordered branch-chaining (and its rejection semantics) only if sessions need ordered multi-PR work. |
 | Remote PR creation scope | v1 targets Gitea; the host API is behind a small `GitHostClient` interface so GitHub/GitLab can be added. |
 | `repo_uri` vs per-PR target | One `origin` per session for v1; a PR can override `base_branch` but not the host. |
 | Diff endpoint | Re-derived on demand (`git diff`); add caching only if it becomes a hot path. |

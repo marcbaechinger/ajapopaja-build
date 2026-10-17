@@ -3,12 +3,11 @@
 ## 1. Overview
 
 The WebSocket channel delivers live session status and Pi output to remote
-clients so a `PiView` (as in ajapopaja) can render the activity log. The protocol
-is a deliberate superset of the message types the ajapopaja backend broadcasts
-today (`INTERACTIVE_STARTED/STOPPED/RPC_EVENT/TURN_ENDED/ERROR`,
-`CODERBOT_STARTED/RPC_EVENT/VERIFICATION/…`, `SESSION_UPDATED`), reorganized
-under a `session.*` / `rpc.event` namespace with legacy aliases for smooth
-migration.
+clients so a log view can render the activity stream. Messages are organized
+under a small set of namespaces — `session.*` for lifecycle, `rpc.event` for raw
+Pi events, `message.delta` for streamed assistant text, `pr.*` for pull requests,
+and `git.status` for git state — so a client can subscribe once and receive the
+full live picture of a session.
 
 The client does **not** drive the session over the WebSocket; lifecycle actions
 stay on the REST API (single writer, idempotent, easily authenticated). The
@@ -21,8 +20,8 @@ Pull-request and git-status updates are streamed read-only the same way.
   subprotocol). The token authenticates the connection and determines which
   sessions the client may subscribe to (§ data-model doc for grants).
 - On an invalid/expired token the server closes the handshake with close code
-  `1008` (policy violation), matching the current backend's behaviour so the
-  client's reconnect/refresh logic works unchanged.
+  `1008` (policy violation). Clients should treat `1008` as a signal to
+  re-authenticate (refresh the token) and reconnect.
 - The server sends `{ type: "hello", ... }` immediately after accept and
   heartbeats (`ping`/`pong`) to detect dead connections.
 
@@ -39,8 +38,9 @@ Every message is a single JSON text frame:
 }
 ```
 
-This mirrors the ajapopaja `WSMessage(type, id, payload)` shape exactly, so the
-existing `WebSocketClient`/`WSHandler` code ports over with minimal change.
+The `type`/`id`/`payload` shape is the single envelope for every message;
+session-scoped messages additionally carry `session_uid` so a client can
+multiplex many sessions over one connection.
 
 ## 4. Message types
 
@@ -77,27 +77,27 @@ existing `WebSocketClient`/`WSHandler` code ports over with minimal change.
 | `unsubscribe` | `{ session_uid }` | Stop receiving a session's stream. |
 | `ping` | `{}` | Liveness; server replies `pong`. |
 
-## 5. Mapping to PiView
+## 5. Rendering model (client side)
 
-The ajapopaja `PiView` consumes a `PiSessionService` whose output is a list of
-`RenderBlock`s (kinds: `text`, `thinking`, `tool`, `bash`, `notice`, `error`,
-`divider`, `verification`). The server does **not** emit `RenderBlock`s; it emits
-raw Pi events and derived deltas, and the client's `PiLogReducer` reduces them to
-blocks — exactly as `InteractiveCodingService`/`CoderBotService` do today.
+The server stays **UI-agnostic**: it emits raw Pi events and a few derived
+deltas, and leaves presentation to the client. A client typically feeds the
+stream into a reducer that turns it into render blocks (`text`, `thinking`,
+`tool`, `bash`, `notice`, `error`, `divider`, `verification`), and a session
+service that tracks lifecycle state (`isActive`, `busy`, `startTime`, `model`).
 
 ```mermaid
 flowchart LR
-    S["Pi Process Server"] -->|"rpc.event (raw)"| W["WebSocketClient"]
+    S["Pi Process Server"] -->|"rpc.event (raw)"| W["WebSocket client"]
     S -->|"message.delta"| W
     S -->|"session.started / stopped / error"| W
-    W --> R["PiLogReducer.handleEvent()"]
-    W --> SVC["InteractiveCodingService / CoderBotService"]
-    R --> V["PiView (RenderBlock[])"]
+    S -->|"pr.* / git.status"| W
+    W --> R["Event reducer"]
+    W --> SVC["Session service"]
+    R --> V["Activity log (render blocks)"]
     SVC --> V
 ```
 
-Client-side reducer handling (already implemented in `PiLogReducer.handleEvent`)
-is fed by `rpc.event.payload.event`, whose `type` field selects the block:
+The reducer keys off `rpc.event.payload.event.type` to choose a render block:
 
 | Pi event `type` | Rendered block |
 |-----------------|----------------|
@@ -111,44 +111,22 @@ is fed by `rpc.event.payload.event`, whose `type` field selects the block:
 | `auto_retry_*`, `summarization_*` | `notice` |
 | `extension_error` | `error` |
 
-`verification.result` maps to `PiLogReducer.addVerificationBlock(result)`, and
-`session.started`/`session.stopped`/`session.error`/`turn.ended` map to the
-`PiSessionService` lifecycle callbacks (`isActive`, `busy`, `startTime`, `model`).
+`verification.result` feeds a `verification` render block, and
+`session.started`/`session.stopped`/`session.error`/`turn.ended` update the
+session service's lifecycle state (`isActive`, `busy`, `startTime`, `model`).
 
 ## 6. Access filtering
 
 The gateway fans out events only to connections that (a) hold a valid token and
 (b) have an active grant on the session (`subscribe` succeeded or an
 owner/editor/viewer grant exists). Filtering is per message so a client with
-access to sessions A and B never receives C's stream. This is the remote
-equivalent of the current backend's `pipeline_id`/`bot_type`/`session_uid`
-filtering in `InteractiveCodingService.matches()`.
+access to sessions A and B never receives C's stream. Filtering is keyed on
+`session_uid`, per message.
 
-## 7. Legacy aliases (migration)
-
-During migration from the embedded backend, the server may additionally emit the
-old types so the existing ajapopaja UI keeps working without a coordinated
-cutover:
-
-| New | Legacy alias |
-|-----|--------------|
-| `session.started` (interactive) | `INTERACTIVE_STARTED` |
-| `session.stopped` (interactive) | `INTERACTIVE_STOPPED` |
-| `rpc.event` (interactive) | `INTERACTIVE_RPC_EVENT` |
-| `rpc.event` (batch) | `CODERBOT_RPC_EVENT` |
-| `message.delta` | `ASSISTANT_STREAM` |
-| `turn.ended` | `INTERACTIVE_TURN_ENDED` |
-| `session.error` | `INTERACTIVE_ERROR` |
-| `session.updated` | `SESSION_UPDATED` |
-| `verification.started` / `verification.result` | `CODERBOT_VERIFICATION_STARTED` / `CODERBOT_VERIFICATION` |
-
-The aliases are opt-in via a server flag and are removed once clients move to
-the new namespace.
-
-## 8. Replay & reconnect
+## 7. Replay & reconnect
 
 A client that (re)connects mid-session or after a pause calls
 `GET /v1/sessions/{uid}/history` to replay `events.jsonl`, then subscribes for the
-live stream — the same pattern `InteractiveCodingService.resumeSession` /
-`CoderBotService.reconnect` use today, including the `suspendEmits()` batching to
-avoid O(n²) reconciliation during replay.
+live stream. To avoid double-applying events during the handoff from replay to
+live, the client buffers live events while replaying and flushes them once the
+subscription is established, keeping reconciliation O(n) rather than O(n²).

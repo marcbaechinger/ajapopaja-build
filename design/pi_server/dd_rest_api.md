@@ -2,11 +2,9 @@
 
 ## 1. Overview
 
-The server exposes a JSON REST API for remote session management. It is the
-superset of the endpoints the ajapopaja `coderbot` router offers today
-(`/coderbot/sessions`, `/coderbot/interactive/*`, `/coderbot/trigger/*`,
-`/coderbot/stop/*`), reorganized under a `/v1/sessions` resource and extended
-with archiving/restoring and git workspace + pull-request management
+The server exposes a JSON REST API for remote session management, organized
+under a `/v1/sessions` resource plus `/v1/pull_requests` for the git workflow,
+with archiving/restoring and git workspace management
 (see [dd_git_workflow.md](dd_git_workflow.md)).
 
 All endpoints require a bearer token (`Authorization: Bearer <token>`) except
@@ -26,12 +24,11 @@ Conventions:
 ```jsonc
 {
   "uid": "3f6c...",
-  "kind": "interactive",            // "interactive" | "batch" (aliases coderbot)
+  "kind": "interactive",            // "interactive" | "batch"
   "status": "running",              // lifecycle state (§ architecture)
   "owner": "alice",
   "label": "refactor parser",
-  "pipeline_id": "…",               // opaque caller metadata
-  "task_id": "…",
+  "metadata": { "…": "…" },         // opaque caller metadata (key-value)
   "pi_session_id": "…",
   "pi_session_file": "/data/…/sessions/<uid>/pi-sessions/--cwd--/….jsonl",
   "session_dir": "/data/…/sessions/<uid>/pi-sessions",
@@ -39,7 +36,7 @@ Conventions:
   "repo_uri": "https://gitea/org/repo.git",   // remote origin (when cloned)
   "workspace_path": "/data/…/sessions/<uid>/workspace",
   "model": "gpt-oss:120",
-  "skill_names": ["ajapopaja"],
+  "skill_names": ["code-review"],
   "bot_type": "interactive",
   "resume_count": 2,
   "last_error": null,
@@ -67,7 +64,7 @@ Conventions:
 | Method | Path | Purpose | Status codes |
 |--------|------|---------|--------------|
 | `POST` | `/v1/sessions` | Create + start a session. | `201`, `400`, `401`, `403`, `409` |
-| `GET` | `/v1/sessions` | List sessions (filter by `kind`, `status`, `owner`, `pipeline_id`, `archived`). | `200` |
+| `GET` | `/v1/sessions` | List sessions (filter by `kind`, `status`, `owner`, `metadata`, `archived`). | `200` |
 | `GET` | `/v1/sessions/{uid}` | Session detail. | `200`, `404`, `403` |
 | `PATCH` | `/v1/sessions/{uid}` | Update mutable fields (`label`, `model`). | `200`, `404`, `403` |
 | `POST` | `/v1/sessions/{uid}/pause` | Persist + stop, keep resumable. | `200`, `404`, `409`, `403` |
@@ -125,11 +122,11 @@ Content-Type: application/json
 {
   "kind": "interactive",
   "label": "refactor parser",
-  "cwd": "/repo/example",          // or pipeline_id, resolved server-side
+  "cwd": "/repo/example",          // working directory; defaults to the workspace
   "repo_uri": "https://gitea/org/example.git", // optional; cloned if set
   "model": "gpt-oss:120",          // optional; else server default
-  "skill_names": ["ajapopaja"],
-  "metadata": { "pipeline_id": "…", "task_id": "…" }  // opaque passthrough
+  "skill_names": ["code-review"],
+  "metadata": { "project": "…", "issue": "…" }  // opaque passthrough
 }
 ```
 
@@ -171,26 +168,3 @@ POST /v1/sessions/3f6c.../archive
 | 429 | `rate_limited` | Too many requests / sessions. |
 | 409 | `git_dirty` | The working tree has uncommitted changes blocking the operation. |
 | 409 | `pr_not_submittable` | PR is not in `open` state / branch or commits are missing. |
-
-## 6. Relationship to the current ajapopaja API
-
-| Today (`/api/coderbot/...`) | This server (`/v1/...`) |
-|-----------------------------|--------------------------|
-| `GET /sessions` | `GET /sessions` |
-| `POST /sessions` | `POST /sessions` |
-| `GET /sessions/{uid}` | `GET /sessions/{uid}` |
-| `PATCH /sessions/{uid}` | `PATCH /sessions/{uid}` |
-| `POST /sessions/{uid}/pause` | `POST /sessions/{uid}/pause` |
-| `POST /sessions/{uid}/resume` | `POST /sessions/{uid}/resume` |
-| `POST /sessions/{uid}/message` | `POST /sessions/{uid}/message` |
-| `POST /sessions/{uid}/discard` | `DELETE /sessions/{uid}` (delete) or `POST .../archive` (cold) |
-| `GET /sessions/{uid}/history` | `GET /sessions/{uid}/history` |
-| `GET /sessions/{uid}/messages` | `GET /sessions/{uid}/messages` |
-| `POST /interactive/start/{pipeline_id}` | `POST /sessions` with `kind=interactive` |
-| `POST /interactive/message` | `POST /sessions/{uid}/message` |
-| `POST /interactive/stop` | `POST /sessions/{uid}/pause` |
-| `POST /trigger/{task_id}`, `POST /stop/{task_id}` | caller-side; not owned by this server |
-
-The `discard` semantics split into **delete** (permanent) and **archive**
-(recoverable), which is the new capability this server adds on top of the
-current backend.

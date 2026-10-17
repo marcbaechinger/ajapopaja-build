@@ -122,8 +122,7 @@ The session document:
 | `status` | string | lifecycle state (§ architecture). |
 | `owner` | string | username of the creating user. |
 | `label` | string \| null | human-readable name. |
-| `pipeline_id` / `task_id` | string \| null | opaque caller metadata. |
-| `pull_request_ids` | string[] | optional caller metadata. |
+| `metadata` | object | opaque caller metadata (arbitrary key-value passthrough). |
 | `pi_session_id` / `pi_session_file` / `session_dir` | string \| null | native Pi identity (from `get_state`). |
 | `cwd` | string \| null | working directory the process runs in. |
 | `repo_uri` | string \| null | the remote `origin` the workspace tracks (when cloned). |
