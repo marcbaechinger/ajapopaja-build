@@ -1,12 +1,10 @@
 # Pi Process Server — Design Overview
 
-This directory holds the design for a **standalone Pi process manager server**. It
-extracts the session-management functionality currently embedded in the
-ajapopaja backend (`backend/api/src/api/coderbot/manager.py`,
-`session.py`, `pi_rpc_process.py`, `pi_session_store.py`) into a separate,
-independently deployable service. A remote UI (such as the ajapopaja UI) can then
-create, pause, resume, archive and delete Pi sessions that are executed, stored
-and archived by this server.
+This directory holds the design for a **standalone Pi process manager server**: a
+separately deployable service that owns the lifecycle of Pi coding-agent
+processes and their durable state. Any remote UI (or CLI) can create, pause,
+resume, archive and delete Pi sessions that are executed, stored and archived by
+this server.
 
 The server is a Node.js / TypeScript application because the Pi SDK is built for
 Node.js; it drives Pi through `pi --mode rpc` subprocesses over std-I/O.
@@ -18,7 +16,7 @@ Node.js; it drives Pi through `pi --mode rpc` subprocesses over std-I/O.
 | [dd_architecture.md](dd_architecture.md) | Server architecture, components, session lifecycle state machine, on-disk layout. |
 | [dd_git_workflow.md](dd_git_workflow.md) | Git workspace + pull-request workflow: clone, commit, submit, reconcile, sync. |
 | [dd_rest_api.md](dd_rest_api.md) | Public REST API for remote session management. |
-| [dd_websocket_protocol.md](dd_websocket_protocol.md) | WebSocket protocol, message envelope, message types and PiView mapping. |
+| [dd_websocket_protocol.md](dd_websocket_protocol.md) | WebSocket protocol, message envelope, message types and client-side rendering. |
 | [dd_data_model_auth.md](dd_data_model_auth.md) | MongoDB collections/documents, token authentication, session access grants. |
 | [dd_project_structure.md](dd_project_structure.md) | Node/TypeScript project layout, build tooling and dependency plan. |
 
@@ -26,8 +24,8 @@ Node.js; it drives Pi through `pi --mode rpc` subprocesses over std-I/O.
 
 The server is intentionally *focused*: it owns the Pi process lifecycle, the
 git workspace each session works in, and the pull requests produced from it.
-Ajapopaja's *pipeline/task* domain stays out of scope and is carried as opaque
-metadata on a session (e.g. `pipeline_id`, `task_id`). This keeps the server
+Application-specific workflow domains (e.g. pipelines, task queues) stay out of
+scope and are carried as opaque metadata on a session. This keeps the server
 reusable by any UI.
 
 ## Key decisions (summary)

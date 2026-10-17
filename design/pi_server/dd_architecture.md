@@ -2,37 +2,37 @@
 
 ## 1. Overview
 
-Today the ajapopaja backend embeds Pi process management inside its own FastAPI
-process: `CoderBotManager` owns a batch queue plus a single interactive slot, and
-`CoderBotSession` / `InteractivePiSession` spawn `pi --mode rpc` subprocesses and
-speak a JSONL RPC protocol over std-I/O. That works well but couples Pi session
-management to the ajapopaja deployment, making it hard to evolve pause/resume/
-archive independently and hard for other UIs to reuse.
+This document specifies a **standalone Pi process server** ("the server") — a
+separately deployable service that owns the lifecycle of Pi coding-agent
+processes and the durable state they produce. It exists so that session
+management (pause/resume/archive), live output streaming, and git/pull-request
+delivery can be evolved and reused independently of any one front end.
 
-This document proposes a **standalone Pi process server** ("the server") that:
+The server:
 
 - manages Pi processes and their durable sessions,
 - gives each session a git workspace and turns its commits into pull requests,
-- exposes the same lifecycle the `coderbot` router offers today, plus archiving,
+- exposes the full lifecycle (create, run, pause, resume, archive, restore,
+  delete),
 - streams live Pi output to remote clients over WebSockets,
 - stores sessions on a controlled filesystem and bookkeeping in MongoDB,
 - authenticates users with tokens and controls per-session access.
 
-Because the Pi SDK is built for Node.js, the server is a TypeScript application.
-It drives Pi through subprocesses over std-I/O (`pi --mode rpc`), preserving the
-process-isolation and multi-process model the Python backend uses today. The
-SDK's in-process API remains a possible later escape hatch for SDK-only features.
+The server is a TypeScript application (the Pi SDK is built for Node.js) that
+drives Pi through subprocesses over std-I/O (`pi --mode rpc`) for process
+isolation and one-process-per-session concurrency. The SDK's in-process API
+remains a possible later escape hatch for SDK-only features.
 
 ## 2. Goals & Non-Goals
 
 ### Goals
 
-1. Decouple Pi session management from ajapopaja so it can be deployed, scaled
-   and versioned independently.
+1. Keep Pi session management independent of any single application so it can be
+   deployed, scaled and versioned on its own.
 2. Support the full lifecycle: create, run, pause, resume, archive, restore,
    delete — plus transient and failure states.
-3. Stream live Pi events to remote clients so a `PiView` (as in ajapopaja) can
-   render the activity log unchanged.
+3. Stream live Pi events to remote clients so a log view can render the activity
+   stream unchanged.
 4. Persist native Pi conversations and retained workspaces so a session can be
    resumed later (or after a server restart).
 5. Give each session a git workspace: clone/init a repository, let the agent
@@ -45,9 +45,9 @@ SDK's in-process API remains a possible later escape hatch for SDK-only features
 
 ### Non-Goals
 
-- Re-implementing ajapopaja's pipelines and tasks. Those are carried as opaque
-  metadata on a session; pull requests and the git workspace, however, are
-  first-class server concepts (see §8 and
+- Hosting application-specific workflow concepts (e.g. pipelines, task queues).
+  Those are carried as opaque metadata on a session; pull requests and the git
+  workspace, however, are first-class server concepts (see §8 and
   [dd_git_workflow.md](dd_git_workflow.md)).
 - General-purpose job orchestration (retries, cron, fan-out). One Pi process per
   running session, bounded by a concurrency cap.
@@ -61,7 +61,7 @@ SDK's in-process API remains a possible later escape hatch for SDK-only features
 ```mermaid
 flowchart TB
     subgraph Clients["Remote clients"]
-        UI["ajapopaja UI / any PiView host"]
+        UI["Web UI / any log-viewer host"]
         CLI["CLI / automation"]
     end
 
@@ -118,8 +118,8 @@ flowchart TB
 |-----------|----------------|
 | HTTP API layer | REST endpoints for the session lifecycle (§ REST doc), request validation, auth dependency. |
 | WebSocket gateway | Authenticates the handshake, manages subscriptions, fans out events only to clients with access. |
-| SessionManager | The analogue of `CoderBotManager`: a registry of `SessionHandle`s, the lifecycle state machine, the concurrency guard, startup reconciliation and archiving/GC. |
-| SessionRunner | Spawns/owns one `pi --mode rpc` subprocess and translates Pi events into server events. Uses the SDK `RpcClient` (or a ported `PiRpcProcess`) over std-I/O by default. |
+| SessionManager | A registry of `SessionHandle`s: the lifecycle state machine, the concurrency guard, startup reconciliation and archiving/GC. |
+| SessionRunner | Spawns/owns one `pi --mode rpc` subprocess and translates Pi events into server events. Uses the SDK `RpcClient` (or a JSONL RPC client) over std-I/O by default. |
 | SdkRunner | Optional future runner that drives Pi through the SDK in-process, for SDK-only features (fork/import, session introspection, custom loaders). |
 | GitService | Owns the per-session workspace repo: clone/init, branch/commit, fetch/pull sync and status. |
 | PullRequestManager | Owns `pull_requests` records, submission to the remote host, and reconciliation of remote PR state. |
@@ -145,11 +145,11 @@ interface SessionRunner {
 ### 3.3 Why one process per session
 
 A Pi process has a fixed working directory (`cwd`). Different sessions run in
-different repositories, and Pi resolves sessions relative to that cwd. We
-therefore keep the invariant from the current backend: **one Pi process per
-running session**, respawned on demand when a paused/archived session is resumed.
-The manager enforces a configurable concurrency cap (`maxRunning`, default `2`
-to preserve today's one-batch-plus-one-interactive behaviour).
+different repositories, and Pi resolves sessions relative to that cwd. The server
+therefore keeps the invariant of **one Pi process per running session**,
+respawned on demand when a paused/archived session is resumed. The manager
+enforces a configurable concurrency cap (`maxRunning`, default `2` to allow one
+batch plus one interactive session at a time).
 
 ```mermaid
 flowchart LR
@@ -202,14 +202,13 @@ stateDiagram-v2
 
 `paused`, `completed`, `failed` and `archived` are terminal-with-resume. Only one
 record may be `running` (per configured lane) at a time; the manager guards this
-with a per-lane lock + `runningSessionId` bookkeeping (mirroring
-`_interactive_lock` / `_running_uid` today).
+with a per-lane lock plus `runningSessionId` bookkeeping.
 
 ### 4.2 Operations
 
 | Operation | Precondition | Effect |
 |-----------|--------------|--------|
-| `create` | valid repo/pipeline metadata | reserve `uid`, write record + dir, clone/init the git workspace, spawn Pi, capture identity, → `running`. |
+| `create` | valid repo metadata | reserve `uid`, write record + dir, clone/init the git workspace, spawn Pi, capture identity, → `running`. |
 | `pause` | `running` | graceful `close()`, cancel in-flight turn, → `paused`, `last_active_at=now`. |
 | `resume` | `paused`/`completed`/`failed` | (optionally pause current) respawn Pi with stored session file + cwd, `resume_count++`, → `running`. |
 | `archive` | not `archived`/`deleting` | pause if running, compress `pi-sessions` + `events.jsonl` + `workspace` into `archive/<uid>.tar.zst`, delete hot dir, → `archived`. |
@@ -218,7 +217,7 @@ with a per-lane lock + `runningSessionId` bookkeeping (mirroring
 
 ### 4.3 Startup reconciliation
 
-On boot the manager mirrors `reconcile_on_startup()`:
+On boot the manager runs startup reconciliation:
 
 1. Flip every `running` record to `paused` with `last_error = "server restarted"`.
 2. Recover missing `sessionFile` from the `meta.json` sidecar.
@@ -252,7 +251,7 @@ Rules:
   hot directory, so disk cost is bounded and restorable later.
 - Absolute paths are persisted in the record (cwd, sessionFile, workspace). The
   server must run with the same `PI_SERVER_ROOT` across restarts so those paths
-  stay valid (same constraint the current backend documents).
+  stay valid.
 - `workspace/` is a full git repository (working tree + `.git`). It is created by
   clone/init at `create`, retained through pause/archive, and removed only on
   `delete` (see [dd_git_workflow.md](dd_git_workflow.md)).
@@ -282,8 +281,7 @@ type ServerEvent =
 ```
 
 The `rpc.event` carries the raw Pi SDK event unchanged so the client can render it
-structurally without the server knowing every Pi event type — the same principle
-as `CODERBOT_RPC_EVENT` / `INTERACTIVE_RPC_EVENT` today.
+structurally without the server knowing every Pi event type.
 
 ## 7. Concurrency & Reliability
 
@@ -324,8 +322,7 @@ events in [dd_websocket_protocol.md](dd_websocket_protocol.md).
 
 | Question | Current lean |
 |----------|--------------|
-| In-process SDK vs subprocess | Default subprocess (`pi --mode rpc` via `RpcClient`/`PiRpcProcess`) for isolation and multi-process; SDK in-process as a future escape hatch. |
+| In-process SDK vs subprocess | Default subprocess (`pi --mode rpc` via `RpcClient`/JSONL RPC) for isolation and multi-process; SDK in-process as a future escape hatch. |
 | Archive format | `tar.zst` (good compression + streaming); revisit if random-access needed. |
 | Multi-node | Single writer per session dir for v1; a shared volume + DB lock is the likely first step if scale requires. |
-| Compatibility with ajapopaja's existing WS types | Emit both namespaced `session.*`/`rpc.event` and legacy `INTERACTIVE_RPC_EVENT`-style aliases during migration (§ WS doc). |
 | Git PR chaining / ordering | Not needed for v1; one PR branches from the default branch. Revisit ordered chaining (and its rejection semantics) only if ordered multi-PR sessions are required (§ git doc). |

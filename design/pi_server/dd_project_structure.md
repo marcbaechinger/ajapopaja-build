@@ -97,20 +97,20 @@ pi-process-server/
 
 ## 4. Key modules
 
-| Module | Responsibility | Ports from (today) |
-|--------|----------------|--------------------|
-| `session/manager.ts` | registry, concurrency guard, lifecycle ops, reconcile | `CoderBotManager` |
-| `session/lifecycle.ts` | state machine + transitions + guards | status enum logic |
-| `runner/subprocess-runner.ts` | spawn `pi --mode rpc` via `RpcClient`, capture identity, relay events | `PiRpcProcess` verbatim |
-| `runner/sdk-runner.ts` | in-process Pi SDK (future) | `InteractivePiSession` |
-| `store/models/session.ts` | `PiSession` document | `PiSession` model |
-| `fs/layout.ts` + `fs/event-log.ts` + `fs/meta.ts` | on-disk layout, event replay, crash sidecar | `pi_session_store.py` |
-| `fs/archive.ts` | archive/restore bundles | new |
-| `server/ws/protocol.ts` | WS envelope + types + legacy aliases | `websocket_manager.py` + `WSMessage` |
-| `server/middleware/authn.ts` + `authz.ts` | token resolution + grant checks | `api/auth.py` |
-| `git/service.ts` + `git/status.ts` | workspace clone/commit/sync + status | `SandboxGitHelper` + `git_helper.py` |
-| `pr/manager.ts` + `pr/submit.ts` + `pr/reconcile.ts` | PR records, remote submission, reconciliation | `routes/pull_request.py` + `GiteaClient` |
-| `server/http/hooks.ts` | Gitea `pr-state` webhook receiver | `api/git_hosting/*` |
+| Module | Responsibility |
+|--------|----------------|
+| `session/manager.ts` | registry, concurrency guard, lifecycle ops, reconcile |
+| `session/lifecycle.ts` | state machine + transitions + guards |
+| `runner/subprocess-runner.ts` | spawn `pi --mode rpc` via `RpcClient`, capture identity, relay events |
+| `runner/sdk-runner.ts` | in-process Pi SDK (future) |
+| `store/models/session.ts` | session document |
+| `fs/layout.ts` + `fs/event-log.ts` + `fs/meta.ts` | on-disk layout, event replay, crash sidecar |
+| `fs/archive.ts` | archive/restore bundles |
+| `server/ws/protocol.ts` | WS envelope + message types |
+| `server/middleware/authn.ts` + `authz.ts` | token resolution + grant checks |
+| `git/service.ts` + `git/status.ts` | workspace clone/commit/sync + status |
+| `pr/manager.ts` + `pr/submit.ts` + `pr/reconcile.ts` | PR records, remote submission, reconciliation |
+| `server/http/hooks.ts` | Gitea `pr-state` webhook receiver |
 
 ## 5. Dependencies (npm)
 
@@ -183,10 +183,10 @@ Build outputs to `dist/` (ESM, NodeNext). CI runs `lint` + `typecheck` + `test`
 ## 8. Why the subprocess runner (and when to use the SDK)
 
 - **Subprocess (`subprocess-runner.ts`)** is the default: it drives `pi --mode rpc`
-  over std-I/O (via the SDK `RpcClient` or a ported `PiRpcProcess`), which gives
-  OS-level process isolation, one process per session `cwd`, and parity with the
-  current Python backend — including the built-in codemode/MCP extensions the CLI
-  loads automatically.
+  over std-I/O (via the SDK `RpcClient`), which gives OS-level process isolation
+  and one process per session `cwd`. The `pi` CLI also loads its built-in
+  codemode/MCP extensions automatically, which the in-process SDK path would
+  require setting up manually.
 - **In-process (`sdk-runner.ts`)** is a future escape hatch for SDK-only features
   (fork/import, session introspection, custom resource loaders).
 
@@ -195,11 +195,11 @@ Both implement `SessionRunner`, so the manager is agnostic to the transport.
 ## 9. Incremental build plan
 
 1. **Skeleton:** config, logger, HTTP server, Mongo connection, `/health`.
-2. **Runner:** `subprocess-runner.ts` (port of `PiRpcProcess`) first, to reach
-   parity with the current backend quickly; then `sdk-runner.ts`.
+2. **Runner:** `subprocess-runner.ts` (`pi --mode rpc` via `RpcClient`) first;
+   then `sdk-runner.ts`.
 3. **Manager + lifecycle:** registry, create/pause/resume, concurrency, reconcile.
 4. **Storage:** layout, event log, meta sidecar, archive/restore.
 5. **Git + PR:** workspace clone/init, commit/sync, PR records, submit, webhook/poller reconcile.
 6. **Auth + grants:** login/refresh, PATs, grant middleware.
-7. **WebSocket:** gateway, subscription, fan-out, legacy aliases.
+7. **WebSocket:** gateway, subscription, fan-out.
 8. **Hardening:** tests, Dockerfile, docs.
