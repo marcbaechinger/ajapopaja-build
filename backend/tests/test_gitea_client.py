@@ -286,3 +286,61 @@ async def test_ensure_pr_state_webhook_skips_existing_target():
     # Only the list call happened; no POST.
     assert mock_req.await_count == 1
     assert mock_req.await_args.args[0] == "GET"
+
+
+@pytest.mark.asyncio
+async def test_delete_branch_builds_encoded_request_and_accepts_204():
+    client = GiteaClient("https://host", "tok")
+    response = MagicMock()
+    response.status_code = 204
+    response.text = ""
+
+    with patch.object(
+        client._client, "request", new=AsyncMock(return_value=response)
+    ) as mock_req:
+        await client.delete_branch("owner", "repo", "coderbot/task 1")
+
+    args, _ = mock_req.await_args
+    assert args[0] == "DELETE"
+    assert (
+        args[1] == "https://host/api/v1/repos/owner/repo/branches/coderbot%2Ftask%201"
+    )
+
+
+@pytest.mark.asyncio
+async def test_delete_branch_treats_404_as_missing_ok():
+    client = GiteaClient("https://host", "tok")
+    response = MagicMock()
+    response.status_code = 404
+    response.text = '{"message":"not found"}'
+
+    with patch.object(client._client, "request", new=AsyncMock(return_value=response)):
+        await client.delete_branch("owner", "repo", "coderbot/t1", missing_ok=True)
+
+
+@pytest.mark.asyncio
+async def test_delete_branch_404_raises_when_missing_not_ok():
+    client = GiteaClient("https://host", "tok")
+    response = MagicMock()
+    response.status_code = 404
+    response.text = '{"message":"not found"}'
+
+    with patch.object(client._client, "request", new=AsyncMock(return_value=response)):
+        with pytest.raises(GiteaApiError) as excinfo:
+            await client.delete_branch("owner", "repo", "coderbot/t1", missing_ok=False)
+
+    assert excinfo.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_branch_raises_on_500():
+    client = GiteaClient("https://host", "tok")
+    response = MagicMock()
+    response.status_code = 500
+    response.text = "boom"
+
+    with patch.object(client._client, "request", new=AsyncMock(return_value=response)):
+        with pytest.raises(GiteaApiError) as excinfo:
+            await client.delete_branch("owner", "repo", "coderbot/t1")
+
+    assert excinfo.value.status_code == 500

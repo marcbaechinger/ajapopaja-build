@@ -24,13 +24,16 @@ from typing import Dict, List, Optional, Tuple
 from urllib.parse import quote, urlsplit, urlunsplit
 
 import git
+from beanie.operators import In
 
+from api.git_hosting.gitea import GiteaClient
 from core import config
 from core.exceptions import EntityNotFoundError, ValidationError
 from core.models.models import (
     Pipeline,
     PiSession,
     PullRequest,
+    PullRequestStatus,
     RepoBootstrapStatus,
 )
 from core.queries import pi_session as pi_session_queries
@@ -321,6 +324,39 @@ def create_branch_at_head(repo: git.Repo, branch_name: str) -> None:
         return
     logger.info("Creating branch %s at HEAD without checkout", branch_name)
     repo.create_head(branch_name, "HEAD")
+
+
+def delete_branch_if_exists(repo: git.Repo, branch_name: str) -> bool:
+    """Delete a local branch with ``git branch -D`` when it exists.
+
+    Returns ``True`` only when a branch was actually deleted. The currently
+    checked-out branch is never deleted (the repository must not be left on a
+    deleted ref): a warning is logged and ``False`` is returned instead. All
+    other git failures are logged and treated as "not deleted" so callers can
+    keep going with the rest of the cleanup.
+    """
+    if not branch_name:
+        return False
+    try:
+        active_branch = repo.active_branch.name
+    except Exception:
+        active_branch = None
+    if active_branch == branch_name:
+        logger.warning(
+            "Refusing to delete branch %s because it is checked out in %s",
+            branch_name,
+            getattr(repo, "working_tree_dir", None),
+        )
+        return False
+    if not _branch_exists_local(repo, branch_name):
+        return False
+    try:
+        repo.git.branch("-D", branch_name)
+        logger.info("Deleted local branch %s", branch_name)
+        return True
+    except git.exc.GitCommandError:
+        logger.warning("Failed to delete local branch %s", branch_name, exc_info=True)
+        return False
 
 
 def current_default_branch(repo: git.Repo) -> str:
@@ -1028,6 +1064,199 @@ def _default_branch_for_repo(repo: git.Repo, pipeline: Pipeline) -> str:
         return current_default_branch(repo)
 
 
+async def cleanup_completed_pull_request(
+    pipeline: Pipeline, pr: PullRequest
+) -> Dict[str, object]:
+    """Release the artefacts of a terminal (accepted/rejected) pull request.
+
+    The helper is idempotent and best-effort: every step is logged
+    independently and failures are recorded in the returned ``errors`` list
+    rather than raised.
+
+    A PR whose session still has a pending chained descendant keeps its *local*
+    feature branch and ``patch`` because they are the start point / patch
+    fallback for that descendant. Its remote Gitea branch is deleted
+    immediately. Deferral is recomputed from the database on every call; no
+    ``deferred`` flag is persisted on the document.
+
+    The retained CoderBot sandbox (``PI_SESSIONS_ROOT/<uid>/workspace``) is
+    deliberately untouched; it is released by the Pi-session TTL sweep or
+    ``discard_session``.
+    """
+    result: Dict[str, object] = {
+        "local_branch_deleted": False,
+        "remote_branch_deleted": False,
+        "patch_cleared": False,
+        "deferred": False,
+        "errors": [],
+    }
+    errors: List[str] = result["errors"]  # type: ignore[assignment]
+
+    # A dev-server worktree may hold the feature branch and block its deletion.
+    try:
+        await remove_pr_worktree(pipeline, pr)
+    except Exception as e:
+        logger.warning("Failed to remove dev-server worktree for PR %s: %s", pr.id, e)
+        errors.append(f"worktree: {e}")
+
+    deferred = False
+    pipeline_id = getattr(pipeline, "id", None)
+    if pr.pi_session_uid and pipeline_id is not None:
+        try:
+            deferred = await pi_session_queries.has_pending_chained_descendant(
+                pr.pi_session_uid, pipeline_id=str(pipeline_id)
+            )
+        except Exception as e:
+            logger.warning(
+                "Failed to check chained descendants for PR %s: %s", pr.id, e
+            )
+            errors.append(f"defer: {e}")
+    result["deferred"] = deferred
+
+    repo = None
+    local_branch_exists = False
+    branch_name = getattr(pr, "branch_name", None)
+    if pipeline.workspace_abs_path and branch_name:
+        try:
+            repo = get_repo(str(pipeline.workspace_abs_path))
+            local_branch_exists = _branch_exists_local(repo, branch_name)
+            if not deferred:
+                result["local_branch_deleted"] = delete_branch_if_exists(
+                    repo, branch_name
+                )
+        except Exception as e:
+            logger.warning(
+                "Failed to delete local branch %s for PR %s: %s",
+                branch_name,
+                pr.id,
+                e,
+            )
+            errors.append(f"local branch: {e}")
+
+    # The remote branch is independent of chained descendants: a descendant's
+    # head already contains the predecessor commits, so it can be deleted now.
+    remote_candidate = bool(
+        pipeline.repo_uri
+        and branch_name
+        and (pr.remote_pr_url or pr.base_branch)
+        and config.GITEA_DELETE_BRANCH_ON_COMPLETE
+    )
+    # Skip a redundant Gitea call when a previous cleanup already released
+    # everything (no local branch and no patch left). Deferred PRs always keep
+    # trying so each completion can clean its own remote branch. The sweep sets
+    # ``_completion_cleanup_remote_done`` because the remote branch is already
+    # deleted at the PR's own completion, even when local/patch were deferred.
+    already_clean = not deferred and pr.patch is None and not local_branch_exists
+    remote_already_done = bool(getattr(pr, "_completion_cleanup_remote_done", False))
+    if remote_candidate and not already_clean and not remote_already_done:
+        try:
+            base_url, owner, repo_name = resolve_gitea_repo(pipeline.repo_uri)
+            token = pipeline.repo_token or config.GIT_PUSH_TOKEN
+            client = GiteaClient(base_url, token)
+            try:
+                await client.delete_branch(
+                    owner, repo_name, branch_name, missing_ok=True
+                )
+            finally:
+                await client.aclose()
+            result["remote_branch_deleted"] = True
+            logger.info("Deleted remote Gitea branch %s for PR %s", branch_name, pr.id)
+            # Drop the now-stale remote-tracking ref too, otherwise a later
+            # ``resolve_pr_workspace`` could re-materialise the deleted branch
+            # from ``origin/<branch>``.
+            if repo is not None:
+                try:
+                    repo.git.update_ref("-d", f"refs/remotes/origin/{branch_name}")
+                except git.exc.GitCommandError:
+                    logger.debug("No remote-tracking ref to drop for %s", branch_name)
+        except Exception as e:
+            logger.warning(
+                "Failed to delete remote Gitea branch %s for PR %s: %s",
+                branch_name,
+                pr.id,
+                e,
+            )
+            errors.append(f"remote branch: {e}")
+
+    if not deferred and pr.patch is not None:
+        try:
+            pr.patch = None
+            await pr.save()
+            result["patch_cleared"] = True
+        except Exception as e:
+            logger.warning("Failed to clear patch for PR %s: %s", pr.id, e)
+            errors.append(f"patch: {e}")
+
+    return result
+
+
+async def sweep_completed_pull_requests(pipeline: Pipeline) -> int:
+    """Run completion cleanup for terminal PRs that still hold artefacts.
+
+    This is the safety net that releases a completed chain prefix whose
+    descendants have since completed. It returns the number of PRs whose
+    cleanup is now complete (i.e. not deferred). The sweep stays cheap when
+    ``GITEA_DELETE_BRANCH_ON_COMPLETE`` is off because cleanup then makes no
+    remote API call.
+    """
+    pipeline_id = getattr(pipeline, "id", None)
+    if pipeline_id is None:
+        return 0
+
+    try:
+        prs = await PullRequest.find(
+            PullRequest.pipeline_id == str(pipeline_id),
+            In(
+                PullRequest.status,
+                [PullRequestStatus.ACCEPTED, PullRequestStatus.REJECTED],
+            ),
+        ).to_list()
+    except Exception:
+        logger.warning(
+            "Failed to query completed pull requests for pipeline %s",
+            pipeline_id,
+            exc_info=True,
+        )
+        return 0
+
+    repo = None
+    if pipeline.workspace_abs_path:
+        try:
+            repo = get_repo(str(pipeline.workspace_abs_path))
+        except Exception:
+            logger.debug(
+                "Could not open pipeline %s workspace for cleanup sweep",
+                pipeline_id,
+                exc_info=True,
+            )
+
+    released = 0
+    for pr in prs:
+        branch_exists = bool(
+            repo is not None
+            and pr.branch_name
+            and _branch_exists_local(repo, pr.branch_name)
+        )
+        if pr.patch is None and not branch_exists:
+            continue
+        # The remote Gitea branch was already deleted when this PR completed;
+        # the sweep only releases the deferred local branch and patch.
+        pr._completion_cleanup_remote_done = True
+        try:
+            result = await cleanup_completed_pull_request(pipeline, pr)
+        except Exception:
+            logger.warning(
+                "Cleanup failed for completed PR %s in pipeline %s",
+                pr.id,
+                pipeline_id,
+                exc_info=True,
+            )
+            continue
+        if not result.get("deferred"):
+            released += 1
+    return released
+
+
 async def resolve_pr_workspace(pipeline: Pipeline, pr: PullRequest) -> Tuple[str, str]:
     """Resolve where a pull request's code lives so a dev server can run there.
 
@@ -1055,6 +1284,18 @@ async def resolve_pr_workspace(pipeline: Pipeline, pr: PullRequest) -> Tuple[str
     await ensure_repo_cloned(pipeline)
     repo = get_repo(str(pipeline.workspace_abs_path))
     wt = _pr_worktree_path(pipeline, pr)
+
+    if (
+        getattr(pr, "status", None)
+        in (PullRequestStatus.ACCEPTED, PullRequestStatus.REJECTED)
+        and pr.patch is None
+        and not _branch_exists_local(repo, pr.branch_name)
+        and not _branch_exists_remote(repo, pr.branch_name)
+    ):
+        raise EntityNotFoundError(
+            f"pull request {pr.id} is completed and its branch/patch have been "
+            "cleaned up"
+        )
 
     if _branch_exists_local(repo, pr.branch_name):
         _remove_worktree(repo, wt)

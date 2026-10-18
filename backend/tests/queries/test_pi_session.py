@@ -14,6 +14,7 @@
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 import git
 import pytest
@@ -256,9 +257,7 @@ async def test_excludes_interactive_and_scopes_by_pipeline(init_mock_db, tmp_pat
     # A valid batch session in p2 is not returned for p1.
     # The PR must post-date the session so it is recognised as an initial run
     # rather than a PR-iteration run (see `_is_initial_batch_run`).
-    pr2 = await _insert_pr(
-        "p2", created_at=datetime.now(UTC) + timedelta(seconds=1)
-    )
+    pr2 = await _insert_pr("p2", created_at=datetime.now(UTC) + timedelta(seconds=1))
     await _insert_session(
         "p2",
         uid="u-batch",
@@ -307,8 +306,7 @@ def test_workspace_has_branch_handles_blank_inputs(tmp_path):
     assert pi_session_queries.workspace_has_branch(None, "b") is False
     assert pi_session_queries.workspace_has_branch(str(tmp_path), None) is False
     assert (
-        pi_session_queries.workspace_has_branch(str(tmp_path / "missing"), "b")
-        is False
+        pi_session_queries.workspace_has_branch(str(tmp_path / "missing"), "b") is False
     )
 
 
@@ -350,3 +348,96 @@ async def test_find_chained_predecessor_branch_missing_predecessor(init_mock_db)
     await chained.save()
 
     assert await pi_session_queries.find_chained_predecessor_branch("u2") is None
+
+
+async def _set_chained_from(uid: str, predecessor_uid: str) -> None:
+    record = await PiSession.find_one(PiSession.uid == uid)
+    record.chained_from_session_uid = predecessor_uid
+    await record.save()
+
+
+@pytest.mark.asyncio
+async def test_has_pending_chained_descendant_detects_active_session(init_mock_db):
+    await _insert_session("p1", uid="u1", workspace_path=None)
+    await _insert_session(
+        "p1",
+        uid="u2",
+        workspace_path=None,
+        status=PiSessionStatus.RUNNING,
+    )
+    await _set_chained_from("u2", "u1")
+
+    assert (
+        await pi_session_queries.has_pending_chained_descendant("u1", pipeline_id="p1")
+        is True
+    )
+
+
+@pytest.mark.asyncio
+async def test_has_pending_chained_descendant_detects_open_pr(init_mock_db):
+    await _insert_session("p1", uid="u1", workspace_path=None)
+    pr = await _insert_pr("p1", status=PullRequestStatus.OPEN)
+    await _insert_session(
+        "p1",
+        uid="u2",
+        workspace_path=None,
+        pull_request_ids=[str(pr.id)],
+    )
+    await _set_chained_from("u2", "u1")
+
+    assert (
+        await pi_session_queries.has_pending_chained_descendant("u1", pipeline_id="p1")
+        is True
+    )
+
+
+@pytest.mark.asyncio
+async def test_has_pending_chained_descendant_transitive_and_terminal(init_mock_db):
+    await _insert_session("p1", uid="u1", workspace_path=None)
+    await _insert_session("p1", uid="u2", workspace_path=None)
+    await _insert_session("p1", uid="u3", workspace_path=None)
+    await _set_chained_from("u2", "u1")
+    await _set_chained_from("u3", "u2")
+    terminal = await _insert_pr("p1", status=PullRequestStatus.ACCEPTED)
+    await _insert_session(
+        "p1",
+        uid="u4",
+        workspace_path=None,
+        pull_request_ids=[str(terminal.id)],
+    )
+    await _set_chained_from("u4", "u3")
+
+    # u4 is completed and owns only a terminal PR, so no pending descendant.
+    assert (
+        await pi_session_queries.has_pending_chained_descendant("u1", pipeline_id="p1")
+        is False
+    )
+
+    u3 = await PiSession.find_one(PiSession.uid == "u3")
+    u3.status = PiSessionStatus.PAUSED
+    await u3.save()
+    assert (
+        await pi_session_queries.has_pending_chained_descendant("u1", pipeline_id="p1")
+        is True
+    )
+
+
+@pytest.mark.asyncio
+async def test_has_pending_chained_descendant_handles_cycles_and_errors(init_mock_db):
+    await _insert_session("p1", uid="u1", workspace_path=None)
+    await _insert_session("p1", uid="u2", workspace_path=None)
+    await _set_chained_from("u1", "u2")
+    await _set_chained_from("u2", "u1")
+
+    assert (
+        await pi_session_queries.has_pending_chained_descendant("u1", pipeline_id="p1")
+        is False
+    )
+
+    with patch.object(PiSession, "find", side_effect=RuntimeError("db down")):
+        assert (
+            await pi_session_queries.has_pending_chained_descendant(
+                "u1", pipeline_id="p1"
+            )
+            is False
+        )

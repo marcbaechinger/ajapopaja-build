@@ -281,7 +281,7 @@ history).
 | Repo | Branch | Created | Deleted / left |
 |------|--------|---------|----------------|
 | `S` | `coderbot/<task_id>` | `setup_sandbox()` | Left in the retained sandbox (default), or removed when the ephemeral sandbox is cleaned up. |
-| `R` | default branch (`main` etc.) | pre-existing | Never deleted; receives `c'` directly at accept. |
+| `R` | default branch (`main` etc.) | pre-existing | Never deleted; receives `c'` directly at accept. No feature branch exists, so completion cleanup only clears `PullRequest.patch`. |
 
 `R` has **no feature branch** in this mode: the accepted patch is committed
 straight onto `R`'s default branch.
@@ -295,16 +295,17 @@ straight onto `R`'s default branch.
 | Remote `origin` | default branch | pre-existing | Receives the pushed `c'`. |
 
 Like `merge`, no feature branch is created in `R`; the commit is made on the
-default branch and pushed as `HEAD`.
+default branch and pushed as `HEAD`. Completion cleanup has no branch to delete
+and only clears `PullRequest.patch`.
 
 ### 8.3 `submit` (remote pipeline, `REMOTE_PR_MODE=gitea_pr`)
 
 | Repo | Branch | Created | Deleted / left |
 |------|--------|---------|----------------|
 | `S` | `coderbot/<task_id>` | `setup_sandbox()` | As §8.1 (the sandbox commit `c` is unrelated to the pushed branch). |
-| `R` (clone) | `coderbot/<task_id>` (feature branch) | `ensure_feature_branch()` at accept | **Left in place** (both locally and on `origin`); the default branch is checked out again and kept clean. |
+| `R` (clone) | `coderbot/<task_id>` (feature branch) | `ensure_feature_branch()` at accept | Deleted on completion (merged/closed), unless a pending chained descendant still needs it as its start point (§8.4). The default branch is checked out again and kept clean. |
 | `R` (clone) | default branch | pre-existing (clone) | Kept clean at the predecessor tip (`M`); never receives `c'`. |
-| Remote `origin` | `coderbot/<task_id>` | pushed by `push_branch_with_auth()` | Left; it is the Gitea PR head branch. |
+| Remote `origin` | `coderbot/<task_id>` | pushed by `push_branch_with_auth()` | Deleted on completion (best-effort), immediately even when the local branch/patch are deferred for a chained descendant. |
 
 For a **chained** PR the feature branch is created at the predecessor's accepted
 feature branch (`start_point`), so PR2's branch physically contains PR1's change.
@@ -318,6 +319,46 @@ gitGraph
     commit id: "c2' (t2 submitted, base=c1')"
     checkout main
 ```
+
+### 8.4 Completion cleanup
+
+A PR reaching a terminal state (`ACCEPTED` or `REJECTED`) releases its
+completion artefacts through the shared, idempotent helper
+`git_utils.cleanup_completed_pull_request(pipeline, pr)`:
+
+1. Remove the dev-server worktree (`remove_pr_worktree`); it may hold the
+   feature branch.
+2. Delete the local feature branch `coderbot/<task_id>` in `R`
+   (`delete_branch_if_exists`, never the currently checked-out branch).
+3. Delete the remote Gitea branch (`GiteaClient.delete_branch`,
+   `missing_ok=True`), when the PR was actually submitted and
+   `GITEA_DELETE_BRANCH_ON_COMPLETE` is enabled. A 404 (already deleted, or
+   Gitea's own "delete branch after merge" setting) is success; other failures
+   are logged without raising.
+4. Clear `PullRequest.patch` to `None` and save the document.
+
+The same helper runs for every delivery mode. In `merge`/`push` mode there is no
+feature branch in `R`, so the branch steps are harmless no-ops and only the
+patch is cleared. The retained CoderBot sandbox `S`
+(`PI_SESSIONS_ROOT/<session_uid>/workspace`) is **out of scope**: cleanup never
+touches it, and it is released by the Pi-session TTL sweep / `discard_session`.
+
+**Chained-PR deferral.** A completed PR keeps its **local** branch and its
+`patch` while its session still has a pending chained descendant (transitively
+over `PiSession.chained_from_session_uid`). A descendant is pending while its
+session is `STARTING`/`RUNNING`/`PAUSED` or while it owns an `OPEN`/`SUBMITTED`
+pull request. The predecessor's local branch is the `start_point` for the
+descendant's accept, and the predecessor patches feed the dev-server patch
+fallback. Deferral is recomputed from the database on every call; no flag is
+stored on the PR. The **remote** Gitea branch has no such dependency (a
+descendant's own head already contains the predecessor commits) and is deleted
+at that PR's own completion.
+
+Because deferral keys only on descendants, completion order does not matter.
+`git_utils.sweep_completed_pull_requests(pipeline)` runs after every completion
+and releases a completed chain prefix once no pending descendant remains. An
+abandoned chain (a rejected predecessor followed by a still-open descendant)
+stays deferred; forcing it to clean is deliberately out of scope for now.
 
 ---
 
@@ -339,8 +380,10 @@ the PR summary is therefore rewritten at accept time to point at `c'`.
 
 ## 10. Rejection, iteration and resume (git side effects)
 
-- **Reject** (`reject_pull_request`): only flips the `PullRequest`/`Task` status.
-  It makes **no git change** to `R`, does not delete `S`, and does not re-parent a
+- **Reject** (`reject_pull_request`): flips the `PullRequest`/`Task` status and
+  runs the shared completion cleanup (§8.4), so the dev-server worktree, the
+  local/remote feature branch and `PullRequest.patch` do not linger (subject to
+  the chained-PR deferral). It does not delete `S` and does not re-parent a
   descendant sandbox already chained onto `c`. See
   [`dd_task_chain_rejection_lifecycle.md`](dd_task_chain_rejection_lifecycle.md)
   for the consequences and open gaps.
@@ -365,4 +408,13 @@ the PR summary is therefore rewritten at accept time to point at `c'`.
 | When does the change leave the sandbox? | Only when the user accepts the PR. |
 | Where does the accepted commit land? | `R`'s default branch (`merge`/`push`) or `R`'s feature branch `coderbot/<task_id>` (`submit`). |
 | When is it pushed? | `push` mode pushes `HEAD` to the default branch; `submit` mode pushes the feature branch and opens a Gitea PR. |
-| What happens to the sandbox? | Deleted after the run, or retained (default) for resume/iteration until TTL sweep or discard. |
+| When are the PR branch and patch released? | On completion (`ACCEPTED`/`REJECTED`) via `cleanup_completed_pull_request`: local + remote feature branch deleted and `patch` cleared. A pending chained descendant defers the local branch and patch; the sweep releases them once the chain tip completes. `merge`/`push` have no branch and only clear the patch. |
+| What happens to the sandbox? | Deleted after the run, or retained (default) for resume/iteration until TTL sweep or discard. Completion cleanup never touches it. |
+
+---
+
+## 12. Completion-cleanup configuration
+
+| Setting | Env var | Default | Meaning |
+|---------|---------|---------|---------|
+| `GITEA_DELETE_BRANCH_ON_COMPLETE` | `GITEA_DELETE_BRANCH_ON_COMPLETE` | `true` | Delete the remote Gitea feature branch when a submitted PR reaches a terminal state. Best-effort: HTTP 404 is treated as success and other failures are logged without blocking cleanup. Set to `false` to retain remote branches. |

@@ -264,6 +264,14 @@ GITEA_WEBHOOK_SECRET = os.getenv("GITEA_WEBHOOK_SECRET", "")
 # PRs/tasks without webhooks. Disabled by default.
 GITEA_PR_POLL_ENABLED = os.getenv("GITEA_PR_POLL_ENABLED", "false").lower() == "true"
 
+# Delete the remote Gitea feature branch when a submitted pull request reaches a
+# terminal state (merged or closed). Best-effort: a missing branch (HTTP 404,
+# including Gitea's own "delete branch after merge" setting) is treated as
+# success. Set to false to leave remote branches in place.
+GITEA_DELETE_BRANCH_ON_COMPLETE = (
+    os.getenv("GITEA_DELETE_BRANCH_ON_COMPLETE", "true").lower() == "true"
+)
+
 try:
     GITEA_PR_POLL_INTERVAL = int(os.getenv("GITEA_PR_POLL_INTERVAL", "60"))
 except ValueError as e:  # pragma: no cover - defensive

@@ -547,7 +547,10 @@ class PullRequest(Document):
     subject: str = ""
     author: Optional[str] = None
     branch_name: str
-    patch: str  # The git diff output
+    # The git diff output. Cleared when the pull request reaches a terminal
+    # state and its completion cleanup runs (see
+    # design/git/dd_batch_coderbot_git_process.md).
+    patch: Optional[str] = None
     status: PullRequestStatus = PullRequestStatus.OPEN
     remote_pr_url: Optional[str] = None  # set only in gitea_pr mode
     # Target/base branch the pull request was submitted against (set in

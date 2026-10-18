@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import logging
+from urllib.parse import quote
 
 import httpx
 
@@ -213,6 +214,37 @@ class GiteaClient:
     async def get_pull_request(self, owner: str, repo: str, index: int) -> dict:
         """GET /repos/{owner}/{repo}/pulls/{index} -> single pull request."""
         return await self._get_json(f"/repos/{owner}/{repo}/pulls/{index}")
+
+    async def delete_branch(
+        self,
+        owner: str,
+        repo: str,
+        branch: str,
+        *,
+        missing_ok: bool = True,
+    ) -> None:
+        """DELETE /repos/{owner}/{repo}/branches/{branch}.
+
+        When ``missing_ok`` is true an HTTP 404 is treated as success (the branch
+        was already deleted, or Gitea's "delete branch after merge" setting
+        removed it first). Other non-2xx responses raise :class:`GiteaApiError`.
+        """
+        encoded_branch = quote(branch, safe="")
+        try:
+            await self._request(
+                "DELETE",
+                f"/repos/{owner}/{repo}/branches/{encoded_branch}",
+            )
+        except GiteaApiError as e:
+            if missing_ok and e.status_code == 404:
+                logger.debug(
+                    "Gitea branch %s/%s/%s already deleted (404)",
+                    owner,
+                    repo,
+                    branch,
+                )
+                return
+            raise
 
     async def list_webhooks(self, owner: str, repo: str) -> list:
         """GET /repos/{owner}/{repo}/hooks -> the repository's webhooks."""

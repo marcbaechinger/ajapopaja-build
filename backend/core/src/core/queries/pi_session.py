@@ -193,3 +193,71 @@ async def find_chained_predecessor_branch(
         )
         return None
     return predecessor.branch_name if predecessor else None
+
+
+async def has_pending_chained_descendant(session_uid: str, *, pipeline_id: str) -> bool:
+    """Whether ``session_uid`` still has a pending descendant in its chain.
+
+    Descendants are found transitively via
+    :attr:`PiSession.chained_from_session_uid`. A descendant is pending while
+    its session is ``STARTING``/``RUNNING``/``PAUSED`` (still producing its PR)
+    or while it owns an ``OPEN``/``SUBMITTED`` pull request.
+
+    Completion cleanup uses this to defer releasing a predecessor's local
+    feature branch and patch: a descendant's accept starts from that branch and
+    its patch fallback replays the predecessor patches. The remote Gitea branch
+    has no such dependency and is deleted at the PR's own completion.
+
+    The walk is capped defensively and guards against cycles. Any DB error is
+    treated as "no pending descendant" (logged at debug level) so cleanup
+    degrades to cleaning rather than blocking forever.
+    """
+    if not session_uid:
+        return False
+
+    pending_session_statuses = {
+        PiSessionStatus.STARTING,
+        PiSessionStatus.RUNNING,
+        PiSessionStatus.PAUSED,
+    }
+    pending_pr_statuses = {PullRequestStatus.OPEN, PullRequestStatus.SUBMITTED}
+    max_depth = 100
+    max_nodes = 1000
+
+    try:
+        frontier = [session_uid]
+        seen = {session_uid}
+        visited = 0
+        depth = 0
+
+        while frontier and depth < max_depth and visited < max_nodes:
+            next_frontier: List[str] = []
+            for uid in frontier:
+                children = await PiSession.find(
+                    PiSession.chained_from_session_uid == uid,
+                    PiSession.pipeline_id == pipeline_id,
+                ).to_list()
+                for child in children:
+                    if not child.uid or child.uid in seen:
+                        continue
+                    seen.add(child.uid)
+                    visited += 1
+                    next_frontier.append(child.uid)
+
+                    if child.status in pending_session_statuses:
+                        return True
+                    for pr in await _load_linked_pull_requests(child):
+                        if pr.status in pending_pr_statuses:
+                            return True
+            frontier = next_frontier
+            depth += 1
+    except Exception:
+        logger.debug(
+            "Failed to inspect chained descendants of session %s in pipeline %s",
+            session_uid,
+            pipeline_id,
+            exc_info=True,
+        )
+        return False
+
+    return False
