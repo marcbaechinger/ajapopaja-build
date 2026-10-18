@@ -207,7 +207,7 @@ In `gitea_pr` mode, `_submit_as_gitea_pr` coordinates both git operations and Gi
 
 1. **Feature branch push (`git_utils.push_branch_with_auth`)**: Pushes the feature branch (`pr.branch_name`) containing the commit to the remote Git server. This step is strictly required because Gitea's REST API cannot create a pull request if the head branch does not already exist on the remote forge (returns HTTP 422 `ref does not exist`).
 2. **Pull request creation (`GiteaClient.create_pull_request`)**: Calls Gitea's REST API (`POST /api/v1/repos/{owner}/{repo}/pulls`) to register the PR from `pr.branch_name` to the default branch (`base`). It does not push code; it only creates the review entity.
-3. **Workspace restoration**: Restores the local workspace to the default branch (`base`) after submission so the local working copy remains clean while awaiting external review.
+3. **Workspace restoration**: Restores the local workspace to the default branch (`base`) after submission so the local working copy remains clean while awaiting external review. The feature branch stays on the remote (and locally in `R`) only until the PR reaches a terminal state; completion cleanup then deletes it (§5.4).
 
 #### Why two commits appear after merging on Gitea
 
@@ -215,6 +215,7 @@ When the pull request is merged in the Gitea web UI, Gitea's default merge metho
 - A Git merge commit joins the base branch and the feature branch with two parent commits.
 - Because no other commits intervened on base, the tree of the merge commit is identical to the feature commit.
 - In Gitea's commit log for `main`, both the feature commit (`pr.branch_name`) and the merge commit (`Merge pull request '...' (#N) from ... into main`) appear.
+- When the PR completes, the head branch is deleted on the remote and locally (see **Completion cleanup** in §5.4). Gitea's commit log on the base branch is therefore the durable record of the change; the feature-branch ref itself is not retained. A merge commit keeps its feature commit reachable through its second parent even after the branch ref is gone.
 - **Configuring single-commit history**: If a single linear commit is desired on the remote repository without an additional merge commit, the repository settings in Gitea should be configured to allow **Rebase (fast-forward)** or **Squash and merge**.
 
 ### Required token scope
@@ -352,6 +353,40 @@ reconciled by the next webhook, the on-demand sync or the poller. The `200`
 `mirrored` body carries `pull_deferred: true` so callers can tell that the DB is
 current while the clone lags. `busy` is no longer returned by the receiver.
 
+### Completion cleanup
+
+When the webhook (or the poller) reports a terminal outcome, the same
+`PrStateNotifier.on_pr_state` used for the DB mirror releases the PR's artefacts
+through the shared helper
+`core.utils.git_utils.cleanup_completed_pull_request(pipeline, pr)`:
+
+- it removes the dev-server worktree, deletes the local feature branch
+  `coderbot/<task_id>` in `R`, deletes the remote Gitea branch (when
+  `GITEA_DELETE_BRANCH_ON_COMPLETE` is enabled, HTTP 404 tolerated), and clears
+  the potentially multi-MB `PullRequest.patch`;
+- it runs **after** `pr.save()`/`transition_task(...)` and the
+  `TASK_STATUS_UPDATED` broadcast, inside a log-only `try/except`, so a cleanup
+  failure can never undo the mirror, suppress the broadcast, or fail the
+  webhook delivery (a non-2xx would make Gitea retry). The `NotifyResult` and
+  the HTTP response (`200`/`202`/`404`) are unchanged;
+- the poller
+  (`reconcile_submitted_pull_requests` → `reconcile_pipeline_pull_requests`)
+  inherits the cleanup because it feeds the very same `on_pr_state`; there is no
+  separate polling cleanup path;
+- because of ordered branch chaining, a completed PR with a pending chained
+  descendant keeps its **local** branch and patch (they are the descendant's
+  `start_point`/patch fallback); its remote branch is deleted immediately.
+  After the per-PR loop the notifier runs
+  `git_utils.sweep_completed_pull_requests(pipeline)` once (log-only on failure)
+  to release the completed chain prefix. See
+  [`dd_batch_coderbot_git_process.md`](dd_batch_coderbot_git_process.md) §8.4 for
+  the deferral rule.
+
+A branch delete on Gitea also emits a `push` webhook with an all-zero `after`.
+`parse_gitea_push_payload` already treats that as non-actionable, so the
+receiver returns `202 {"status":"ignored"}` and cleanup never re-enters the
+reconciler.
+
 ### Webhook registration
 
 On remote-pipeline creation Ajapopaja calls `GiteaClient.ensure_pr_state_webhook`
@@ -372,6 +407,7 @@ same reconciler. Interval is `GITEA_PR_POLL_INTERVAL` (seconds, default `60`).
 | `GITEA_WEBHOOK_SECRET` | `""` | HMAC shared secret for webhook signature verification |
 | `GITEA_PR_POLL_ENABLED` | `false` | Enable the polling reconciler |
 | `GITEA_PR_POLL_INTERVAL` | `60` | Poll interval in seconds |
+| `GITEA_DELETE_BRANCH_ON_COMPLETE` | `true` | Delete the remote Gitea feature branch when a completed PR is reconciled (best-effort; 404 is success). Set to `false` to retain remote branches. |
 
 
 

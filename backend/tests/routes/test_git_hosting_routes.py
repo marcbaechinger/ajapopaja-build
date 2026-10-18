@@ -261,3 +261,40 @@ async def test_pr_state_normalized_body(async_client, init_mock_db, monkeypatch)
     assert response.status_code == 200
     assert response.json()["state"] == "closed"
     mock_notify.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_pr_state_branch_delete_push_webhook_is_ignored(
+    async_client, init_mock_db, monkeypatch
+):
+    """A Gitea branch-delete push (all-zero ``after``) has no commit to mirror.
+
+    Completion cleanup deletes the remote feature branch; Gitea emits this push
+    event. It must stay a ``202 ignored`` no-op so cleanup never re-enters the
+    reconciler.
+    """
+    monkeypatch.setattr(config, "GITEA_WEBHOOK_SECRET", SECRET)
+    payload = {
+        "ref": "refs/heads/coderbot/t1",
+        "before": "a" * 40,
+        "after": "0" * 40,
+        "repository": {"full_name": "org/repo"},
+    }
+    raw, sig = _sign(payload)
+
+    with patch(
+        "api.routes.git_hosting.PrStateNotifier.on_pr_state",
+        new=AsyncMock(return_value=NotifyResult(status="mirrored")),
+    ) as mock_notify:
+        response = await async_client.post(
+            "/api/git_hosting/pipelines/pipe-1/pr-state",
+            content=raw,
+            headers={
+                "Content-Type": "application/json",
+                "X-Gitea-Signature": sig,
+            },
+        )
+
+    assert response.status_code == 202
+    assert response.json() == {"status": "ignored"}
+    mock_notify.assert_not_awaited()

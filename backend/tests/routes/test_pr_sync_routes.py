@@ -51,6 +51,16 @@ def mock_auth():
     app.dependency_overrides.clear()
 
 
+@pytest.fixture(autouse=True)
+def mock_completion_cleanup_gitea():
+    """Keep completion cleanup offline when a reconciliation terminalises a PR."""
+    client = MagicMock()
+    client.delete_branch = AsyncMock()
+    client.aclose = AsyncMock()
+    with patch("core.utils.git_utils.GiteaClient", return_value=client):
+        yield client
+
+
 def _fake_gitea(data):
     """A stand-in GiteaClient whose get_pull_request returns ``data``."""
     client = MagicMock()

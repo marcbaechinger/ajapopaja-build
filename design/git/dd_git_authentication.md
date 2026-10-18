@@ -191,6 +191,11 @@ set, otherwise the global `GIT_PUSH_USERNAME`/`GIT_PUSH_TOKEN`. The credentials
 are injected only for the push call and are **not persisted** in the repo
 config or the stored `repo_uri`.
 
+Deleting the remote feature branch on completion
+(`GiteaClient.delete_branch`, §5.4 of [`dd_git_hosting.md`](dd_git_hosting.md))
+uses the same resolved credentials as the push (pipeline fields → global env)
+and therefore needs the same **repo write** token scope.
+
 ### 4.4 Wire into PR acceptance
 
 In `accept_pull_request()` in `pull_request.py`, after `commit_changes()`:
@@ -200,6 +205,10 @@ new_commit_hash = commit_changes(repo, pr, commit_message)
 if pipeline.repo_uri:
     git_utils.push_with_auth(repo, pipeline)
 ```
+
+When the remotely submitted PR later completes, the webhook/poller cleanup uses
+the same credential resolution for `GiteaClient.delete_branch`; it is
+best-effort and a 404 is treated as already deleted.
 
 ### 4.5 SSH alternative (optional, per repo) — NOT part of this implementation
 

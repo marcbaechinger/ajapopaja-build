@@ -12,14 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+import subprocess
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import git
 import pytest
 
 from api.git_hosting.branch_events import PrStateEvent
-from api.git_hosting.branch_notifier import PrStateNotifier
+from api.git_hosting.branch_notifier import PrStateNotifier, SyncResult
+from api.git_hosting.gitea import GiteaApiError
 from api.websocket_manager import WSMessage
+from core import config
 from core.models.models import (
     Pipeline,
     PiSession,
@@ -30,6 +35,63 @@ from core.models.models import (
     Task,
     TaskStatus,
 )
+from core.utils import git_utils
+
+RUN_GIT_ENV = {
+    "GIT_AUTHOR_NAME": "Test User",
+    "GIT_AUTHOR_EMAIL": "test@example.com",
+    "GIT_COMMITTER_NAME": "Test User",
+    "GIT_COMMITTER_EMAIL": "test@example.com",
+}
+
+
+def _git(cwd, args):
+    return subprocess.run(
+        ["git"] + args,
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        text=True,
+        env={**os.environ, **RUN_GIT_ENV},
+    )
+
+
+def _make_repo(path: Path, branch: str = "main") -> Path:
+    path.mkdir(parents=True, exist_ok=True)
+    _git(path, ["init", "-b", branch])
+    (path / "readme.md").write_text("readme\n")
+    _git(path, ["add", "."])
+    _git(path, ["commit", "-m", "Initial commit"])
+    return path
+
+
+def _commit_file(repo_path: Path, branch: str, name: str, text: str) -> str:
+    _git(repo_path, ["checkout", "-B", branch])
+    (repo_path / name).write_text(text)
+    _git(repo_path, ["add", "."])
+    _git(repo_path, ["commit", "-m", f"commit {name}"])
+    return _git(repo_path, ["rev-parse", "HEAD"]).stdout.strip()
+
+
+@pytest.fixture(autouse=True)
+def isolated_cleanup_roots(monkeypatch, tmp_path):
+    root = tmp_path / "workspaces"
+    remote = tmp_path / "remote_workspaces"
+    root.mkdir()
+    remote.mkdir()
+    monkeypatch.setattr(config, "WORKSPACES_ROOT", root)
+    monkeypatch.setattr(config, "REMOTE_WORKSPACES_ROOT", remote)
+    monkeypatch.setattr(config, "PI_SESSIONS_ROOT", tmp_path / "pi_sessions")
+    monkeypatch.setattr(config, "GITEA_DELETE_BRANCH_ON_COMPLETE", True)
+
+
+@pytest.fixture(autouse=True)
+def fake_gitea():
+    client = MagicMock()
+    client.delete_branch = AsyncMock()
+    client.aclose = AsyncMock()
+    with patch("core.utils.git_utils.GiteaClient", return_value=client):
+        yield client
 
 
 def _event(state="merged", base_branch="main", commit_hash="commit-sha"):
@@ -42,12 +104,13 @@ def _event(state="merged", base_branch="main", commit_hash="commit-sha"):
     )
 
 
-async def _make_pipeline() -> Pipeline:
+async def _make_pipeline(workspace_abs_path=None) -> Pipeline:
     pipeline = Pipeline(
         name="myapp",
         repo_uri="https://host/org/repo.git",
         repo_username="user",
         repo_token="tok",
+        workspace_abs_path=workspace_abs_path,
     )
     await pipeline.insert()
     return pipeline
@@ -752,3 +815,283 @@ async def test_on_pr_state_second_event_of_merge_prompts_once(init_mock_db):
     assert second.affected_task_ids == []
     mock_notify.assert_awaited_once()
     mock_pull.assert_not_awaited()
+
+
+async def _make_pr(
+    pipeline,
+    *,
+    branch_name,
+    status=PullRequestStatus.OPEN,
+    base_branch="main",
+    pi_session_uid=None,
+):
+    task = Task(
+        title=f"Task {branch_name}",
+        pipeline_id=str(pipeline.id),
+        status=TaskStatus.SUBMITTED,
+    )
+    await task.insert()
+    pr = PullRequest(
+        pipeline_id=str(pipeline.id),
+        task_id=str(task.id),
+        summary="summary",
+        subject="subject",
+        branch_name=branch_name,
+        patch=f"patch {branch_name}",
+        status=status,
+        base_branch=base_branch,
+        remote_pr_url="https://host/org/repo/pulls/1",
+        pi_session_uid=pi_session_uid,
+    )
+    await pr.insert()
+    return pr, task
+
+
+def _add_worktree(pipeline, pr):
+    wt = git_utils._pr_worktree_path(pipeline, pr)
+    wt.parent.mkdir(parents=True, exist_ok=True)
+    git_utils.get_repo(str(pipeline.workspace_abs_path)).git.worktree(
+        "add", str(wt), pr.branch_name
+    )
+    return wt
+
+
+def _local_branches(repo_path):
+    return {b.name for b in git.Repo(str(repo_path)).branches}
+
+
+@pytest.mark.asyncio
+async def test_on_pr_state_remote_merge_releases_completion_artifacts(
+    init_mock_db, tmp_path, fake_gitea
+):
+    pipeline = await _make_pipeline()
+    repo = _make_repo(Path(pipeline.workspace_abs_path))
+    _commit_file(repo, "coderbot/t1", "one.txt", "one\n")
+    _git(repo, ["checkout", "main"])
+    pr, _task = await _make_pr_and_task(pipeline)
+    wt = _add_worktree(pipeline, pr)
+
+    notifier = PrStateNotifier()
+    with (
+        patch.object(
+            PrStateNotifier,
+            "fetch_pipeline_repo",
+            new=AsyncMock(return_value=SyncResult(status="synced")),
+        ),
+        patch.object(PrStateNotifier, "verify_commit_present", return_value=True),
+        patch.object(PrStateNotifier, "pull_pipeline_repo", new=AsyncMock()),
+        patch(
+            "api.git_hosting.branch_notifier.ws_manager.broadcast",
+            new=AsyncMock(),
+        ),
+    ):
+        result = await notifier.on_pr_state(str(pipeline.id), _event())
+
+    assert result.status == "mirrored"
+    refreshed = await PullRequest.get(pr.id)
+    assert refreshed.status == PullRequestStatus.ACCEPTED
+    assert refreshed.patch is None
+    assert "coderbot/t1" not in _local_branches(repo)
+    assert not wt.exists()
+    fake_gitea.delete_branch.assert_awaited_once_with(
+        "org", "repo", "coderbot/t1", missing_ok=True
+    )
+
+
+@pytest.mark.asyncio
+async def test_on_pr_state_remote_close_releases_completion_artifacts(
+    init_mock_db, tmp_path, fake_gitea
+):
+    pipeline = await _make_pipeline()
+    repo = _make_repo(Path(pipeline.workspace_abs_path))
+    _commit_file(repo, "coderbot/t1", "one.txt", "one\n")
+    _git(repo, ["checkout", "main"])
+    pr, _task = await _make_pr_and_task(pipeline)
+    wt = _add_worktree(pipeline, pr)
+
+    notifier = PrStateNotifier()
+    with (
+        patch.object(
+            PrStateNotifier,
+            "fetch_pipeline_repo",
+            new=AsyncMock(return_value=SyncResult(status="synced")),
+        ),
+        patch.object(PrStateNotifier, "pull_pipeline_repo", new=AsyncMock()),
+        patch(
+            "api.git_hosting.branch_notifier.ws_manager.broadcast",
+            new=AsyncMock(),
+        ),
+    ):
+        result = await notifier.on_pr_state(str(pipeline.id), _event(state="closed"))
+
+    assert result.status == "mirrored"
+    refreshed = await PullRequest.get(pr.id)
+    assert refreshed.status == PullRequestStatus.REJECTED
+    assert refreshed.patch is None
+    assert "coderbot/t1" not in _local_branches(repo)
+    assert not wt.exists()
+    fake_gitea.delete_branch.assert_awaited_once_with(
+        "org", "repo", "coderbot/t1", missing_ok=True
+    )
+
+
+@pytest.mark.asyncio
+async def test_remote_branch_delete_uses_pipeline_credentials_and_tolerates_404(
+    init_mock_db, tmp_path, fake_gitea
+):
+    pipeline = await _make_pipeline()
+    repo = _make_repo(Path(pipeline.workspace_abs_path))
+    _commit_file(repo, "coderbot/t1", "one.txt", "one\n")
+    _git(repo, ["checkout", "main"])
+    pr, _task = await _make_pr_and_task(pipeline)
+    fake_gitea.delete_branch.side_effect = GiteaApiError("not found", 404)
+
+    notifier = PrStateNotifier()
+    with (
+        patch("core.utils.git_utils.GiteaClient", return_value=fake_gitea) as ctor,
+        patch.object(
+            PrStateNotifier,
+            "fetch_pipeline_repo",
+            new=AsyncMock(return_value=SyncResult(status="synced")),
+        ),
+        patch.object(PrStateNotifier, "pull_pipeline_repo", new=AsyncMock()),
+        patch(
+            "api.git_hosting.branch_notifier.ws_manager.broadcast",
+            new=AsyncMock(),
+        ),
+    ):
+        result = await notifier.on_pr_state(str(pipeline.id), _event(state="closed"))
+
+    ctor.assert_called_once_with("https://host", "tok")
+    fake_gitea.delete_branch.assert_awaited_once_with(
+        "org", "repo", "coderbot/t1", missing_ok=True
+    )
+    # A 404 (already deleted / Gitea's delete-after-merge) never fails the
+    # webhook or blocks the rest of the cleanup.
+    assert result.status == "mirrored"
+    refreshed = await PullRequest.get(pr.id)
+    assert refreshed.status == PullRequestStatus.REJECTED
+    assert refreshed.patch is None
+    assert "coderbot/t1" not in _local_branches(repo)
+
+
+@pytest.mark.asyncio
+async def test_cleanup_failure_does_not_change_result_or_block_broadcast(
+    init_mock_db,
+):
+    pipeline = await _make_pipeline()
+    pr, task = await _make_pr_and_task(pipeline)
+    mock_broadcast = AsyncMock()
+
+    notifier = PrStateNotifier()
+    with (
+        patch.object(
+            PrStateNotifier,
+            "fetch_pipeline_repo",
+            new=AsyncMock(return_value=SyncResult(status="synced")),
+        ),
+        patch.object(PrStateNotifier, "pull_pipeline_repo", new=AsyncMock()),
+        patch(
+            "api.git_hosting.branch_notifier.ws_manager.broadcast",
+            new=mock_broadcast,
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.cleanup_completed_pull_request",
+            new=AsyncMock(side_effect=RuntimeError("cleanup boom")),
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.sweep_completed_pull_requests",
+            new=AsyncMock(),
+        ) as mock_sweep,
+    ):
+        result = await notifier.on_pr_state(str(pipeline.id), _event(state="closed"))
+
+    assert result.status == "mirrored"
+    assert result.affected_task_ids == [str(task.id)]
+    assert (await PullRequest.get(pr.id)).status == PullRequestStatus.REJECTED
+    assert (await Task.get(task.id)).status == TaskStatus.CREATED
+    mock_broadcast.assert_awaited_once()
+    mock_sweep.assert_awaited_once()
+    assert mock_sweep.await_args.args[0].id == pipeline.id
+
+
+@pytest.mark.asyncio
+async def test_chain_tip_completion_sweeps_deferred_predecessor(
+    init_mock_db, tmp_path, fake_gitea
+):
+    pipeline = await _make_pipeline()
+    repo = _make_repo(Path(pipeline.workspace_abs_path))
+    _commit_file(repo, "coderbot/t1", "one.txt", "one\n")
+    _commit_file(repo, "coderbot/t2", "two.txt", "two\n")
+    _git(repo, ["checkout", "main"])
+
+    pr1, task1 = await _make_pr(
+        pipeline,
+        branch_name="coderbot/t1",
+        status=PullRequestStatus.SUBMITTED,
+        pi_session_uid="u1",
+    )
+    pr2, task2 = await _make_pr(
+        pipeline,
+        branch_name="coderbot/t2",
+        status=PullRequestStatus.OPEN,
+        pi_session_uid="u2",
+    )
+    await PiSession(
+        uid="u1",
+        kind=PiSessionKind.CODERBOT,
+        status=PiSessionStatus.COMPLETED,
+        pipeline_id=str(pipeline.id),
+        task_id=str(task1.id),
+        branch_name="coderbot/t1",
+        pull_request_ids=[str(pr1.id)],
+    ).insert()
+    await PiSession(
+        uid="u2",
+        kind=PiSessionKind.CODERBOT,
+        status=PiSessionStatus.COMPLETED,
+        pipeline_id=str(pipeline.id),
+        task_id=str(task2.id),
+        branch_name="coderbot/t2",
+        pull_request_ids=[str(pr2.id)],
+        chained_from_session_uid="u1",
+    ).insert()
+
+    notifier = PrStateNotifier()
+    with (
+        patch.object(
+            PrStateNotifier,
+            "fetch_pipeline_repo",
+            new=AsyncMock(return_value=SyncResult(status="synced")),
+        ),
+        patch.object(PrStateNotifier, "verify_commit_present", return_value=True),
+        patch.object(PrStateNotifier, "pull_pipeline_repo", new=AsyncMock()),
+        patch(
+            "api.git_hosting.branch_notifier.ws_manager.broadcast",
+            new=AsyncMock(),
+        ),
+    ):
+        first = await notifier.on_pr_state(str(pipeline.id), _event())
+        # The predecessor is terminal but its local branch/patch must survive
+        # while the chained descendant is still pending.
+        assert first.affected_task_ids == [str(task1.id)]
+        assert "coderbot/t1" in _local_branches(repo)
+        assert (await PullRequest.get(pr1.id)).patch is not None
+
+        # The descendant becomes the chain tip and completes.
+        pr2.status = PullRequestStatus.SUBMITTED
+        await pr2.save()
+        task2.status = TaskStatus.SUBMITTED
+        await task2.save()
+        second = await notifier.on_pr_state(str(pipeline.id), _event())
+
+    assert second.affected_task_ids == [str(task2.id)]
+    assert not [
+        branch for branch in _local_branches(repo) if branch.startswith("coderbot/")
+    ]
+    assert (await PullRequest.get(pr1.id)).patch is None
+    assert (await PullRequest.get(pr2.id)).patch is None
+    assert [c.args[2] for c in fake_gitea.delete_branch.await_args_list] == [
+        "coderbot/t1",
+        "coderbot/t2",
+    ]

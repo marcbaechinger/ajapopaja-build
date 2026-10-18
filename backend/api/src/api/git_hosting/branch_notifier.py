@@ -379,6 +379,34 @@ class PrStateNotifier:
             )
             affected_task_ids.append(str(task.id))
 
+            # Release the PR's artefacts only after the mirror and broadcast:
+            # a cleanup failure must never undo or delay them. The helper is
+            # best-effort and keeps a predecessor's local branch/patch while a
+            # chained descendant is still pending (the sweep below releases it
+            # once the chain tip completes).
+            try:
+                await git_utils.cleanup_completed_pull_request(pipeline, pr)
+            except Exception:
+                logger.warning(
+                    "Failed to clean up completed PR %s in pipeline %s",
+                    pr.id,
+                    pipeline_id,
+                    exc_info=True,
+                )
+
+        # Because of ordered chaining a just-completed chain tip can leave its
+        # terminal ancestors deferred; release that completed prefix in one
+        # pass. Log-only: the webhook response and NotifyResult are unchanged.
+        if affected_task_ids:
+            try:
+                await git_utils.sweep_completed_pull_requests(pipeline)
+            except Exception:
+                logger.warning(
+                    "Failed to sweep completed PRs for pipeline %s",
+                    pipeline_id,
+                    exc_info=True,
+                )
+
         # The DB mirror is applied; the working-tree update is gated both on a
         # session being idle and on an event that actually reconciled local
         # state. A feature-branch push (e.g. the one Ajapopaja itself creates

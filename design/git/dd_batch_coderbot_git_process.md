@@ -16,8 +16,9 @@ It answers, concretely:
 
 - which **working repositories** a batch session touches and where/when each is
   created and destroyed;
-- which **branches** are created in which directory, and when they are deleted or
-  left in place;
+- which **branches** are created in which directory, and when they are deleted
+  (completion cleanup, §8.4) or retained (a deferred chained predecessor, the
+  retained sandbox `S`);
 - which **commits** are created on which repository;
 - when the **`PullRequest` document** is created and updated; and
 - when a remote PR is **submitted** vs. when a commit is **applied locally and
@@ -45,7 +46,7 @@ which this document cross-references where the two topics meet.
 | `R` | The pipeline's **durable working repository**. For a *local* pipeline it is the host path under `WORKSPACES_ROOT`; for a *remote* pipeline it is a clone under `REMOTE_WORKSPACES_ROOT`. | pipeline creation (local) / startup bootstrap or lazy clone (remote) |
 | `S` | The **sandbox** the batch session works in. A per-task clone of `R` (or a per-session retained clone). | `CoderBotSession.run()` → `SandboxGitHelper.setup_sandbox()` |
 | `c` | The commit CoderBot creates **inside `S`** on `coderbot/<task_id>`. It exists only in the sandbox. | `_handle_agent_end()` |
-| `c'` | The commit created in `R` when a PR is **accepted** (the patch is re-applied with `git apply --3way`). It has a **different hash** from `c`. | `accept_pull_request()` |
+| `c'` | The commit created in `R` when a PR is **accepted** (the patch is re-applied with `git apply --3way`). It has a **different hash** from `c`. In `submit` mode it lives on the feature branch, which is deleted locally and remotely when the Gitea PR completes (completion cleanup, §8.4). | `accept_pull_request()` |
 | `PR` | The `PullRequest` MongoDB document (`status ∈ open / accepted / rejected / submitted`). | `_handle_agent_end()` (insert or update) |
 
 ### 2.2 Repositories and directories
@@ -53,7 +54,7 @@ which this document cross-references where the two topics meet.
 | Directory | Purpose | Lifecycle |
 |-----------|---------|-----------|
 | Local `R` = `WORKSPACES_ROOT/<workspace_path>` | The user's real working repo for a **local** pipeline (`pipeline.repo_uri` is unset). | Persistent; never deleted by CoderBot. |
-| Remote `R` = `REMOTE_WORKSPACES_ROOT/<repo_name>` | A clone of `pipeline.repo_uri` used as the durable working repo for a **remote** pipeline. `repo_name` is derived from the URI via `repo_name_from_uri`. | Cloned on first use (`ensure_repo_cloned` / `ensure_repo_present`, pre-warmed by `repo_bootstrap` at startup). Fetch + `pull --ff-only` on subsequent syncs. Persistent. |
+| Remote `R` = `REMOTE_WORKSPACES_ROOT/<repo_name>` | A clone of `pipeline.repo_uri` used as the durable working repo for a **remote** pipeline. `repo_name` is derived from the URI via `repo_name_from_uri`. | Cloned on first use (`ensure_repo_cloned` / `ensure_repo_present`, pre-warmed by `repo_bootstrap` at startup). Fetch + `pull --ff-only` on subsequent syncs. Persistent; completed `coderbot/<task_id>` feature branches are deleted by completion cleanup unless deferred for a chained descendant (§8.4). |
 | Ephemeral sandbox `S` = `SANDBOX_ROOT/coderbot/<task_id>` | Per-task full clone of `R` where Pi actually runs. Used when the run has **no `session_uid`** or workspace retention is disabled. | `rmtree` in `SandboxGitHelper.cleanup()` after the run. |
 | Retained sandbox `S` = `PI_SESSIONS_ROOT/<session_uid>/workspace` | Per-session full clone of `R`, kept so the session can be resumed / iterated in place. Used when the run has a `session_uid` **and** `PI_SESSION_RETAIN_BATCH_WORKSPACE` is enabled (default). | Kept after the run; swept by `sweep_expired_workspaces()` after `PI_SESSION_WORKSPACE_TTL_DAYS` (default 14) or deleted by `discard_session()`. |
 | `PI_SESSIONS_ROOT/<session_uid>/pi-sessions/` | `--session-dir` passed to Pi (native Pi conversation files). | Persisted with the session. |
@@ -75,7 +76,10 @@ coderbot/<task_id>
 ```
 
 The same name is stored on the `PullRequest.branch_name` and re-used as the
-feature branch name when a PR is later accepted in `gitea_pr` mode.
+feature branch name when a PR is later accepted in `gitea_pr` mode. Once the PR
+reaches a terminal state, completion cleanup deletes that branch in `R` and on
+Gitea (a pending chained descendant defers only the local branch/patch; see
+§8.4).
 
 ---
 
@@ -236,10 +240,15 @@ The PR keeps its `id` and status; only its content is refreshed. The task stays
 | `POST /pull_requests/{id}/accept` (submit) | `OPEN → SUBMITTED` (+ `remote_pr_url`) | `PULL_REQUEST_AVAILABLE → SUBMITTED` (records `commit_hash`, `completion_info`, `review_md`) |
 | `POST /pull_requests/{id}/reject` | `OPEN → REJECTED` | `PULL_REQUEST_AVAILABLE → CREATED` (back to backlog) |
 | `POST /pull_requests/{id}/iterate` | unchanged (`OPEN`) | unchanged (`PULL_REQUEST_AVAILABLE`) |
+| Gitea webhook / poller reports **merged** | `SUBMITTED → ACCEPTED` | `SUBMITTED → IMPLEMENTED` (records the merge commit) |
+| Gitea webhook / poller reports **closed without merge** (remote reject) | `SUBMITTED → REJECTED` | `SUBMITTED → CREATED` (back to backlog) |
 
 `ACCEPTED` and `REJECTED` are terminal and also trigger completion cleanup
 (§8.4); `SUBMITTED` is not terminal and keeps its patch/branch until the Gitea
-event or reconciliation completes the PR.
+event or reconciliation completes the PR. The remote hook and the local
+accept/reject routes all use the same shared cleanup helper, so the submit and
+remote-reject rows release the local `coderbot/<task_id>` branch, the Gitea
+branch and the `PullRequest.patch` (subject to the chained-descendant deferral).
 
 ---
 
@@ -391,6 +400,13 @@ the PR summary is therefore rewritten at accept time to point at `c'`.
   descendant sandbox already chained onto `c`. See
   [`dd_task_chain_rejection_lifecycle.md`](dd_task_chain_rejection_lifecycle.md)
   for the consequences and open gaps.
+- **Remote merge / remote reject** (Gitea webhook or
+  `GITEA_PR_POLL_ENABLED` poller): `PrStateNotifier.on_pr_state` mirrors
+  `SUBMITTED → ACCEPTED`/`REJECTED` and then runs the same completion cleanup
+  (§8.4). A submit-mode PR therefore has its local `coderbot/<task_id>` branch,
+  its Gitea branch and its patch deleted when the hook reports the outcome; the
+  local branch/patch are retained only while a pending chained descendant still
+  needs them, and the sweep releases them when the chain tip completes.
 - **Iterate** (`iterate_pull_request` / `resume_session`): re-runs CoderBot on a
   fresh branch with the existing patch applied as **unstaged** changes; on
   `agent_end` it updates the existing PR (new sandbox commit `c`, new patch,

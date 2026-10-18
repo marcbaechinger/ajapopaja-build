@@ -178,6 +178,7 @@ Build outputs to `dist/` (ESM, NodeNext). CI runs `lint` + `typecheck` + `test`
 | `GITEA_WEBHOOK_SECRET` | *(empty)* | HMAC secret for the `pr-state` webhook. |
 | `GITEA_PR_POLL_ENABLED` | `false` | Enable the polling PR reconciler. |
 | `GITEA_PR_POLL_INTERVAL` | `60` | Poll interval (seconds). |
+| `GITEA_DELETE_BRANCH_ON_COMPLETE` | `true` | Delete the remote Gitea feature branch when a completed PR is reconciled (best-effort; 404 is success). |
 | `PI_SERVER_PUBLIC_URL` | *(empty)* | Public base URL used to build webhook targets. |
 
 ## 8. Why the subprocess runner (and when to use the SDK)

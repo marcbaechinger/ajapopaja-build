@@ -1,7 +1,7 @@
 # Design Document: Task-Chain Lifecycle and Pull-Request Rejection
 
 **Task ID:** 6ac6aa15bd8a2b256aff5496
-**Status:** IMPLEMENTED (fixes 1–4 from §10 landed)
+**Status:** IMPLEMENTED (fixes 1–5 from §10 landed)
 **Related design:** Task-chain problem design (version 18, "Solve the task chain problem when making PRs")
 
 ## 1. Goal
@@ -154,32 +154,50 @@ default branch stays at `M` throughout (only the feature branches advance).
 `reject_pull_request()` sets `pr.status = PullRequestStatus.REJECTED` (no Gitea
 call) and, when the task is `PULL_REQUEST_AVAILABLE`, transitions it back to
 `CREATED` and broadcasts a `TASK_STATUS_UPDATED` WebSocket message so the UI
-moves the card back to the backlog.
+moves the card back to the backlog. It then runs the shared completion cleanup
+(§8.4 of [`dd_batch_coderbot_git_process.md`](dd_batch_coderbot_git_process.md)):
+the dev-server worktree is removed, `PullRequest.patch` is cleared, and a
+feature branch is deleted if one exists (for example after a failed accept with
+`failure_strategy=keep`). The Gitea branch is also deleted best-effort when the
+PR had been submitted.
 
-It does **not** touch `R` (`main` stays at `M`), does **not** delete `S1`
-(`c1` still exists on disk), and does **not** re-parent any sandbox that already
-chained onto `c1`.
+It does **not** touch `R`'s default branch (`main` stays at `M`), does **not**
+delete `S1` (`c1` still exists on disk), and does **not** re-parent any sandbox
+that already chained onto `c1`.
 
-Base resolution for a **new** task then skips the rejected PR (`status != OPEN`)
-and falls back to `M`. But `S2`, already created, keeps `c1` as ancestor.
+Because of the chained-PR deferral rule, if `PR1` still has a pending chained
+descendant its local branch and patch are retained until that descendant
+completes (the remote branch is released immediately). Base resolution for a
+**new** task skips the rejected PR (only `OPEN`/`SUBMITTED` count as pending) and
+falls back to `M`. But `S2`, already created, keeps `c1` as ancestor.
 
 ## 6. Rejection channel B — remote Gitea reject
 
-There is **no observer** for remote PR state: no webhook handler and no polling of
-`GiteaClient.get_pull_request` in the routes. When the Gitea user closes the PR,
-nothing changes locally:
+> **Historical framing (before the webhook):** originally there was **no
+> observer** for remote PR state — no webhook handler and no polling of
+> `GiteaClient.get_pull_request` — so closing the PR in Gitea left local
+> `PR1.status`/`task t1` at `SUBMITTED` and both `coderbot/t1` branches in
+> place. That paragraph describes the old behaviour only.
 
-* local `PR1.status` stays `SUBMITTED`,
-* `task t1` stays `SUBMITTED`,
-* `remote_pr_url` and the pushed feature branch (`coderbot/t1`, still holding
-  `c1'`) remain,
-* `R`'s local default branch stays at `M` (fix 4 no longer commits it at accept
-  time), but the local and remote `coderbot/t1` branch still contain `c1'`.
+Today the HMAC-protected webhook
+(`POST /api/git_hosting/pipelines/{pipeline_id}/pr-state`) and the optional
+`GITEA_PR_POLL_ENABLED` reconciler feed the same
+`PrStateNotifier.on_pr_state`. When the Gitea user closes the PR without
+merging:
 
-A remote reject is therefore still invisible both to the chain logic and to the
-local repository — and, because a chained PR2's feature branch stacks on
-`coderbot/t1`, the rejected `c1'` can still reach the remote through a merged
-PR2 (see §9, consequence 3).
+* local `PR1.status` becomes `REJECTED` and `task t1` returns to `CREATED`
+  (mirroring the local reject), with the usual `TASK_STATUS_UPDATED` broadcast;
+* completion cleanup removes the dev-server worktree, deletes the local
+  `coderbot/t1` branch, deletes the Gitea branch, and clears `PR1.patch`;
+* `R`'s local default branch stays at `M` (fix 4 never committed `c1'` there).
+
+The cleanup obeys the chained-descendant deferral rule: if a descendant is still
+pending, the **local** `coderbot/t1` branch and `PR1.patch` are kept as that
+descendant's `start_point`/patch fallback, while the **remote** branch is
+deleted immediately. The sweep releases the local branch and patch once the
+chain tip completes. A remote reject is therefore no longer invisible to the
+chain logic, although an already-created descendant still carries `c1` in its
+history (see §9, consequence 3).
 
 ## 7. Decision diagram: rejecting PR1 while PR2 is chained on c1
 
@@ -191,26 +209,30 @@ flowchart TD
     D --> E["PR2 OPEN\nS2 stack M←c1←c2\npatch = diff(c1,c2)"]
 
     E --> F{"How is PR1 rejected?"}
-    F -->|"Local reject\n(POST /pr/…/reject)"| G["PR1.status = REJECTED\ntask t1 → CREATED\nR.main unchanged (M)\nS1 kept, c1 still on disk"]
-    F -->|"Gitea user closes PR"| H["No backend observer\nPR1.status stays SUBMITTED\ntask t1 stays SUBMITTED\nR.main stays clean (M)\ncoderbot/t1 still has c1'"]
+    F -->|"Local reject\n(POST /pr/…/reject)"| G["PR1.status = REJECTED\ntask t1 → CREATED\nR.main unchanged (M)\ncleanup: worktree removed, patch cleared,\nfeature/Gitea branch deleted if any\n(chained descendant defers local branch+patch)\nS1 kept, c1 still on disk"]
+    F -->|"Gitea user closes PR\n(webhook/poller)"| H["Reconciled: PR1.status = REJECTED\ntask t1 → CREATED\nR.main stays clean (M)\ncleanup deletes local coderbot/t1 + Gitea branch,\nclears patch, removes worktree\n(pending descendant defers local branch+patch)"]
 
     G --> I["S2 base is NOT re-evaluated\nc2 still has ancestor c1"]
     H --> I
 
     I --> J{"Accepting PR2?"}
-    J -->|"git apply --3way\ndiff(c1,c2) onto M"| K{"Does c1's content exist in M?"}
-    K -->|"no overlap / 3-way resolves"| L["Applies, but c1's files are absent\n→ partially correct result"]
-    K -->|"context needed from c1"| M2["Conflict → HTTP 500\nworkspace reset (REVERT)"]
-    J -->|"ordering guard §3.6"| N["Does NOT fire:\nPR1 is no longer OPEN"]
+    J -->|"rejected-predecessor guard\n(fix 1)"| N["409 Conflict:\nPR1 is REJECTED\nre-chain/rework the descendant"]
+    J -->|"after manual re-chain/rework"| O["PR2 gets a valid base;\nno silent partial apply"]
 ```
 
-> In `gitea_pr` mode the “accepting PR2” leg differs from the diagram above.
-> For the **local-reject** case the predecessor feature branch `coderbot/t1` was
-> never created, so `_resolve_chained_start_point` falls back to `M` and the
-> `git apply --3way diff(c1,c2)` behaviour above applies. For the **remote-reject**
-> case `coderbot/t1` still exists, so PR2's feature branch stacks on `coderbot/t1`
-> (already containing `c1'`) and the delta applies cleanly — the rejected `c1'`
-> then rides along into the remote PR2 (consequence 3 in §9).
+> In `gitea_pr` mode the “accepting PR2” leg differs slightly. For the
+> **local-reject** case the predecessor feature branch `coderbot/t1` is normally
+> never created (unless an earlier accept attempt created it), so a re-chain or
+> rework starts from `M`. For the **remote-reject** case the Gitea branch is
+> deleted immediately, while the local `coderbot/t1` survives only when a
+> chained descendant is pending; a reworked descendant may use it as its start
+> point until the chain tip completes. In both cases the accept route refuses a
+> descendant of a rejected predecessor with `409` (fix 1) until it is re-chained
+> or reworked. If a descendant had already been accepted/merged *before* the
+> predecessor's remote rejection was reconciled, its branch history still
+> carries the rejected `c1'` (consequence 3 in §9); completion cleanup cannot
+> rewrite that content. Once the chain tip completes, the predecessor's local
+> branch and patch are released by the sweep.
 
 ## 8. Content vs. ancestry: does a rejected middle commit block descendants?
 
@@ -227,10 +249,14 @@ keyed on **content**:
 The `Parent commit (base): c2` line in the summary is audit metadata only and is
 not consulted at accept time.
 
-Consequently, in a chain `c1 → c2 → c3` where the tasks edit **disjoint** files
-(`f1`, `f2`, `f3`), rejecting `c2` and accepting `PR3` onto `main` still works:
-`diff(c2,c3)` contains only `f3`'s hunk, and `f3@c2 == f3@M`, so it applies. `c2` is
-not required as an ancestor. The failure is content-dependent, not automatic:
+At the content layer, in a chain `c1 → c2 → c3` where the tasks edit **disjoint**
+files (`f1`, `f2`, `f3`), `diff(c2,c3)` contains only `f3`'s hunk and
+`f3@c2 == f3@M`, so the delta *could* apply without `c2` as an ancestor. That is
+why the failure mode is content-dependent rather than automatic — and why the
+accept route needs the explicit rejected-predecessor guard (fix 1) to refuse a
+descendant of a rejected predecessor with `409` instead of relying on the patch
+to fail. The content analysis still explains what happens if a descendant was
+accepted/merged before its predecessor's rejection was reconciled:
 
 | Case | Applies? | Why |
 |------|----------|-----|
@@ -243,50 +269,62 @@ not required as an ancestor. The failure is content-dependent, not automatic:
 preimage blobs exist in `R`. Sandbox commits do not, so overlapping hunks
 generally fail hard (`HTTP 500` + workspace reset) rather than merging.
 
-This generalises to an N-deep chain: each PR carries only `diff(c_{n-1}, c_n)`, so a
-rejected middle commit `ck` blocks a descendant only where that descendant's patch
-depends on `ck`'s content. `tree(cN) = tree(c1) + Δ2 + ... + ΔN`; a missing `Δk`
-leaves the tree wrong wherever later diffs rely on it. Disjoint work is unaffected.
+This generalises to an N-deep chain: each PR carries only `diff(c_{n-1}, c_n)`, so
+a rejected middle commit `ck` matters to a descendant where that descendant's
+patch depends on `ck`'s content. `tree(cN) = tree(c1) + Δ2 + ... + ΔN`; a missing
+`Δk` leaves the tree wrong wherever later diffs rely on it. Today fix 1 blocks
+acceptance of such a descendant until it is re-chained/reworked; the table above
+describes the content-level behaviour that motivates that guard (and that still
+applies to work merged before the rejection was reconciled).
 
 ## 9. Gap analysis
 
 | Situation | Design rule | Covered? |
 |-----------|-------------|-----------|
-| New task starts after PR rejected | eligibility requires `OPEN` → skip, branch from `M` | ✅ §3.2/§3.5 |
-| Accept newer PR while older is still `OPEN` | `409` ordering guard | ✅ §3.6 |
+| New task starts after PR rejected | eligibility only counts `OPEN`/`SUBMITTED` → skip rejected, branch from `M` | ✅ §3.2/§3.5 |
+| Accept newer PR while older is still pending | `409` ordering guard over `OPEN`/`SUBMITTED` | ✅ §3.6 |
 | Keep `R.main` clean in `gitea_pr` mode so rejected work does not leak into new branches | commit onto the feature branch, not the default branch | ✅ fix 4 (§10) |
 | Stack a chained `gitea_pr` PR on its predecessor's accepted branch | `_resolve_chained_start_point` | ✅ fix 4 (§10) |
-| **Descendant already chained onto a later-rejected predecessor** | none — reject does not re-parent `S2` | ❌ |
-| **Remote Gitea reject** | none — local status stays `SUBMITTED`; remote reject not observed | ❌ |
-| Accept a descendant whose ancestor was rejected | ordering guard only looks at `OPEN` | ❌ (§3.6 misses it) |
-| Treat `SUBMITTED` as pending for chaining/ordering | eligibility/ordering query only tests `OPEN` | ❌ (fix 2) |
+| Descendant already chained onto a later-rejected predecessor | accept is blocked with `409`; the descendant is not automatically re-parented | ✅ fix 1; re-chain/rework remains manual |
+| Remote Gitea reject | webhook/poller mirrors `REJECTED` and runs completion cleanup (subject to chained-descendant deferral) | ✅ fix 3 + fix 5 |
+| Accept a descendant whose ancestor was rejected | rejected-predecessor guard blocks it with `409` | ✅ fix 1 |
+| Treat `SUBMITTED` as pending for chaining/ordering | eligibility/ordering query counts `OPEN`/`SUBMITTED` | ✅ fix 2 |
+| Completed PR leaves local branch, Gitea branch or multi-MB patch behind | completion cleanup + sweep | ✅ fix 5 |
 
 ### Consequences
 
 1. In the t1+t2-at-once scenario the chain is formed **before** the user can
-   review, so rejecting `PR1` does not make `PR2` fall back to `main`. Accepting
-   `PR2` alone replays `diff(c1,c2)` on `M`, which can either fail or produce a
-   partial result. Whether it is harmful depends on content overlap (see [§8](#8-content-vs-ancestry-does-a-rejected-middle-commit-block-descendants));
-   either way the recorded base `c1` never exists in `main`. The ordering guard
-   does not catch it because `PR1` is no longer `OPEN` after the reject. (In
-   `gitea_pr` mode this is the **local-reject** fallback: `coderbot/t1` was never
-   created, so PR2 branches from `M` and hits the same apply behaviour.)
-2. A remote reject is still silently ignored (fix 3 not applied): the local
-   PR/task remain `SUBMITTED`. Separately, `SUBMITTED` PRs are not treated as
-   pending by the chaining eligibility query (only `OPEN` counts, fix 2 not
-   applied), so in the normal `gitea_pr` flow the chain **breaks** as soon as
-   PR1 is submitted for review: a subsequent task falls back to `M` instead of
-   chaining onto `c1`, and the rejected `c1'` stays stranded on the
-   `coderbot/t1` feature branch.
+   review, so rejecting `PR1` still does not make `PR2` fall back to `main`.
+   What changed is that accepting `PR2` is now **blocked with `409`** by the
+   rejected-predecessor guard (fix 1) instead of silently replaying
+   `diff(c1,c2)` on `M`; re-chaining or reworking the descendant remains a
+   manual action (open). The reject also runs completion cleanup, so `PR1`'s
+   dev-server worktree and branches are released (local branch/patch only once
+   no chained descendant is pending).
+2. A remote reject is no longer silently ignored: the webhook/poller mirrors
+   `REJECTED` onto the local PR/task and runs the same completion cleanup.
+   Because `SUBMITTED` now counts as pending (fix 2), a normal `gitea_pr` chain
+   keeps chaining while review is pending; when the remote close is reconciled
+   the completed PR's Gitea branch is deleted immediately and its local
+   branch/patch are released once no pending descendant remains. Accepting a
+   descendant of that rejected predecessor is still blocked by fix 1 until it is
+   re-chained/reworked.
 3. Because `gitea_pr` accept stacks PR2's feature branch on PR1's accepted
    feature branch (rather than on `R.main`), a rejected PR1's change can still
-   reach the remote through a merged PR2: PR2's branch physically contains
-   `c1'`, and no reconciliation ever removes it.
+   reach the remote through a descendant that was already chained and is later
+   accepted/merged. What changed with completion cleanup is that the **completed
+   PR's branches and patch are released** (the remote branch at its own
+   completion, the local branch and patch by the sweep once the chain tip
+   completes). What cleanup does **not** and cannot undo is the *content/history*
+   property: a merged descendant still carries the predecessor's commit `c1'` in
+   its branch history. Open issues remain: a rejected predecessor still blocks
+   the descendant (manual re-chain/rework), and an abandoned chain (rejected
+   predecessor followed by a still-pending descendant) stays deferred; forcing
+   such a chain to clean up is an explicit escape hatch that is out of scope.
 
 ## 10. Proposed fixes and current status
 
-The four fixes below were proposed in the original analysis. Only fix 4 has
-landed so far; the rest remain open.
+The five fixes below were proposed in the original analysis; all have landed.
 
 1. **Re-chain or invalidate descendants on reject.** When `PR1` is rejected,
    detect sessions/PRs already chained onto `c1` and either mark them stale or
@@ -314,19 +352,37 @@ landed so far; the rest remain open.
    branches still stack by design — each chained PR is a delta — so the
    “feature branches stop stacking” goal is only partially achieved (see §9,
    consequence 3).
+5. **Completion cleanup.** A terminal (`ACCEPTED`/`REJECTED`) PR releases its
+   dev-server worktree, its local and remote feature branches and its
+   `PullRequest.patch` through the shared, idempotent
+   `git_utils.cleanup_completed_pull_request`; a pending chained descendant
+   defers the local branch/patch, and `sweep_completed_pull_requests` releases
+   the completed prefix when the chain tip completes. It is invoked by the
+   webhook/poller `on_pr_state` (log-only failures, never changing the HTTP
+   response) and by the local accept/reject routes. — **Implemented** (see
+   [`dd_batch_coderbot_git_process.md`](dd_batch_coderbot_git_process.md) §8.4
+   and [`dd_git_hosting.md`](dd_git_hosting.md) §5.4).
 
 ## 11. Test strategy
 
-Already covered (fix 4): accepting a chained Gitea PR stacks its feature branch
-on the predecessor's accepted branch and leaves the default branch clean
-(`test_accept_chained_pr_gitea.py`, `test_accept_pr_with_user_summary_gitea.py`).
+Covered (fixes 1–5):
 
-The following are still aspirational, pending fixes 1–3:
-
-* Unit: reject flips `PR.status`/task status; a chained descendant is flagged or
-  blocked as specified by fix 1.
-* Unit: eligibility query includes `SUBMITTED` as pending.
-* Integration (temp repos): t1+t2 chained, reject PR1, accept PR2 → asserts the
-  chosen behaviour (blocked/409 or re-chained from `M`), never a silent partial
-  apply.
-* Integration: remote-reject reconciliation flips local PR/task status.
+* Fix 4: accepting a chained Gitea PR stacks its feature branch on the
+  predecessor's accepted branch and leaves the default branch clean
+  (`test_accept_chained_pr_gitea.py`, `test_accept_pr_with_user_summary_gitea.py`).
+* Fix 1: accepting a descendant of a rejected predecessor is blocked with `409`
+  (rejected-predecessor guard tests).
+* Fix 2: the eligibility/ordering queries treat `SUBMITTED` as pending.
+* Fix 3: remote-reject/merge reconciliation flips the local PR/task and does not
+  change webhook responses (`backend/tests/test_branch_notifier.py`,
+  `backend/tests/routes/test_git_hosting_routes.py`).
+* Fix 5: the chain timeline tests **T-A…T-I** in
+  `backend/tests/test_completion_cleanup.py` exercise the shared helper and
+  deferral/sweep semantics: T-A (own remote branch only), T-B (deferred branch
+  remains a start point), T-C (tip releases the whole prefix), T-D (non-chained
+  immediate cleanup), T-E (sibling does not defer), T-F (abandoned chain stays
+  deferred), T-G (order independence), T-H (idempotency) and T-I (PR without a
+  branch never raises). The hook path additionally covers remote merge/close
+  cleanup, credential use, 404 tolerance, log-only cleanup failure and the
+  branch-delete webhook no-op in `backend/tests/test_branch_notifier.py` and
+  `backend/tests/routes/test_git_hosting_routes.py`.
