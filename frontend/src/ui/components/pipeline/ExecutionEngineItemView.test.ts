@@ -76,6 +76,13 @@ describe('ExecutionEngineItemView', () => {
     expect(html).toContain('value="3"');
   });
 
+  it('should apply the selected styling when isSelected is true', () => {
+    const html = ExecutionEngineItemView.render(makeTask({ status: TaskStatus.SCHEDULED }), true);
+    expect(html).toContain('border-app-accent-1/70');
+    expect(html).toContain('bg-app-accent-1/10');
+    expect(html).toContain('ring-1 ring-app-accent-1/40');
+  });
+
   it('should not render the order control for non-SCHEDULED tasks', () => {
     const html = ExecutionEngineItemView.render(makeTask({ status: TaskStatus.INPROGRESS, order: 3 }));
     expect(html).not.toContain('update_task_order');

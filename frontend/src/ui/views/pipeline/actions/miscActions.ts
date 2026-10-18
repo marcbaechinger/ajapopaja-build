@@ -63,7 +63,7 @@ export function registerMiscActions(ctx: PipelineDetailCtx, deps: MiscActionsDep
     // or we can refresh manually if needed.
   });
 
-  // Collapse/expand the left backlog sidebar (proposed designs + backlog) to
+  // Collapse/expand the left backlog sidebar (proposed designs + backlog + queue) to
   // reclaim horizontal space on demand. The chosen state is persisted per
   // pipeline and restored on the next visit.
   actionRegistry.register('toggle_backlog_sidebar', () => {

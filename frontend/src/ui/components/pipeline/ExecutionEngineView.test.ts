@@ -36,24 +36,25 @@ function makeTask(overrides: Partial<Task> = {}): Task {
 }
 
 describe('ExecutionEngineView', () => {
-  it('should render the In Progress and Queue sections (no Failed section)', () => {
+  it('should render only the In Progress section (queue moved to the backlog)', () => {
     const html = ExecutionEngineView.render({ tasks: [
       makeTask({ id: 'p', status: TaskStatus.INPROGRESS }),
       makeTask({ id: 'q', status: TaskStatus.SCHEDULED }),
       makeTask({ id: 'f', status: TaskStatus.FAILED }),
     ] });
     expect(html).toContain('In Progress');
-    expect(html).toContain('Queue');
+    expect(html).not.toContain('>Queue<');
+    expect(html).not.toContain('Nothing scheduled.');
     expect(html).not.toContain('Failed');
     expect(html).toContain('data-view-id="p"');
-    expect(html).toContain('data-view-id="q"');
+    expect(html).not.toContain('data-view-id="q"');
     expect(html).not.toContain('data-view-id="f"');
   });
 
   it('should sort tasks within a section by execution order', () => {
     const html = ExecutionEngineView.render({ tasks: [
-      makeTask({ id: 'b', status: TaskStatus.SCHEDULED, order: 10 }),
-      makeTask({ id: 'a', status: TaskStatus.SCHEDULED, order: 1 }),
+      makeTask({ id: 'b', status: TaskStatus.INPROGRESS, order: 10 }),
+      makeTask({ id: 'a', status: TaskStatus.INPROGRESS, order: 1 }),
     ] });
     expect(html.indexOf('data-view-id="a"')).toBeLessThan(html.indexOf('data-view-id="b"'));
   });
@@ -63,38 +64,35 @@ describe('ExecutionEngineView', () => {
       makeTask({ id: 'c', status: TaskStatus.CREATED }),
       makeTask({ id: 'q', status: TaskStatus.SCHEDULED }),
     ] });
-    expect(html).toContain('data-view-id="q"');
+    expect(html).not.toContain('data-view-id="q"');
     expect(html).not.toContain('data-view-id="c"');
   });
 
   it('should render empty states when no tasks exist', () => {
     const html = ExecutionEngineView.render({ tasks: [] });
     expect(html).toContain('No active work.');
-    expect(html).toContain('Nothing scheduled.');
+    expect(html).not.toContain('Nothing scheduled.');
     expect(html).not.toContain('No failed tasks.');
   });
 
-  it('should show the task count in each section header', () => {
+  it('should show the task count in the In Progress section header', () => {
     const html = ExecutionEngineView.render({ tasks: [
       makeTask({ id: 'p1', status: TaskStatus.INPROGRESS }),
       makeTask({ id: 'p2', status: TaskStatus.INPROGRESS }),
       makeTask({ id: 'q1', status: TaskStatus.SCHEDULED }),
     ] });
-    // one count chip per section (section chips use a distinct muted style)
-    expect((html.match(/bg-app-surface border border-app-border rounded-full/g) || []).length).toBe(2);
+    // one count chip for In Progress (section chips use a distinct muted style)
+    expect((html.match(/bg-app-surface border border-app-border rounded-full/g) || []).length).toBe(1);
   });
 
   it('should render a stable CoderBot PiView mount outside the repainted sections', () => {
     const html = ExecutionEngineView.render({ tasks: [
       makeTask({ id: 'p', status: TaskStatus.INPROGRESS }),
-      makeTask({ id: 'q', status: TaskStatus.SCHEDULED }),
     ] });
     const inProgIdx = html.indexOf('In Progress');
     const mountIdx = html.indexOf('engine-piview-mount');
-    const queueIdx = html.indexOf('>Queue<');
     expect(mountIdx).toBeGreaterThan(-1);
     expect(mountIdx).toBeGreaterThan(inProgIdx);
-    expect(mountIdx).toBeGreaterThan(queueIdx);
     expect(html).not.toContain('CoderBot Activity');
     expect(html).toContain('Start a CoderBot to see its output here.');
 
@@ -123,37 +121,23 @@ describe('ExecutionEngineView', () => {
   });
 
   it('should ignore deleted tasks', () => {
-    const html = ExecutionEngineView.render({ tasks: [makeTask({ status: TaskStatus.SCHEDULED, deleted: true })] });
-    expect(html).toContain('Nothing scheduled.');
+    const html = ExecutionEngineView.render({ tasks: [makeTask({ status: TaskStatus.INPROGRESS, deleted: true })] });
+    expect(html).toContain('No active work.');
   });
 
   it('should render the PipelineHistoryView at the bottom when history tasks are provided', () => {
     const html = ExecutionEngineView.render({
-      tasks: [makeTask({ id: 'q', status: TaskStatus.SCHEDULED })],
+      tasks: [makeTask({ id: 'p', status: TaskStatus.INPROGRESS })],
       historyTasks: [makeTask({ id: 'h1', status: TaskStatus.IMPLEMENTED, title: 'Done Task' })],
       historyPage: 0,
     });
     expect(html).toContain('History Feed');
     expect(html).toContain('Done Task');
     expect(html).toContain('sidebar-history');
-    // History comes after the engine sections (Queue) at the bottom.
-    expect(html.indexOf('sidebar-history')).toBeGreaterThan(html.indexOf('>Queue<'));
+    // History comes after the engine sections at the bottom.
+    expect(html.indexOf('sidebar-history')).toBeGreaterThan(html.indexOf('In Progress'));
     expect(html).toContain('overflow-hidden');
-    // Failed section has been removed, so history comes after Queue.
     expect(html).not.toContain('Failed');
-  });
-
-  it('should scroll the queue list within a bounded max-height container', () => {
-    const html = ExecutionEngineView.render({ tasks: [
-      makeTask({ id: 'q1', status: TaskStatus.SCHEDULED }),
-      makeTask({ id: 'q2', status: TaskStatus.SCHEDULED }),
-      makeTask({ id: 'q3', status: TaskStatus.SCHEDULED }),
-    ] });
-    expect(html).toContain('max-h-48');
-    expect(html).toContain('overflow-y-auto');
-    expect(html).toContain('data-view-id="q1"');
-    expect(html).toContain('data-view-id="q2"');
-    expect(html).toContain('data-view-id="q3"');
   });
 
   describe('collapsible sections', () => {
@@ -208,7 +192,7 @@ describe('ExecutionEngineView', () => {
   describe('bucketFor()', () => {
     it('maps each status to its sidebar bucket', () => {
       expect(ExecutionEngineView.bucketFor(TaskStatus.INPROGRESS)).toBe('inprogress');
-      expect(ExecutionEngineView.bucketFor(TaskStatus.SCHEDULED)).toBe('queue');
+      expect(ExecutionEngineView.bucketFor(TaskStatus.SCHEDULED)).toBe('none');
       expect(ExecutionEngineView.bucketFor(TaskStatus.IMPLEMENTED)).toBe('history');
       expect(ExecutionEngineView.bucketFor(TaskStatus.SUBMITTED)).toBe('history');
       expect(ExecutionEngineView.bucketFor(TaskStatus.DISCARDED)).toBe('history');
@@ -265,13 +249,12 @@ describe('ExecutionEngineView', () => {
       expect(container.querySelector('#completed-task-list [data-task-id="h1"]')!.textContent).toContain('implemented');
     });
 
-    it('moves a queue task into in-progress in order and updates both counts', () => {
+    it('falls back for a queue task entering in-progress (queue lives in the backlog)', () => {
       const queued = makeTask({ id: 'q1', status: TaskStatus.SCHEDULED, order: 3 });
       const container = mount([
         makeTask({ id: 'p1', status: TaskStatus.INPROGRESS, order: 10 }),
         queued,
       ]);
-      const mountEl = container.querySelector('#engine-piview-mount');
 
       const ok = ExecutionEngineView.reconcileTask(
         container,
@@ -279,13 +262,7 @@ describe('ExecutionEngineView', () => {
         TaskStatus.SCHEDULED
       );
 
-      expect(ok).toBe(true);
-      expect(idsIn(container, '[data-engine-section="inprogress"] [data-view-id]')).toEqual(['q1', 'p1']);
-      expect(container.querySelector('[data-engine-count="inprogress"]')!.textContent).toBe('2');
-      expect(container.querySelectorAll('[data-engine-section="queue"] [data-view-id]').length).toBe(0);
-      expect(container.querySelector('[data-engine-count="queue"]')!.textContent).toBe('0');
-      expect(container.querySelector('[data-engine-section="queue"]')!.textContent).toContain('Nothing scheduled.');
-      expect(container.querySelector('#engine-piview-mount')).toBe(mountEl);
+      expect(ok).toBe(false);
     });
 
     it('removes an in-progress task that moves to none and restores the empty state', () => {

@@ -111,7 +111,7 @@ export class PipelineDetailView extends View {
   private get pendingTaskId(): string | null { return this.ctx.state.pendingTaskId; }
   private set pendingTaskId(value: string | null) { this.ctx.state.pendingTaskId = value; }
 
-  // Whether the left backlog sidebar (proposed designs + backlog) is collapsed.
+  // Whether the left backlog sidebar (proposed designs + backlog + queue) is collapsed.
   // Persisted per pipeline so the chosen layout survives reloads.
   private get sidebarCollapsed(): boolean { return this.ctx.state.sidebarCollapsed; }
   private set sidebarCollapsed(value: boolean) { this.ctx.state.sidebarCollapsed = value; }
@@ -893,9 +893,17 @@ export class PipelineDetailView extends View {
     if (!this.container) return;
     const backlogEl = this.container.querySelector('#backlog-view');
     if (!backlogEl) return;
-    const backlogTasks = this.allLoadedTasks.filter(t => !t.deleted && (t.status === TaskStatus.PROPOSED || t.status === TaskStatus.CREATED));
+    const backlogTasks = this.allLoadedTasks.filter(
+      t =>
+        !t.deleted &&
+        (t.status === TaskStatus.PROPOSED ||
+          t.status === TaskStatus.CREATED ||
+          t.status === TaskStatus.SCHEDULED)
+    );
     const selectedTaskId =
-      this.selectedTask && this.selectedTask.status === TaskStatus.CREATED
+      this.selectedTask &&
+      (this.selectedTask.status === TaskStatus.CREATED ||
+        this.selectedTask.status === TaskStatus.SCHEDULED)
         ? this.selectedTask.id
         : undefined;
 

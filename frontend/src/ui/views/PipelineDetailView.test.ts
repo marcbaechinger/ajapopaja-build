@@ -254,7 +254,7 @@ describe('PipelineDetailView Layout', () => {
     expect(backlog.innerHTML).not.toContain('ring-app-accent-1/40');
   });
 
-  it('should render scheduled tasks in the right ExecutionEngineView and remove them when unscheduled', async () => {
+  it('should render scheduled tasks in the backlog sidebar queue and remove them when unscheduled', async () => {
     let tasksHandler: ((payload: any) => void) | undefined;
     mockContext.dataManager.on = vi.fn((query: string, cb: any) => {
       if (query.startsWith('pipeline:tasks:')) tasksHandler = cb;
@@ -267,8 +267,11 @@ describe('PipelineDetailView Layout', () => {
     container.innerHTML = view.render() as string;
     await view.refreshTasks();
 
+    const backlog = container.querySelector('#backlog-view');
     const engine = container.querySelector('#execution-engine-view');
+    expect(backlog).not.toBeNull();
     expect(engine).not.toBeNull();
+    expect(backlog!.querySelectorAll('[data-view-id="s1"]').length).toBe(0);
     expect(engine!.querySelectorAll('[data-view-id="s1"]').length).toBe(0);
 
     const scheduledTask: any = { id: 's1', title: 'Sched', status: TaskStatus.SCHEDULED, deleted: false, version: 1, order: 0, type: 'manual', want_design_doc: false };
@@ -276,10 +279,13 @@ describe('PipelineDetailView Layout', () => {
     // the scheduling operation can produce a duplicate WS notification
     tasksHandler!(scheduledTask);
     tasksHandler!(scheduledTask);
-    expect(engine!.querySelectorAll('[data-view-id="s1"]').length).toBe(1);
+    expect(backlog!.querySelectorAll('[data-view-id="s1"]').length).toBe(1);
+    expect(engine!.querySelectorAll('[data-view-id="s1"]').length).toBe(0);
 
-    // moving back to CREATED must remove the task from the ExecutionEngineView
+    // moving back to CREATED must move the task out of the queue section
     tasksHandler!({ id: 's1', title: 'Sched', status: TaskStatus.CREATED, deleted: false, version: 2, order: 0, type: 'manual', want_design_doc: false });
+    expect(backlog!.querySelectorAll('[data-view-id="s1"]').length).toBe(1);
+    expect(backlog!.querySelector('[data-backlog-section="queue"] [data-view-id="s1"]')).toBeNull();
     expect(engine!.querySelectorAll('[data-view-id="s1"]').length).toBe(0);
   });
 

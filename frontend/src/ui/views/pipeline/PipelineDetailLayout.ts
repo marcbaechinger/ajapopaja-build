@@ -88,7 +88,7 @@ export class PipelineDetailLayout {
             </button>
           </div>
 
-          <!-- Left Sidebar: BacklogView (proposed designs + backlog) -->
+          <!-- Left Sidebar: BacklogView (proposed designs + backlog + queue) -->
           <aside id="backlog-sidebar"
             class="w-96 flex-none shrink-0 border-r border-app-border/60 bg-app-surface/30 overflow-y-auto${backlogHidden}">
             <div id="backlog-view" class="min-h-full">

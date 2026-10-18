@@ -40,20 +40,31 @@ const statusMeta: Record<string, { label: string; badgeClass: string }> = {
 };
 
 /**
- * Renders a single task inside the ExecutionEngineView right sidebar.
+ * Renders a single task inside the ExecutionEngineView right sidebar and the
+ * Queue section of the BacklogView sidebar.
  *
  * It mirrors the compact look of BacklogTaskView but without action buttons:
  * it shows the title, a spec excerpt and a small status badge, and is clickable
  * to select the task so it appears in the selected TaskView in the main area.
  */
 export class ExecutionEngineItemView {
-  static render(task: Task): string {
+  /**
+   * @param isSelected When true the row gets the same selected treatment as a
+   *   backlog row, so a queued task selected from the sidebar is highlighted.
+   */
+  static render(task: Task, isSelected: boolean = false): string {
     const taskId = escapeHtml(task.id || '');
     const excerpt = task.spec ? specExcerpt(task.spec) : '';
     const meta = statusMeta[task.status] || { label: task.status, badgeClass: 'text-app-muted bg-app-surface border-app-border' };
 
+    const rowClass =
+      'group rounded-lg p-3 flex flex-col gap-2 transition-colors cursor-pointer hover:border-app-accent-2/40 hover:bg-app-bg ' +
+      (isSelected
+        ? 'border border-app-accent-1/70 bg-app-accent-1/10 ring-1 ring-app-accent-1/40'
+        : 'border border-app-border bg-app-bg/60');
+
     return `
-      <div class="group rounded-lg border border-app-border bg-app-bg/60 p-3 flex flex-col gap-2 transition-colors cursor-pointer hover:border-app-accent-2/40 hover:bg-app-bg"
+      <div class="${rowClass}"
            data-action-click="select_task" data-view-id="${taskId}" data-task-id="${taskId}" data-order="${task.order ?? 0}">
         <div class="flex items-start justify-between gap-2">
           <span class="text-[11px] font-bold text-app-text leading-snug break-words">${escapeHtml(task.title || '')}</span>

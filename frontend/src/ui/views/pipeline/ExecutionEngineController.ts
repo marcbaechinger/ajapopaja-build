@@ -41,7 +41,7 @@ export class ExecutionEngineController {
   private readonly deps: ExecutionEngineControllerDeps;
   private enginePiView: PiView | null = null;
   private enginePiMountedKey: string | null = null;
-  /** Whether all three engine sections are collapsed (shared for the group). */
+  /** Whether all engine sections are collapsed (shared for the group). */
   private sectionsCollapsed: boolean = false;
 
   constructor(deps: ExecutionEngineControllerDeps) {
@@ -58,7 +58,7 @@ export class ExecutionEngineController {
     this.toggleSections();
   };
 
-  /** Collapses or expands all three sections together. */
+  /** Collapses or expands all engine sections together. */
   toggleSections(): void {
     this.setSectionsCollapsed(!this.sectionsCollapsed);
   }

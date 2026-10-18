@@ -37,18 +37,21 @@ function makeTask(overrides: Partial<Task> = {}): Task {
 }
 
 describe('BacklogView', () => {
-  it('should render PROPOSED and CREATED sections', () => {
+  it('should render PROPOSED, CREATED and Queue sections', () => {
     const html = BacklogView.render({ tasks: [makeTask()] });
     expect(html).toContain('Proposed');
     expect(html).toContain('Backlog');
+    expect(html).toContain('Queue');
   });
 
-  it('should place the PROPOSED section above the CREATED section', () => {
+  it('should place the PROPOSED section above the CREATED and Queue sections', () => {
     const html = BacklogView.render({ tasks: [makeTask()] });
     const proposedIdx = html.indexOf('Proposed');
     const backlogIdx = html.indexOf('Backlog');
+    const queueIdx = html.indexOf('>Queue<');
     expect(proposedIdx).toBeGreaterThan(-1);
     expect(backlogIdx).toBeGreaterThan(proposedIdx);
+    expect(queueIdx).toBeGreaterThan(backlogIdx);
   });
 
   it('should show the task count in each section header', () => {
@@ -56,12 +59,18 @@ describe('BacklogView', () => {
       makeTask({ id: 'p1', status: TaskStatus.PROPOSED, design_doc: '# d' }),
       makeTask({ id: 'c1', status: TaskStatus.CREATED }),
       makeTask({ id: 'c2', status: TaskStatus.CREATED }),
+      makeTask({ id: 'q1', status: TaskStatus.SCHEDULED }),
     ];
     const html = BacklogView.render({ tasks });
     expect(html).toContain('Proposed');
     expect(html).toContain('Backlog');
-    // both sections render a count chip
-    expect((html.match(/rounded-full px-1.5 py-0.5/g) || []).length).toBe(3); // 1 proposed + 2 created
+    expect(html).toContain('Queue');
+    // each of the three sections renders its own count chip
+    const container = document.createElement('div');
+    container.innerHTML = html;
+    expect(container.querySelector('[data-backlog-count="proposed"]')!.textContent).toBe('1');
+    expect(container.querySelector('[data-backlog-count="backlog"]')!.textContent).toBe('2');
+    expect(container.querySelector('[data-backlog-count="queue"]')!.textContent).toBe('1');
   });
 
   it('should sort tasks within a section by order ascending (lower first)', () => {
@@ -75,13 +84,25 @@ describe('BacklogView', () => {
     expect(html.indexOf('data-task-id="low"')).toBeLessThan(html.indexOf('data-task-id="high"'));
   });
 
+  it('should sort queue tasks by order ascending and render queued list items', () => {
+    const tasks = [
+      makeTask({ id: 'q-high', title: 'Later', status: TaskStatus.SCHEDULED, order: 10 }),
+      makeTask({ id: 'q-low', title: 'Sooner', status: TaskStatus.SCHEDULED, order: -5 }),
+    ];
+    const html = BacklogView.render({ tasks });
+    expect(html.indexOf('data-view-id="q-low"')).toBeLessThan(html.indexOf('data-view-id="q-high"'));
+    expect(html).toContain('Queued');
+    expect(html).toContain('data-action-change="update_task_order"');
+  });
+
   it('should render empty states when no tasks exist', () => {
     const html = BacklogView.render({ tasks: [] });
     expect(html).toContain('No proposed designs.');
     expect(html).toContain('Backlog is empty.');
+    expect(html).toContain('Nothing scheduled.');
   });
 
-  it('should ignore tasks that are not in the backlog', () => {
+  it('should include scheduled queue tasks alongside the backlog', () => {
     const html = BacklogView.render({
       tasks: [
         makeTask({ id: 'sch', status: TaskStatus.SCHEDULED }),
@@ -89,7 +110,18 @@ describe('BacklogView', () => {
       ],
     });
     expect(html).toContain('data-task-id="pro"');
-    expect(html).not.toContain('data-task-id="sch"');
+    expect(html).toContain('data-task-id="sch"');
+  });
+
+  it('should ignore tasks that are not in the backlog or queue', () => {
+    const html = BacklogView.render({
+      tasks: [
+        makeTask({ id: 'running', status: TaskStatus.INPROGRESS }),
+        makeTask({ id: 'pro', status: TaskStatus.PROPOSED, design_doc: '# d' }),
+      ],
+    });
+    expect(html).toContain('data-task-id="pro"');
+    expect(html).not.toContain('data-task-id="running"');
   });
 
   it('should ignore deleted tasks', () => {
@@ -125,6 +157,21 @@ describe('BacklogView', () => {
     expect(c2.cls).not.toContain('border-app-accent-1/70');
     expect(c2.cls).not.toContain('bg-app-accent-1/10');
     expect(c2.cls).not.toContain('ring-app-accent-1/40');
+  });
+
+  it('should highlight the queue row matching selectedTaskId', () => {
+    const tasks = [
+      makeTask({ id: 'q1', status: TaskStatus.SCHEDULED }),
+      makeTask({ id: 'q2', status: TaskStatus.SCHEDULED }),
+    ];
+    const html = BacklogView.render({ tasks, selectedTaskId: 'q1' });
+    const container = document.createElement('div');
+    container.innerHTML = html;
+    const q1 = container.querySelector('[data-backlog-section="queue"] [data-view-id="q1"]')!;
+    const q2 = container.querySelector('[data-backlog-section="queue"] [data-view-id="q2"]')!;
+    expect(q1.className).toContain('border-app-accent-1/70');
+    expect(q1.className).toContain('bg-app-accent-1/10');
+    expect(q2.className).not.toContain('border-app-accent-1/70');
   });
 
   it('should not apply selected styling when selectedTaskId is omitted', () => {

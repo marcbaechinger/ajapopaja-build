@@ -24,9 +24,9 @@ export interface ExecutionEngineViewProps {
   historyTasks?: Task[];
   historyPage?: number;
   /**
-   * When true, all three sidebar sections (In Progress, Queue and the History
-   * Feed) are collapsed together. The sections are either all displayed or all
-   * collapsed; the embedded CoderBot PiView then fills the freed vertical space.
+   * When true, all sidebar sections (In Progress and the History Feed) are
+   * collapsed together. The sections are either all displayed or all collapsed;
+   * the embedded CoderBot PiView then fills the freed vertical space.
    */
   collapsed?: boolean;
   /** Alias for {@link collapsed}. */
@@ -34,7 +34,7 @@ export interface ExecutionEngineViewProps {
 }
 
 /** The right-sidebar bucket a task is rendered in, based on its status. */
-export type EngineBucket = 'inprogress' | 'queue' | 'history' | 'none';
+export type EngineBucket = 'inprogress' | 'history' | 'none';
 
 /** Statuses that belong to the paged History Feed. */
 const HISTORY_STATUSES: TaskStatus[] = [
@@ -47,13 +47,14 @@ const HISTORY_STATUSES: TaskStatus[] = [
  * ExecutionEngineView renders the right side panel of the PipelineDetailView.
  *
  * It lists the tasks currently handled by the execution engine, grouped into
- * sections - In Progress (IN_PROGRESS), Queue (SCHEDULED) and the paged History
- * Feed - each with a header showing the section type and the total number of
- * tasks in it. Tasks within a section are ordered by their execution order.
+ * sections - In Progress (IN_PROGRESS) and the paged History Feed - each with a
+ * header showing the section type and the total number of tasks in it. The
+ * execution Queue (SCHEDULED) lives in the backlog sidebar instead. Tasks
+ * within a section are ordered by their execution order.
  *
- * The three sections collapse together: the shell renders a single master
- * toggle that hides `#engine-sections` and lets the embedded CoderBot PiView
- * grow to fill the freed sidebar height.
+ * The sections collapse together: the shell renders a single master toggle that
+ * hides `#engine-sections` and lets the embedded CoderBot PiView grow to fill
+ * the freed sidebar height.
  */
 export class ExecutionEngineView {
   static render(props: ExecutionEngineViewProps): string {
@@ -76,7 +77,7 @@ export class ExecutionEngineView {
       : 'flex flex-col flex-1 min-h-0';
     return `
       <div class="flex flex-col min-h-0 h-full overflow-hidden pt-2">
-        <!-- Master collapse toggle for the three sections below. It lives in the
+        <!-- Master collapse toggle for the sections below. It lives in the
              stable shell (outside #engine-sections) so it survives every section
              repaint and always stays reachable. -->
         <div class="flex items-center justify-end px-1 pb-0.5 shrink-0">
@@ -110,9 +111,9 @@ export class ExecutionEngineView {
 
   /**
    * Applies the shared collapsed state to a mounted engine view. When collapsed,
-   * all three section lists (`#engine-sections`) are hidden and the embedded
-   * CoderBot `PiView` is allowed to grow to the full sidebar height; when
-   * expanded, the PiView returns to its compact fixed height.
+   * all section lists (`#engine-sections`) are hidden and the embedded CoderBot
+   * `PiView` is allowed to grow to the full sidebar height; when expanded, the
+   * PiView returns to its compact fixed height.
    *
    * Kept as a pure DOM helper (mirroring `PipelineDetailLayout.applySidebarState`)
    * so the controller only owns the boolean state, not the layout details.
@@ -160,7 +161,7 @@ export class ExecutionEngineView {
   }
 
   /**
-   * The repaintable section lists (In Progress, Queue and the History Feed).
+   * The repaintable section lists (In Progress and the History Feed).
    * This is the only markup replaced by a full engine refresh.
    */
   static renderSections(props: ExecutionEngineViewProps): string {
@@ -171,16 +172,10 @@ export class ExecutionEngineView {
     const inProgress = tasks
       .filter(t => !t.deleted && t.status === TaskStatus.INPROGRESS)
       .sort((a, b) => orderSort(a, b));
-    const queue = tasks
-      .filter(t => !t.deleted && t.status === TaskStatus.SCHEDULED)
-      .sort((a, b) => orderSort(a, b));
 
     return `
       ${ExecutionEngineView.sectionHeader('In Progress', inProgress.length, 'text-amber-400', 'inprogress')}
       ${ExecutionEngineView.sectionBody(inProgress, 'No active work.', '', 'inprogress')}
-
-      ${ExecutionEngineView.sectionHeader('Queue', queue.length, 'text-app-accent-1', 'queue')}
-      ${ExecutionEngineView.sectionBody(queue, 'Nothing scheduled.', 'max-h-48 overflow-y-auto', 'queue')}
 
       <div id="sidebar-history" class="flex-1 min-h-0 mt-2 flex flex-col overflow-hidden">
         ${PipelineHistoryView.render(historyTasks, historyPage)}
@@ -221,7 +216,6 @@ export class ExecutionEngineView {
    */
   static bucketFor(status: TaskStatus): EngineBucket {
     if (status === TaskStatus.INPROGRESS) return 'inprogress';
-    if (status === TaskStatus.SCHEDULED) return 'queue';
     if (HISTORY_STATUSES.includes(status)) return 'history';
     return 'none';
   }
@@ -265,7 +259,7 @@ export class ExecutionEngineView {
 
   /**
    * Removes a single task from the rendered In Progress section in place,
-   * keeping the rest of the ExecutionEngineView DOM (PiView mount, queue, history)
+   * keeping the rest of the ExecutionEngineView DOM (PiView mount, history)
    * untouched. Used when a task transitions out of IN_PROGRESS (e.g. to
    * PULL_REQUEST_AVAILABLE) without a full task re-broadcast. Returns true when
    * the item was found and removed.
@@ -284,7 +278,7 @@ export class ExecutionEngineView {
       const list = container.querySelector('#completed-task-list');
       return list?.querySelector(`[data-view-type="history"][data-task-id="${taskId}"]`) ?? null;
     }
-    if (bucket === 'inprogress' || bucket === 'queue') {
+    if (bucket === 'inprogress') {
       const list = container.querySelector(`[data-engine-section="${bucket}"]`);
       return list?.querySelector(`[data-view-id="${taskId}"]`) ?? null;
     }
@@ -294,7 +288,7 @@ export class ExecutionEngineView {
   /** Returns the list element backing a bucket, or null when it is absent. */
   private static sectionFor(container: HTMLElement, bucket: EngineBucket): Element | null {
     if (bucket === 'history') return container.querySelector('#completed-task-list');
-    if (bucket === 'inprogress' || bucket === 'queue') {
+    if (bucket === 'inprogress') {
       return container.querySelector(`[data-engine-section="${bucket}"]`);
     }
     return null;
@@ -382,8 +376,7 @@ export class ExecutionEngineView {
     if (bucket === 'history') {
       return `<p class="text-app-muted italic text-[10px] text-center py-3">No tasks completed yet.</p>`;
     }
-    const message = bucket === 'queue' ? 'Nothing scheduled.' : 'No active work.';
-    return `<div class="px-1"><p class="text-[10px] italic text-app-muted/50 text-center border border-dashed border-app-border/40 rounded-lg py-3">${message}</p></div>`;
+    return `<div class="px-1"><p class="text-[10px] italic text-app-muted/50 text-center border border-dashed border-app-border/40 rounded-lg py-3">No active work.</p></div>`;
   }
 }
 

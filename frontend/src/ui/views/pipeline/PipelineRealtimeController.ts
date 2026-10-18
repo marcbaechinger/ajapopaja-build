@@ -259,7 +259,7 @@ export class PipelineRealtimeController {
    * broadcast as a PULL_REQUEST_CREATED event (no task-status update flows
    * through the DataManager). Reflect it in the local cache and remove the task
    * from the ExecutionEngineView's In Progress list via a targeted, in-place DOM
-   * removal so the rest of the sidebar (PiView mount, queue, history) is not
+   * removal so the rest of the sidebar (PiView mount, history) is not
    * disturbed.
    */
   removeTaskFromInProgressOnPullRequest(taskId?: string): void {
