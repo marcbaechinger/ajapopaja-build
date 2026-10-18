@@ -237,6 +237,10 @@ The PR keeps its `id` and status; only its content is refreshed. The task stays
 | `POST /pull_requests/{id}/reject` | `OPEN → REJECTED` | `PULL_REQUEST_AVAILABLE → CREATED` (back to backlog) |
 | `POST /pull_requests/{id}/iterate` | unchanged (`OPEN`) | unchanged (`PULL_REQUEST_AVAILABLE`) |
 
+`ACCEPTED` and `REJECTED` are terminal and also trigger completion cleanup
+(§8.4); `SUBMITTED` is not terminal and keeps its patch/branch until the Gitea
+event or reconciliation completes the PR.
+
 ---
 
 ## 7. When remote PRs are submitted vs. commits applied/pushed

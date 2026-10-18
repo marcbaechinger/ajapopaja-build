@@ -674,7 +674,18 @@ async def accept_pull_request(
 
         await update_pull_request_status(pr, PullRequestStatus.ACCEPTED)
         await update_task_status(task, new_commit_hash, pr.summary, pr_id)
-        await git_utils.remove_pr_worktree(pipeline, pr)
+        try:
+            await git_utils.sweep_completed_pull_requests(pipeline)
+        except Exception as cleanup_error:
+            # Cleanup is best-effort: the acceptance has already succeeded and
+            # must not be turned into an HTTP 500 by a Gitea/git failure.
+            logger.warning(
+                "Failed to clean up completed pull requests for pipeline %s "
+                "after accepting PR %s: %s",
+                getattr(pipeline, "id", None),
+                pr_id,
+                cleanup_error,
+            )
 
         return {
             "status": "success",
@@ -733,15 +744,6 @@ async def reject_pull_request(pr_id: str):
     pr.status = PullRequestStatus.REJECTED
     await pr.save()
 
-    try:
-        pipeline = await Pipeline.get(pr.pipeline_id)
-        if pipeline is not None:
-            await git_utils.remove_pr_worktree(pipeline, pr)
-    except Exception as e:
-        logger.warning(
-            "Failed to remove PR dev-server worktree for %s: %s", pr.id, e
-        )
-
     task = await Task.get(pr.task_id)
     if task and task.status == TaskStatus.PULL_REQUEST_AVAILABLE:
         logger.info(f"Updating status for task {pr.task_id} to CREATED")
@@ -756,5 +758,16 @@ async def reject_pull_request(pr_id: str):
                 type="TASK_STATUS_UPDATED",
                 payload=updated_task.model_dump(mode="json"),
             )
+        )
+    try:
+        pipeline = await Pipeline.get(pr.pipeline_id)
+        if pipeline is not None:
+            await git_utils.sweep_completed_pull_requests(pipeline)
+    except Exception as e:
+        # Cleanup is best-effort and must not fail the rejection request.
+        logger.warning(
+            "Failed to clean up completed pull requests for rejected PR %s: %s",
+            pr.id,
+            e,
         )
     return {"status": "success", "message": "Pull Request rejected"}

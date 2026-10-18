@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import subprocess
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -107,8 +108,8 @@ async def test_reject_pull_request_unauthenticated(async_client, init_mock_db):
 async def test_reject_pull_request_broadcasts_task_status_update(init_mock_db):
     """Rejecting a PR moves the task PULL_REQUEST_AVAILABLE -> CREATED and
     broadcasts TASK_STATUS_UPDATED so the UI updates the displayed TaskItem."""
-    from core.models.models import Task
     from api.websocket_manager import WSMessage
+    from core.models.models import Task
 
     task = Task(
         title="Task 1",
@@ -160,8 +161,8 @@ async def test_reject_pull_request_broadcasts_task_status_update(init_mock_db):
 async def test_reject_pull_request_leaves_other_statuses_untouched(init_mock_db):
     """A task that is not awaiting review keeps its status and no WS message
     is broadcast."""
-    from core.models.models import Task
     from api.websocket_manager import WSMessage
+    from core.models.models import Task
 
     task = Task(
         title="Task 1",
@@ -569,6 +570,248 @@ async def test_accept_pull_request_direct_mode_uses_push(async_client, init_mock
     mock_update_status.assert_awaited_once_with(mock_pr, PullRequestStatus.ACCEPTED)
     mock_update_task.assert_awaited_once()
     app.dependency_overrides.clear()
+
+
+def _run_git(cwd, *args):
+    return subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+def _make_git_repo(path):
+    path.mkdir(parents=True, exist_ok=True)
+    _run_git(path, "init", "-b", "main")
+    (path / "readme.txt").write_text("readme\n")
+    _run_git(path, "add", ".")
+    _run_git(
+        path,
+        "-c",
+        "user.name=Test User",
+        "-c",
+        "user.email=test@example.com",
+        "commit",
+        "-m",
+        "initial",
+    )
+    return path
+
+
+@pytest.mark.asyncio
+async def test_accept_merge_mode_clears_patch_and_keeps_default_branch_commit(
+    async_client, init_mock_db, tmp_path, monkeypatch
+):
+    from core.models.models import Pipeline, Task
+
+    monkeypatch.setattr(pr_routes.config, "WORKSPACES_ROOT", tmp_path)
+    repo_path = _make_git_repo(tmp_path / "repo")
+    head_before = _run_git(repo_path, "rev-parse", "HEAD")
+
+    pipeline = Pipeline(name="local", workspace_path="repo")
+    await pipeline.insert()
+    task = Task(
+        title="Task",
+        pipeline_id=str(pipeline.id),
+        status=TaskStatus.PULL_REQUEST_AVAILABLE,
+    )
+    await task.insert()
+    branch = f"coderbot/{task.id}"
+    pr = PullRequest(
+        pipeline_id=str(pipeline.id),
+        task_id=str(task.id),
+        summary="summary",
+        branch_name=branch,
+        patch="diff --git a/readme.txt b/readme.txt\n",
+        status=PullRequestStatus.OPEN,
+    )
+    await pr.insert()
+
+    mock_user = AsyncMock()
+    mock_user.username = "testuser"
+    app.dependency_overrides[get_current_user] = lambda: mock_user
+    try:
+        with (
+            patch("api.routes.pull_request.apply_patch", new_callable=AsyncMock),
+            patch("api.routes.pull_request.format_workspace", new_callable=AsyncMock),
+            patch(
+                "api.routes.pull_request.commit_changes", return_value=head_before
+            ),
+        ):
+            response = await async_client.post(
+                f"/api/pull_requests/{pr.id}/accept"
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    refreshed = await PullRequest.get(pr.id)
+    assert refreshed.status == PullRequestStatus.ACCEPTED
+    assert refreshed.patch is None
+    assert _run_git(repo_path, "rev-parse", "HEAD") == head_before
+
+
+@pytest.mark.asyncio
+async def test_accept_submit_mode_keeps_patch_and_feature_branch(
+    async_client, init_mock_db, tmp_path, monkeypatch
+):
+    from core.models.models import Pipeline, Task
+
+    monkeypatch.setattr(pr_routes.config, "REMOTE_WORKSPACES_ROOT", tmp_path)
+    monkeypatch.setattr(pr_routes.config, "REMOTE_PR_MODE", "gitea_pr")
+    repo_path = _make_git_repo(tmp_path / "repo")
+
+    pipeline = Pipeline(name="repo", repo_uri="https://host/owner/repo.git")
+    await pipeline.insert()
+    task = Task(
+        title="Task",
+        pipeline_id=str(pipeline.id),
+        status=TaskStatus.PULL_REQUEST_AVAILABLE,
+    )
+    await task.insert()
+    branch = f"coderbot/{task.id}"
+    patch_text = "diff --git a/readme.txt b/readme.txt\n"
+    pr = PullRequest(
+        pipeline_id=str(pipeline.id),
+        task_id=str(task.id),
+        summary="summary",
+        branch_name=branch,
+        patch=patch_text,
+        status=PullRequestStatus.OPEN,
+    )
+    await pr.insert()
+
+    mock_user = AsyncMock()
+    mock_user.username = "testuser"
+    app.dependency_overrides[get_current_user] = lambda: mock_user
+    try:
+        with (
+            patch("api.routes.pull_request.apply_patch", new_callable=AsyncMock),
+            patch("api.routes.pull_request.format_workspace", new_callable=AsyncMock),
+            patch(
+                "api.routes.pull_request.commit_changes",
+                return_value=_run_git(repo_path, "rev-parse", "HEAD"),
+            ),
+            patch(
+                "api.routes.pull_request._submit_as_gitea_pr",
+                new_callable=AsyncMock,
+                return_value="https://host/owner/repo/pulls/1",
+            ),
+        ):
+            response = await async_client.post(
+                f"/api/pull_requests/{pr.id}/accept"
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    refreshed = await PullRequest.get(pr.id)
+    assert refreshed.status == PullRequestStatus.SUBMITTED
+    assert refreshed.patch == patch_text
+    assert branch in _run_git(repo_path, "branch", "--format=%(refname:short)")
+
+
+@pytest.mark.asyncio
+async def test_reject_clears_patch_and_deletes_existing_local_branch(
+    async_client, init_mock_db, tmp_path, monkeypatch
+):
+    from core.models.models import Pipeline, Task
+
+    monkeypatch.setattr(pr_routes.config, "WORKSPACES_ROOT", tmp_path)
+    repo_path = _make_git_repo(tmp_path / "repo")
+
+    pipeline = Pipeline(name="local", workspace_path="repo")
+    await pipeline.insert()
+    task = Task(
+        title="Task",
+        pipeline_id=str(pipeline.id),
+        status=TaskStatus.IMPLEMENTED,
+    )
+    await task.insert()
+    branch = f"coderbot/{task.id}"
+    _run_git(repo_path, "branch", branch)
+    pr = PullRequest(
+        pipeline_id=str(pipeline.id),
+        task_id=str(task.id),
+        summary="summary",
+        branch_name=branch,
+        patch="diff --git a/readme.txt b/readme.txt\n",
+        status=PullRequestStatus.OPEN,
+    )
+    await pr.insert()
+
+    mock_user = AsyncMock()
+    mock_user.username = "testuser"
+    app.dependency_overrides[get_current_user] = lambda: mock_user
+    try:
+        response = await async_client.post(f"/api/pull_requests/{pr.id}/reject")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    refreshed = await PullRequest.get(pr.id)
+    assert refreshed.status == PullRequestStatus.REJECTED
+    assert refreshed.patch is None
+    assert branch not in _run_git(repo_path, "branch", "--format=%(refname:short)")
+
+
+@pytest.mark.asyncio
+async def test_accept_cleanup_failure_is_logged_without_changing_response(
+    async_client, init_mock_db, tmp_path, monkeypatch, caplog
+):
+    from core.models.models import Pipeline, Task
+
+    monkeypatch.setattr(pr_routes.config, "WORKSPACES_ROOT", tmp_path)
+    repo_path = _make_git_repo(tmp_path / "repo")
+    head = _run_git(repo_path, "rev-parse", "HEAD")
+
+    pipeline = Pipeline(name="local", workspace_path="repo")
+    await pipeline.insert()
+    task = Task(
+        title="Task",
+        pipeline_id=str(pipeline.id),
+        status=TaskStatus.PULL_REQUEST_AVAILABLE,
+    )
+    await task.insert()
+    pr = PullRequest(
+        pipeline_id=str(pipeline.id),
+        task_id=str(task.id),
+        summary="summary",
+        branch_name=f"coderbot/{task.id}",
+        patch="diff --git a/readme.txt b/readme.txt\n",
+        status=PullRequestStatus.OPEN,
+    )
+    await pr.insert()
+
+    mock_user = AsyncMock()
+    mock_user.username = "testuser"
+    app.dependency_overrides[get_current_user] = lambda: mock_user
+    try:
+        with (
+            patch("api.routes.pull_request.apply_patch", new_callable=AsyncMock),
+            patch("api.routes.pull_request.format_workspace", new_callable=AsyncMock),
+            patch("api.routes.pull_request.commit_changes", return_value=head),
+            patch(
+                "api.routes.pull_request.git_utils.sweep_completed_pull_requests",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("cleanup boom"),
+            ),
+        ):
+            caplog.set_level("WARNING", logger="api.routes.pull_request")
+            response = await async_client.post(
+                f"/api/pull_requests/{pr.id}/accept"
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "success"
+    assert any(
+        "Failed to clean up completed pull requests" in record.message
+        for record in caplog.records
+    )
 
 
 @pytest.mark.asyncio
