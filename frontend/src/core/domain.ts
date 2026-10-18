@@ -268,7 +268,9 @@ export class PullRequest {
     if (json.subject !== undefined) this.subject = String(json.subject);
     if (json.author !== undefined) this.author = String(json.author);
     if (json.branch_name !== undefined) this.branch_name = String(json.branch_name);
-    if (json.patch !== undefined) this.patch = String(json.patch);
+    // A completed PR may have its patch cleaned up by the backend (null).
+    // Keep patch a string on the model, but never turn null into "null".
+    this.patch = json.patch != null ? String(json.patch) : '';
     if (json.status !== undefined) this.status = json.status as PullRequestStatus;
     this.remote_pr_url =
       json.remote_pr_url != null ? String(json.remote_pr_url) : undefined;
@@ -300,7 +302,7 @@ export class CommitDiff {
   constructor(json: any) {
     if (!json) return;
     if (json.commit_hash !== undefined) this.commit_hash = String(json.commit_hash);
-    if (json.patch !== undefined) this.patch = String(json.patch);
+    this.patch = json.patch != null ? String(json.patch) : '';
     if (json.subject !== undefined) this.subject = json.subject;
     if (json.message !== undefined) this.message = json.message;
     if (json.author !== undefined) this.author = json.author;

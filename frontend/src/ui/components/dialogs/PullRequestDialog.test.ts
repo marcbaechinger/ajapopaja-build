@@ -365,4 +365,113 @@ describe('PullRequestDialog', () => {
     expect(acceptPullRequest).toHaveBeenLastCalledWith('pr-conflict', expect.anything(), 'revert', true);
     expect(syncPullRequests).not.toHaveBeenCalled();
   });
+
+  describe('completed pull requests with a cleaned-up patch', () => {
+    const terminalPr = (status: string, extra: any = {}) => ({
+      _id: `pr-${status}`,
+      pipeline_id: 'p1',
+      task_id: 't1',
+      summary: 'summary',
+      subject: 'Completed subject',
+      branch_name: 'feature/completed',
+      patch: null,
+      status,
+      ...extra,
+    });
+
+    it.each([PullRequestStatus.ACCEPTED, PullRequestStatus.REJECTED])(
+      'renders the diff-unavailable explanation and no DiffView for %s',
+      async (status) => {
+        const dialog = new PullRequestDialog({
+          taskId: 't1',
+          pipelineId: 'p1',
+          context: makeContext(terminalPr(status)),
+        });
+
+        await vi.waitFor(() => expect(dialog['pr']).not.toBeNull());
+
+        const body = dialog['dialog'].querySelector('#dialog-body-container') as HTMLElement;
+        expect(body.querySelector('#pr-diff-unavailable')).not.toBeNull();
+        expect(body.querySelector('#pr-diff-container')).toBeNull();
+        expect(body.querySelector('[data-role="diff-view"]')).toBeNull();
+        expect(body.textContent).toContain('The diff is no longer stored');
+        expect(body.textContent).toContain(status);
+        expect(body.textContent).toContain('feature/completed');
+        expect(body.textContent).not.toContain('null');
+      },
+    );
+
+    it('renders no accept/reject buttons for a terminal PR', async () => {
+      const dialog = new PullRequestDialog({
+        taskId: 't1',
+        pipelineId: 'p1',
+        context: makeContext(terminalPr(PullRequestStatus.ACCEPTED)),
+      });
+
+      await vi.waitFor(() => expect(dialog['pr']).not.toBeNull());
+
+      const footer = dialog['dialog'].querySelector('#dialog-footer-container') as HTMLElement;
+      expect(footer.querySelector('#pr-accept-btn')).toBeNull();
+      expect(footer.querySelector('#pr-reject-btn')).toBeNull();
+      expect(footer.querySelector('#pr-accept-anyway-btn')).toBeNull();
+      expect(footer.querySelector('#pr-close-btn')).not.toBeNull();
+    });
+
+    it('shows the Gitea link for a terminal PR when remote_pr_url is set', async () => {
+      const dialog = new PullRequestDialog({
+        taskId: 't1',
+        pipelineId: 'p1',
+        context: makeContext(terminalPr(PullRequestStatus.REJECTED, {
+          remote_pr_url: 'https://host/owner/repo/pulls/7',
+        })),
+      });
+
+      await vi.waitFor(() => expect(dialog['pr']).not.toBeNull());
+
+      const body = dialog['dialog'].querySelector('#dialog-body-container') as HTMLElement;
+      expect(body.textContent).toContain('The diff is no longer stored');
+      expect(body.innerHTML).toContain('https://host/owner/repo/pulls/7');
+
+      const footer = dialog['dialog'].querySelector('#dialog-footer-container') as HTMLElement;
+      expect(footer.querySelector('#pr-accept-btn')).toBeNull();
+      expect(footer.querySelector('#pr-reject-btn')).toBeNull();
+      const link = footer.querySelector('#pr-open-gitea-link') as HTMLAnchorElement;
+      expect(link).not.toBeNull();
+      expect(link.getAttribute('href')).toBe('https://host/owner/repo/pulls/7');
+    });
+  });
+
+  it('still renders the diff and accept/reject buttons for an OPEN PR with a patch', async () => {
+    const patch = `diff --git a/src/foo.ts b/src/foo.ts
+--- a/src/foo.ts
++++ b/src/foo.ts
+@@ -1,1 +1,1 @@
+-old
++new
+`;
+    const dialog = new PullRequestDialog({
+      taskId: 't1',
+      pipelineId: 'p1',
+      context: makeContext({
+        _id: 'pr-open-patch',
+        pipeline_id: 'p1',
+        task_id: 't1',
+        summary: 'summary',
+        branch_name: 'feature/open',
+        patch,
+        status: PullRequestStatus.OPEN,
+      }),
+    });
+
+    await vi.waitFor(() => expect(dialog['pr']).not.toBeNull());
+
+    const body = dialog['dialog'].querySelector('#dialog-body-container') as HTMLElement;
+    expect(body.querySelector('#pr-diff-unavailable')).toBeNull();
+    expect(body.querySelector('[data-role="diff-view"]')).not.toBeNull();
+    expect(body.textContent).toContain('new');
+
+    const footer = dialog['dialog'].querySelector('#dialog-footer-container') as HTMLElement;
+    expect(footer.querySelector('#pr-accept-btn')).not.toBeNull();
+    expect(footer.querySelector('#pr-reject-btn')).not.toBeNull();
+  });
 });

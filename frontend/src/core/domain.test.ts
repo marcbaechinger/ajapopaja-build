@@ -25,6 +25,8 @@ import {
   NotificationType,
   NotificationSeverity,
   isProcessedStatus,
+  PullRequest,
+  PullRequestStatus,
 } from './domain';
 
 describe('Domain Models', () => {
@@ -182,6 +184,30 @@ describe('Domain Models', () => {
       expect(notification.actions[0].data).toEqual({});
       expect(notification.actions[0].style).toBe('default');
       expect(notification.actions[1].name).toBe('');
+    });
+  });
+
+  describe('PullRequest patch', () => {
+    it('maps a null patch to an empty string', () => {
+      const pr = new PullRequest({ patch: null });
+      expect(pr.patch).toBe('');
+    });
+
+    it('maps a missing patch to an empty string', () => {
+      const pr = new PullRequest({});
+      expect(pr.patch).toBe('');
+    });
+
+    it('keeps a present patch as a string', () => {
+      const patch = 'diff --git a/a.txt b/a.txt\n';
+      const pr = new PullRequest({ patch });
+      expect(pr.patch).toBe(patch);
+    });
+
+    it('keeps a terminal status for a completed pull request', () => {
+      const pr = new PullRequest({ status: PullRequestStatus.ACCEPTED, patch: null });
+      expect(pr.status).toBe(PullRequestStatus.ACCEPTED);
+      expect(pr.patch).toBe('');
     });
   });
 
