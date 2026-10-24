@@ -103,6 +103,25 @@ describe('CoderBotService RPC stream', () => {
     expect(texts[1].text).toBe('second');
   });
 
+  it('renders a user message_start/message_end pair as one user block', () => {
+    rpcEvent(ws, {
+      type: 'message_start',
+      message: { role: 'user', content: 'Review this repository', timestamp: 1733234401000 },
+    });
+    rpcEvent(ws, {
+      type: 'message_end',
+      message: { role: 'user', content: 'Review this repository', timestamp: 1733234401000 },
+    });
+
+    const users = history.filter((b) => b.kind === 'user');
+    expect(users).toHaveLength(1);
+    expect(LAST(users)).toMatchObject({
+      header: 'You',
+      text: 'Review this repository',
+      complete: true,
+    });
+  });
+
   it('builds a tool block from toolcall_start/delta/end', () => {
     rpcEvent(ws, { type: 'message_update', assistantMessageEvent: { type: 'toolcall_start', contentIndex: 1, id: 'call_1', toolName: 'write' } });
     rpcEvent(ws, { type: 'message_update', assistantMessageEvent: { type: 'toolcall_delta', contentIndex: 1, id: 'call_1', delta: '{"path":"a.ts"}' } });
@@ -337,6 +356,43 @@ describe('CoderBotService session tracking / reconnect', () => {
     await service.reconnect({ pipelineId: 'p1', taskId: 't1', active: true });
     expect(fetchMock).toHaveBeenCalledTimes(2); // one /session + one /history
     expect(texts()).toHaveLength(1);
+  });
+
+  it('reconstructs user prompts from persisted history during replay', async () => {
+    ws.dispatch('CODERBOT_STARTED', { task_id: 't1', pipeline_id: 'p1' });
+    const timestamp = 1733234401000;
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          events: [
+            {
+              type: 'message_start',
+              message: { role: 'user', content: 'Replayed prompt', timestamp },
+            },
+            {
+              type: 'message_end',
+              message: { role: 'user', content: 'Replayed prompt', timestamp },
+            },
+            {
+              type: 'message_update',
+              assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'replayed answer' },
+            },
+          ],
+        }),
+    });
+
+    await service.reconnect({ pipelineId: 'p1', taskId: 't1', active: true });
+
+    const blocks = service.getHistory();
+    expect(blocks.filter((b) => b.kind === 'user')).toHaveLength(1);
+    expect(blocks[0]).toMatchObject({
+      kind: 'user',
+      header: 'You',
+      text: 'Replayed prompt',
+      complete: true,
+    });
+    expect(blocks.filter((b) => b.kind === 'text')[0].text).toBe('replayed answer');
   });
 
   it('coalesces a long history replay into a single block notification', async () => {

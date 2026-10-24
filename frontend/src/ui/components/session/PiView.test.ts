@@ -323,6 +323,73 @@ describe('PiView', () => {
     expect(Array.from(container.querySelectorAll('div')).some((el) => el.textContent === 'plain')).toBe(true);
   });
 
+  it('renders user messages with a "You" label and safe plain text', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    const userText = 'Review this repository <img src=x onerror=alert(1)>';
+    emitBlocks([{ id: 'u1', kind: 'user', header: 'You', text: userText, complete: true }]);
+
+    const userEl = mount.querySelector('.piview-user') as HTMLElement;
+    expect(userEl).not.toBeNull();
+    expect(userEl.querySelector('[data-role="header"]')?.textContent).toBe('You');
+    const body = userEl.querySelector('[data-role="body"]') as HTMLElement;
+    // textContent (not innerHTML) means the markup stays inert text.
+    expect(body.textContent).toBe(userText);
+    expect(body.querySelector('img')).toBeNull();
+    // User content stays verbatim by default even though the block is complete.
+    expect(userEl.querySelector('.piview-formatted')).toBeNull();
+  });
+
+  it('updates the same user block when message_end finalizes it', () => {
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+
+    emitBlocks([
+      { id: 'u1', kind: 'user', header: 'You', text: 'draft prompt', complete: false },
+    ]);
+    const first = mount.querySelector('.piview-user') as HTMLElement;
+    expect(first.querySelector('[data-role="body"]')?.textContent).toBe('draft prompt');
+
+    emitBlocks([
+      { id: 'u1', kind: 'user', header: 'You', text: 'final prompt', complete: true },
+    ]);
+    const second = mount.querySelector('.piview-user') as HTMLElement;
+    expect(second).toBe(first);
+    expect(mount.querySelectorAll('.piview-user')).toHaveLength(1);
+    expect(second.querySelector('[data-role="body"]')?.textContent).toBe('final prompt');
+  });
+
+  it('includes user prompts in copy, copy-all and manual Markdown formatting', () => {
+    const writeText = vi.fn(async (_text: string) => { });
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+    emitBlocks([
+      { id: 'u1', kind: 'user', header: 'You', text: '**prompt** text', complete: true },
+      { id: 'a1', kind: 'text', text: 'answer', complete: true },
+    ]);
+
+    const userEl = mount.querySelector('.piview-user') as HTMLElement;
+    (userEl.querySelector('.piview-copy') as HTMLButtonElement).click();
+    expect(writeText).toHaveBeenCalledTimes(1);
+    const copied = writeText.mock.calls[0][0] as string;
+    expect(copied).toContain('**prompt** text');
+
+    (mount.querySelector('#copy-all-btn') as HTMLButtonElement).click();
+    expect(writeText).toHaveBeenCalledTimes(2);
+    expect(writeText.mock.calls[1][0]).toContain('**prompt** text');
+
+    (userEl.querySelector('.piview-format') as HTMLButtonElement).click();
+    const formatted = userEl.querySelector('.piview-formatted') as HTMLElement;
+    expect(formatted).not.toBeNull();
+    expect(formatted.querySelector('strong')?.textContent).toBe('prompt');
+    expect(formatted.textContent).not.toContain('You');
+  });
+
   it('prepends the executed command before the output for a finished tool block', () => {
     const { service, emitBlocks } = createStubService();
     const view = new PiView(service, mount);
@@ -1147,6 +1214,28 @@ describe('PiView', () => {
     const first = marks[0] as HTMLElement;
     expect(first.classList.contains('piview-search-current')).toBe(true);
     expect(marks[1].classList.contains('piview-search-current')).toBe(false);
+
+    view.destroy();
+    vi.useRealTimers();
+  });
+
+  it('search includes user message text', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
+    const { service, emitBlocks } = createStubService();
+    const view = new PiView(service, mount);
+    view.render();
+    emitBlocks([
+      { id: 'u1', kind: 'user', header: 'You', text: 'needle prompt', complete: true },
+      { id: 'a1', kind: 'text', text: 'needle answer', complete: true },
+    ]);
+
+    const input = mount.querySelector('#piview-search-input') as HTMLInputElement;
+    input.value = 'needle';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    vi.advanceTimersByTime(200);
+
+    expect(mount.querySelectorAll('mark.piview-search-match').length).toBe(2);
+    expect((mount.querySelector('#piview-search-count') as HTMLElement).textContent).toBe('1 / 2');
 
     view.destroy();
     vi.useRealTimers();

@@ -1179,6 +1179,24 @@ export class PiView {
   private createBlockEl(block: RenderBlock): HTMLElement {
     let el: HTMLElement;
     switch (block.kind) {
+      case 'user': {
+        const wrapper = document.createElement('div');
+        wrapper.className =
+          'piview-user border-l-2 border-app-accent-1/60 bg-app-accent-1/10 rounded px-2 py-1';
+        const header = document.createElement('div');
+        header.setAttribute('data-role', 'header');
+        header.className =
+          'text-app-accent-1 font-semibold text-[10px] uppercase tracking-wider';
+        header.textContent = block.header ?? 'You';
+        wrapper.appendChild(header);
+        const body = document.createElement('div');
+        body.setAttribute('data-role', 'body');
+        body.className = 'text-app-text whitespace-pre-wrap break-all';
+        body.textContent = block.text ?? '';
+        wrapper.appendChild(body);
+        el = wrapper;
+        break;
+      }
       case 'tool': {
         const wrapper = document.createElement('div');
         wrapper.className =
@@ -1464,6 +1482,11 @@ export class PiView {
 
   /** Returns the Markdown-renderable text for a block (header omitted for thinking). */
   private blockToText(block: RenderBlock): string {
+    // User messages are rendered verbatim; their "You" label is chrome and must
+    // not be copied or injected into the (optionally formatted) user content.
+    if (block.kind === 'user') {
+      return block.text ?? '';
+    }
     if (block.kind === 'verification') {
       return [block.text ?? '', ...(block.sub ?? [])].join('\n');
     }

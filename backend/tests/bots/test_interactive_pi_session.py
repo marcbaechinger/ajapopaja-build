@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -186,6 +186,50 @@ async def test_broadcast_rpc_emits_interactive_rpc_event():
     assert msg.payload["pipeline_id"] == "p1"
     assert msg.payload["bot_type"] == "interactive"
     assert msg.payload["event"] == {"type": "agent_settled"}
+
+
+@pytest.mark.asyncio
+async def test_handle_event_broadcasts_and_persists_user_messages(monkeypatch):
+    # Keep the test hermetic: a session uid normally creates a durable session
+    # directory, but this test only inspects the event-log append calls.
+    monkeypatch.setattr(
+        "api.coderbot.session.config.PI_SESSION_PERSISTENCE_ENABLED", False
+    )
+    session = InteractivePiSession(pipeline_id="p1", session_uid="u1")
+    session.event_log = MagicMock()
+    timestamp = 1733234401000
+    start = {
+        "type": "message_start",
+        "message": {
+            "role": "user",
+            "content": "Review this repository",
+            "timestamp": timestamp,
+        },
+    }
+    end = {
+        "type": "message_end",
+        "message": {
+            "role": "user",
+            "content": "Review this repository",
+            "timestamp": timestamp,
+        },
+    }
+
+    with patch(
+        "api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock
+    ) as mock_broadcast:
+        await session._handle_event(start)
+        await session._handle_event(end)
+
+    rpc_messages = [
+        c.args[0]
+        for c in mock_broadcast.await_args_list
+        if c.args[0].type == "INTERACTIVE_RPC_EVENT"
+    ]
+    assert [m.payload["event"] for m in rpc_messages] == [start, end]
+    assert all(m.payload["pipeline_id"] == "p1" for m in rpc_messages)
+    assert all(m.payload["session_uid"] == "u1" for m in rpc_messages)
+    assert [c.args[0] for c in session.event_log.append.call_args_list] == [start, end]
 
 
 @pytest.mark.asyncio

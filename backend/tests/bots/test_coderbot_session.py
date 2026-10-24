@@ -149,6 +149,48 @@ async def test_coderbot_broadcasts_rpc_event(init_mock_db):
 
 
 @pytest.mark.asyncio
+async def test_coderbot_handle_event_broadcasts_and_persists_user_messages(
+    init_mock_db,
+):
+    """Batch sessions forward the raw user message pair for PiView rendering."""
+    session = CoderBotSession(pipeline_id="p1", task_id="t1")
+    session.event_log = MagicMock()
+    timestamp = 1733234401000
+    start = {
+        "type": "message_start",
+        "message": {
+            "role": "user",
+            "content": "Review this repository",
+            "timestamp": timestamp,
+        },
+    }
+    end = {
+        "type": "message_end",
+        "message": {
+            "role": "user",
+            "content": "Review this repository",
+            "timestamp": timestamp,
+        },
+    }
+
+    with patch(
+        "api.coderbot.session.ws_manager.broadcast", new_callable=AsyncMock
+    ) as mock_broadcast:
+        await session._handle_event(start)
+        await session._handle_event(end)
+
+    rpc_messages = [
+        c.args[0]
+        for c in mock_broadcast.await_args_list
+        if c.args[0].type == "CODERBOT_RPC_EVENT"
+    ]
+    assert [m.payload["event"] for m in rpc_messages] == [start, end]
+    assert all(m.payload["task_id"] == "t1" for m in rpc_messages)
+    assert all(m.payload["pipeline_id"] == "p1" for m in rpc_messages)
+    assert [c.args[0] for c in session.event_log.append.call_args_list] == [start, end]
+
+
+@pytest.mark.asyncio
 async def test_coderbot_session_initialization(init_mock_db):
     task = Task(
         title="Test Task",

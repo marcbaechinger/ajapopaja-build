@@ -17,6 +17,7 @@
 import { formatMs } from '../ui/components/utils/duration.ts';
 
 export type BlockKind =
+  | 'user'
   | 'text'
   | 'thinking'
   | 'tool'
@@ -58,6 +59,40 @@ export interface RenderBlock {
 
 type BlockListener = (blocks: RenderBlock[]) => void;
 
+/**
+ * Extracts the human-readable text of a Pi user message.
+ *
+ * Pi's `UserMessage.content` is either a plain string or an array of text/image
+ * content blocks. Text blocks are joined with a newline (matching the backend's
+ * session-title extractor) and images only contribute a short placeholder so
+ * base64 payloads never reach the DOM. Unknown blocks are ignored rather than
+ * throwing, keeping the log robust to Pi protocol shape drift.
+ */
+function extractUserText(content: unknown): string {
+  if (typeof content === 'string') return content.trim();
+  if (!Array.isArray(content)) return '';
+
+  const parts: string[] = [];
+  for (const raw of content) {
+    if (typeof raw === 'string') {
+      parts.push(raw);
+      continue;
+    }
+    if (!raw || typeof raw !== 'object') continue;
+    const block = raw as { type?: unknown; text?: unknown; mimeType?: unknown };
+    if (block.type === 'text' && typeof block.text === 'string') {
+      parts.push(block.text);
+    } else if (block.type === 'image') {
+      const mimeType =
+        typeof block.mimeType === 'string' && block.mimeType
+          ? block.mimeType
+          : 'image';
+      parts.push(`[Image: ${mimeType}]`);
+    }
+  }
+  return parts.join('\n').trim();
+}
+
 interface OpenBlock {
   block: RenderBlock;
   buffer: string;
@@ -78,6 +113,10 @@ export class PiLogReducer {
   private blocks: RenderBlock[] = [];
   /** Live blocks still receiving streaming deltas, keyed by a logical key. */
   private openBlocks: Map<string, OpenBlock> = new Map();
+  /** Stable user-message key -> block id, for start/end dedupe. */
+  private userBlockIds: Map<string, string> = new Map();
+  /** Key opened by message_start while waiting for its message_end. */
+  private pendingUserKey: string | null = null;
   private nextBlockId: number = 1;
   private blockListeners: Set<BlockListener> = new Set();
   /**
@@ -111,6 +150,8 @@ export class PiLogReducer {
   public clear() {
     this.blocks = [];
     this.openBlocks.clear();
+    this.userBlockIds.clear();
+    this.pendingUserKey = null;
     this.nextBlockId = 1;
     this.emitBlocks();
   }
@@ -130,11 +171,16 @@ export class PiLogReducer {
         this.handleMessageUpdate(event.assistantMessageEvent);
         break;
       case 'message_start':
-      case 'message_end':
+      case 'message_end': {
+        const message = event?.message;
+        if (message?.role === 'user') {
+          this.upsertUserMessage(message, type === 'message_end');
+        }
         // Close any streaming text/thinking blocks so each message's content stays
         // in its own block (contentIndex restarts at 0 per message).
         this.closeStreamingBlocks(['text', 'thinking']);
         break;
+      }
       case 'agent_start':
         this.addBlock({ kind: 'notice', text: '● Agent started' });
         break;
@@ -315,6 +361,56 @@ export class PiLogReducer {
   // ---------------------------------------------------------------------------
   // Event helpers
   // ---------------------------------------------------------------------------
+
+  /**
+   * Adds or finalizes a `user` block for a Pi `message_start`/`message_end`
+   * user message. The start event renders immediately, while the end event
+   * updates the same block (authoritative content) instead of duplicating it.
+   */
+  private upsertUserMessage(message: any, final: boolean) {
+    const timestamp = message?.timestamp;
+    const hasTimestamp = timestamp !== undefined && timestamp !== null;
+    const timestampKey = hasTimestamp ? `timestamp:${String(timestamp)}` : null;
+
+    // A start opens a pending key. Its matching end always finalizes that key,
+    // even if the end's timestamp differs or is missing, so a pair that Pi
+    // labels inconsistently still renders as one block. Standalone/duplicate
+    // events fall back to the timestamp or a fresh anonymous key.
+    const key =
+      (!final && timestampKey) ||
+      this.pendingUserKey ||
+      timestampKey ||
+      `anon:${this.nextBlockId}`;
+
+    const text = extractUserText(message?.content);
+    if (!text) {
+      if (!final) {
+        this.pendingUserKey = key;
+      } else if (this.pendingUserKey === key) {
+        this.pendingUserKey = null;
+      }
+      return;
+    }
+
+    const existingId = this.userBlockIds.get(key);
+    if (existingId) {
+      this.updateBlock(existingId, { text, complete: final });
+    } else {
+      const id = this.addBlock({
+        kind: 'user',
+        header: 'You',
+        text,
+        complete: final,
+      });
+      this.userBlockIds.set(key, id);
+    }
+
+    if (!final) {
+      this.pendingUserKey = key;
+    } else if (this.pendingUserKey === key) {
+      this.pendingUserKey = null;
+    }
+  }
 
   private handleMessageUpdate(delta: any) {
     const deltaType = delta?.type;

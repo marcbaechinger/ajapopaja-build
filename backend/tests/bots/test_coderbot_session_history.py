@@ -48,6 +48,53 @@ async def test_read_session_history_replays_rpc_events(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_read_session_history_replays_user_message_events_in_order(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(session_module.config, "PI_SESSIONS_ROOT", tmp_path)
+    monkeypatch.setattr(session_module.config, "PI_SESSION_EVENT_LOG_ENABLED", True)
+    timestamp = 1733234401000
+    events = [
+        {
+            "type": "message_start",
+            "message": {
+                "role": "user",
+                "content": "Review this repository",
+                "timestamp": timestamp,
+            },
+        },
+        {
+            "type": "message_end",
+            "message": {
+                "role": "user",
+                "content": "Review this repository",
+                "timestamp": timestamp,
+            },
+        },
+        {
+            "type": "message_update",
+            "assistantMessageEvent": {
+                "type": "text_delta",
+                "contentIndex": 0,
+                "delta": "Looking…",
+            },
+        },
+    ]
+    path = tmp_path / "u-user" / "events.jsonl"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        "\n".join(
+            json.dumps({"type": "pi_rpc_event", "event": event}) for event in events
+        )
+        + "\n"
+    )
+
+    replayed = await read_session_history("t1", session_uid="u-user")
+
+    assert replayed == events
+
+
+@pytest.mark.asyncio
 async def test_read_session_history_empty_when_no_log(tmp_path):
     with patch.object(session_module.config, "SANDBOX_ROOT", tmp_path):
         assert await read_session_history("t1") == []

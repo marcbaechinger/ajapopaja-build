@@ -260,4 +260,152 @@ describe('PiLogReducer', () => {
     expect(listener).toHaveBeenCalledTimes(1);
     expect((listener.mock.calls[0][0] as RenderBlock[])[0].complete).toBe(true);
   });
+
+  describe('user messages', () => {
+    const userMessage = (content: unknown, timestamp?: number) => ({
+      role: 'user',
+      content,
+      ...(timestamp !== undefined ? { timestamp } : {}),
+    });
+
+    it('reduces a user start/end pair into one block before the assistant response', () => {
+      const reducer = new PiLogReducer();
+      reducer.handleEvent({
+        type: 'message_start',
+        message: userMessage('Review this repository', 1733234401000),
+      });
+      reducer.handleEvent({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'Looking…' },
+      });
+      reducer.handleEvent({
+        type: 'message_end',
+        message: userMessage('Review this repository', 1733234401000),
+      });
+
+      const blocks = reducer.getBlocks();
+      expect(blocks.filter((b) => b.kind === 'user')).toHaveLength(1);
+      expect(blocks[0]).toMatchObject({
+        kind: 'user',
+        header: 'You',
+        text: 'Review this repository',
+        complete: true,
+      });
+      expect(blocks[1].kind).toBe('text');
+      expect(blocks[1].text).toBe('Looking…');
+    });
+
+    it('renders one incomplete block for a user message_start without an end', () => {
+      const reducer = new PiLogReducer();
+      reducer.handleEvent({
+        type: 'message_start',
+        message: userMessage('interrupted', 1),
+      });
+
+      const users = reducer.getBlocks().filter((b) => b.kind === 'user');
+      expect(users).toHaveLength(1);
+      expect(users[0].complete).toBe(false);
+    });
+
+    it('renders one complete block for a standalone user message_end', () => {
+      const reducer = new PiLogReducer();
+      reducer.handleEvent({
+        type: 'message_end',
+        message: userMessage('older log entry', 2),
+      });
+
+      const users = reducer.getBlocks().filter((b) => b.kind === 'user');
+      expect(users).toHaveLength(1);
+      expect(users[0].text).toBe('older log entry');
+      expect(users[0].complete).toBe(true);
+    });
+
+    it('does not duplicate a repeated user message_end with the same timestamp', () => {
+      const reducer = new PiLogReducer();
+      const event = {
+        type: 'message_end',
+        message: userMessage('once', 3),
+      };
+      reducer.handleEvent(event);
+      reducer.handleEvent(event);
+
+      expect(reducer.getBlocks().filter((b) => b.kind === 'user')).toHaveLength(1);
+    });
+
+    it('finalizes a start/end pair even when the end has no timestamp', () => {
+      const reducer = new PiLogReducer();
+      reducer.handleEvent({
+        type: 'message_start',
+        message: userMessage('no end timestamp', 4),
+      });
+      reducer.handleEvent({
+        type: 'message_end',
+        message: userMessage('no end timestamp'),
+      });
+
+      const users = reducer.getBlocks().filter((b) => b.kind === 'user');
+      expect(users).toHaveLength(1);
+      expect(users[0].complete).toBe(true);
+    });
+
+    it('joins content-block text and replaces image data with a placeholder', () => {
+      const reducer = new PiLogReducer();
+      reducer.handleEvent({
+        type: 'message_end',
+        message: userMessage(
+          [
+            { type: 'text', text: 'first line' },
+            { type: 'image', mimeType: 'image/png', data: 'aGVsbG8=' },
+            { type: 'text', text: 'second line' },
+          ],
+          5
+        ),
+      });
+
+      const users = reducer.getBlocks().filter((b) => b.kind === 'user');
+      expect(users).toHaveLength(1);
+      expect(users[0].text).toBe('first line\n[Image: image/png]\nsecond line');
+      expect(users[0].text).not.toContain('aGVsbG8=');
+    });
+
+    it('ignores assistant, system, tool-result and empty user messages', () => {
+      const reducer = new PiLogReducer();
+      reducer.handleEvent({
+        type: 'message_end',
+        message: { role: 'assistant', content: 'answer', timestamp: 6 },
+      });
+      reducer.handleEvent({
+        type: 'message_end',
+        message: { role: 'system', content: 'system prompt', timestamp: 7 },
+      });
+      reducer.handleEvent({
+        type: 'message_end',
+        message: { role: 'toolResult', content: 'tool output', timestamp: 8 },
+      });
+      reducer.handleEvent({
+        type: 'message_end',
+        message: userMessage('   ', 9),
+      });
+
+      expect(reducer.getBlocks().filter((b) => b.kind === 'user')).toHaveLength(0);
+    });
+
+    it('clear resets user blocks and their dedupe state', () => {
+      const reducer = new PiLogReducer();
+      const event = {
+        type: 'message_end',
+        message: userMessage('before clear', 10),
+      };
+      reducer.handleEvent(event);
+      expect(reducer.getBlocks().filter((b) => b.kind === 'user')).toHaveLength(1);
+
+      reducer.clear();
+      expect(reducer.getBlocks()).toHaveLength(0);
+
+      reducer.handleEvent(event);
+      const users = reducer.getBlocks().filter((b) => b.kind === 'user');
+      expect(users).toHaveLength(1);
+      expect(users[0].text).toBe('before clear');
+    });
+  });
 });

@@ -109,6 +109,26 @@ describe('InteractiveCodingService', () => {
     expect(texts(service.getHistory())[0].text).toBe('hello');
   });
 
+  it('renders a user message_start/message_end pair as one user block', () => {
+    const timestamp = 1733234401000;
+    rpc(ws, {
+      type: 'message_start',
+      message: { role: 'user', content: 'Review this repository', timestamp },
+    });
+    rpc(ws, {
+      type: 'message_end',
+      message: { role: 'user', content: 'Review this repository', timestamp },
+    });
+
+    const users = service.getHistory().filter((b) => b.kind === 'user');
+    expect(users).toHaveLength(1);
+    expect(users[0]).toMatchObject({
+      header: 'You',
+      text: 'Review this repository',
+      complete: true,
+    });
+  });
+
   it('filters out events for another pipeline', () => {
     rpc(
       ws,
@@ -242,6 +262,36 @@ describe('InteractiveCodingService', () => {
     expect(service.getCurrentSession().uid).toBe('uid-reload');
     expect(client.getSessionEvents).toHaveBeenCalledWith('uid-reload');
     expect(texts(service.getHistory())[0].text).toBe('reloaded');
+  });
+
+  it('reconstructs user prompts from persisted history during replay', async () => {
+    const timestamp = 1733234401000;
+    client.getSessionEvents.mockResolvedValue([
+      {
+        type: 'message_start',
+        message: { role: 'user', content: 'Replayed prompt', timestamp },
+      },
+      {
+        type: 'message_end',
+        message: { role: 'user', content: 'Replayed prompt', timestamp },
+      },
+      {
+        type: 'message_update',
+        assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'replayed answer' },
+      },
+    ]);
+
+    await service.loadSessionHistory('uid-replay');
+
+    const blocks = service.getHistory();
+    expect(blocks.filter((b) => b.kind === 'user')).toHaveLength(1);
+    expect(blocks[0]).toMatchObject({
+      kind: 'user',
+      header: 'You',
+      text: 'Replayed prompt',
+      complete: true,
+    });
+    expect(blocks.filter((b) => b.kind === 'text')[0].text).toBe('replayed answer');
   });
 
   it('clearHistory resets the log', () => {
