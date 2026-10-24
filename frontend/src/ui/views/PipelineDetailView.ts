@@ -208,6 +208,28 @@ export class PipelineDetailView extends View {
         return;
       }
 
+      // 'd' opens the dev server dialog while a process is running. The
+      // header only shows the dev-server status in that state, so the shortcut
+      // mirrors the "Logs" action next to it.
+      if (this.devProcessState?.running) {
+        const isPlainD =
+          e.key.toLowerCase() === 'd' && !e.ctrlKey && !e.metaKey && !e.altKey;
+        const isModifiedD =
+          e.key.toLowerCase() === 'd' &&
+          (e.ctrlKey || e.metaKey) &&
+          e.shiftKey &&
+          !e.altKey;
+        if (isPlainD || isModifiedD) {
+          e.preventDefault();
+          void this.context.actionRegistry.execute(
+            'open_dev_server_dialog',
+            e,
+            document.body,
+          );
+          return;
+        }
+      }
+
       // 'h' key opens the History tab
       if (e.key === 'h' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();

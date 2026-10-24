@@ -67,6 +67,7 @@ describe('PipelineHeaderView', () => {
     });
     expect(running).toContain('Dev Server Running');
     expect(running).toContain('open_dev_server_dialog');
+    expect(running).toContain('Open Dev Server Logs (D)');
     expect(running).toContain(':1224');
   });
 

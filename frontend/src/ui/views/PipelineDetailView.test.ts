@@ -21,6 +21,7 @@ import { ActionRegistry } from '../../core/ActionRegistry.ts';
 import { TaskStatus } from '../../core/domain.ts';
 import { setTaskSpecProposalUpdater } from '../components/pipeline/SpecSection.ts';
 import { PipelineEditDialog } from '../components/dialogs/PipelineEditDialog.ts';
+import { DevServerDialog } from '../components/dialogs/DevServerDialog.ts';
 import {
   installGettingStartedFetchMock,
   flushPromises,
@@ -903,6 +904,40 @@ describe('PipelineDetailView Keyboard Shortcuts', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(PipelineEditDialog).not.toHaveBeenCalled();
+    view.unmount();
+  });
+
+  it('opens the dev server dialog on D while the dev process is running', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    (view as any).devProcessState = { running: true, pid: 42, port: 1224 };
+
+    keydown(view, { key: 'd' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(DevServerDialog).toHaveBeenCalledWith(mockContext, 'p1');
+    expect((DevServerDialog as any).mock.results[0].value.show).toHaveBeenCalled();
+    view.unmount();
+  });
+
+  it('opens the dev server dialog on Cmd+Shift+D while the dev process is running', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    (view as any).devProcessState = { running: true, pid: 42, port: 1224 };
+
+    keydown(view, { key: 'D', metaKey: true, shiftKey: true });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(DevServerDialog).toHaveBeenCalledWith(mockContext, 'p1');
+    view.unmount();
+  });
+
+  it('does not open the dev server dialog when no dev process is running', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    (view as any).devProcessState = { running: false, pid: null, port: null };
+
+    keydown(view, { key: 'd' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(DevServerDialog).not.toHaveBeenCalled();
     view.unmount();
   });
 });

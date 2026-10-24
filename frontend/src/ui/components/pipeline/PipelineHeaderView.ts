@@ -156,7 +156,7 @@ export class PipelineHeaderView {
           <span class="font-bold tracking-wide uppercase">Dev Server Running</span>
           ${devProcessState.target ? `<span class="font-mono text-emerald-300/80">on ${devProcessState.target}</span>` : ''}
           ${devProcessState.port != null ? `<span class="font-mono text-emerald-300/80">:${devProcessState.port}</span>` : ''}
-          <button data-action-click="open_dev_server_dialog" class="font-black underline hover:text-emerald-300 transition-colors cursor-pointer ml-1">Logs</button>
+          <button data-action-click="open_dev_server_dialog" class="font-black underline hover:text-emerald-300 transition-colors cursor-pointer ml-1" title="Open Dev Server Logs (D) (Ctrl/Cmd+Shift+D)" accesskey="d" aria-keyshortcuts="D">Logs</button>
         </div>
       `;
     }
