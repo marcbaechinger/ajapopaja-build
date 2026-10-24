@@ -23,6 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from api.assistant.tools.command_runner import run_command_sequence
 from api.auth import get_current_user
+from core.exceptions import EntityNotFoundError
 from core.models.models import PullRequest, PullRequestStatus, User
 from core.queries import pipeline as pipeline_queries
 from core.services.dev_process_manager import (
@@ -45,9 +46,22 @@ async def dev_status(pipeline_id: str, current_user: User = Depends(get_current_
     """Return the status of the pipeline's dev process.
 
     The response includes ``port`` (the container port the dev server is
-    expected to listen on, published to the host via docker-compose).
+    expected to listen on, published to the host via docker-compose),
+    ``phase`` (the raw manager phase) and ``build_commands_configured`` so the
+    dialog can decide whether a rebuild is possible.
     """
-    return await DevProcessManager.instance().status(pipeline_id)
+    result = await DevProcessManager.instance().status(pipeline_id)
+    try:
+        pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
+    except EntityNotFoundError:
+        # Preserve the historical behaviour of the status endpoint: a missing
+        # pipeline is not an error here, it simply has no build commands.
+        result["build_commands_configured"] = False
+    else:
+        result["build_commands_configured"] = bool(
+            [c for c in (pipeline.build_commands or []) if isinstance(c, list) and c]
+        )
+    return result
 
 
 @router.post("/start", response_model=dict)
@@ -98,6 +112,35 @@ async def _stop_and_start_on_default(pipeline_id: str, username: str):
         )
     try:
         return await manager.start(pipeline_id, commands, username)
+    except DevProcessAlreadyRunningError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except DevProcessError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/rebuild", response_model=dict)
+async def dev_rebuild(pipeline_id: str, current_user: User = Depends(get_current_user)):
+    """Rebuild and restart the dev process in its current workspace.
+
+    The pipeline's configured ``build_commands`` run in the exact workspace of
+    the currently tracked process (which may be a pull-request worktree or a
+    retained sandbox), then the original serve commands are restarted there.
+    """
+    pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
+    build_commands = [
+        c for c in (pipeline.build_commands or []) if isinstance(c, list) and c
+    ]
+    if not build_commands:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No build commands configured",
+        )
+    try:
+        return await DevProcessManager.instance().rebuild(
+            pipeline_id, build_commands, current_user.username
+        )
+    except DevProcessNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except DevProcessAlreadyRunningError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except DevProcessError as e:

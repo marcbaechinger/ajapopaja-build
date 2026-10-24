@@ -209,3 +209,52 @@ async def test_subscribe_without_pipeline_id_is_ignored():
 
     await _dispatch({"type": DEV_PROCESS_LOGS_SUBSCRIBE, "payload": {}}, websocket, cm)
     assert dev_server_ws._pumps == {}
+
+
+async def test_subscribe_pump_forwards_multiple_status_events_in_order():
+    manager = DevProcessManager.instance()
+
+    async def fake_stream(pipeline_id, run_id=None):
+        yield {
+            "type": "status",
+            "run_id": "r1",
+            "pid": 1,
+            "status": "building",
+        }
+        yield {"type": "chunk", "seq": 0, "stream": "stdout", "text": "build\n"}
+        yield {
+            "type": "status",
+            "run_id": "r1",
+            "pid": 2,
+            "status": "running",
+        }
+        yield {"type": "chunk", "seq": 1, "stream": "stdout", "text": "serve\n"}
+        yield {"type": "exit", "exit_code": 0}
+
+    cm = ConnectionManager()
+    register_dev_process_ws(cm=cm)
+    websocket = AsyncMock()
+
+    with patch.object(manager, "stream", new=fake_stream):
+        await _dispatch(
+            {
+                "type": DEV_PROCESS_LOGS_SUBSCRIBE,
+                "payload": {"pipeline_id": "p1", "run_id": "r1"},
+            },
+            websocket,
+            cm,
+        )
+        task = dev_server_ws._pumps[(id(websocket), "p1")]
+        await task
+
+    messages = _sent(websocket)
+    assert [m["type"] for m in messages] == [
+        DEV_PROCESS_STATUS,
+        DEV_PROCESS_LOG,
+        DEV_PROCESS_STATUS,
+        DEV_PROCESS_LOG,
+        DEV_PROCESS_STREAM_END,
+    ]
+    assert messages[0]["payload"]["status"] == "building"
+    assert messages[2]["payload"]["status"] == "running"
+    assert messages[2]["payload"]["pid"] == 2

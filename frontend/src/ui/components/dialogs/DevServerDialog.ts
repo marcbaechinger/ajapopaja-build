@@ -17,6 +17,7 @@
 import { BaseDialog } from './dialog_common.ts';
 import { ProcessIoView } from '../session/ProcessIoView.ts';
 import type { AppContext } from '../../../core/AppContext.ts';
+import type { DevServerStatus } from '../../../core/clients/PipelineClient.ts';
 import { Icon } from '../common/Icon.ts';
 
 /**
@@ -29,6 +30,8 @@ export class DevServerDialog extends BaseDialog<void> {
   private pipelineId: string;
   private processIoView: ProcessIoView | null = null;
   private resetButton: HTMLButtonElement | null = null;
+  private rebuildButton: HTMLButtonElement | null = null;
+  private errorSlot: HTMLElement | null = null;
 
   constructor(context: AppContext, pipelineId: string) {
     super({
@@ -60,17 +63,26 @@ export class DevServerDialog extends BaseDialog<void> {
     this.resetButton = footerContainer.querySelector(
       '#dev-server-dialog-default-branch-btn',
     ) as HTMLButtonElement | null;
+    this.rebuildButton = footerContainer.querySelector(
+      '#dev-server-dialog-rebuild-btn',
+    ) as HTMLButtonElement | null;
+    this.errorSlot = footerContainer.querySelector(
+      '#dev-server-dialog-error',
+    ) as HTMLElement | null;
+
     this.resetButton?.addEventListener('click', () => {
       void this.resetToDefaultBranch();
     });
-    void this.refreshResetButtonVisibility();
+    this.rebuildButton?.addEventListener('click', () => {
+      void this.rebuildServer();
+    });
+    void this.refreshActionButtons();
 
     const mount = bodyContainer.querySelector(
       '#dev-server-pioview-mount',
     ) as HTMLElement;
     if (mount) {
-      this.processIoView = new ProcessIoView(mount, this.context, this.pipelineId);
-      this.processIoView.render();
+      this.mountProcessIoView(mount);
     }
   }
 
@@ -82,29 +94,97 @@ export class DevServerDialog extends BaseDialog<void> {
 
   protected renderFooter(): string {
     return `
-      <div class="p-3 border-t border-app-border flex justify-between items-center bg-app-surface/50">
-        <button id="dev-server-dialog-default-branch-btn" type="button" class="hidden px-4 py-1.5 rounded text-xs font-bold bg-app-accent-2 text-white hover:bg-app-accent-2/80 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
-          Back to default branch
-        </button>
-        <button id="dev-server-dialog-close-btn" class="px-4 py-1.5 rounded text-xs font-bold bg-app-bg border border-app-border text-app-text hover:bg-app-surface transition-colors cursor-pointer">
-          Close
-        </button>
+      <div class="p-3 border-t border-app-border bg-app-surface/50">
+        <div id="dev-server-dialog-error" class="hidden mb-2 text-xs text-red-400" aria-live="polite"></div>
+        <div class="flex justify-between items-center">
+          <div class="flex items-center gap-2">
+            <button id="dev-server-dialog-default-branch-btn" type="button" class="hidden px-4 py-1.5 rounded text-xs font-bold bg-app-accent-2 text-white hover:bg-app-accent-2/80 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+              Back to default branch
+            </button>
+            <button id="dev-server-dialog-rebuild-btn" type="button" class="hidden px-4 py-1.5 rounded text-xs font-bold bg-app-accent-1 text-white hover:bg-app-accent-1/80 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+              Rebuild
+            </button>
+          </div>
+          <button id="dev-server-dialog-close-btn" class="px-4 py-1.5 rounded text-xs font-bold bg-app-bg border border-app-border text-app-text hover:bg-app-surface transition-colors cursor-pointer">
+            Close
+          </button>
+        </div>
       </div>
     `;
   }
 
-  /** Shows the reset button only when the server is running on another branch. */
-  private async refreshResetButtonVisibility(): Promise<void> {
-    if (!this.resetButton) return;
+  /** Reads the current status once and updates both footer actions. */
+  private async refreshActionButtons(): Promise<void> {
     try {
       const status = await this.context.pipelineClient.getDevServerStatus(
         this.pipelineId,
       );
-      const onAnotherBranch = Boolean(status.task_id || status.target);
-      this.resetButton.classList.toggle('hidden', !onAnotherBranch);
+      this.applyStatusToActions(status);
     } catch (error) {
       console.error('DevServerDialog: failed to read dev server status', error);
-      this.resetButton.classList.add('hidden');
+      this.resetButton?.classList.add('hidden');
+      this.rebuildButton?.classList.add('hidden');
+    }
+  }
+
+  private applyStatusToActions(status: DevServerStatus): void {
+    const onAnotherBranch = Boolean(status.task_id || status.target);
+    this.resetButton?.classList.toggle('hidden', !onAnotherBranch);
+
+    const rebuildAvailable =
+      Boolean(status.run_id) && status.build_commands_configured !== false;
+    this.rebuildButton?.classList.toggle('hidden', !rebuildAvailable);
+    if (!rebuildAvailable || !this.rebuildButton) return;
+
+    const building = status.phase === 'building';
+    this.rebuildButton.disabled = building;
+    this.rebuildButton.textContent = building ? 'Rebuilding…' : 'Rebuild';
+  }
+
+  /** Keeps the rebuild action in sync with live process phase changes. */
+  private handleProcessStatus(status: string): void {
+    if (!this.rebuildButton) return;
+    if (status === 'building') {
+      this.rebuildButton.disabled = true;
+      this.rebuildButton.textContent = 'Rebuilding…';
+      return;
+    }
+    if (
+      status === 'running' ||
+      status === 'exited' ||
+      status === 'failed' ||
+      status === 'build_failed' ||
+      status === 'stopped'
+    ) {
+      this.rebuildButton.disabled = false;
+      this.rebuildButton.textContent = 'Rebuild';
+    }
+  }
+
+  private mountProcessIoView(mount: HTMLElement): void {
+    this.processIoView = new ProcessIoView(mount, this.context, this.pipelineId, {
+      onStatus: (status) => this.handleProcessStatus(status),
+    });
+    this.processIoView.render();
+  }
+
+  /** Rebuilds and restarts the dev server in its current workspace. */
+  private async rebuildServer(): Promise<void> {
+    const button = this.rebuildButton;
+    if (!button || button.disabled) return;
+
+    button.disabled = true;
+    button.textContent = 'Rebuilding…';
+    this.clearError();
+    try {
+      await this.context.pipelineClient.rebuildDevServer(this.pipelineId);
+      // The old run has ended; subscribe to the new rebuild run so the dialog
+      // tails build output and then the restarted server.
+      this.recreateProcessIoView();
+    } catch (error: any) {
+      button.disabled = false;
+      button.textContent = 'Rebuild';
+      this.showError(error?.message ?? 'Rebuild failed');
     }
   }
 
@@ -116,6 +196,7 @@ export class DevServerDialog extends BaseDialog<void> {
     const original = button.textContent ?? '';
     button.disabled = true;
     button.textContent = 'Switching…';
+    this.clearError();
     try {
       await this.context.pipelineClient.resetDevServerToDefaultBranch(
         this.pipelineId,
@@ -124,11 +205,24 @@ export class DevServerDialog extends BaseDialog<void> {
       // The old process stream has ended; re-mount the view so it tails the
       // freshly started default-branch process.
       this.recreateProcessIoView();
-    } catch (error) {
+    } catch (error: any) {
       console.error('DevServerDialog: failed to reset dev server branch', error);
       button.disabled = false;
       button.textContent = original;
+      this.showError(error?.message ?? 'Could not switch to the default branch');
     }
+  }
+
+  private showError(message: string): void {
+    if (!this.errorSlot) return;
+    this.errorSlot.textContent = message;
+    this.errorSlot.classList.remove('hidden');
+  }
+
+  private clearError(): void {
+    if (!this.errorSlot) return;
+    this.errorSlot.textContent = '';
+    this.errorSlot.classList.add('hidden');
   }
 
   private recreateProcessIoView(): void {
@@ -140,8 +234,7 @@ export class DevServerDialog extends BaseDialog<void> {
       '#dev-server-pioview-mount',
     ) as HTMLElement | null;
     if (mount) {
-      this.processIoView = new ProcessIoView(mount, this.context, this.pipelineId);
-      this.processIoView.render();
+      this.mountProcessIoView(mount);
     }
   }
 

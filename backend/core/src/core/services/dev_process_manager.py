@@ -37,8 +37,9 @@ import signal
 import time
 import uuid
 from collections import deque
+from contextlib import suppress
 from dataclasses import dataclass, field
-from typing import Awaitable, Callable, Deque, Dict, List, Optional
+from typing import Awaitable, Callable, Deque, Dict, List, Optional, Tuple
 
 from core import config
 from core.exceptions import EntityNotFoundError
@@ -383,10 +384,97 @@ class DevProcessManager:
                 "commit_hash": info.commit_hash,
             }
 
+    async def _run_command_group(
+        self,
+        pipeline_id: str,
+        info: ProcessInfo,
+        commands: List[List[str]],
+        workspace: str,
+        env: Dict[str, str],
+        *,
+        phase: str = "running",
+        started_emitted: bool = False,
+    ) -> Tuple[Optional[int], bool]:
+        """Runs one command group sequentially, streaming into ``info.buffer``.
+
+        Returns the exit code of the last command and whether the
+        ``DEV_PROCESS_STARTED`` event has already been emitted for this run.
+        """
+
+        async def _drain(stream, name: str) -> None:
+            """Reads a pipe in chunks and appends each chunk to the buffer."""
+            while True:
+                chunk = await stream.read(4096)
+                if not chunk:
+                    break
+                info.buffer.append(name, chunk.decode(errors="replace"))
+                if not info.started_event.is_set():
+                    info.started_event.set()
+
+        for entry in commands:
+            proc = await asyncio.create_subprocess_exec(
+                *entry,
+                cwd=workspace,
+                env=env,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                # Own session/process group so descendants die with it.
+                start_new_session=True,
+            )
+            info.process = proc
+            info.status = phase
+            if not info.started_event.is_set():
+                info.started_event.set()
+            if not started_emitted:
+                started_emitted = True
+                await self._emit(
+                    "DEV_PROCESS_STARTED",
+                    {
+                        "pipeline_id": pipeline_id,
+                        "run_id": info.run_id,
+                        "pid": proc.pid,
+                        "port": config.DEV_SERVER_PORT,
+                        "user": info.user,
+                        "status": phase,
+                        "target": info.target,
+                        "task_id": info.task_id,
+                        "branch": info.branch,
+                        "commit_hash": info.commit_hash,
+                    },
+                )
+
+            # Concurrently drain stdout/stderr so output is observable as it
+            # is produced instead of being buffered until exit.
+            await asyncio.gather(
+                _drain(proc.stdout, "stdout"),
+                _drain(proc.stderr, "stderr"),
+                proc.wait(),
+            )
+            info.exit_code = proc.returncode
+            if proc.returncode != 0:
+                logger.warning(
+                    "Dev command %s for pipeline %s exited with code %s.",
+                    entry,
+                    pipeline_id,
+                    proc.returncode,
+                )
+                return proc.returncode, started_emitted
+
+        return info.exit_code, started_emitted
+
     async def _run_commands(
-        self, pipeline_id: str, commands: List[List[str]], workspace: str
+        self,
+        pipeline_id: str,
+        commands: List[List[str]],
+        workspace: str,
+        build_commands: Optional[List[List[str]]] = None,
     ) -> None:
-        """Runs the command sequence in the background, streaming output."""
+        """Runs the command sequence in the background, streaming output.
+
+        When ``build_commands`` is provided they run first in ``workspace``.
+        A non-zero build exit marks the run ``build_failed`` and never starts
+        the serve commands.
+        """
         info = self._processes.get(pipeline_id)
         if info is None:  # pragma: no cover - defensive
             return
@@ -401,66 +489,43 @@ class DevProcessManager:
             "PORT": str(config.DEV_SERVER_PORT),
         }
 
-        async def _drain(stream, name: str) -> None:
-            """Reads a pipe in chunks and appends each chunk to the buffer."""
-            while True:
-                chunk = await stream.read(4096)
-                if not chunk:
-                    break
-                info.buffer.append(name, chunk.decode(errors="replace"))
-                if not info.started_event.is_set():
-                    info.started_event.set()
-
         started_emitted = False
         try:
-            for entry in commands:
-                proc = await asyncio.create_subprocess_exec(
-                    *entry,
-                    cwd=workspace,
-                    env=env,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    # Own session/process group so descendants die with it.
-                    start_new_session=True,
+            if build_commands:
+                info.status = "building"
+                info.buffer.append("stdout", "[rebuild] running build commands…\n")
+                build_code, started_emitted = await self._run_command_group(
+                    pipeline_id,
+                    info,
+                    build_commands,
+                    workspace,
+                    env,
+                    phase="building",
+                    started_emitted=started_emitted,
                 )
-                info.process = proc
+                if build_code != 0:
+                    info.exit_code = build_code
+                    info.status = "build_failed"
+                    info.buffer.append(
+                        "stderr",
+                        f"\n[rebuild] build failed with exit code {build_code}; "
+                        "server not started\n",
+                    )
+                    return
                 info.status = "running"
-                if not info.started_event.is_set():
-                    info.started_event.set()
-                if not started_emitted:
-                    started_emitted = True
-                    await self._emit(
-                        "DEV_PROCESS_STARTED",
-                        {
-                            "pipeline_id": pipeline_id,
-                            "run_id": info.run_id,
-                            "pid": proc.pid,
-                            "port": config.DEV_SERVER_PORT,
-                            "user": info.user,
-                            "status": "running",
-                            "target": info.target,
-                            "task_id": info.task_id,
-                            "branch": info.branch,
-                            "commit_hash": info.commit_hash,
-                        },
-                    )
-
-                # Concurrently drain stdout/stderr so output is observable as it
-                # is produced instead of being buffered until exit.
-                await asyncio.gather(
-                    _drain(proc.stdout, "stdout"),
-                    _drain(proc.stderr, "stderr"),
-                    proc.wait(),
+                info.buffer.append(
+                    "stdout", "\n[rebuild] build succeeded; starting server…\n"
                 )
-                info.exit_code = proc.returncode
-                if proc.returncode != 0:
-                    logger.warning(
-                        "Dev command %s for pipeline %s exited with code %s.",
-                        entry,
-                        pipeline_id,
-                        proc.returncode,
-                    )
-                    break
+
+            _, started_emitted = await self._run_command_group(
+                pipeline_id,
+                info,
+                commands,
+                workspace,
+                env,
+                phase="running",
+                started_emitted=started_emitted,
+            )
         except asyncio.CancelledError:
             info.status = "stopped"
             if info.process is not None and info.process.returncode is None:
@@ -480,7 +545,7 @@ class DevProcessManager:
 
             if info.exit_code is None and info.process is not None:
                 info.exit_code = info.process.returncode
-            if info.status not in ("stopped", "failed"):
+            if info.status not in ("stopped", "failed", "build_failed"):
                 info.status = "exited" if info.exit_code == 0 else "failed"
 
             # Finalise the legacy strings from the (bounded) buffer.
@@ -514,6 +579,7 @@ class DevProcessManager:
             return
 
         yield {"type": "status", **self._info_public(info, pipeline_id)}
+        last = self._info_public(info, pipeline_id)
         seq = 0
         while True:
             for chunk in info.buffer.snapshot(seq):
@@ -524,6 +590,10 @@ class DevProcessManager:
                     "text": chunk.text,
                 }
                 seq = chunk.seq + 1
+            current = self._info_public(info, pipeline_id)
+            if current != last:
+                yield {"type": "status", **current}
+                last = current
             if not self._is_running(info):
                 yield {"type": "exit", "exit_code": info.exit_code}
                 return
@@ -537,6 +607,7 @@ class DevProcessManager:
                 "pipeline_id": pipeline_id,
                 "running": False,
                 "status": "not_started",
+                "phase": "not_started",
                 "pid": None,
                 "exit_code": None,
                 "run_id": None,
@@ -558,6 +629,7 @@ class DevProcessManager:
             "pipeline_id": pipeline_id,
             "running": running,
             "status": "running" if running else "stopped",
+            "phase": info.status,
             "pid": pid,
             "exit_code": info.exit_code,
             "run_id": info.run_id,
@@ -569,6 +641,112 @@ class DevProcessManager:
             "branch": info.branch,
             "commit_hash": info.commit_hash,
         }
+
+    async def rebuild(
+        self,
+        pipeline_id: str,
+        build_commands: List[List[str]],
+        user: str = "",
+    ) -> Dict:
+        """Rebuilds and restarts the current dev process in its workspace.
+
+        The build commands run in the exact workspace captured by the current
+        (or most recent) process, preserving PR worktrees and retained sandbox
+        checkouts. On success the original serve commands are restarted in the
+        same workspace and with the same target/task context.
+        """
+        async with self._lock_for(pipeline_id):
+            existing = self._processes.get(pipeline_id)
+            if existing is None:
+                raise DevProcessNotFoundError(
+                    f"No dev process found for pipeline {pipeline_id}"
+                )
+            if existing.status == "building" and self._is_running(existing):
+                raise DevProcessAlreadyRunningError(
+                    "A rebuild is already in progress"
+                )
+            if not build_commands:
+                raise DevProcessError("No build commands configured")
+
+            # Capture the running context *before* stopping the old run. Never
+            # re-resolve the workspace when one is known: it may point at a PR
+            # worktree or a retained CoderBot sandbox.
+            workspace = existing.workspace
+            if not workspace:
+                workspace = await self._resolve_workspace(pipeline_id)
+            serve_commands = list(existing.commands)
+            target = existing.target
+            task_id = existing.task_id
+            branch = existing.branch
+            commit_hash = existing.commit_hash
+
+            await self._stop_locked(pipeline_id)
+
+            info = ProcessInfo(
+                run_id=uuid.uuid4().hex,
+                commands=serve_commands,
+                user=user,
+                status="building",
+                target=target,
+                workspace=workspace,
+                task_id=task_id,
+                branch=branch,
+                commit_hash=commit_hash,
+            )
+            self._processes[pipeline_id] = info
+            info.task = asyncio.create_task(
+                self._run_commands(
+                    pipeline_id,
+                    serve_commands,
+                    workspace,
+                    build_commands=build_commands,
+                )
+            )
+
+            # Wait briefly for the first build command to spawn so the caller
+            # gets a pid; the build itself keeps running in the background.
+            try:
+                await asyncio.wait_for(info.started_event.wait(), timeout=10)
+            except asyncio.TimeoutError:  # pragma: no cover - defensive
+                logger.warning(
+                    "Timed out waiting for rebuild of pipeline %s to start.",
+                    pipeline_id,
+                )
+
+            pid = (
+                info.process.pid
+                if info.process is not None and info.process.returncode is None
+                else None
+            )
+            return {
+                "status": "rebuilding",
+                "pipeline_id": pipeline_id,
+                "run_id": info.run_id,
+                "pid": pid,
+                "port": config.DEV_SERVER_PORT,
+                "user": info.user,
+                "started_at": info.started_at,
+                "target": info.target,
+                "task_id": info.task_id,
+                "branch": info.branch,
+                "commit_hash": info.commit_hash,
+            }
+
+    async def _stop_locked(self, pipeline_id: str) -> Optional[ProcessInfo]:
+        """Stops and removes a process while the caller holds its lock."""
+        info = self._processes.get(pipeline_id)
+        if info is None:
+            return None
+        # Cancel the run first: its cancellation handler terminates the active
+        # process group and records the ``stopped`` phase. Any process that
+        # survives (e.g. an already-finished task) is terminated below.
+        if info.task is not None and not info.task.done():
+            info.task.cancel()
+            with suppress(asyncio.CancelledError):
+                await info.task
+        if info.process is not None and info.process.returncode is None:
+            await _terminate_proc_tree(info.process)
+        return self._processes.pop(pipeline_id, None)
 
     async def stop(self, pipeline_id: str) -> Dict:
         """Stops the running dev process for a pipeline and clears its state.
@@ -583,19 +761,8 @@ class DevProcessManager:
                     f"No dev process found for pipeline {pipeline_id}"
                 )
 
-            if info.process is not None and info.process.returncode is None:
-                await _terminate_proc_tree(info.process)
-
-            task = info.task
-            if task is not None and not task.done():
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
-
             exit_code = info.exit_code
-            self._processes.pop(pipeline_id, None)
+            await self._stop_locked(pipeline_id)
             return {
                 "status": "stopped",
                 "pipeline_id": pipeline_id,

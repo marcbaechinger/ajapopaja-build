@@ -22,6 +22,7 @@ from api.main import app
 from core.models.models import Pipeline, PullRequest, PullRequestStatus
 from core.services.dev_process_manager import (
     DevProcessAlreadyRunningError,
+    DevProcessError,
     DevProcessManager,
     DevProcessNotFoundError,
 )
@@ -38,23 +39,82 @@ def mock_auth():
 
 @pytest.mark.asyncio
 async def test_dev_status(async_client, init_mock_db):
+    pipeline = Pipeline(
+        name="Serve", build_commands=[["sh", "-c", "npm run build"]]
+    )
+    await pipeline.insert()
+
     with patch.object(
         DevProcessManager, "status", new_callable=AsyncMock
     ) as mock_status:
         mock_status.return_value = {
             "running": False,
+            "status": "stopped",
+            "phase": "exited",
             "pid": None,
             "exit_code": None,
             "port": 1224,
         }
-        response = await async_client.get("/api/pipelines/p1/dev/status")
+        response = await async_client.get(
+            f"/api/pipelines/{pipeline.id}/dev/status"
+        )
         assert response.status_code == status.HTTP_200_OK
         assert response.json() == {
             "running": False,
+            "status": "stopped",
+            "phase": "exited",
+            "pid": None,
+            "exit_code": None,
+            "port": 1224,
+            "build_commands_configured": True,
+        }
+
+
+@pytest.mark.asyncio
+async def test_dev_status_without_pipeline_reports_no_build_commands(
+    async_client, init_mock_db
+):
+    with patch.object(
+        DevProcessManager, "status", new_callable=AsyncMock
+    ) as mock_status:
+        mock_status.return_value = {
+            "running": False,
+            "status": "not_started",
+            "phase": "not_started",
             "pid": None,
             "exit_code": None,
             "port": 1224,
         }
+        response = await async_client.get("/api/pipelines/missing/dev/status")
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["build_commands_configured"] is False
+
+
+@pytest.mark.asyncio
+async def test_dev_status_reports_build_commands_not_configured(
+    async_client, init_mock_db
+):
+    pipeline = Pipeline(name="Serve")
+    await pipeline.insert()
+
+    with patch.object(
+        DevProcessManager, "status", new_callable=AsyncMock
+    ) as mock_status:
+        mock_status.return_value = {
+            "running": True,
+            "status": "running",
+            "phase": "running",
+            "pid": 42,
+            "exit_code": None,
+            "port": 1224,
+        }
+        response = await async_client.get(
+            f"/api/pipelines/{pipeline.id}/dev/status"
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["build_commands_configured"] is False
 
 
 @pytest.mark.asyncio
@@ -224,6 +284,112 @@ async def test_dev_default_branch_ignores_stop_not_found(async_client, init_mock
     assert response.status_code == status.HTTP_200_OK
     mock_stop.assert_awaited_once()
     mock_start.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_dev_rebuild_passes_build_commands(async_client, init_mock_db):
+    pipeline = Pipeline(
+        name="Serve",
+        serve_commands=[["sh", "-c", "sleep 30"]],
+        build_commands=[["sh", "-c", "npm run build"]],
+    )
+    await pipeline.insert()
+
+    with patch.object(
+        DevProcessManager, "rebuild", new_callable=AsyncMock
+    ) as mock_rebuild:
+        mock_rebuild.return_value = {
+            "status": "rebuilding",
+            "run_id": "new-run",
+            "pid": 42,
+            "port": 1224,
+        }
+        response = await async_client.post(
+            f"/api/pipelines/{pipeline.id}/dev/rebuild"
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["status"] == "rebuilding"
+    assert response.json()["run_id"] == "new-run"
+    mock_rebuild.assert_awaited_once()
+    args = mock_rebuild.await_args.args
+    assert args[0] == str(pipeline.id)
+    assert args[1] == [["sh", "-c", "npm run build"]]
+    assert args[2] == "testuser"
+
+
+@pytest.mark.asyncio
+async def test_dev_rebuild_without_build_commands(async_client, init_mock_db):
+    pipeline = Pipeline(name="Serve", serve_commands=[["sh", "-c", "sleep 30"]])
+    await pipeline.insert()
+
+    with patch.object(
+        DevProcessManager, "rebuild", new_callable=AsyncMock
+    ) as mock_rebuild:
+        response = await async_client.post(
+            f"/api/pipelines/{pipeline.id}/dev/rebuild"
+        )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "No build commands" in response.json()["detail"]
+    mock_rebuild.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_dev_rebuild_not_found(async_client, init_mock_db):
+    pipeline = Pipeline(name="Serve", build_commands=[["sh", "-c", "true"]])
+    await pipeline.insert()
+
+    with patch.object(
+        DevProcessManager,
+        "rebuild",
+        new_callable=AsyncMock,
+        side_effect=DevProcessNotFoundError("no process"),
+    ):
+        response = await async_client.post(
+            f"/api/pipelines/{pipeline.id}/dev/rebuild"
+        )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert "no process" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_dev_rebuild_already_in_progress(async_client, init_mock_db):
+    pipeline = Pipeline(name="Serve", build_commands=[["sh", "-c", "true"]])
+    await pipeline.insert()
+
+    with patch.object(
+        DevProcessManager,
+        "rebuild",
+        new_callable=AsyncMock,
+        side_effect=DevProcessAlreadyRunningError("already rebuilding"),
+    ):
+        response = await async_client.post(
+            f"/api/pipelines/{pipeline.id}/dev/rebuild"
+        )
+
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert "already rebuilding" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_dev_rebuild_maps_service_error_to_400(async_client, init_mock_db):
+    pipeline = Pipeline(name="Serve", build_commands=[["sh", "-c", "true"]])
+    await pipeline.insert()
+
+    with patch.object(
+        DevProcessManager,
+        "rebuild",
+        new_callable=AsyncMock,
+        side_effect=DevProcessError("bad rebuild"),
+    ):
+        response = await async_client.post(
+            f"/api/pipelines/{pipeline.id}/dev/rebuild"
+        )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "bad rebuild" in response.json()["detail"]
 
 
 # ---------------------------------------------------------------------------

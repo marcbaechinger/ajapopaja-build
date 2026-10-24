@@ -454,3 +454,161 @@ async def test_start_falls_back_to_target_when_detached(tmp_path):
     assert started["commit_hash"] is None
     assert started["task_id"] is None
     await manager.stop("p1")
+
+
+# ---------------------------------------------------------------------------
+# Rebuild
+# ---------------------------------------------------------------------------
+
+
+async def _wait_until(predicate, timeout: float = 5.0) -> None:
+    for _ in range(int(timeout / 0.01)):
+        if predicate():
+            return
+        await asyncio.sleep(0.01)
+    raise AssertionError("condition was not met before timeout")
+
+
+async def test_rebuild_uses_captured_workspace_and_preserves_context(tmp_path):
+    manager = DevProcessManager.instance()
+    custom = tmp_path / "pr-worktree"
+    custom.mkdir()
+
+    with patch.object(
+        manager, "_resolve_workspace", new_callable=AsyncMock
+    ) as mock_resolve:
+        started = await manager.start(
+            "p1",
+            [["sh", "-c", "echo SERVE_STARTED; sleep 30"]],
+            workspace=str(custom),
+            target="coderbot/t1",
+            task_id="t1",
+            user="alice",
+        )
+        mock_resolve.reset_mock()
+
+        rebuilt = await manager.rebuild(
+            "p1", [["sh", "-c", "echo BUILD_OUTPUT"]], user="bob"
+        )
+
+        info = manager._processes["p1"]
+        await _wait_until(
+            lambda: "SERVE_STARTED" in "".join(
+                c.text for c in info.buffer.snapshot(0)
+            )
+        )
+
+    mock_resolve.assert_not_called()
+    assert rebuilt["status"] == "rebuilding"
+    assert rebuilt["run_id"] != started["run_id"]
+    assert rebuilt["user"] == "bob"
+    assert rebuilt["target"] == "coderbot/t1"
+    assert rebuilt["task_id"] == "t1"
+
+    status = await manager.status("p1")
+    assert status["target"] == "coderbot/t1"
+    assert status["task_id"] == "t1"
+    assert status["phase"] == "running"
+
+    captured = "".join(c.text for c in info.buffer.snapshot(0))
+    assert captured.index("BUILD_OUTPUT") < captured.index("SERVE_STARTED")
+    assert "[rebuild] build succeeded" in captured
+    assert str(custom) == info.workspace
+    await manager.stop("p1")
+
+
+async def test_rebuild_failed_build_never_starts_server(tmp_path):
+    manager = DevProcessManager.instance()
+    with _patch_workspace(manager, str(tmp_path)):
+        await manager.start(
+            "p1", [["sh", "-c", "echo SERVE_STARTED; sleep 30"]]
+        )
+        await manager.rebuild(
+            "p1", [["sh", "-c", "echo BUILD_FAILED; exit 4"]]
+        )
+
+    info = manager._processes["p1"]
+    await asyncio.wait_for(info.task, timeout=5)
+
+    assert info.status == "build_failed"
+    assert info.exit_code == 4
+    captured = "".join(c.text for c in info.buffer.snapshot(0))
+    assert "BUILD_FAILED" in captured
+    assert "[rebuild] build failed with exit code 4" in captured
+    assert "SERVE_STARTED" not in captured
+    status = await manager.status("p1")
+    assert status["phase"] == "build_failed"
+    assert status["exit_code"] == 4
+
+
+async def test_rebuild_without_process_raises():
+    manager = DevProcessManager.instance()
+    with pytest.raises(DevProcessNotFoundError):
+        await manager.rebuild("p1", [["sh", "-c", "true"]])
+
+
+async def test_rebuild_without_build_commands_raises(tmp_path):
+    manager = DevProcessManager.instance()
+    with _patch_workspace(manager, str(tmp_path)):
+        await manager.start("p1", [["sh", "-c", "sleep 30"]])
+        with pytest.raises(DevProcessError):
+            await manager.rebuild("p1", [])
+    await manager.stop("p1")
+
+
+async def test_rebuild_while_building_is_rejected(tmp_path):
+    manager = DevProcessManager.instance()
+    with _patch_workspace(manager, str(tmp_path)):
+        await manager.start("p1", [["sh", "-c", "sleep 30"]])
+        await manager.rebuild("p1", [["sh", "-c", "sleep 30"]])
+        with pytest.raises(DevProcessAlreadyRunningError):
+            await manager.rebuild("p1", [["sh", "-c", "sleep 30"]])
+    await manager.stop("p1")
+
+
+async def test_stop_during_build_cancels_build_and_serve(tmp_path):
+    manager = DevProcessManager.instance()
+    with _patch_workspace(manager, str(tmp_path)):
+        await manager.start("p1", [["sh", "-c", "sleep 30"]])
+        await manager.rebuild(
+            "p1", [["sh", "-c", "echo BUILDING; sleep 30"]]
+        )
+        info = manager._processes["p1"]
+        await _wait_until(lambda: info.status == "building")
+
+        stopped = await manager.stop("p1")
+
+    assert stopped["status"] == "stopped"
+    assert info.task is not None and info.task.cancelled()
+    assert "SERVE" not in "".join(c.text for c in info.buffer.snapshot(0))
+    status = await manager.status("p1")
+    assert status["status"] == "not_started"
+
+
+async def test_stream_emits_status_when_phase_changes(tmp_path):
+    manager = DevProcessManager.instance()
+    with _patch_workspace(manager, str(tmp_path)):
+        await manager.start(
+            "p1", [["sh", "-c", "echo SERVE_STARTED; sleep 30"]]
+        )
+        await manager.rebuild(
+            "p1", [["sh", "-c", "sleep 0.3; echo BUILD_OUTPUT"]]
+        )
+
+    info = manager._processes["p1"]
+    events = []
+    async for event in manager.stream("p1", info.run_id):
+        events.append(event)
+        if (
+            event["type"] == "status"
+            and event.get("status") == "running"
+            and event.get("pid") is not None
+        ):
+            break
+
+    statuses = [e for e in events if e["type"] == "status"]
+    assert statuses[0]["status"] == "building"
+    assert statuses[-1]["status"] == "running"
+    assert statuses[-1]["pid"] is not None
+    assert statuses[-1]["pid"] != statuses[0]["pid"]
+    await manager.stop("p1")

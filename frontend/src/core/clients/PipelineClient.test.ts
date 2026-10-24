@@ -962,6 +962,28 @@ describe('PipelineClient dev server endpoints', () => {
     expect((fetch as any).mock.calls[0][1].method).toBe('POST');
   });
 
+  it('should POST to rebuild the dev server', async () => {
+    const payload = {
+      status: 'rebuilding',
+      running: true,
+      run_id: 'run-2',
+      pid: 43,
+      port: 1224,
+      phase: 'building',
+    };
+    (fetch as any).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(payload),
+    });
+
+    const status = await client.rebuildDevServer('pipe-1');
+
+    expect(status).toEqual(payload);
+    const url = new URL((fetch as any).mock.calls[0][0]);
+    expect(url.pathname).toBe('/pipelines/pipe-1/dev/rebuild');
+    expect((fetch as any).mock.calls[0][1].method).toBe('POST');
+  });
+
   it('should propagate dev server errors', async () => {
     (fetch as any).mockResolvedValue({
       ok: false,

@@ -22,6 +22,10 @@ export interface DevServerStatus {
   pipeline_id?: string;
   running: boolean;
   status: string;
+  /** Raw manager phase (``building``, ``running``, ``build_failed``, ...). */
+  phase?: string;
+  /** Whether the pipeline has build commands configured for a rebuild. */
+  build_commands_configured?: boolean;
   pid: number | null;
   exit_code: number | null;
   run_id: string | null;
@@ -179,6 +183,14 @@ export class PipelineClient extends BaseClient {
   async resetDevServerToDefaultBranch(id: string): Promise<DevServerStatus> {
     const response = await this.fetch(
       `${this.baseUrl}/pipelines/${id}/dev/default-branch`,
+      { method: 'POST' },
+    );
+    return await response.json();
+  }
+
+  async rebuildDevServer(id: string): Promise<DevServerStatus> {
+    const response = await this.fetch(
+      `${this.baseUrl}/pipelines/${id}/dev/rebuild`,
       { method: 'POST' },
     );
     return await response.json();

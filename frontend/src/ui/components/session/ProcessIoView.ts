@@ -24,6 +24,8 @@ export interface ProcessIoViewOptions {
   followInitially?: boolean;
   /** Invoked once when the stream terminates with the process exit code. */
   onExited?: (exitCode: number | null) => void;
+  /** Invoked whenever a status event updates the process header. */
+  onStatus?: (status: string) => void;
 }
 
 /**
@@ -159,6 +161,7 @@ export class ProcessIoView {
     this.renderHeader();
     this.renderActions();
     this.startElapsedTimer();
+    this.options.onStatus?.(this.currentStatus);
   }
 
   private appendChunk(stream: 'stdout' | 'stderr' | string, text: string): void {
@@ -183,7 +186,9 @@ export class ProcessIoView {
     if (this.exited) return;
     this.exited = true;
     this.stopElapsedTimer();
-    this.currentStatus = exitCode === 0 ? 'exited' : 'failed';
+    if (this.currentStatus !== 'build_failed') {
+      this.currentStatus = exitCode === 0 ? 'exited' : 'failed';
+    }
 
     if (this.output) {
       const line = document.createElement('span');
@@ -344,10 +349,17 @@ export class ProcessIoView {
   }
 
   private statusPillClass(status: string): string {
+    if (status === 'building') {
+      return 'bg-amber-500/10 border-amber-500/30 text-amber-400';
+    }
     if (status === 'exited') {
       return 'bg-green-500/10 border-green-500/30 text-green-500';
     }
-    if (status === 'failed' || status === 'stopped') {
+    if (
+      status === 'failed' ||
+      status === 'build_failed' ||
+      status === 'stopped'
+    ) {
       return 'bg-red-500/10 border-red-500/30 text-red-400';
     }
     return 'bg-green-500/10 border-green-500/30 text-green-400';

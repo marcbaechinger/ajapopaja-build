@@ -186,4 +186,42 @@ describe('ProcessIoView', () => {
       mount.querySelector('#process-io-placeholder')!.classList.contains('hidden'),
     ).toBe(false);
   });
+
+  it('invokes onStatus for status events', () => {
+    const onStatus = vi.fn();
+    view = new ProcessIoView(mount, context, 'p1', { onStatus });
+    view.render();
+
+    onEvent!({ type: 'status', status: 'building', pid: 11 });
+    expect(onStatus).toHaveBeenCalledWith('building');
+
+    onEvent!({ type: 'status', status: 'running', pid: 12 });
+    expect(onStatus).toHaveBeenLastCalledWith('running');
+  });
+
+  it('renders the building phase without breaking the header and actions', () => {
+    render();
+    onEvent!({
+      type: 'status',
+      status: 'building',
+      pid: 11,
+      commands: [['sh', '-c', 'npm run dev']],
+    });
+
+    const pill = mount.querySelector('#process-io-status')!;
+    expect(pill.textContent).toContain('building');
+    expect(pill.className).toContain('amber');
+    expect(mount.querySelector('#process-io-pid')!.textContent).toContain('11');
+    expect(mount.querySelector('#process-io-stop')).not.toBeNull();
+  });
+
+  it('preserves build_failed when the stream ends', () => {
+    render();
+    onEvent!({ type: 'status', status: 'build_failed' });
+    onEvent!({ type: 'exit', exit_code: 4 });
+
+    expect(mount.querySelector('#process-io-status')!.textContent).toContain(
+      'build_failed',
+    );
+  });
 });
