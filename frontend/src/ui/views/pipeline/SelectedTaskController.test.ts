@@ -604,6 +604,118 @@ describe('SelectedTaskController', () => {
       expect(ctx.state.selectedTask!.status).toBe(TaskStatus.PULL_REQUEST_AVAILABLE);
     });
 
+    it('patches summary and history in place on SUBMITTED -> IMPLEMENTED without losing unsaved spec text', () => {
+      const oldHistory = [
+        {
+          from_status: TaskStatus.INPROGRESS,
+          to_status: TaskStatus.SUBMITTED,
+          timestamp: '2026-01-01T10:00:00Z',
+          by: 'user',
+        },
+      ];
+      const newHistory = [
+        ...oldHistory,
+        {
+          from_status: TaskStatus.SUBMITTED,
+          to_status: TaskStatus.IMPLEMENTED,
+          timestamp: '2026-01-01T11:00:00Z',
+          by: 'system',
+        },
+      ];
+      const submitted = makeTask({
+        status: TaskStatus.SUBMITTED,
+        completion_info: 'Old summary',
+        history: oldHistory,
+        version: 1,
+      });
+      ctx.state.selectedTask = submitted;
+      ctx.state.allLoadedTasks = [submitted];
+      const viewEl = host.querySelector('#selected-task-view') as HTMLElement;
+      viewEl.innerHTML = TaskItem.render(submitted, false, true, false, false, true);
+
+      const specEdit = viewEl.querySelector<HTMLElement>('.spec-edit')!;
+      viewEl.querySelector<HTMLElement>('.spec-view')!.classList.add('hidden');
+      specEdit.classList.remove('hidden');
+      const textarea = specEdit.querySelector('textarea') as HTMLTextAreaElement;
+      textarea.value = 'unsaved spec draft';
+
+      const cardBefore = viewEl.querySelector('[data-view-id="c1"]');
+      const bodyBefore = cardBefore!.querySelector('.task-body');
+
+      controller.update(makeTask({
+        status: TaskStatus.IMPLEMENTED,
+        completion_info: 'New summary',
+        history: newHistory,
+        version: 2,
+      }));
+
+      expect(refresh.selectedTask).not.toHaveBeenCalled();
+      expect(host.querySelector('#selected-task-view')).toBe(viewEl);
+      expect(viewEl.querySelector('[data-view-id="c1"]')).toBe(cardBefore);
+      expect(cardBefore!.querySelector('.task-body')).toBe(bodyBefore);
+      expect(cardBefore!.querySelector('.status-badge')!.textContent).toContain(TaskStatus.IMPLEMENTED);
+      expect(cardBefore!.querySelector('[data-task-section="implementation-summary"]')!.textContent).toContain('New summary');
+      expect(cardBefore!.querySelector('[data-task-section="implementation-summary"]')!.textContent).not.toContain('Old summary');
+      expect(cardBefore!.querySelector('[data-task-section="status-history"]')!.textContent).toContain(TaskStatus.IMPLEMENTED);
+      expect(specEdit.classList.contains('hidden')).toBe(false);
+      expect(textarea.value).toBe('unsaved spec draft');
+    });
+
+    it('patches in place when only completion_info/history changes without a status change', () => {
+      const history = [
+        {
+          from_status: TaskStatus.INPROGRESS,
+          to_status: TaskStatus.SUBMITTED,
+          timestamp: '2026-01-01T10:00:00Z',
+          by: 'user',
+        },
+      ];
+      const submitted = makeTask({
+        status: TaskStatus.SUBMITTED,
+        completion_info: 'Old summary',
+        history,
+        version: 1,
+      });
+      ctx.state.selectedTask = submitted;
+      ctx.state.allLoadedTasks = [submitted];
+      const viewEl = host.querySelector('#selected-task-view') as HTMLElement;
+      viewEl.innerHTML = TaskItem.render(submitted, false, true, false, false, true);
+
+      const specEdit = viewEl.querySelector<HTMLElement>('.spec-edit')!;
+      viewEl.querySelector<HTMLElement>('.spec-view')!.classList.add('hidden');
+      specEdit.classList.remove('hidden');
+      const textarea = specEdit.querySelector('textarea') as HTMLTextAreaElement;
+      textarea.value = 'unsaved spec draft';
+      const cardBefore = viewEl.querySelector('[data-view-id="c1"]');
+      const bodyBefore = cardBefore!.querySelector('.task-body');
+
+      controller.update(makeTask({
+        status: TaskStatus.SUBMITTED,
+        completion_info: 'Updated summary',
+        history: [
+          ...history,
+          {
+            from_status: TaskStatus.SUBMITTED,
+            to_status: TaskStatus.SUBMITTED,
+            timestamp: '2026-01-01T11:00:00Z',
+            by: 'reviewbot',
+          },
+        ],
+        version: 2,
+      }));
+
+      // No heavy repaint hooks are needed for a read-only body-only change.
+      expect(refresh.backlog).not.toHaveBeenCalled();
+      expect(refresh.executionEngine).not.toHaveBeenCalled();
+      expect(refresh.selectedTask).not.toHaveBeenCalled();
+      expect(viewEl.querySelector('[data-view-id="c1"]')).toBe(cardBefore);
+      expect(cardBefore!.querySelector('.task-body')).toBe(bodyBefore);
+      expect(cardBefore!.querySelector('[data-task-section="implementation-summary"]')!.textContent).toContain('Updated summary');
+      expect(cardBefore!.querySelector('[data-task-section="status-history"]')!.textContent).toContain('reviewbot');
+      expect(specEdit.classList.contains('hidden')).toBe(false);
+      expect(textarea.value).toBe('unsaved spec draft');
+    });
+
     it('reconciles the engine incrementally for a status change instead of repainting it', () => {
       const engineContainer = document.createElement('div');
       engineContainer.id = 'execution-engine-view';

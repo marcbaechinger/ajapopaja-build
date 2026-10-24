@@ -275,12 +275,16 @@ export class PipelineRealtimeController {
     const host = this.deps.getHost();
 
     // The task may be displayed as a full TaskItem (e.g. the selected task in
-    // the main content area). Patch only its header so the status badge and
-    // action toolbar reflect the new state without re-rendering the body and
+    // the main content area). Patch its header and read-only body sections so
+    // the status badge, action toolbar, Implementation Summary and Status
+    // History reflect the new state without re-rendering the body and
     // discarding an open Specification/Design-Doc editor.
     host
       ?.querySelectorAll<HTMLElement>(`[data-view-id="${taskId}"]`)
-      .forEach((el) => TaskItem.updateHeaderInPlace(el, task));
+      .forEach((el) => {
+        TaskItem.updateHeaderInPlace(el, task);
+        TaskItem.updateReadOnlySectionsInPlace(el, task);
+      });
 
     const engine = host?.querySelector('#execution-engine-view');
     if (engine) {

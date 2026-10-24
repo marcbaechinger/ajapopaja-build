@@ -250,6 +250,186 @@ describe('TaskItem', () => {
     expect(el.innerHTML).toBe('');
   });
 
+  it('updateReadOnlySectionsInPlace updates the implementation summary and status history', () => {
+    const oldHistory = [
+      {
+        from_status: TaskStatus.INPROGRESS,
+        to_status: TaskStatus.SUBMITTED,
+        timestamp: '2026-04-12T10:00:00Z',
+        by: 'user',
+      },
+    ];
+    const newHistory = [
+      ...oldHistory,
+      {
+        from_status: TaskStatus.SUBMITTED,
+        to_status: TaskStatus.IMPLEMENTED,
+        timestamp: '2026-04-12T11:00:00Z',
+        by: 'system',
+      },
+    ];
+    const container = document.createElement('div');
+    container.innerHTML = TaskItem.render(
+      {
+        ...mockTask,
+        status: TaskStatus.SUBMITTED,
+        completion_info: 'Old summary',
+        history: oldHistory,
+        version: 1,
+      } as any,
+      true,
+      true
+    );
+
+    TaskItem.updateReadOnlySectionsInPlace(container, {
+      ...mockTask,
+      status: TaskStatus.IMPLEMENTED,
+      completion_info: 'New [summary](https://example.com)',
+      history: newHistory,
+      version: 2,
+    } as any);
+
+    const summary = container.querySelector('[data-task-section="implementation-summary"]')!;
+    expect(summary.textContent).toContain('Implementation Summary');
+    expect(summary.textContent).toContain('New summary');
+    expect(summary.textContent).not.toContain('Old summary');
+
+    const history = container.querySelector('[data-task-section="status-history"]')!;
+    expect(history.textContent).toContain(TaskStatus.IMPLEMENTED);
+    expect(history.textContent).toContain('system');
+    expect(container.querySelector('.title-container')!.getAttribute('data-version')).toBe('2');
+  });
+
+  it('updateReadOnlySectionsInPlace inserts and removes the summary section', () => {
+    const container = document.createElement('div');
+    container.innerHTML = TaskItem.render(
+      { ...mockTask, status: TaskStatus.SUBMITTED, completion_info: '', version: 1 } as any,
+      true,
+      true
+    );
+    expect(container.querySelector('[data-task-section="implementation-summary"]')).toBeNull();
+
+    TaskItem.updateReadOnlySectionsInPlace(container, {
+      ...mockTask,
+      status: TaskStatus.IMPLEMENTED,
+      completion_info: 'Added summary',
+      version: 2,
+    } as any);
+
+    const summary = container.querySelector('[data-task-section="implementation-summary"]');
+    expect(summary).not.toBeNull();
+    expect(summary!.textContent).toContain('Added summary');
+    // Inserted before the editable sections, not after them.
+    const spec = container.querySelector('.spec-container')!;
+    expect(summary!.compareDocumentPosition(spec) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    TaskItem.updateReadOnlySectionsInPlace(container, {
+      ...mockTask,
+      status: TaskStatus.IMPLEMENTED,
+      completion_info: '',
+      version: 3,
+    } as any);
+
+    expect(container.querySelector('[data-task-section="implementation-summary"]')).toBeNull();
+  });
+
+  it('updateReadOnlySectionsInPlace preserves an open Specification and Design Doc editor', () => {
+    const container = document.createElement('div');
+    container.innerHTML = TaskItem.render(
+      {
+        ...mockTask,
+        status: TaskStatus.SUBMITTED,
+        completion_info: 'Old summary',
+        design_doc: '# Design',
+        history: [
+          {
+            from_status: TaskStatus.INPROGRESS,
+            to_status: TaskStatus.SUBMITTED,
+            timestamp: '2026-04-12T10:00:00Z',
+            by: 'user',
+          },
+        ],
+        version: 1,
+      } as any,
+      true,
+      true
+    );
+
+    const specEdit = container.querySelector<HTMLElement>('.spec-edit')!;
+    container.querySelector<HTMLElement>('.spec-view')!.classList.add('hidden');
+    specEdit.classList.remove('hidden');
+    const specTextarea = specEdit.querySelector('textarea') as HTMLTextAreaElement;
+    specTextarea.value = 'unsaved spec draft';
+
+    const designEdit = container.querySelector<HTMLElement>('.design-doc-edit')!;
+    container.querySelector<HTMLElement>('.design-doc-view')!.classList.add('hidden');
+    designEdit.classList.remove('hidden');
+    const designTextarea = designEdit.querySelector('textarea') as HTMLTextAreaElement;
+    designTextarea.value = 'unsaved design draft';
+
+    const bodyBefore = container.querySelector('.task-body');
+    const specContainerBefore = container.querySelector('.spec-container');
+    const designContainerBefore = container.querySelector('.design-doc-container');
+
+    TaskItem.updateReadOnlySectionsInPlace(container, {
+      ...mockTask,
+      status: TaskStatus.IMPLEMENTED,
+      completion_info: 'New summary',
+      design_doc: '# Design changed',
+      history: [],
+      version: 2,
+    } as any);
+
+    expect(container.querySelector('.task-body')).toBe(bodyBefore);
+    expect(container.querySelector('.spec-container')).toBe(specContainerBefore);
+    expect(container.querySelector('.design-doc-container')).toBe(designContainerBefore);
+    expect(specEdit.classList.contains('hidden')).toBe(false);
+    expect(specTextarea.value).toBe('unsaved spec draft');
+    expect(designEdit.classList.contains('hidden')).toBe(false);
+    expect(designTextarea.value).toBe('unsaved design draft');
+  });
+
+  it('updateReadOnlySectionsInPlace preserves the status-history open/closed state', () => {
+    const history = [
+      {
+        from_status: TaskStatus.INPROGRESS,
+        to_status: TaskStatus.SUBMITTED,
+        timestamp: '2026-04-12T10:00:00Z',
+        by: 'user',
+      },
+    ];
+
+    const openContainer = document.createElement('div');
+    openContainer.innerHTML = TaskItem.render(
+      { ...mockTask, status: TaskStatus.SUBMITTED, history, version: 1 } as any,
+      true,
+      true
+    );
+    expect(openContainer.querySelector('details[data-task-section="status-history"]')!.hasAttribute('open')).toBe(true);
+    TaskItem.updateReadOnlySectionsInPlace(openContainer, {
+      ...mockTask,
+      status: TaskStatus.IMPLEMENTED,
+      history,
+      version: 2,
+    } as any);
+    expect(openContainer.querySelector('details[data-task-section="status-history"]')!.hasAttribute('open')).toBe(true);
+
+    const closedContainer = document.createElement('div');
+    closedContainer.innerHTML = TaskItem.render(
+      { ...mockTask, status: TaskStatus.SUBMITTED, history, version: 1 } as any,
+      true,
+      false
+    );
+    expect(closedContainer.querySelector('details[data-task-section="status-history"]')!.hasAttribute('open')).toBe(false);
+    TaskItem.updateReadOnlySectionsInPlace(closedContainer, {
+      ...mockTask,
+      status: TaskStatus.IMPLEMENTED,
+      history,
+      version: 2,
+    } as any);
+    expect(closedContainer.querySelector('details[data-task-section="status-history"]')!.hasAttribute('open')).toBe(false);
+  });
+
   describe('focusScheduleExecution', () => {
     const mount = (html: string) => {
       const el = document.createElement('div');

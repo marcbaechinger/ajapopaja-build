@@ -48,11 +48,14 @@ export class SelectedTaskController {
    * part of the UI that actually needs to change:
    *
    * - a title-only change patches the title in place,
-   * - a status-only change patches just the TaskItem header in place (so an open
+   * - a status change patches the TaskItem header and read-only body sections
+   *   (Implementation Summary / Status History) in place (so an open
    *   Specification/Design-Doc editor in the body survives the server-driven
    *   state transition) while the backlog is refreshed and the execution engine
    *   is reconciled in place (falling back to a full repaint only when the
    *   affected row cannot be located),
+   * - a completion-info / history-only change patches the same header and
+   *   read-only body sections in place without a full repaint,
    * - anything else repaints the backlog, the execution engine and, only when
    *   the updated task is the selected one, the selected task view.
    *
@@ -91,7 +94,7 @@ export class SelectedTaskController {
       // instead of re-rendering the whole card so an open Specification/Design-Doc
       // editor in the body is not discarded.
       if (this.isStatusChange(prev, task)) {
-        this.updateHeaderOnly(task);
+        this.updateHeaderAndReadOnlySections(task);
         ctx.refresh.backlog();
         // Move just the affected sidebar row. This keeps the CoderBot PiView
         // mount and the other sections (and their scroll state) intact; only
@@ -105,6 +108,16 @@ export class SelectedTaskController {
         if (!reconciled) {
           ctx.refresh.executionEngine();
         }
+        return;
+      }
+
+      // A completion-info / history-only change affects the read-only body
+      // sections but not any editable content. Patch the card in place instead
+      // of re-rendering it and discarding an open Specification/Design-Doc
+      // editor. A status change is handled above because it also moves the
+      // task between sidebar sections.
+      if (this.isReadOnlyBodyChange(prev, task)) {
+        this.updateHeaderAndReadOnlySections(task);
         return;
       }
 
@@ -266,6 +279,26 @@ export class SelectedTaskController {
   }
 
   /**
+   * Returns whether an incoming task update changes only the read-only body
+   * data (``completion_info`` / ``history``), ignoring the bookkeeping fields
+   * ``version`` and ``updated_at``. Such updates can patch the existing card
+   * in place instead of re-rendering it and wiping unsaved edits.
+   */
+  private isReadOnlyBodyChange(prev: Task, next: Task): boolean {
+    const readOnlyChanged =
+      JSON.stringify(prev.completion_info ?? null) !==
+        JSON.stringify(next.completion_info ?? null) ||
+      JSON.stringify(prev.history ?? []) !== JSON.stringify(next.history ?? []);
+    if (!readOnlyChanged) return false;
+
+    const comparable = (t: Task) => {
+      const { completion_info, history, version, updated_at, ...rest } = t as any;
+      return rest;
+    };
+    return JSON.stringify(comparable(prev)) === JSON.stringify(comparable(next));
+  }
+
+  /**
    * Patches only the header of every rendered TaskItem for the task in place,
    * keeping the rest of each card (and therefore any open editor) untouched.
    */
@@ -282,6 +315,29 @@ export class SelectedTaskController {
     host
       .querySelectorAll<HTMLElement>(`[data-view-id="${taskId}"]`)
       .forEach((el) => TaskItem.updateHeaderInPlace(el, task));
+  }
+
+  /**
+   * Patches both the header and the read-only body sections (Implementation
+   * Summary / Status History) of every rendered TaskItem for the task, leaving
+   * the editable Specification / Design-Doc sections untouched.
+   */
+  private updateHeaderAndReadOnlySections(task: Task): void {
+    const { ctx } = this.deps;
+    const host = this.deps.getHost();
+    const taskId = task.id ?? '';
+    if (!taskId || !host) return;
+
+    if (ctx.state.selectedTask?.id === taskId) {
+      ctx.state.selectedTask = task;
+    }
+
+    host
+      .querySelectorAll<HTMLElement>(`[data-view-id="${taskId}"]`)
+      .forEach((el) => {
+        TaskItem.updateHeaderInPlace(el, task);
+        TaskItem.updateReadOnlySectionsInPlace(el, task);
+      });
   }
 
   /**

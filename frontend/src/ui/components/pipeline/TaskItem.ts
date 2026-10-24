@@ -132,6 +132,90 @@ export class TaskItem {
   }
 
   /**
+   * Renders the read-only "Implementation Summary" section of a task card.
+   * Returns an empty string when the task has no ``completion_info``.
+   */
+  static renderImplementationSummarySection(task: Task): string {
+    if (!task.completion_info) return '';
+
+    return `
+            <div class="bg-green-500/10 border border-green-500/20 p-3 rounded-lg text-sm text-app-text/80" data-task-section="implementation-summary">
+              <div class="font-bold text-green-400 mb-1 flex items-center gap-2">
+                 ${Icon.render('check', { size: 16 })}
+                 Implementation Summary
+              </div>
+              <div class="prose-theme prose-sm max-w-none text-app-text/80 marker:text-green-500">
+                ${DOMPurify.sanitize(marked.parse(task.completion_info) as string)}
+              </div>
+            </div>
+          `;
+  }
+
+  /**
+   * Updates only the read-only body sections (Implementation Summary and
+   * Status History) of an already-rendered TaskItem in place. The editable
+   * Specification / Design Doc sections — including any unsaved textarea
+   * content, focus, scroll position and collapse state — are left untouched.
+   *
+   * The summary section is inserted, replaced or removed depending on whether
+   * ``completion_info`` is non-empty. The history section is replaced while
+   * preserving its current open/closed state. Optimistic-concurrency
+   * ``data-version`` attributes are refreshed across the card.
+   *
+   * It is a no-op when ``element`` does not contain a ``.task-body``.
+   */
+  static updateReadOnlySectionsInPlace(element: Element, task: Task): void {
+    const body = element.querySelector('.task-body');
+    if (!body) return;
+
+    const version = task.version ?? 1;
+    element.querySelectorAll<HTMLElement>('[data-version]').forEach(el => {
+      el.setAttribute('data-version', String(version));
+    });
+
+    const existingSummary = body.querySelector('[data-task-section="implementation-summary"]');
+    const existingHistory = body.querySelector('[data-task-section="status-history"]');
+
+    if (task.completion_info) {
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = TaskItem.renderImplementationSummarySection(task);
+      const newSummary = wrapper.firstElementChild;
+      if (newSummary) {
+        if (existingSummary) {
+          existingSummary.replaceWith(newSummary);
+        } else {
+          const anchor =
+            existingHistory ??
+            body.querySelector('.spec-container') ??
+            body.querySelector('.design-doc-container');
+          if (anchor) body.insertBefore(newSummary, anchor);
+          else body.appendChild(newSummary);
+        }
+      }
+    } else {
+      existingSummary?.remove();
+    }
+
+    const expandHistory = existingHistory?.hasAttribute('open') ?? false;
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = renderStatusHistorySection(task, expandHistory);
+    const newHistory = wrapper.firstElementChild;
+    if (newHistory) {
+      if (existingHistory) {
+        existingHistory.replaceWith(newHistory);
+      } else {
+        const anchor =
+          body.querySelector('.spec-container') ??
+          body.querySelector('.design-doc-container');
+        if (anchor) body.insertBefore(newHistory, anchor);
+        else body.appendChild(newHistory);
+      }
+    } else {
+      existingHistory?.remove();
+    }
+  }
+
+  /**
    * Tailwind classes applied to the "Schedule Execution" button while it is
    * focused programmatically (e.g. right after saving a Specification).
    *
@@ -614,17 +698,7 @@ ${TaskItem.renderHeader(task, isCollapsed, showStatusSelector)}
           </div>
           ${task.description ? `<p class="text-sm text-app-text/70">${task.description}</p>` : ''}
           
-          ${task.completion_info ? `
-            <div class="bg-green-500/10 border border-green-500/20 p-3 rounded-lg text-sm text-app-text/80">
-              <div class="font-bold text-green-400 mb-1 flex items-center gap-2">
-                 ${Icon.render('check', { size: 16 })}
-                 Implementation Summary
-              </div>
-              <div class="prose-theme prose-sm max-w-none text-app-text/80 marker:text-green-500">
-                ${DOMPurify.sanitize(marked.parse(task.completion_info) as string)}
-              </div>
-            </div>
-          ` : ''}
+          ${TaskItem.renderImplementationSummarySection(task)}
 
           ${renderStatusHistorySection(task, expandHistory)}
 
