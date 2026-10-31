@@ -45,14 +45,10 @@ echo "1. Building Docker image (shared by all environments)..."
 echo "2. Ensuring destination directory $DEST_DIR exists..."
 sudo mkdir -p "$DEST_DIR"
 
-# Copy the docker-compose.yml and its scoped bubblewrap seccomp profile to the
-# stable location used by the systemd unit. Both production and staging have
-# their own DATA_DIR, so each instance gets its own copy.
-echo "2b. Copying docker-compose.yml and seccomp profile to $DATA_DIR/..."
+# Copy the docker-compose.yml to the stable location used by the systemd unit.
+echo "2b. Copying docker-compose.yml to $DATA_DIR/..."
 sudo mkdir -p "$DATA_DIR"
 sudo cp docker-compose.yml "$DATA_DIR/docker-compose.yml"
-sudo cp deploy/seccomp-bwrap.json "$DATA_DIR/seccomp-bwrap.json"
-sudo chmod 644 "$DATA_DIR/docker-compose.yml" "$DATA_DIR/seccomp-bwrap.json"
 
 echo "2c. Setting up environment file at $ENV_FILE..."
 if [ ! -f "$ENV_FILE" ]; then

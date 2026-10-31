@@ -79,8 +79,7 @@ Agents work on real code inside isolated sandboxes and report back through the U
   show search bar) that can be per‑instance remapped via the `keyboardBindings`
   option.
 - **Secure by default** – JWT‑based authentication across the API, sandboxed
-  workspaces with path‑traversal protection, a scoped Docker seccomp profile
-  for bubblewrap user namespaces, and Markdown sanitization.
+  workspaces with path‑traversal protection, and Markdown sanitization.
 
 ---
 
@@ -101,17 +100,6 @@ git pull && ./deploy-local.sh staging \
 
 See [INSTALL.md §7](INSTALL.md#7-run-an-isolated-staging-instance) for the full
 staging workflow and the list of isolated dependencies.
-
-**Sandboxed processes (bubblewrap):** the image ships `bwrap`. Docker's default
-seccomp profile blocks `CLONE_NEWUSER`, so Compose applies the scoped
-`deploy/seccomp-bwrap.json` through
-`security_opt: - seccomp=${BWRAP_SECCOMP_PROFILE:-./seccomp-bwrap.json}`.
-`deploy-local.sh` installs that profile next to the compose file for both
-production and staging. For a direct `docker run`, pass
-`--security-opt seccomp=deploy/seccomp-bwrap.json`. Do **not** use
-`--privileged` or `--cap-add SYS_ADMIN`; see
-[INSTALL.md §2.4](INSTALL.md#24-user-namespaces-and-the-scoped-seccomp-profile)
-and [`deploy/README.md`](deploy/README.md) for details and troubleshooting.
 
 **Friendly domain names:** once deployed, production is on
 `http://ajapopaja` (port 8081) and staging on `http://ajapopaja.stage` (port

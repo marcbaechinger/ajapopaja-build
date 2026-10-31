@@ -14,8 +14,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     tree \
     curl \
-    bubblewrap \
-    && bwrap --version \
     && rm -rf /var/lib/apt/lists/*
 
 # The container runs as root, but mounted workspaces (e.g. /home) may be owned
