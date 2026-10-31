@@ -73,6 +73,11 @@ docker build --build-arg BUILD_VERSION=$(git rev-parse --short HEAD) \
   sets (see `PI_SKILLS_LIBRARY_DIR`, `INTERACTIVE_SKILLS` and `CODERBOT_SKILLS`
   below). The `httpx` package required by the bundled `mcp_client.py` helper is
   pre-installed.
+- **`bubblewrap`** at `/usr/bin/bwrap`, used to sandbox user-started dev
+  servers and coding-agent processes. At runtime the container additionally
+  needs the user-namespace Docker seccomp profile documented by the companion
+  seccomp task; running the container with `--privileged` is not the intended
+  setup.
 - Git configured with `safe.directory '*'` so it can operate on mounted
   workspaces owned by a different host user.
 
