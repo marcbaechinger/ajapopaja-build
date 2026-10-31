@@ -74,12 +74,59 @@ docker build --build-arg BUILD_VERSION=$(git rev-parse --short HEAD) \
   below). The `httpx` package required by the bundled `mcp_client.py` helper is
   pre-installed.
 - **`bubblewrap`** at `/usr/bin/bwrap`, used to sandbox user-started dev
-  servers and coding-agent processes. At runtime the container additionally
-  needs the user-namespace Docker seccomp profile documented by the companion
-  seccomp task; running the container with `--privileged` is not the intended
+  servers and coding-agent processes. It needs the scoped Docker seccomp
+  profile described in section 2.4 so it can create an unprivileged user
+  namespace; running the container with `--privileged` is not the intended
   setup.
 - Git configured with `safe.directory '*'` so it can operate on mounted
   workspaces owned by a different host user.
+
+### 2.4 User namespaces and the scoped seccomp profile
+
+Bubblewrap creates a sandbox by first creating an unprivileged user namespace
+(`CLONE_NEWUSER`) and then the mount/pid/uts/ipc/net namespaces. Docker's
+default seccomp profile denies `clone`/`unshare` with `CLONE_NEWUSER` unless the
+container has `CAP_SYS_ADMIN`, so `unshare --user` and `bwrap --unshare-all`
+fail with `Operation not permitted` even though the host has
+`kernel.unprivileged_userns_clone=1`.
+
+The repository ships `deploy/seccomp-bwrap.json`: a vendored copy of the
+Docker/Moby **v29.9.2** default seccomp profile with only that user-namespace
+restriction relaxed. Its `defaultAction` remains `SCMP_ACT_ERRNO`; all unrelated
+filtering is unchanged. See [`deploy/README.md`](deploy/README.md) for the source
+URL and exact diff, so the profile can be refreshed deliberately when Docker is
+upgraded. Compose applies it with:
+
+```yaml
+    security_opt:
+      - seccomp=${BWRAP_SECCOMP_PROFILE:-./seccomp-bwrap.json}
+```
+
+`deploy-local.sh` installs the profile next to the compose file in each
+instance's data directory. For a manual deployment, copy it yourself:
+
+```bash
+sudo cp deploy/seccomp-bwrap.json /data/ajapopaja/seccomp-bwrap.json
+sudo chmod 644 /data/ajapopaja/seccomp-bwrap.json
+```
+
+For a direct `docker run` (instead of Compose), pass the same scoped profile:
+
+```bash
+docker run --security-opt seccomp=deploy/seccomp-bwrap.json ...
+```
+
+Do **not** use `--privileged`, `--cap-add SYS_ADMIN`, or `seccomp=unconfined`
+to work around this. The scoped profile keeps Docker's syscall filter for the
+rest of the container; the other options remove or broaden it substantially.
+
+Verify the running container uses the profile and that bubblewrap works:
+
+```bash
+docker inspect ajapopaja-build --format '{{json .HostConfig.SecurityOpt}}'
+docker exec ajapopaja-build \
+  bwrap --unshare-all --ro-bind / / --dev /dev --proc /proc /bin/true
+```
 
 ---
 
@@ -107,6 +154,7 @@ WORKSPACES_ROOT=/home/marc-baechinger/monolit/code
 PI_SESSIONS_ROOT=/data/ajapopaja/pi_sessions
 SANDBOX_ROOT=/data/ajapopaja/sandboxes
 REMOTE_WORKSPACES_ROOT=/data/ajapopaja/remote_workspaces
+BWRAP_SECCOMP_PROFILE=/data/ajapopaja/seccomp-bwrap.json
 CODERBOT_DEFAULT_MODEL=deepseek-v4.1-flash:cloud
 ```
 
@@ -133,6 +181,7 @@ template is `deploy/staging.env.example` (see
 | `CODERBOT_DEFAULT_MODEL` | No | Model used by the CoderBot when spawning `pi` sessions. If unset, no `--model` flag is passed to `pi`. |
 | `SANDBOX_ROOT` | No | Directory where bot sandboxes are created. Default: `/data/ajapopaja/sandboxes`. Mounted `host:container` 1:1 so sandboxes survive restarts. |
 | `REMOTE_WORKSPACES_ROOT` | No | Directory where remote repositories (pipelines with a `repo_uri`) are cloned. Default: `/data/ajapopaja/remote_workspaces`. Mounted `host:container` 1:1. |
+| `BWRAP_SECCOMP_PROFILE` | No | Path to the scoped Docker seccomp profile that lets bubblewrap create an unprivileged user namespace. Compose defaults to `./seccomp-bwrap.json` relative to the systemd working directory. Do not commit `seccomp=unconfined`; only use it as an explicit, temporary operator override. |
 | `AUTH_SECRET_KEY` | No | Secret used to sign JWTs. Set a distinct value per instance so tokens cannot be replayed across production and staging. |
 | `REFRESH_COOKIE_NAME` | No | Name of the `HttpOnly` refresh-token cookie. Defaults to a name derived from `DATABASE_NAME` (e.g. `refresh_token_ajapopaja_build_prod`), falling back to `refresh_token`. Cookies are **not** scoped by port, so production and staging on the same host must use distinct names. |
 | `AUTH_COOKIE_SECURE` | No | Set to `true` when the app is served over HTTPS so the refresh cookie gets the `Secure` attribute. Default: `false`. |
@@ -161,6 +210,13 @@ template is `deploy/staging.env.example` (see
   same absolute path on both sides, then recreate the container.
 - **`host.docker.internal`** resolves to the host machine from inside the
   container. It is enabled by the `extra_hosts` entry in `docker-compose.yml`.
+- **The scoped seccomp profile must be installed next to the compose file.**
+  `deploy-local.sh` copies `deploy/seccomp-bwrap.json` to each instance's
+  `DATA_DIR`. For a manual install, copy it to `/data/ajapopaja/` (production)
+  or `/data/ajapopaja/staging/` (staging) as shown in section 2.4. If the env
+  file sets an absolute `BWRAP_SECCOMP_PROFILE`, keep that file in sync too;
+  otherwise Docker will refuse to start the container because the profile is
+  missing.
 - **All env-file variables are forwarded automatically.** The service uses
   docker-compose with `env_file: /etc/ajapopaja-build.env`, so **every** variable
   in the env file is passed into the container automatically. You do **not** need
@@ -227,6 +283,8 @@ services:
     image: ajapopaja-build:latest
     container_name: ${CONTAINER_NAME:-ajapopaja-build}
     restart: always
+    security_opt:
+      - seccomp=${BWRAP_SECCOMP_PROFILE:-./seccomp-bwrap.json}
     env_file:
       - ${AJAPOPAJA_ENV_FILE:-/etc/ajapopaja-build.env}
     ports:
@@ -261,8 +319,11 @@ sudo mkdir -p /data/ajapopaja/docker
 docker save -o /data/ajapopaja/docker/ajapopaja-build.tar ajapopaja-build:latest
 sudo chmod 644 /data/ajapopaja/docker/ajapopaja-build.tar
 
-# 2. Install the docker-compose.yml to the location used by the service
+# 2. Install the compose file and scoped bubblewrap seccomp profile
 sudo cp docker-compose.yml /data/ajapopaja/docker-compose.yml
+sudo cp deploy/seccomp-bwrap.json /data/ajapopaja/seccomp-bwrap.json
+sudo chmod 644 /data/ajapopaja/docker-compose.yml \
+  /data/ajapopaja/seccomp-bwrap.json
 
 # 3. Create the environment file (see section 3)
 sudo nano /etc/ajapopaja-build.env
@@ -382,6 +443,7 @@ so the two instances do not overwrite each other's session cookie.
 | Sandboxes | `/data/ajapopaja/sandboxes` | `/data/ajapopaja/staging/sandboxes` |
 | Remote workspaces | `/data/ajapopaja/remote_workspaces` | `/data/ajapopaja/staging/remote_workspaces` |
 | Workspace root | `/home/<user>/monolit/code` | `/data/ajapopaja/staging/workspaces` |
+| Bubblewrap seccomp profile | `/data/ajapopaja/seccomp-bwrap.json` | `/data/ajapopaja/staging/seccomp-bwrap.json` |
 | JWT secret | `/etc/ajapopaja-build.env` | auto-generated in the staging env file |
 
 MongoDB, Gitea, the Docker image and the filesystem roots are the only stateful
@@ -550,6 +612,35 @@ To verify persistence manually:
    that resuming it replays the history (`events.jsonl`).
 4. Confirm the files exist on the host under
    `/data/ajapopaja/pi_sessions/<uid>/` and are root-owned.
+
+### `unshare` / `bwrap` fails with `Operation not permitted`
+
+Docker's default seccomp profile blocks unprivileged `CLONE_NEWUSER`, which
+bubblewrap needs. Confirm the container is using the scoped profile:
+
+```bash
+docker inspect ajapopaja-build \
+  --format '{{json .HostConfig.SecurityOpt}}'
+docker exec ajapopaja-build unshare --user true
+docker exec ajapopaja-build \
+  bwrap --unshare-all --ro-bind / / --dev /dev --proc /proc /bin/true
+```
+
+`HostConfig.SecurityOpt` should reference `seccomp-bwrap.json` (production) or
+the installed staging copy, not the default profile. If it is missing:
+
+1. Run `./deploy-local.sh` (or `./deploy-local.sh staging`) to reinstall the
+   compose file and profile.
+2. Check that `/data/ajapopaja/seccomp-bwrap.json` (or the path in
+   `BWRAP_SECCOMP_PROFILE`) exists and is readable.
+3. Restart the service: `sudo systemctl restart ajapopaja-build` (or
+   `ajapopaja-build-staging`).
+
+If the command still fails, capture the kernel/AppArmor audit message. As a
+temporary diagnostic only, an operator may set `BWRAP_SECCOMP_PROFILE` to
+`unconfined` and restart, but do not commit that setting. Do **not** add
+`CAP_SYS_ADMIN` or run with `--privileged`; those are not the supported
+solution.
 
 ### The pipeline dev server is not reachable from the host
 
