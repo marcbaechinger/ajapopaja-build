@@ -118,3 +118,25 @@ async def test_patch_task_omits_suggested_model_when_not_provided(
             mock_update.assert_awaited_once_with("t1", 3, order=5, actor="user")
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_create_task_with_nonexistent_pipeline_returns_404(
+    async_client, init_mock_db
+):
+    from api.auth import get_current_user
+    from api.main import app
+
+    app.dependency_overrides[get_current_user] = lambda: AsyncMock()
+    try:
+        pipeline_id = "000000000000000000000000"
+        response = await async_client.post(
+            f"/api/pipelines/{pipeline_id}/tasks/",
+            json={"title": "Orphaned Task", "pipeline_id": pipeline_id},
+        )
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert response.json()["detail"] == f"Pipeline with ID {pipeline_id} not found"
+        assert await Task.find(Task.pipeline_id == pipeline_id).count() == 0
+    finally:
+        app.dependency_overrides.clear()

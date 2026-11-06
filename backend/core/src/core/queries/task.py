@@ -214,6 +214,13 @@ async def get_design_doc_history(task_id: str) -> List[DesignDocHistory]:
 
 
 async def create_task(pipeline_id: str, task: Task, actor: str = "user") -> Task:
+    # Validate that the pipeline exists (and is not deleted) before inserting the
+    # task, so no code path can create an orphaned task that references a
+    # missing pipeline.
+    from core.queries import pipeline as pipeline_queries
+
+    await pipeline_queries.get_pipeline_by_id(pipeline_id)
+
     task.pipeline_id = pipeline_id
     task.version = 1
     task.history = [StateTransition(to_status=task.status, by=actor)]

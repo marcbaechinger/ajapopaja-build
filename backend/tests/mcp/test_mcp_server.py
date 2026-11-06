@@ -350,6 +350,15 @@ async def test_mcp_create_task_success():
 
 
 @pytest.mark.asyncio
+async def test_mcp_create_task_nonexistent_pipeline():
+    result = await create_task(VALID_PID, "Orphaned Task")
+
+    assert "error" in result
+    assert f"Pipeline with ID {VALID_PID} not found" == result["error"]
+    assert await Task.find(Task.pipeline_id == VALID_PID).count() == 0
+
+
+@pytest.mark.asyncio
 async def test_mcp_create_task_defaults_and_want_design_doc():
     pipeline = Pipeline(name="MCP Pipeline")
     await pipeline.insert()

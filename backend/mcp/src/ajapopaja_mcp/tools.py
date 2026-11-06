@@ -128,6 +128,8 @@ async def create_task(
 
     try:
         new_task = await task_queries.create_task(pipeline_id, task, actor="mcp")
+    except EntityNotFoundError as e:
+        return {"error": str(e)}
     except Exception as e:
         return {"error": f"An unexpected error occurred: {str(e)}"}
 

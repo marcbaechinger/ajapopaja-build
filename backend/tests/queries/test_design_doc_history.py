@@ -14,13 +14,15 @@
 
 import pytest
 
-from core.models.models import Task
+from core.models.models import Pipeline, Task
 from core.queries.task import create_task, get_design_doc_history, update_task_details
 
 
 @pytest.mark.asyncio
 async def test_design_doc_history_creation(init_mock_db):
-    pipeline_id = "test-pipeline"
+    pipeline = Pipeline(name="Test Pipeline")
+    await pipeline.insert()
+    pipeline_id = str(pipeline.id)
     task = Task(title="Initial Task", pipeline_id=pipeline_id)
     await create_task(pipeline_id, task)
 
@@ -60,7 +62,9 @@ async def test_design_doc_history_creation(init_mock_db):
 
 @pytest.mark.asyncio
 async def test_design_doc_history_no_change(init_mock_db):
-    pipeline_id = "test-pipeline"
+    pipeline = Pipeline(name="Test Pipeline")
+    await pipeline.insert()
+    pipeline_id = str(pipeline.id)
     task = Task(title="Initial Task", design_doc="# Initial", pipeline_id=pipeline_id)
     await create_task(pipeline_id, task)
 
