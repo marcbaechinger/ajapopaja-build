@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from api.git_hosting.gitea import GiteaApiError, GiteaClient
+from api.git_hosting.gitea import GiteaApiError, GiteaClient, GitHubClient
 
 
 @pytest.mark.asyncio
@@ -344,3 +344,63 @@ async def test_delete_branch_raises_on_500():
             await client.delete_branch("owner", "repo", "coderbot/t1")
 
     assert excinfo.value.status_code == 500
+
+
+@pytest.mark.asyncio
+async def test_github_client_create_pull_request_uses_github_api():
+    client = GitHubClient("gh-token")
+    response = MagicMock()
+    response.status_code = 201
+    response.json.return_value = {
+        "html_url": "https://github.com/owner/repo/pull/42",
+        "number": 42,
+    }
+    response.text = "{}"
+
+    with patch.object(
+        client._client, "request", new=AsyncMock(return_value=response)
+    ) as mock_req:
+        url = await client.create_pull_request(
+            "owner", "repo", head="feature/x", base="main", title="t", body="b"
+        )
+
+    assert url == "https://github.com/owner/repo/pull/42"
+    args, kwargs = mock_req.await_args
+    assert args[0] == "POST"
+    # GitHub's API has no /api/v1 prefix and uses api.github.com.
+    assert args[1] == "https://api.github.com/repos/owner/repo/pulls"
+    assert kwargs["headers"]["Authorization"] == "Bearer gh-token"
+    assert kwargs["json"] == {
+        "head": "feature/x",
+        "base": "main",
+        "title": "t",
+        "body": "b",
+    }
+
+
+@pytest.mark.asyncio
+async def test_github_client_falls_back_to_pull_url():
+    client = GitHubClient("gh-token")
+    response = MagicMock()
+    response.status_code = 201
+    response.json.return_value = {"number": 7}
+    response.text = "{}"
+
+    with patch.object(client._client, "request", new=AsyncMock(return_value=response)):
+        url = await client.create_pull_request(
+            "owner", "repo", head="h", base="main", title="t"
+        )
+
+    # GitHub uses the singular "pull" segment in its web URL.
+    assert url == "https://github.com/owner/repo/pull/7"
+
+
+def test_is_github_host_detects_github():
+    from api.git_hosting.pull_requests import _is_github_host
+
+    assert _is_github_host("https://github.com/owner/repo.git")
+    assert _is_github_host("https://github.com/owner/repo")
+    assert _is_github_host("https://www.github.com/owner/repo.git")
+    assert _is_github_host("git@github.com:owner/repo.git")
+    assert not _is_github_host("https://gitea.example.com/owner/repo.git")
+    assert not _is_github_host("http://localhost:3000/owner/repo.git")

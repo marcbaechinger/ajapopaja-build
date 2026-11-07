@@ -19,8 +19,6 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-GITEA_API_VERSION = "v1"
-
 
 class GiteaApiError(Exception):
     """Raised when the Gitea REST API returns a non-2xx response."""
@@ -39,20 +37,35 @@ class GiteaClient:
     be used against GitHub-compatible hosts.
     """
 
-    def __init__(self, base_url: str, token: str) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        token: str,
+        *,
+        api_prefix: str = "/api/v1",
+        auth_scheme: str = "token",
+        web_base_url: str | None = None,
+        accept: str = "application/json",
+        pr_url_segment: str = "pulls",
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self.token = token
+        self.api_prefix = api_prefix
+        self.auth_scheme = auth_scheme
+        self.web_base_url = (web_base_url or base_url).rstrip("/")
+        self.accept = accept
+        self.pr_url_segment = pr_url_segment
         self._client = httpx.AsyncClient()
 
     def _auth_headers(self) -> dict:
-        """Return the authorization headers using a Gitea access token."""
-        headers = {"Accept": "application/json"}
+        """Return the authorization headers using an access token."""
+        headers = {"Accept": self.accept}
         if self.token:
-            headers["Authorization"] = f"token {self.token}"
+            headers["Authorization"] = f"{self.auth_scheme} {self.token}"
         return headers
 
     async def _request(self, method: str, path: str, **kwargs) -> httpx.Response:
-        url = f"{self.base_url}/api/{GITEA_API_VERSION}{path}"
+        url = f"{self.base_url}{self.api_prefix}{path}"
         try:
             response = await self._client.request(
                 method, url, headers=self._auth_headers(), **kwargs
@@ -109,7 +122,7 @@ class GiteaClient:
                 status_code=response.status_code,
                 detail=response.text,
             )
-        return f"{self.base_url}/{owner}/{repo}/pulls/{number}"
+        return f"{self.web_base_url}/{owner}/{repo}/{self.pr_url_segment}/{number}"
 
     async def _get_json(self, path: str, params: dict | None = None) -> list | dict:
         """Perform a GET request and return the parsed JSON body."""
@@ -296,3 +309,27 @@ class GiteaClient:
 
     async def aclose(self) -> None:
         await self._client.aclose()
+
+
+class GitHubClient(GiteaClient):
+    """Async client for the GitHub REST API (pull requests).
+
+    GitHub's API lives at ``https://api.github.com`` (no ``/api/v1`` prefix) and
+    authenticates fine-grained personal access tokens with a ``Bearer`` header,
+    unlike Gitea. Reuses the Gitea client's request/response handling, differing
+    only in the API base, auth scheme, web URL and PR URL path segment.
+    """
+
+    API_BASE = "https://api.github.com"
+    WEB_BASE = "https://github.com"
+
+    def __init__(self, token: str) -> None:
+        super().__init__(
+            self.API_BASE,
+            token,
+            api_prefix="",
+            auth_scheme="Bearer",
+            web_base_url=self.WEB_BASE,
+            accept="application/vnd.github+json",
+            pr_url_segment="pull",
+        )

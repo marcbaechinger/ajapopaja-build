@@ -21,15 +21,23 @@ credential resolution and the Gitea client lifecycle.
 """
 
 import logging
+from urllib.parse import urlsplit
 
 import git
 
-from api.git_hosting.gitea import GiteaClient
+from api.git_hosting.gitea import GiteaClient, GitHubClient
 from core import config
 from core.models.models import Pipeline
 from core.utils import git_utils
 
 logger = logging.getLogger(__name__)
+
+
+def _is_github_host(repo_uri: str) -> bool:
+    """Return True when the ``repo_uri`` points at github.com."""
+    base_url, _, _ = git_utils.resolve_gitea_repo(repo_uri)
+    host = (urlsplit(base_url).hostname or "").lower()
+    return host in ("github.com", "www.github.com")
 
 
 async def create_pipeline_pull_request(
@@ -69,7 +77,10 @@ async def create_pipeline_pull_request(
 
     base_url, owner, repo_name = git_utils.resolve_gitea_repo(pipeline.repo_uri)
     token = pipeline.repo_token or config.GIT_PUSH_TOKEN
-    client = GiteaClient(base_url, token)
+    if _is_github_host(pipeline.repo_uri):
+        client: GiteaClient = GitHubClient(token)
+    else:
+        client = GiteaClient(base_url, token)
     try:
         return await client.create_pull_request(
             owner,
