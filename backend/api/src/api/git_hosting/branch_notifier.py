@@ -260,6 +260,12 @@ class PrStateNotifier:
         """
         if event.remote_pr_url:
             candidates = [pr for pr in prs if pr.remote_pr_url == event.remote_pr_url]
+            if not candidates and event.pr_number is not None:
+                candidates = [
+                    pr
+                    for pr in prs
+                    if pr_index_from_url(pr.remote_pr_url) == event.pr_number
+                ]
         elif event.pr_number is not None:
             candidates = [
                 pr
@@ -411,39 +417,54 @@ class PrStateNotifier:
                     )
                 continue
 
-            task = await Task.get(pr.task_id)
-            if task is None or task.status != TaskStatus.SUBMITTED:
-                continue
-
+            # The remote state always belongs to the matched implementation
+            # PR, even when its task already moved out of SUBMITTED. Mirror it
+            # unconditionally so a merged/rejected PR can never stay pending.
             if event.state == "merged":
-                # The merge commit belongs to the implementation pull request.
                 pr.status = PullRequestStatus.ACCEPTED
                 pr.commit_hash = event.commit_hash
-                task.commit_hash = event.commit_hash
-                await pr.save()
-                await task_queries.transition_task(
-                    str(task.id), TaskStatus.IMPLEMENTED, actor="system", task=task
-                )
             else:  # "closed" remote reject
                 pr.status = PullRequestStatus.REJECTED
-                await pr.save()
-                # The implementation did not land, so its commit, review URL
-                # and completion summary must not remain attached to the task
-                # as stale metadata once it returns to the backlog.
-                task.commit_hash = None
-                task.review_md = None
-                task.completion_info = None
-                await task_queries.transition_task(
-                    str(task.id), TaskStatus.CREATED, actor="system", task=task
-                )
-
+            await pr.save()
+            # Broadcast the PR mirror unconditionally: the task transition below
+            # is conditional, but the UI must refresh the PR section even when
+            # the task already left SUBMITTED.
             await ws_manager.broadcast(
                 WSMessage(
-                    type="TASK_STATUS_UPDATED",
-                    payload=task.model_dump(mode="json"),
+                    type="PULL_REQUEST_UPDATED",
+                    payload=pr.model_dump(mode="json"),
                 )
             )
-            affected_task_ids.append(str(task.id))
+
+            task = await Task.get(pr.task_id)
+            if task is not None and task.status == TaskStatus.SUBMITTED:
+                if event.state == "merged":
+                    # The merge commit belongs to the implementation PR.
+                    task.commit_hash = event.commit_hash
+                    await task_queries.transition_task(
+                        str(task.id),
+                        TaskStatus.IMPLEMENTED,
+                        actor="system",
+                        task=task,
+                    )
+                else:
+                    # The implementation did not land, so its commit, review
+                    # URL and completion summary must not remain attached to
+                    # the task as stale metadata once it returns to the backlog.
+                    task.commit_hash = None
+                    task.review_md = None
+                    task.completion_info = None
+                    await task_queries.transition_task(
+                        str(task.id), TaskStatus.CREATED, actor="system", task=task
+                    )
+
+                await ws_manager.broadcast(
+                    WSMessage(
+                        type="TASK_STATUS_UPDATED",
+                        payload=task.model_dump(mode="json"),
+                    )
+                )
+                affected_task_ids.append(str(task.id))
 
             # Release the PR's artefacts only after the mirror and broadcast:
             # a cleanup failure must never undo or delay them. The helper is

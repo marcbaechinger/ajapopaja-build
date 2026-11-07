@@ -640,17 +640,22 @@ async def test_on_pr_state_closed_rejects_and_clears_stale_metadata(init_mock_db
 
 
 @pytest.mark.asyncio
-async def test_on_pr_state_skips_task_not_submitted(init_mock_db):
+async def test_on_pr_state_merged_with_task_already_implemented_updates_pr_only(
+    init_mock_db,
+):
+    """A task that already left SUBMITTED must not keep its merged PR pending."""
     pipeline = await _make_pipeline()
     pr, task = await _make_pr_and_task(pipeline)
-    # Task already moved on (e.g. manually accepted) — must be skipped safely.
     task.status = TaskStatus.IMPLEMENTED
+    task.commit_hash = "existing-commit"
+    task.completion_info = "existing summary"
+    task.review_md = "https://host/org/repo/pulls/1"
     await task.save()
+    history_before = list(task.history)
 
     mock_repo = MagicMock()
     mock_repo.active_branch.name = "main"
     mock_repo.head.commit.hexsha = "commit-sha"
-    mock_repo.remotes.origin.fetch.return_value = []
 
     notifier = PrStateNotifier()
     with (
@@ -675,9 +680,72 @@ async def test_on_pr_state_skips_task_not_submitted(init_mock_db):
 
     assert result.status == "mirrored"
     assert result.affected_task_ids == []
-    mock_broadcast.assert_not_awaited()
-    # PR stays SUBMITTED because its task is no longer SUBMITTED.
-    assert (await PullRequest.get(pr.id)).status == PullRequestStatus.SUBMITTED
+    messages = [c.args[0] for c in mock_broadcast.await_args_list]
+    assert [m.type for m in messages] == ["PULL_REQUEST_UPDATED"]
+    assert messages[0].payload["id"] == str(pr.id)
+    assert messages[0].payload["status"] == PullRequestStatus.ACCEPTED.value
+    assert messages[0].payload["commit_hash"] == "commit-sha"
+
+    updated_pr = await PullRequest.get(pr.id)
+    assert updated_pr.status == PullRequestStatus.ACCEPTED
+    assert updated_pr.commit_hash == "commit-sha"
+
+    # The task transition (and its metadata/broadcast) stays conditional.
+    updated_task = await Task.get(task.id)
+    assert updated_task.status == TaskStatus.IMPLEMENTED
+    assert updated_task.commit_hash == "existing-commit"
+    assert updated_task.completion_info == "existing summary"
+    assert updated_task.review_md == "https://host/org/repo/pulls/1"
+    assert updated_task.history == history_before
+
+
+@pytest.mark.asyncio
+async def test_on_pr_state_closed_with_task_already_implemented_updates_pr_only(
+    init_mock_db,
+):
+    """A closed PR is mirrored even when its task is no longer SUBMITTED."""
+    pipeline = await _make_pipeline()
+    pr, task = await _make_pr_and_task(pipeline)
+    task.status = TaskStatus.IMPLEMENTED
+    task.commit_hash = "existing-commit"
+    task.completion_info = "existing summary"
+    task.review_md = "https://host/org/repo/pulls/1"
+    await task.save()
+    history_before = list(task.history)
+
+    notifier = PrStateNotifier()
+    with (
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.ensure_repo_fetched",
+            new=AsyncMock(),
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.get_repo",
+            return_value=_mock_repo(),
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.ws_manager.broadcast",
+            new=AsyncMock(),
+        ) as mock_broadcast,
+    ):
+        result = await notifier.on_pr_state(str(pipeline.id), _event(state="closed"))
+
+    assert result.status == "mirrored"
+    assert result.affected_task_ids == []
+    messages = [c.args[0] for c in mock_broadcast.await_args_list]
+    assert [m.type for m in messages] == ["PULL_REQUEST_UPDATED"]
+    assert messages[0].payload["id"] == str(pr.id)
+    assert messages[0].payload["status"] == PullRequestStatus.REJECTED.value
+
+    updated_pr = await PullRequest.get(pr.id)
+    assert updated_pr.status == PullRequestStatus.REJECTED
+
+    updated_task = await Task.get(task.id)
+    assert updated_task.status == TaskStatus.IMPLEMENTED
+    assert updated_task.commit_hash == "existing-commit"
+    assert updated_task.completion_info == "existing summary"
+    assert updated_task.review_md == "https://host/org/repo/pulls/1"
+    assert updated_task.history == history_before
 
 
 @pytest.mark.asyncio
@@ -749,6 +817,165 @@ async def _make_identity_pr(
     )
     await pr.insert()
     return pr, task
+
+
+@pytest.mark.asyncio
+async def test_on_pr_state_url_mismatch_falls_back_to_pr_number(init_mock_db):
+    """A hostname/ROOT_URL mismatch must not drop an otherwise identified PR."""
+    pipeline = await _make_pipeline()
+    pr, task = await _make_identity_pr(
+        pipeline, remote_pr_url="https://local-host/org/repo/pulls/405"
+    )
+    event = PrStateEvent(
+        repo_full_name="org/repo",
+        branch="main",
+        state="merged",
+        commit_hash="merge-405",
+        base_branch="main",
+        pr_number=405,
+        remote_pr_url="https://remote-host/org/repo/pulls/405",
+    )
+
+    notifier = PrStateNotifier()
+    with (
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.ensure_repo_fetched",
+            new=AsyncMock(),
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.get_repo",
+            return_value=_mock_repo("main", "merge-405"),
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.validate_commit_hash",
+            return_value=True,
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.ws_manager.broadcast",
+            new=AsyncMock(),
+        ),
+        patch.object(PrStateNotifier, "pull_pipeline_repo", new=AsyncMock()),
+    ):
+        result = await notifier.on_pr_state(str(pipeline.id), event)
+
+    assert result.affected_task_ids == [str(task.id)]
+    updated_pr = await PullRequest.get(pr.id)
+    assert updated_pr.status == PullRequestStatus.ACCEPTED
+    assert updated_pr.commit_hash == "merge-405"
+    updated_task = await Task.get(task.id)
+    assert updated_task.status == TaskStatus.IMPLEMENTED
+    assert updated_task.commit_hash == "merge-405"
+
+
+@pytest.mark.asyncio
+async def test_on_pr_state_unmatched_identity_does_not_match_by_base_branch(
+    init_mock_db,
+):
+    """An identity event with no URL/number match must not guess by base."""
+    pipeline = await _make_pipeline()
+    pr, task = await _make_identity_pr(
+        pipeline, remote_pr_url="https://host/org/repo/pulls/1"
+    )
+    event = PrStateEvent(
+        repo_full_name="org/repo",
+        branch="main",
+        state="closed",
+        commit_hash=None,
+        base_branch="main",
+        pr_number=999,
+        remote_pr_url="https://host/org/repo/pulls/999",
+    )
+
+    notifier = PrStateNotifier()
+    with (
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.ensure_repo_fetched",
+            new=AsyncMock(),
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.get_repo",
+            return_value=_mock_repo(),
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.ws_manager.broadcast",
+            new=AsyncMock(),
+        ) as mock_broadcast,
+        patch.object(PrStateNotifier, "pull_pipeline_repo", new=AsyncMock()),
+    ):
+        result = await notifier.on_pr_state(str(pipeline.id), event)
+
+    assert result.affected_task_ids == []
+    mock_broadcast.assert_not_awaited()
+    assert (await PullRequest.get(pr.id)).status == PullRequestStatus.SUBMITTED
+    assert (await Task.get(task.id)).status == TaskStatus.SUBMITTED
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("state", ["merged", "closed"])
+async def test_on_pr_state_documentation_pr_never_transitions_task(init_mock_db, state):
+    """Documentation PRs only mirror their own status on either reconcile path."""
+    pipeline = await _make_pipeline()
+    task = Task(
+        title="Implement feature",
+        pipeline_id=str(pipeline.id),
+        status=TaskStatus.IMPLEMENTED,
+        commit_hash="impl-commit",
+        completion_info="implementation summary",
+        review_md="https://host/org/repo/pulls/1",
+    )
+    await task.insert()
+    pr, _ = await _make_identity_pr(
+        pipeline,
+        remote_pr_url="https://local-host/org/repo/pulls/2",
+        kind=PullRequestKind.DOCUMENTATION,
+        task=task,
+    )
+    history_before = list(task.history)
+    event = PrStateEvent(
+        repo_full_name="org/repo",
+        branch="main",
+        state=state,
+        commit_hash="doc-merge" if state == "merged" else None,
+        base_branch="main",
+        pr_number=2,
+        remote_pr_url="https://remote-host/org/repo/pulls/2",
+    )
+
+    notifier = PrStateNotifier()
+    with (
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.ensure_repo_fetched",
+            new=AsyncMock(),
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.get_repo",
+            return_value=_mock_repo("main", "doc-merge"),
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.validate_commit_hash",
+            return_value=True,
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.ws_manager.broadcast",
+            new=AsyncMock(),
+        ),
+        patch.object(PrStateNotifier, "pull_pipeline_repo", new=AsyncMock()),
+    ):
+        result = await notifier.on_pr_state(str(pipeline.id), event)
+
+    assert result.status == "mirrored"
+    assert result.affected_task_ids == []
+    updated_pr = await PullRequest.get(pr.id)
+    assert updated_pr.status == (
+        PullRequestStatus.ACCEPTED if state == "merged" else PullRequestStatus.REJECTED
+    )
+
+    updated_task = await Task.get(task.id)
+    assert updated_task.status == TaskStatus.IMPLEMENTED
+    assert updated_task.commit_hash == "impl-commit"
+    assert updated_task.completion_info == "implementation summary"
+    assert updated_task.review_md == "https://host/org/repo/pulls/1"
+    assert updated_task.history == history_before
 
 
 @pytest.mark.asyncio
@@ -1353,7 +1580,11 @@ async def test_cleanup_failure_does_not_change_result_or_block_broadcast(
     assert result.affected_task_ids == [str(task.id)]
     assert (await PullRequest.get(pr.id)).status == PullRequestStatus.REJECTED
     assert (await Task.get(task.id)).status == TaskStatus.CREATED
-    mock_broadcast.assert_awaited_once()
+    messages = [c.args[0] for c in mock_broadcast.await_args_list]
+    assert [m.type for m in messages] == [
+        "PULL_REQUEST_UPDATED",
+        "TASK_STATUS_UPDATED",
+    ]
     mock_sweep.assert_awaited_once()
     assert mock_sweep.await_args.args[0].id == pipeline.id
 
