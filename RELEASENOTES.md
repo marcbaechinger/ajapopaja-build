@@ -14,7 +14,8 @@
   our internal server is unreachable from there; manual sync is used instead.
 * **Manual sync works for GitHub** – the “Sync” button now reconciles remote PR
   state for GitHub repos (using the GitHub client), so a user can manually
-  reconcile PR acceptance/rejection when a webhook cannot deliver.
+  reconcile PR acceptance/rejection when a webhook cannot deliver. The manual
+  sync action is also available from the Commits tab.
 
 ## 0.4.0 – IDE‑style workspace, remote repositories, interactive sessions, and richer agent tooling
 
