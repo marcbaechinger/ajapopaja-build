@@ -339,7 +339,7 @@ async def test_find_older_open_pull_request_keeps_legacy_without_kind(init_mock_
 
 
 @pytest.mark.asyncio
-async def test_resolve_chained_start_point_skips_documentation():
+async def test_resolve_chained_start_point_skips_documentation(init_mock_db):
     doc_pr = PullRequest(
         pipeline_id="pipe_doc",
         task_id="task_doc",
@@ -353,9 +353,7 @@ async def test_resolve_chained_start_point_skips_documentation():
         "api.routes.pull_request.pi_session_queries.find_chained_predecessor_branch",
         new_callable=AsyncMock,
     ) as mock_find_branch:
-        start_point = await pr_routes._resolve_chained_start_point(
-            MagicMock(), doc_pr
-        )
+        start_point = await pr_routes._resolve_chained_start_point(MagicMock(), doc_pr)
 
     assert start_point is None
     mock_find_branch.assert_not_awaited()
@@ -421,9 +419,7 @@ async def test_accept_documentation_pr_ignores_order_and_implementation_chain(
             ),
             patch("api.routes.pull_request.apply_patch", new_callable=AsyncMock),
             patch("api.routes.pull_request.format_workspace", new_callable=AsyncMock),
-            patch(
-                "api.routes.pull_request.commit_changes", return_value="doc-commit"
-            ),
+            patch("api.routes.pull_request.commit_changes", return_value="doc-commit"),
             patch(
                 "api.routes.pull_request.git_utils.current_default_branch",
                 return_value="main",
@@ -558,6 +554,94 @@ async def test_reject_pull_request_broadcasts_task_status_update(init_mock_db):
     payload = status_msgs[0].args[0].payload
     assert payload["id"] == str(task.id)
     assert payload["status"] == TaskStatus.CREATED
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "task_status", [TaskStatus.PULL_REQUEST_AVAILABLE, TaskStatus.SUBMITTED]
+)
+async def test_reject_pull_request_clears_stale_task_metadata(
+    init_mock_db, task_status
+):
+    """Rejecting an implementation PR returns the task to a clean backlog state
+    while keeping the transition in history."""
+    task = Task(
+        title="Task 1",
+        pipeline_id="pipe_123",
+        status=task_status,
+        commit_hash="stale-commit",
+        completion_info="stale summary",
+        review_md="https://host/owner/repo/pulls/9",
+        design_doc="keep this design",
+        spec="keep this spec",
+    )
+    await task.insert()
+
+    pr = PullRequest(
+        id=ObjectId(),
+        pipeline_id="pipe_123",
+        task_id=str(task.id),
+        summary="summary",
+        branch_name="branch",
+        patch="patch",
+        status=PullRequestStatus.SUBMITTED,
+    )
+    await pr.insert()
+
+    with patch("api.routes.pull_request.ws_manager.broadcast", new_callable=AsyncMock):
+        result = await pr_routes.reject_pull_request(str(pr.id))
+
+    assert result["status"] == "success"
+    assert (await PullRequest.get(pr.id)).status == PullRequestStatus.REJECTED
+
+    updated = await Task.get(str(task.id))
+    assert updated.status == TaskStatus.CREATED
+    assert updated.commit_hash is None
+    assert updated.review_md is None
+    assert updated.completion_info is None
+    assert updated.design_doc == "keep this design"
+    assert updated.spec == "keep this spec"
+    assert updated.history[-1].from_status == task_status
+    assert updated.history[-1].to_status == TaskStatus.CREATED
+    assert updated.history[-1].by == "user"
+
+
+@pytest.mark.asyncio
+async def test_reject_documentation_pull_request_leaves_task_untouched(init_mock_db):
+    task = Task(
+        title="Task 1",
+        pipeline_id="pipe_123",
+        status=TaskStatus.IMPLEMENTED,
+        commit_hash="impl-commit",
+        completion_info="implementation summary",
+        review_md="https://host/owner/repo/pulls/1",
+    )
+    await task.insert()
+
+    pr = PullRequest(
+        id=ObjectId(),
+        pipeline_id="pipe_123",
+        task_id=str(task.id),
+        summary="documentation summary",
+        branch_name="docbot/branch",
+        patch="patch",
+        status=PullRequestStatus.OPEN,
+        kind=PullRequestKind.DOCUMENTATION,
+    )
+    await pr.insert()
+
+    with patch(
+        "api.routes.pull_request.ws_manager.broadcast", new_callable=AsyncMock
+    ) as mock_broadcast:
+        await pr_routes.reject_pull_request(str(pr.id))
+
+    assert (await PullRequest.get(pr.id)).status == PullRequestStatus.REJECTED
+    updated = await Task.get(str(task.id))
+    assert updated.status == TaskStatus.IMPLEMENTED
+    assert updated.commit_hash == "impl-commit"
+    assert updated.review_md == "https://host/owner/repo/pulls/1"
+    assert updated.completion_info == "implementation summary"
+    mock_broadcast.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -1055,13 +1139,9 @@ async def test_accept_merge_mode_clears_patch_and_keeps_default_branch_commit(
         with (
             patch("api.routes.pull_request.apply_patch", new_callable=AsyncMock),
             patch("api.routes.pull_request.format_workspace", new_callable=AsyncMock),
-            patch(
-                "api.routes.pull_request.commit_changes", return_value=head_before
-            ),
+            patch("api.routes.pull_request.commit_changes", return_value=head_before),
         ):
-            response = await async_client.post(
-                f"/api/pull_requests/{pr.id}/accept"
-            )
+            response = await async_client.post(f"/api/pull_requests/{pr.id}/accept")
     finally:
         app.dependency_overrides.clear()
 
@@ -1119,9 +1199,7 @@ async def test_accept_submit_mode_keeps_patch_and_feature_branch(
                 return_value="https://host/owner/repo/pulls/1",
             ),
         ):
-            response = await async_client.post(
-                f"/api/pull_requests/{pr.id}/accept"
-            )
+            response = await async_client.post(f"/api/pull_requests/{pr.id}/accept")
     finally:
         app.dependency_overrides.clear()
 
@@ -1219,9 +1297,7 @@ async def test_accept_cleanup_failure_is_logged_without_changing_response(
             ),
         ):
             caplog.set_level("WARNING", logger="api.routes.pull_request")
-            response = await async_client.post(
-                f"/api/pull_requests/{pr.id}/accept"
-            )
+            response = await async_client.post(f"/api/pull_requests/{pr.id}/accept")
     finally:
         app.dependency_overrides.clear()
 
@@ -1406,9 +1482,7 @@ async def test_accept_pull_request_blocks_out_of_order(async_client, init_mock_d
             new_callable=AsyncMock,
             return_value=newer,
         ):
-            response = await async_client.post(
-                f"/api/pull_requests/{newer_id}/accept"
-            )
+            response = await async_client.post(f"/api/pull_requests/{newer_id}/accept")
 
         assert response.status_code == 409
         assert "older pull request" in response.json()["detail"].lower()

@@ -43,6 +43,33 @@ async def make_async_iter(items):
 
 
 @pytest.mark.asyncio
+async def test_get_initial_prompt_reports_commit_missing_from_workspace():
+    session = DocBotSession(pipeline_id="test_pipeline", task_id="test_task")
+    task = MagicMock()
+    task.commit_hash = "missing-sha"
+    pipeline = MagicMock()
+    pipeline.workspace_abs_path = "/tmp/fake/workspace"
+    repo = MagicMock()
+    repo.git.show.side_effect = Exception("bad object missing-sha")
+
+    with (
+        patch(
+            "api.docbot.session.task_queries.get_task_by_id",
+            new_callable=AsyncMock,
+            return_value=task,
+        ),
+        patch(
+            "api.docbot.session.pipeline_queries.get_pipeline_by_id",
+            new_callable=AsyncMock,
+            return_value=pipeline,
+        ),
+        patch("api.docbot.session.git_utils.get_repo", return_value=repo),
+    ):
+        with pytest.raises(ValueError, match="missing from the pipeline workspace"):
+            await session.get_initial_prompt()
+
+
+@pytest.mark.asyncio
 async def test_docbot_session_run_terminal_call():
     session = DocBotSession(pipeline_id="test_pipeline", task_id="test_task")
 

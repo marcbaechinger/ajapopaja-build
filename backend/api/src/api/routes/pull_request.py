@@ -765,9 +765,7 @@ async def iterate_pull_request(pr_id: str, request: IteratePullRequestRequest):
         # Continue the original batch session with its full context instead of
         # starting a fresh iteration run.
         try:
-            await coderbot_manager.resume_session(
-                request.session_uid, message=comments
-            )
+            await coderbot_manager.resume_session(request.session_uid, message=comments)
         except Exception as e:
             raise HTTPException(status_code=404, detail=str(e))
         return {
@@ -789,10 +787,22 @@ async def reject_pull_request(pr_id: str):
     await pr.save()
 
     task = await Task.get(pr.task_id)
-    if task and task.status == TaskStatus.PULL_REQUEST_AVAILABLE:
+    is_documentation = getattr(pr, "kind", None) == PullRequestKind.DOCUMENTATION
+    can_return_to_backlog = task and task.status in (
+        TaskStatus.PULL_REQUEST_AVAILABLE,
+        TaskStatus.SUBMITTED,
+        TaskStatus.CREATED,
+    )
+    if can_return_to_backlog and not is_documentation:
         logger.info(f"Updating status for task {pr.task_id} to CREATED")
+        # A rejected implementation PR returns the task to a clean backlog
+        # state: its commit, review URL and completion summary describe work
+        # that did not land and must not be attached to a CREATED task.
+        task.commit_hash = None
+        task.review_md = None
+        task.completion_info = None
         updated_task = await task_queries.transition_task(
-            str(task.id), TaskStatus.CREATED, actor="user"
+            str(task.id), TaskStatus.CREATED, actor="user", task=task
         )
         # Broadcast the status change so connected clients move the task out of
         # PULL_REQUEST_AVAILABLE and back into the backlog. Without this the

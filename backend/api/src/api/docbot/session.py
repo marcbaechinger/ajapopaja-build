@@ -249,7 +249,9 @@ class DocBotSession(BaseBotSession):
             diff = repo.git.show(task.commit_hash)
         except Exception as e:
             raise ValueError(
-                f"Failed to get git diff for commit {task.commit_hash}: {e}"
+                f"Commit {task.commit_hash} is missing from the pipeline "
+                f"workspace for pipeline {self.pipeline_id}; cannot generate "
+                f"the DocBot diff: {e}"
             )
 
         return f"""

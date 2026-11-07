@@ -19,7 +19,7 @@ from fastapi import status
 
 from api.auth import get_current_user
 from api.main import app
-from core.models.models import Pipeline, Task
+from core.models.models import Pipeline, Task, TaskStatus
 
 
 @pytest.fixture(autouse=True)
@@ -32,18 +32,61 @@ def mock_auth():
 
 
 @pytest.mark.asyncio
-async def test_trigger_docbot_success(async_client, init_mock_db):
+@pytest.mark.parametrize("task_status", [TaskStatus.IMPLEMENTED, TaskStatus.SUBMITTED])
+async def test_trigger_docbot_success(async_client, init_mock_db, task_status):
     with patch(
         "api.routes.docbot.pipeline_queries.get_pipeline_by_id", new_callable=AsyncMock
     ) as mock_p_get:
-        mock_p_get.return_value = Pipeline(name="P1")
+        mock_p_get.return_value = Pipeline(name="P1", workspace_path="p1")
         with patch(
             "api.routes.docbot.task_queries.get_task_by_id", new_callable=AsyncMock
         ) as mock_t_get:
-            task = Task(title="T1", pipeline_id="p1", commit_hash="abc")
+            task = Task(
+                title="T1",
+                pipeline_id="p1",
+                status=task_status,
+                commit_hash="abc",
+            )
             # We need to set task.id to match the path param if we were using it in
             # queries, but here the mock returns it regardless.
             mock_t_get.return_value = task
+
+            with (
+                patch("api.routes.docbot.git_utils.get_repo") as mock_get_repo,
+                patch(
+                    "api.routes.docbot.DocBotManager.process_completed_task",
+                    new_callable=AsyncMock,
+                ) as mock_process,
+            ):
+                response = await async_client.post(
+                    "/api/pipelines/p1/docbot/trigger/t1"
+                )
+                assert response.status_code == status.HTTP_200_OK
+                mock_get_repo.return_value.commit.assert_called_once_with("abc")
+                assert mock_process.called
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "task_status",
+    [TaskStatus.CREATED, TaskStatus.SCHEDULED, TaskStatus.INPROGRESS],
+)
+async def test_trigger_docbot_rejects_incomplete_task(
+    async_client, init_mock_db, task_status
+):
+    with patch(
+        "api.routes.docbot.pipeline_queries.get_pipeline_by_id", new_callable=AsyncMock
+    ) as mock_p_get:
+        mock_p_get.return_value = Pipeline(name="P1", workspace_path="p1")
+        with patch(
+            "api.routes.docbot.task_queries.get_task_by_id", new_callable=AsyncMock
+        ) as mock_t_get:
+            mock_t_get.return_value = Task(
+                title="T1",
+                pipeline_id="p1",
+                status=task_status,
+                commit_hash="abc",
+            )
 
             with patch(
                 "api.routes.docbot.DocBotManager.process_completed_task",
@@ -52,8 +95,10 @@ async def test_trigger_docbot_success(async_client, init_mock_db):
                 response = await async_client.post(
                     "/api/pipelines/p1/docbot/trigger/t1"
                 )
-                assert response.status_code == status.HTTP_200_OK
-                assert mock_process.called
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "IMPLEMENTED or SUBMITTED" in response.json()["detail"]
+    mock_process.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -61,16 +106,59 @@ async def test_trigger_docbot_no_commit(async_client, init_mock_db):
     with patch(
         "api.routes.docbot.pipeline_queries.get_pipeline_by_id", new_callable=AsyncMock
     ) as mock_p_get:
-        mock_p_get.return_value = Pipeline(name="P1")
+        mock_p_get.return_value = Pipeline(name="P1", workspace_path="p1")
         with patch(
             "api.routes.docbot.task_queries.get_task_by_id", new_callable=AsyncMock
         ) as mock_t_get:
-            task = Task(title="T1", pipeline_id="p1", commit_hash=None)
+            task = Task(
+                title="T1",
+                pipeline_id="p1",
+                status=TaskStatus.IMPLEMENTED,
+                commit_hash=None,
+            )
             mock_t_get.return_value = task
 
             response = await async_client.post("/api/pipelines/p1/docbot/trigger/t1")
             assert response.status_code == status.HTTP_400_BAD_REQUEST
-            assert "commit hash" in response.json()["detail"]
+            assert "implementation commit" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_trigger_docbot_rejects_commit_missing_from_workspace(
+    async_client, init_mock_db
+):
+    with patch(
+        "api.routes.docbot.pipeline_queries.get_pipeline_by_id", new_callable=AsyncMock
+    ) as mock_p_get:
+        mock_p_get.return_value = Pipeline(name="P1", workspace_path="p1")
+        with patch(
+            "api.routes.docbot.task_queries.get_task_by_id", new_callable=AsyncMock
+        ) as mock_t_get:
+            mock_t_get.return_value = Task(
+                title="T1",
+                pipeline_id="p1",
+                status=TaskStatus.IMPLEMENTED,
+                commit_hash="missing-sha",
+            )
+
+            with (
+                patch("api.routes.docbot.git_utils.get_repo") as mock_get_repo,
+                patch(
+                    "api.routes.docbot.DocBotManager.process_completed_task",
+                    new_callable=AsyncMock,
+                ) as mock_process,
+            ):
+                mock_get_repo.return_value.commit.side_effect = ValueError(
+                    "missing commit"
+                )
+                response = await async_client.post(
+                    "/api/pipelines/p1/docbot/trigger/t1"
+                )
+
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert "missing-sha" in response.json()["detail"]
+    assert "not present in the pipeline workspace" in response.json()["detail"]
+    mock_process.assert_not_awaited()
 
 
 @pytest.mark.asyncio

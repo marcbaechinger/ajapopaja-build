@@ -587,9 +587,13 @@ async def test_on_pr_state_merged_unreachable_commit(init_mock_db):
 
 
 @pytest.mark.asyncio
-async def test_on_pr_state_closed_rejects(init_mock_db):
+async def test_on_pr_state_closed_rejects_and_clears_stale_metadata(init_mock_db):
     pipeline = await _make_pipeline()
     pr, task = await _make_pr_and_task(pipeline)
+    task.commit_hash = "stale-commit"
+    task.completion_info = "stale summary"
+    task.review_md = "https://host/org/repo/pulls/1"
+    await task.save()
 
     mock_repo = MagicMock()
     mock_repo.active_branch.name = "main"
@@ -621,6 +625,9 @@ async def test_on_pr_state_closed_rejects(init_mock_db):
 
     updated_task = await Task.get(task.id)
     assert updated_task.status == TaskStatus.CREATED
+    assert updated_task.commit_hash is None
+    assert updated_task.completion_info is None
+    assert updated_task.review_md is None
     transitions = [(t.from_status, t.to_status, t.by) for t in updated_task.history]
     assert (TaskStatus.SUBMITTED, TaskStatus.CREATED, "system") in transitions
 

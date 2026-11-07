@@ -427,6 +427,12 @@ class PrStateNotifier:
             else:  # "closed" remote reject
                 pr.status = PullRequestStatus.REJECTED
                 await pr.save()
+                # The implementation did not land, so its commit, review URL
+                # and completion summary must not remain attached to the task
+                # as stale metadata once it returns to the backlog.
+                task.commit_hash = None
+                task.review_md = None
+                task.completion_info = None
                 await task_queries.transition_task(
                     str(task.id), TaskStatus.CREATED, actor="system", task=task
                 )

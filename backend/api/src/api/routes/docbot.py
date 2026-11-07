@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from api.auth import get_current_user
+from core.models.models import TaskStatus
 from core.queries import pipeline as pipeline_queries
 from core.queries import task as task_queries
 from core.utils import git_utils
@@ -51,9 +52,31 @@ async def trigger_docbot(pipeline_id: str, task_id: str):
             status_code=400, detail="Task does not belong to this pipeline"
         )
 
+    if task.status not in (TaskStatus.IMPLEMENTED, TaskStatus.SUBMITTED):
+        raise HTTPException(
+            status_code=400,
+            detail="DocBot requires a task in IMPLEMENTED or SUBMITTED state",
+        )
+
     if not task.commit_hash:
         raise HTTPException(
-            status_code=400, detail="Task must have a commit hash to run DocBot"
+            status_code=400,
+            detail="Task has no implementation commit",
+        )
+
+    if not pipeline.workspace_abs_path:
+        raise HTTPException(status_code=404, detail="Pipeline workspace not found")
+
+    try:
+        repo = git_utils.get_repo(str(pipeline.workspace_abs_path))
+        repo.commit(task.commit_hash)
+    except Exception:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Implementation commit {task.commit_hash} is not present in the "
+                "pipeline workspace. Sync the repository and retry."
+            ),
         )
 
     # Queue the bot session
