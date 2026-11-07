@@ -373,6 +373,86 @@ async def test_handle_bot_end_whitespace_only_patch_skips_pr_creation():
 
 
 @pytest.mark.asyncio
+async def test_handle_bot_end_commit_failure_records_failed_result():
+    """A commit failure is surfaced instead of silently completing the session."""
+    session = DocBotSession(pipeline_id="test_pipeline", task_id="test_task")
+    session.has_updates = True
+
+    mock_repo = MagicMock()
+    mock_repo.git.add = MagicMock()
+    mock_repo.git.commit = MagicMock(side_effect=Exception("commit failed"))
+    mock_repo.git.diff = MagicMock()
+
+    mock_helper = MagicMock()
+    mock_helper.get_repo = MagicMock(return_value=mock_repo)
+    mock_helper.branch_name = "test-branch"
+    mock_helper.cleanup = MagicMock()
+    session.helper = mock_helper
+    session.session_result = {"summary": "Test summary"}
+
+    with (
+        patch("api.docbot.session.PullRequest") as mock_pr_class,
+        patch("api.docbot.session.manager") as mock_manager,
+        patch("api.docbot.session.logger") as mock_logger,
+    ):
+        await session._handle_bot_end()
+
+    assert session.session_result == {
+        "status": "pr_creation_failed",
+        "reason": "commit failed",
+        "summary": "Test summary",
+    }
+    mock_pr_class.return_value.insert.assert_not_called()
+    mock_repo.git.diff.assert_not_called()
+    mock_helper.cleanup.assert_called_once()
+    mock_manager.broadcast.assert_not_called()
+    mock_logger.error.assert_called_once_with(
+        "DocBot error creating PR: commit failed", exc_info=True
+    )
+
+
+@pytest.mark.asyncio
+async def test_handle_bot_end_pull_request_insert_failure_records_failed_result():
+    """A database insert failure is surfaced instead of reporting completion."""
+    session = DocBotSession(pipeline_id="test_pipeline", task_id="test_task")
+    session.has_updates = True
+
+    mock_repo = MagicMock()
+    mock_repo.git.add = MagicMock()
+    mock_repo.git.commit = MagicMock()
+    mock_repo.git.diff = MagicMock(return_value="diff --git a/doc.md b/doc.md\n")
+
+    mock_helper = MagicMock()
+    mock_helper.get_repo = MagicMock(return_value=mock_repo)
+    mock_helper.branch_name = "docbot/test_task/abc12345"
+    mock_helper.cleanup = MagicMock()
+    session.helper = mock_helper
+    session.session_result = {"summary": "Test summary"}
+
+    mock_pr = MagicMock()
+    mock_pr.insert = AsyncMock(side_effect=Exception("insert failed"))
+
+    with (
+        patch("api.docbot.session.PullRequest", return_value=mock_pr),
+        patch("api.docbot.session.manager") as mock_manager,
+        patch("api.docbot.session.logger") as mock_logger,
+    ):
+        await session._handle_bot_end()
+
+    assert session.session_result == {
+        "status": "pr_creation_failed",
+        "reason": "insert failed",
+        "summary": "Test summary",
+    }
+    mock_pr.insert.assert_awaited_once()
+    mock_helper.cleanup.assert_called_once()
+    mock_manager.broadcast.assert_not_called()
+    mock_logger.error.assert_called_once_with(
+        "DocBot error creating PR: insert failed", exc_info=True
+    )
+
+
+@pytest.mark.asyncio
 async def test_handle_bot_end_no_helper():
     """Test that _handle_bot_end with no helper skips PR creation appropriately."""
     session = DocBotSession(pipeline_id="test_pipeline", task_id="test_task")
@@ -435,6 +515,8 @@ async def test_handle_bot_end_creates_documentation_pull_request():
     session.session_result = {"summary": "# Updated architecture\n\nDetails"}
 
     mock_pr = MagicMock()
+    mock_pr.id = "pr-123"
+    mock_pr.branch_name = "docbot/test_task/abc12345"
     mock_pr.insert = AsyncMock()
 
     with (
@@ -456,6 +538,8 @@ async def test_handle_bot_end_creates_documentation_pull_request():
     assert kwargs["status"].value == "open"
     mock_pr.insert.assert_awaited_once()
     mock_helper.cleanup.assert_called_once()
+    assert session.session_result["pr_id"] == "pr-123"
+    assert session.session_result["branch_name"] == "docbot/test_task/abc12345"
 
 
 def test_two_docbot_sessions_for_same_task_get_distinct_branches():

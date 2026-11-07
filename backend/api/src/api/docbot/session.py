@@ -178,16 +178,12 @@ class DocBotSession(BaseBotSession):
             repo = self.helper.get_repo()
             repo.git.add(A=True)
 
-            try:
-                # Use --no-verify to bypass pre-commit hooks that might fail in the server environment
-                repo.git.commit("-m", f"DocBot: {summary[:200]}", "--no-verify")
-                # Use git diff to get a clean, structural patch without commit metadata.
-                # --binary is required so binary files (e.g. images) are included in the
-                # patch and can be applied later via `git apply --3way`.
-                patch = repo.git.diff("HEAD~1", "HEAD", binary=True)
-            except Exception as e:
-                logger.info(f"Nothing to commit or commit failed: {e}")
-                patch = self.helper.get_patch()
+            # Use --no-verify to bypass pre-commit hooks that might fail in the server environment
+            repo.git.commit("-m", f"DocBot: {summary[:200]}", "--no-verify")
+            # Use git diff to get a clean, structural patch without commit metadata.
+            # --binary is required so binary files (e.g. images) are included in the
+            # patch and can be applied later via `git apply --3way`.
+            patch = repo.git.diff("HEAD~1", "HEAD", binary=True)
 
             # Skip PR creation if patch is empty or contains only whitespace
             if not patch or not patch.strip():
@@ -213,6 +209,10 @@ class DocBotSession(BaseBotSession):
             await pr.insert()
             logger.info(f"DocBot PullRequest {pr.id} created in DB.")
 
+            if isinstance(self.session_result, dict):
+                self.session_result["pr_id"] = str(pr.id)
+                self.session_result["branch_name"] = pr.branch_name
+
             await manager.broadcast(
                 WSMessage(
                     type="PULL_REQUEST_CREATED",
@@ -226,6 +226,11 @@ class DocBotSession(BaseBotSession):
             )
         except Exception as e:
             logger.error(f"DocBot error creating PR: {e}", exc_info=True)
+            self.session_result = {
+                "status": "pr_creation_failed",
+                "reason": str(e),
+                "summary": summary if "summary" in locals() else "",
+            }
         finally:
             logger.info("Cleaning up DocBot sandbox.")
             self.helper.cleanup()
