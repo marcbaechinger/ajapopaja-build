@@ -17,9 +17,11 @@ import re
 from pathlib import Path
 from typing import Optional
 
-# Default to a sensible path for the host user; allow override via env var
+# Default to the image's built-in workspace directory; override via env var.
+# Inside the container this is overridden by WORKSPACES_ROOT from the env file
+# (see .env.example / deploy/*.env.example).
 WORKSPACES_ROOT = Path(
-    os.getenv("WORKSPACES_ROOT", "/home/marc-baechinger/monolit/code")
+    os.getenv("WORKSPACES_ROOT", "/workspaces")
 ).resolve()
 
 # Root directory for bot sandboxes

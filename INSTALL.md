@@ -98,7 +98,7 @@ DEV_SERVER_PORT=1224
 OLLAMA_HOST=http://host.docker.internal:11434
 # OLLAMA_MODEL=gpt-oss:20b
 # ONE_PROMPT_OLLAMA_MODEL=gpt-oss:20b  # optional; defaults to OLLAMA_MODEL
-WORKSPACES_ROOT=/home/marc-baechinger/monolit/code
+WORKSPACES_ROOT=/home/yourname/path/to/your/repos
 PI_SESSIONS_ROOT=/data/ajapopaja/pi_sessions
 SANDBOX_ROOT=/data/ajapopaja/sandboxes
 REMOTE_WORKSPACES_ROOT=/data/ajapopaja/remote_workspaces
@@ -108,6 +108,12 @@ CODERBOT_DEFAULT_MODEL=deepseek-v4.1-flash:cloud
 A ready-to-copy template lives in `deploy/prod.env.example`; the staging
 template is `deploy/staging.env.example` (see
 [section 7](#7-run-an-isolated-staging-instance)).
+
+For a **local** run (building with `./docker-build.sh` and starting with
+`docker compose up` — outside systemd), Docker Compose reads a `.env` file in
+the project directory instead. Copy `.env.example` to `.env` and set
+`WORKSPACES_ROOT` there; the compose file requires it and fails with a clear
+error if it is missing.
 
 ### 3.2 Variable reference
 
@@ -142,11 +148,11 @@ template is `deploy/staging.env.example` (see
 
 ### 3.3 Important notes
 
-- **`WORKSPACES_ROOT` must be mounted into the container.** The systemd service
-  mounts the host's `/home` (and `/Users`) into the container, so a workspace
-  root under `/home` (e.g. `/home/<user>/monolit/code`) is visible inside the
-  container at the same path. If you use a different root, add a matching
-  `-v <host-path>:<host-path>` mount to the service file.
+- **`WORKSPACES_ROOT` must be mounted into the container.** The shipped
+  `docker-compose.yml` mounts exactly one source root — `WORKSPACES_ROOT` —
+  `host:container` 1:1 (the host and container paths must be identical, because
+  the backend stores absolute paths). Set it in the env file (or in `.env` for
+  local runs); the compose file no longer mounts entire home directories.
 - **`PI_SESSIONS_ROOT` must be mounted into the container.** Interactive and
   batch Pi sessions are persisted under this root so they survive container
   restarts. The shipped `docker-compose.yml` mounts
@@ -228,13 +234,11 @@ services:
       - "127.0.0.1:${PORT:-8081}:${PORT:-8081}"
       - "127.0.0.1:${DEV_SERVER_PORT:-1224}:${DEV_SERVER_PORT:-1224}"
     volumes:
-      - /home:/home
-      - /Users:/Users
+      - ${WORKSPACES_ROOT:?WORKSPACES_ROOT is not set. Copy .env.example to .env and edit it.}:${WORKSPACES_ROOT:?WORKSPACES_ROOT is not set. Copy .env.example to .env and edit it.}
       - /tmp/nvimsocket:/tmp/nvimsocket
       - ${PI_SESSIONS_ROOT:-/data/ajapopaja/pi_sessions}:${PI_SESSIONS_ROOT:-/data/ajapopaja/pi_sessions}
       - ${SANDBOX_ROOT:-/data/ajapopaja/sandboxes}:${SANDBOX_ROOT:-/data/ajapopaja/sandboxes}
       - ${REMOTE_WORKSPACES_ROOT:-/data/ajapopaja/remote_workspaces}:${REMOTE_WORKSPACES_ROOT:-/data/ajapopaja/remote_workspaces}
-      - ${WORKSPACES_ROOT:-/home/marc-baechinger/monolit/code}:${WORKSPACES_ROOT:-/home/marc-baechinger/monolit/code}
     extra_hosts:
       - "host.docker.internal:host-gateway"
 ```
@@ -242,9 +246,9 @@ services:
 `env_file` forwards **every** variable in `${AJAPOPAJA_ENV_FILE}` into the
 container automatically, so you never need to list individual `-e` flags. The
 same variables drive the `${...}` interpolation, which is what lets the same
-compose file serve both production and staging. The values default to the
-historic production values, so an existing `/etc/ajapopaja-build.env` keeps
-working unchanged. Note that `SANDBOX_ROOT`, `REMOTE_WORKSPACES_ROOT` and
+compose file serve both production and staging. `WORKSPACES_ROOT` is required
+(no default): set it in the env file, or copy `.env.example` to `.env` for
+local runs. Note that `SANDBOX_ROOT`, `REMOTE_WORKSPACES_ROOT` and
 `WORKSPACES_ROOT` are now mounted (persisted) on the host as well.
 
 ### 4.3 Install the service

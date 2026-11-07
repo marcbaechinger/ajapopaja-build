@@ -74,7 +74,7 @@ sudo bash -c "set -a; . '$ENV_FILE'; set +a; \
   mkdir -p \"\${PI_SESSIONS_ROOT:-/data/ajapopaja/pi_sessions}\" \
            \"\${SANDBOX_ROOT:-/data/ajapopaja/sandboxes}\" \
            \"\${REMOTE_WORKSPACES_ROOT:-/data/ajapopaja/remote_workspaces}\" \
-           \"\${WORKSPACES_ROOT:-/home/marc-baechinger/monolit/code}\""
+           \"\${WORKSPACES_ROOT}\""
 
 echo "3. Exporting shared image to $DEST_DIR/$IMAGE_NAME.tar..."
 docker save -o "$DEST_DIR/$IMAGE_NAME.tar" "$IMAGE_NAME:$VERSION"

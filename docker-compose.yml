@@ -21,7 +21,8 @@ services:
       # Single repos root — the only host source tree exposed to the container.
       # Mounted 1:1 so host and container paths stay identical (paths are
       # persisted by the data models). Never mount an entire home directory.
-      - ${WORKSPACES_ROOT:-/home/marc-baechinger/monolit/code}:${WORKSPACES_ROOT:-/home/marc-baechinger/monolit/code}
+      # Set WORKSPACES_ROOT in .env (copy .env.example to .env first).
+      - ${WORKSPACES_ROOT:?WORKSPACES_ROOT is not set. Copy .env.example to .env and edit it.}:${WORKSPACES_ROOT:?WORKSPACES_ROOT is not set. Copy .env.example to .env and edit it.}
       # Editor socket (a single socket file, not a directory tree).
       - /tmp/nvimsocket:/tmp/nvimsocket
       # Per-instance writable roots. Host and container paths MUST be identical:
