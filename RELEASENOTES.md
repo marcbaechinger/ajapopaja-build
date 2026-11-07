@@ -129,8 +129,8 @@ commands and a much broader tool set.
   stay global; skills are configurable via `INTERACTIVE_SKILLS` and
   `CODERBOT_SKILLS`.
 * **Pi agent upgrades** – Pi coding agent **1.5.0** on Node.js 24, a bundled
-  `code‑review` skill, a bubblewrap‑sandboxed runtime, and additional models
-  (deepseek‑pro, gpt‑oss:120, qwen3‑coder).
+  `code‑review` skill, and additional models (deepseek‑pro, gpt‑oss:120,
+  qwen3‑coder).
 
 ### 🔒 Security & reliability
 
@@ -233,12 +233,6 @@ commands and a much broader tool set.
 * **Reliability fixes** – merged/rejected PRs no longer stay stuck in
   `SUBMITTED`, rejected PRs no longer leak into new CoderBot branches, and
   chained PRs accept correctly in Gitea‑PR mode.
-
-### 🧵 Pi process server
-
-* The Pi process manager is now a **standalone server** using a std‑I/O
-  subprocess transport, decoupled from the web API.
-
 
 ## 0.3.0 – Autonomous coding agents and pull‑request workflow
 
