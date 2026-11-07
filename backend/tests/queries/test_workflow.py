@@ -351,6 +351,67 @@ async def test_transition_task_with_task_object_preserves_fields(init_mock_db):
 
 
 @pytest.mark.asyncio
+async def test_transition_implemented_to_submitted_records_history(init_mock_db):
+    """A documentation PR may move an already implemented task to SUBMITTED."""
+    pipeline = Pipeline(name="Test Pipeline")
+    await pipeline.insert()
+
+    task = Task(
+        title="Task 1",
+        pipeline_id=str(pipeline.id),
+        status=TaskStatus.IMPLEMENTED,
+    )
+    await task.insert()
+
+    updated = await task_queries.transition_task(
+        str(task.id), TaskStatus.SUBMITTED, actor="user"
+    )
+
+    assert updated.status == TaskStatus.SUBMITTED
+    assert updated.history[-1].from_status == TaskStatus.IMPLEMENTED
+    assert updated.history[-1].to_status == TaskStatus.SUBMITTED
+    assert updated.version == task.version + 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "status",
+    [TaskStatus.IMPLEMENTED, TaskStatus.SUBMITTED],
+)
+async def test_transition_to_same_status_is_idempotent(init_mock_db, status):
+    """Same-state transitions persist caller-set fields without history noise."""
+    pipeline = Pipeline(name="Test Pipeline")
+    await pipeline.insert()
+
+    task = Task(
+        title="Task 1",
+        pipeline_id=str(pipeline.id),
+        status=status,
+    )
+    await task.insert()
+    history_len = len(task.history)
+    old_version = task.version
+
+    # Simulate a caller setting completion metadata on the in-memory object.
+    task.commit_hash = "abc1234"
+    task.completion_info = "Done"
+    task.review_md = "https://host/owner/repo/pulls/1"
+    updated = await task_queries.transition_task(
+        str(task.id), status, actor="user", task=task
+    )
+
+    assert updated.status == status
+    assert updated.version == old_version + 1
+    assert len(updated.history) == history_len
+
+    persisted = await Task.get(str(task.id))
+    assert persisted.commit_hash == "abc1234"
+    assert persisted.completion_info == "Done"
+    assert persisted.review_md == "https://host/owner/repo/pulls/1"
+    assert persisted.version == old_version + 1
+
+
+@pytest.mark.asyncio
 async def test_delete_task(init_mock_db):
     pipeline = Pipeline(name="Test Pipeline")
     await pipeline.insert()

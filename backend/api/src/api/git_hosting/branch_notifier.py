@@ -40,6 +40,7 @@ from core.models.models import (
     PiSessionStatus,
     Pipeline,
     PullRequest,
+    PullRequestKind,
     PullRequestStatus,
     Task,
     TaskStatus,
@@ -358,8 +359,14 @@ class PrStateNotifier:
                 continue
 
             if event.state == "merged":
-                task.commit_hash = event.commit_hash
+                # The merge commit belongs to the pull request. Only an
+                # implementation PR may overwrite the task's implementation
+                # commit; a documentation PR must leave the task's original
+                # commit/summary/review metadata intact.
                 pr.status = PullRequestStatus.ACCEPTED
+                pr.commit_hash = event.commit_hash
+                if pr.kind == PullRequestKind.IMPLEMENTATION:
+                    task.commit_hash = event.commit_hash
                 await pr.save()
                 await task_queries.transition_task(
                     str(task.id), TaskStatus.IMPLEMENTED, actor="system", task=task

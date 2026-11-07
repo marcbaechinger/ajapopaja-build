@@ -63,7 +63,11 @@ ALLOWED_TRANSITIONS: Dict[TaskStatus, set] = {
         # backlog so it can be reworked (mirrors the local reject path).
         TaskStatus.CREATED,
     },
-    TaskStatus.IMPLEMENTED: set(),
+    TaskStatus.IMPLEMENTED: {
+        # A documentation PR may be submitted for external review after the
+        # implementation task has already been completed.
+        TaskStatus.SUBMITTED,
+    },
     TaskStatus.DISCARDED: set(),
     TaskStatus.FAILED: {TaskStatus.CREATED, TaskStatus.SCHEDULED},
 }
@@ -264,9 +268,23 @@ async def transition_task(
     Raises ValueError if the transition is not allowed by ALLOWED_TRANSITIONS.
     If a task object is provided it is used directly (avoiding a re-fetch);
     otherwise the task is loaded by id.
+
+    A transition to the task's current status is idempotent: it persists any
+    fields the caller set on the in-memory task (for example ``commit_hash``,
+    ``completion_info`` or ``review_md``) but does not append a meaningless
+    history entry. The version is still incremented because it is the
+    optimistic-concurrency/change counter consumed by ``update_task_details``,
+    the public ``update_task_status`` and ``complete_task``; leaving it stale
+    would let a subsequent update overwrite the fields persisted here.
     """
     if task is None:
         task = await get_task_by_id(task_id)
+
+    if to_status == task.status:
+        task.version += 1
+        task.updated_at = datetime.now(UTC)
+        await task.save()
+        return task
 
     allowed = ALLOWED_TRANSITIONS.get(task.status, set())
     if to_status not in allowed:

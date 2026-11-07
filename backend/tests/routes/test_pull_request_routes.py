@@ -24,8 +24,11 @@ from api.auth import get_current_user
 from api.main import app
 from api.routes import pull_request as pr_routes
 from core.models.models import (
+    Pipeline,
     PullRequest,
+    PullRequestKind,
     PullRequestStatus,
+    Task,
     TaskStatus,
 )
 
@@ -44,9 +47,15 @@ async def test_keep_task_pending_review_transitions_to_submitted(init_mock_db):
         completion_info="summary",
     )
     await task.insert()
+    pr = PullRequest(
+        pipeline_id="pipe_123",
+        task_id=str(task.id),
+        summary="summary",
+        branch_name="branch",
+    )
 
     await pr_routes.keep_task_pending_review(
-        task, "abc1234", "summary", "https://host/owner/repo/pulls/9"
+        task, "abc1234", "summary", "https://host/owner/repo/pulls/9", pr
     )
 
     assert task.status == TaskStatus.SUBMITTED
@@ -55,6 +64,188 @@ async def test_keep_task_pending_review_transitions_to_submitted(init_mock_db):
     assert task.review_md == "https://host/owner/repo/pulls/9"
     assert task.history[-1].to_status == TaskStatus.SUBMITTED
     assert task.history[-1].from_status == TaskStatus.PULL_REQUEST_AVAILABLE
+
+
+@pytest.mark.asyncio
+async def test_update_task_status_documentation_preserves_implementation_metadata(
+    init_mock_db,
+):
+    """A documentation PR must not overwrite the implementation metadata."""
+    task = Task(
+        title="Task 1",
+        pipeline_id="pipe_123",
+        status=TaskStatus.SUBMITTED,
+        commit_hash="impl-commit",
+        completion_info="implementation summary",
+        review_md="https://host/owner/repo/pulls/1",
+    )
+    await task.insert()
+    pr = PullRequest(
+        pipeline_id="pipe_123",
+        task_id=str(task.id),
+        summary="documentation summary",
+        branch_name="docbot/branch",
+        kind=PullRequestKind.DOCUMENTATION,
+    )
+
+    await pr_routes.update_task_status(task, "doc-commit", "doc summary", pr)
+
+    assert task.status == TaskStatus.IMPLEMENTED
+    assert task.commit_hash == "impl-commit"
+    assert task.completion_info == "implementation summary"
+    assert task.review_md == "https://host/owner/repo/pulls/1"
+
+
+@pytest.mark.asyncio
+async def test_keep_task_pending_review_documentation_preserves_implementation_metadata(
+    init_mock_db,
+):
+    task = Task(
+        title="Task 1",
+        pipeline_id="pipe_123",
+        status=TaskStatus.IMPLEMENTED,
+        commit_hash="impl-commit",
+        completion_info="implementation summary",
+        review_md="https://host/owner/repo/pulls/1",
+    )
+    await task.insert()
+    pr = PullRequest(
+        pipeline_id="pipe_123",
+        task_id=str(task.id),
+        summary="documentation summary",
+        branch_name="docbot/branch",
+        kind=PullRequestKind.DOCUMENTATION,
+    )
+
+    await pr_routes.keep_task_pending_review(
+        task,
+        "doc-commit",
+        "doc summary",
+        "https://host/owner/repo/pulls/2",
+        pr,
+    )
+
+    assert task.status == TaskStatus.SUBMITTED
+    assert task.commit_hash == "impl-commit"
+    assert task.completion_info == "implementation summary"
+    assert task.review_md == "https://host/owner/repo/pulls/1"
+    assert task.history[-1].from_status == TaskStatus.IMPLEMENTED
+    assert task.history[-1].to_status == TaskStatus.SUBMITTED
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "gitea_pr,initial_status,expected_status",
+    [
+        (True, TaskStatus.IMPLEMENTED, TaskStatus.SUBMITTED),
+        (True, TaskStatus.SUBMITTED, TaskStatus.SUBMITTED),
+        (False, TaskStatus.IMPLEMENTED, TaskStatus.IMPLEMENTED),
+        (False, TaskStatus.SUBMITTED, TaskStatus.IMPLEMENTED),
+    ],
+)
+async def test_accept_documentation_pr_preserves_task_metadata(
+    async_client,
+    init_mock_db,
+    gitea_pr,
+    initial_status,
+    expected_status,
+):
+    """DocBot acceptance works on IMPLEMENTED/SUBMITTED tasks and a quick
+    accept without a commit message succeeds."""
+    mock_user = AsyncMock()
+    mock_user.username = "testuser"
+    app.dependency_overrides[get_current_user] = lambda: mock_user
+
+    pipeline = Pipeline(
+        name="doc-pipeline",
+        workspace_path="/tmp/doc_repo",
+        repo_uri="https://host/owner/repo.git",
+    )
+    await pipeline.insert()
+    task = Task(
+        title="Implementation task",
+        pipeline_id=str(pipeline.id),
+        status=initial_status,
+        commit_hash="impl-commit",
+        completion_info="implementation summary",
+        review_md="https://host/owner/repo/pulls/1",
+    )
+    await task.insert()
+    pr = PullRequest(
+        pipeline_id=str(pipeline.id),
+        task_id=str(task.id),
+        summary="DocBot: update architecture docs\n\nMore details",
+        subject="",
+        branch_name="docbot/task/abc123",
+        patch="diff --git a/doc.md b/doc.md\n",
+        status=PullRequestStatus.OPEN,
+        kind=PullRequestKind.DOCUMENTATION,
+    )
+    await pr.insert()
+
+    mock_repo = MagicMock()
+    try:
+        with (
+            patch("api.routes.pull_request.git_utils.get_repo", return_value=mock_repo),
+            patch(
+                "api.routes.pull_request.validate_workspace_clean",
+                new_callable=AsyncMock,
+            ),
+            patch("api.routes.pull_request.apply_patch", new_callable=AsyncMock),
+            patch("api.routes.pull_request.format_workspace", new_callable=AsyncMock),
+            patch(
+                "api.routes.pull_request.commit_changes", return_value="doc-commit"
+            ) as mock_commit,
+            patch(
+                "api.routes.pull_request.git_utils.current_default_branch",
+                return_value="main",
+            ),
+            patch("api.routes.pull_request.git_utils.ensure_feature_branch"),
+            patch(
+                "api.routes.pull_request._submit_as_gitea_pr",
+                new_callable=AsyncMock,
+                return_value="https://host/owner/repo/pulls/2",
+            ) as mock_submit,
+            patch("api.routes.pull_request.git_utils.push_with_auth"),
+            patch(
+                "api.routes.pull_request.git_utils.remove_pr_worktree",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "api.routes.pull_request.git_utils.sweep_completed_pull_requests",
+                new_callable=AsyncMock,
+            ),
+            patch.object(
+                pr_routes.config,
+                "REMOTE_PR_MODE",
+                "gitea_pr" if gitea_pr else "direct",
+            ),
+        ):
+            response = await async_client.post(f"/api/pull_requests/{pr.id}/accept")
+
+        assert response.status_code == 200, response.text
+
+        # Quick accept built a non-empty commit message.
+        commit_message = mock_commit.call_args.args[2]
+        assert commit_message == "DocBot: update architecture docs"
+        if gitea_pr:
+            assert mock_submit.await_args.args[3] == commit_message
+
+        updated_task = await Task.get(str(task.id))
+        assert updated_task.status == expected_status
+        assert updated_task.commit_hash == "impl-commit"
+        assert updated_task.completion_info == "implementation summary"
+        assert updated_task.review_md == "https://host/owner/repo/pulls/1"
+
+        updated_pr = await PullRequest.get(pr.id)
+        assert updated_pr.commit_hash == "doc-commit"
+        assert updated_pr.status == (
+            PullRequestStatus.SUBMITTED if gitea_pr else PullRequestStatus.ACCEPTED
+        )
+        if gitea_pr:
+            assert updated_pr.remote_pr_url == "https://host/owner/repo/pulls/2"
+    finally:
+        app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
@@ -253,13 +444,29 @@ def test_build_commit_message_uses_request_when_provided():
     assert pr_routes.build_commit_message(request, mock_pr) == "Add new feature"
 
 
-def test_build_commit_message_returns_empty_string_when_both_empty():
+def test_build_commit_message_falls_back_to_first_summary_line():
     mock_pr = MagicMock()
     mock_pr.subject = None
+    mock_pr.summary = "\n  DocBot: update architecture docs  \nMore details"
     request = pr_routes.AcceptPullRequestRequest(
         commit_message=None, failure_strategy=pr_routes.FailureStrategy.REVERT
     )
-    assert pr_routes.build_commit_message(request, mock_pr) == ""
+    assert (
+        pr_routes.build_commit_message(request, mock_pr)
+        == "DocBot: update architecture docs"
+    )
+
+
+def test_build_commit_message_uses_pr_id_when_all_sources_empty():
+    mock_pr = MagicMock()
+    mock_pr.subject = None
+    mock_pr.summary = ""
+    mock_pr.id = "pr_123"
+    request = pr_routes.AcceptPullRequestRequest(
+        commit_message=None, failure_strategy=pr_routes.FailureStrategy.REVERT
+    )
+    assert pr_routes.build_commit_message(request, mock_pr) == "Pull request pr_123"
+    assert pr_routes.build_commit_message(None, mock_pr) == "Pull request pr_123"
 
 
 def test_build_commit_message_falls_back_to_subject():

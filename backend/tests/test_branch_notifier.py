@@ -31,6 +31,7 @@ from core.models.models import (
     PiSessionKind,
     PiSessionStatus,
     PullRequest,
+    PullRequestKind,
     PullRequestStatus,
     Task,
     TaskStatus,
@@ -387,6 +388,80 @@ async def test_on_pr_state_merged_mirrors_pr_and_task(init_mock_db):
         if isinstance(c.args[0], WSMessage) and c.args[0].type == "TASK_STATUS_UPDATED"
     ]
     assert len(status_msgs) == 1
+
+
+@pytest.mark.asyncio
+async def test_on_pr_state_merged_documentation_pr_preserves_task_metadata(
+    init_mock_db,
+):
+    """Merging a DocBot PR records the merge on the PR but keeps the task's
+    implementation commit/summary/review metadata untouched."""
+    pipeline = await _make_pipeline()
+    task = Task(
+        title="Implement feature",
+        pipeline_id=str(pipeline.id),
+        status=TaskStatus.SUBMITTED,
+        commit_hash="impl-commit",
+        completion_info="implementation summary",
+        review_md="https://host/org/repo/pulls/1",
+    )
+    await task.insert()
+    pr = PullRequest(
+        pipeline_id=str(pipeline.id),
+        task_id=str(task.id),
+        summary="documentation summary",
+        subject="DocBot: update docs",
+        branch_name="docbot/t1/abc123",
+        patch="patch",
+        status=PullRequestStatus.SUBMITTED,
+        base_branch="main",
+        remote_pr_url="https://host/org/repo/pulls/2",
+        kind=PullRequestKind.DOCUMENTATION,
+    )
+    await pr.insert()
+
+    mock_repo = MagicMock()
+    mock_repo.active_branch.name = "main"
+    mock_repo.head.commit.hexsha = "merge-sha"
+
+    notifier = PrStateNotifier()
+    with (
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.ensure_repo_fetched",
+            new=AsyncMock(),
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.get_repo",
+            return_value=mock_repo,
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.validate_commit_hash",
+            return_value=True,
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.ws_manager.broadcast",
+            new=AsyncMock(),
+        ),
+        patch.object(PrStateNotifier, "pull_pipeline_repo", new=AsyncMock()),
+        patch(
+            "api.git_hosting.branch_notifier.notification_manager.notify_actions",
+            new=AsyncMock(),
+        ),
+    ):
+        result = await notifier.on_pr_state(
+            str(pipeline.id), _event(commit_hash="merge-sha")
+        )
+
+    assert result.status == "mirrored"
+    updated_pr = await PullRequest.get(pr.id)
+    assert updated_pr.status == PullRequestStatus.ACCEPTED
+    assert updated_pr.commit_hash == "merge-sha"
+
+    updated_task = await Task.get(task.id)
+    assert updated_task.status == TaskStatus.IMPLEMENTED
+    assert updated_task.commit_hash == "impl-commit"
+    assert updated_task.completion_info == "implementation summary"
+    assert updated_task.review_md == "https://host/org/repo/pulls/1"
 
 
 @pytest.mark.asyncio
