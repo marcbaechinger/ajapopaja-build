@@ -26,7 +26,8 @@ import logging
 
 from api.git_hosting.branch_events import PrStateEvent, pr_index_from_url
 from api.git_hosting.branch_notifier import PrStateNotifier
-from api.git_hosting.gitea import GiteaClient
+from api.git_hosting.gitea import GiteaClient, GitHubClient
+from api.git_hosting.pull_requests import _is_github_host
 from core import config
 from core.models.models import Pipeline, PullRequest, PullRequestStatus, Task
 from core.utils import git_utils
@@ -132,10 +133,13 @@ async def reconcile_pipeline_pull_requests(
         if not prs:
             return {"status": "ok", "up_to_date": True, "reconciled": []}
 
-        # Read every submitted PR's remote state first so a Gitea outage is
-        # reported as ``sync_failed`` without half-applying anything.
+        # Read every submitted PR's remote state first so a Gitea/GitHub
+        # outage is reported as ``sync_failed`` without half-applying anything.
         token = pipeline.repo_token or config.GIT_PUSH_TOKEN
-        client = GiteaClient(base_url, token)
+        if _is_github_host(pipeline.repo_uri):
+            client = GitHubClient(token)
+        else:
+            client = GiteaClient(base_url, token)
         remote: dict[str, tuple[int, dict]] = {}
         sync_failed = False
         try:

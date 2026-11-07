@@ -211,6 +211,79 @@ async def test_sync_endpoint_merged_pr_is_accepted(async_client, init_mock_db):
 
 
 @pytest.mark.asyncio
+async def test_sync_endpoint_github_merged_pr_is_accepted(async_client, init_mock_db):
+    """GitHub repos must reconcile via the GitHub client (Bearer auth)."""
+    pipeline = Pipeline(
+        name="github",
+        repo_uri="https://github.com/example/repo.git",
+        repo_username="user",
+        repo_token="tok",
+    )
+    await pipeline.insert()
+
+    task = Task(
+        title="Implement a feature",
+        pipeline_id=str(pipeline.id),
+        status=TaskStatus.SUBMITTED,
+    )
+    await task.insert()
+
+    pr = PullRequest(
+        pipeline_id=str(pipeline.id),
+        task_id=str(task.id),
+        summary="summary",
+        subject="subject",
+        branch_name="coderbot/t1",
+        patch="patch",
+        status=PullRequestStatus.SUBMITTED,
+        base_branch="main",
+        remote_pr_url="https://github.com/example/repo/pull/42",
+    )
+    await pr.insert()
+
+    fake = _fake_gitea(_merged_payload())
+
+    with (
+        patch("api.git_hosting.pr_poller.GitHubClient", new=lambda *a, **k: fake),
+        patch(
+            "api.git_hosting.pr_poller.GiteaClient",
+            new=MagicMock(
+                side_effect=AssertionError(
+                    "GiteaClient must not be used for GitHub repos"
+                )
+            ),
+        ),
+        patch.object(
+            PrStateNotifier,
+            "fetch_pipeline_repo",
+            new=AsyncMock(return_value=SyncResult(status="synced")),
+        ),
+        patch(
+            "api.git_hosting.branch_notifier.git_utils.get_repo",
+            return_value=MagicMock(),
+        ),
+        patch.object(PrStateNotifier, "verify_commit_present", return_value=True),
+    ):
+        response = await async_client.post(
+            f"/api/pipelines/{pipeline.id}/pull_requests/sync"
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    body = response.json()
+    assert body["up_to_date"] is False
+    assert len(body["reconciled"]) == 1
+    entry = body["reconciled"][0]
+    assert entry["gitea_pr"] == 42
+    assert entry["remote_state"] == "merged"
+    assert entry["outcome"] == "accepted"
+
+    assert (await PullRequest.get(pr.id)).status == PullRequestStatus.ACCEPTED
+    updated_task = await Task.get(task.id)
+    assert updated_task.status == TaskStatus.IMPLEMENTED
+    assert updated_task.commit_hash == "merge-sha-123"
+
+
+@pytest.mark.asyncio
 async def test_sync_endpoint_closed_pr_is_rejected(async_client, init_mock_db):
     pipeline, task, pr = await _insert_pipeline_and_pr()
     fake = _fake_gitea({"state": "closed", "merged": False, "base": {"ref": "main"}})
