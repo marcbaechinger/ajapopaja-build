@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import logging
+import uuid
 from textwrap import dedent, indent
 from typing import Any, Dict, List, Optional
 
@@ -20,7 +21,7 @@ from api.bot.tool_registry import ToolDefinition
 from api.bot.base_session import BaseBotSession
 from api.bot.session_config import BaseBotSessionConfig
 from api.websocket_manager import WSMessage, manager
-from core.models.models import PullRequest, PullRequestStatus
+from core.models.models import PullRequest, PullRequestKind, PullRequestStatus
 from core.queries import pipeline as pipeline_queries
 from core.queries import task as task_queries
 from core.utils import git_utils
@@ -74,6 +75,20 @@ explanation, or narration in the text response. Output ONLY the tool call.
     """)
 
 
+def _docbot_subject(summary: str) -> str:
+    """Build a concise, non-empty PR subject from the DocBot summary."""
+    first = next(
+        (line.strip() for line in (summary or "").splitlines() if line.strip()),
+        "",
+    )
+    first = first.lstrip("# ").strip()
+    if not first:
+        first = "Documentation updated by DocBot"
+    if not first.lower().startswith("docbot"):
+        first = f"DocBot: {first}"
+    return first[:200]
+
+
 class DocBotSession(BaseBotSession):
     """
     Specialized assistant agent for maintaining project documentation.
@@ -101,6 +116,15 @@ class DocBotSession(BaseBotSession):
     @property
     def use_sandbox(self) -> bool:
         return True
+
+    def get_sandbox_branch_name(self) -> str:
+        """Return a unique branch for this DocBot run.
+
+        DocBot may run more than once for the same task. A deterministic branch
+        would be shared by those runs, so completing one PR could delete the
+        branch another run still needs.
+        """
+        return f"{self.bot_type}/{self.task_id}/{uuid.uuid4().hex[:8]}"
 
     def get_default_feedback(
         self, pipeline_id: str, task_id: str, assistant_message: str
@@ -178,7 +202,10 @@ class DocBotSession(BaseBotSession):
             pr = PullRequest(
                 pipeline_id=self.pipeline_id,
                 task_id=self.task_id,
+                kind=PullRequestKind.DOCUMENTATION,
                 summary=summary,
+                subject=_docbot_subject(summary),
+                author="docbot",
                 branch_name=self.helper.branch_name,
                 patch=patch,
                 status=PullRequestStatus.OPEN,

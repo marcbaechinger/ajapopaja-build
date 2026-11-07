@@ -53,6 +53,7 @@ class SandboxGitHelper:
         source_repo_path: Path,
         workspace_path: Path | str | None = None,
         base: Optional[SandboxBase] = None,
+        branch_name: str | None = None,
     ):
         self.bot_type = bot_type
         self.task_id = task_id
@@ -67,7 +68,11 @@ class SandboxGitHelper:
             self.sandbox_path = Path(workspace_path)
         else:
             self.sandbox_path = config.SANDBOX_ROOT / bot_type / task_id
-        self.branch_name = f"{bot_type}/{task_id}"
+        # Callers may override the branch name, e.g. DocBot uses a unique
+        # per-run branch so concurrent runs for the same task do not share (and
+        # later delete) each other's branch. CoderBot keeps the deterministic
+        # ``coderbot/<task_id>`` name because it is used for ordered chaining.
+        self.branch_name = branch_name or f"{bot_type}/{task_id}"
 
     def setup_sandbox(self):
         """Clones the source repo and creates a branch.

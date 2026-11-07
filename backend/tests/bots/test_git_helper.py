@@ -147,6 +147,17 @@ def test_get_patch_falls_back_to_empty_tree_when_base_ref_unborn(monkeypatch):
     repo.git.diff.assert_called_once_with(SandboxGitHelper._EMPTY_TREE, binary=True)
 
 
+def test_branch_name_can_be_overridden():
+    """Callers can supply a unique branch while the default stays unchanged."""
+    default_helper = SandboxGitHelper("docbot", "task_id", Path("/fake/path"))
+    custom_helper = SandboxGitHelper(
+        "docbot", "task_id", Path("/fake/path"), branch_name="docbot/task_id/abc123"
+    )
+
+    assert default_helper.branch_name == "docbot/task_id"
+    assert custom_helper.branch_name == "docbot/task_id/abc123"
+
+
 def test_setup_sandbox_without_base_checks_out_new_branch(tmp_path):
     """Without a base the sandbox branches off the cloned default branch."""
     helper = SandboxGitHelper("coderbot", "task_id", Path("/fake/path"))
@@ -168,9 +179,7 @@ def test_setup_sandbox_with_base_fetches_and_checks_out_fetch_head(tmp_path):
         ref="refs/heads/coderbot/t1",
         commit="abc123",
     )
-    helper = SandboxGitHelper(
-        "coderbot", "t2", Path("/fake/path"), base=base
-    )
+    helper = SandboxGitHelper("coderbot", "t2", Path("/fake/path"), base=base)
     repo = MagicMock()
 
     with patch("api.bot.git_helper.git.Repo.clone_from", return_value=repo):
@@ -180,9 +189,7 @@ def test_setup_sandbox_with_base_fetches_and_checks_out_fetch_head(tmp_path):
     repo.git.fetch.assert_called_once_with(
         "/predecessor/workspace", "refs/heads/coderbot/t1"
     )
-    repo.git.checkout.assert_called_once_with(
-        "-b", "coderbot/t2", "FETCH_HEAD"
-    )
+    repo.git.checkout.assert_called_once_with("-b", "coderbot/t2", "FETCH_HEAD")
 
 
 def test_get_patch_diffs_against_chained_base_commit(monkeypatch):
@@ -194,9 +201,7 @@ def test_get_patch_diffs_against_chained_base_commit(monkeypatch):
         ref="refs/heads/coderbot/t1",
         commit="chained-base-commit",
     )
-    helper = SandboxGitHelper(
-        "coderbot", "t2", Path("/fake/path"), base=base
-    )
+    helper = SandboxGitHelper("coderbot", "t2", Path("/fake/path"), base=base)
 
     repo = MagicMock()
     repo.commit.return_value = "base-commit"
@@ -267,9 +272,7 @@ def test_setup_sandbox_chains_predecessor_commit(tmp_path):
     assert repo.commit("HEAD~1").hexsha == main_commit
 
     # Task 2 edits the same file and commits.
-    (sandbox / "shared.txt").write_text(
-        "base\ntask1\ntask2\n", encoding="utf-8"
-    )
+    (sandbox / "shared.txt").write_text("base\ntask1\ntask2\n", encoding="utf-8")
     repo.git.add(A=True)
     repo.git.commit(
         "-m", "task2", "--no-verify", env=git_utils.ensure_git_identity(repo)
@@ -287,9 +290,7 @@ def test_setup_sandbox_chains_predecessor_commit(tmp_path):
     acc_repo.git.checkout(c1)
     patch_file = None
     try:
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".patch", delete=False
-        ) as fh:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".patch", delete=False) as fh:
             fh.write(patch_str if patch_str.endswith("\n") else patch_str + "\n")
             patch_file = fh.name
         acc_repo.git.apply("--3way", patch_file)

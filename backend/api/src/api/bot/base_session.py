@@ -199,6 +199,15 @@ class BaseBotSession(ABC):
         """Returns True if this session should operate in a sandbox."""
         return False
 
+    def get_sandbox_branch_name(self) -> str | None:
+        """Return a custom sandbox branch name, or None for the default.
+
+        The default branch name is deterministic (``<bot_type>/<task_id>``).
+        Subclasses that can run multiple independent sessions for the same task
+        can override this to return a unique branch name.
+        """
+        return None
+
     async def run(self, max_iterations: Optional[int] = None):
         """
         Runs the autonomous loop until a terminal tool is called or
@@ -214,7 +223,10 @@ class BaseBotSession(ABC):
                 return
 
             self.helper = SandboxGitHelper(
-                self.bot_type, self.task_id, pipeline.workspace_abs_path
+                self.bot_type,
+                self.task_id,
+                pipeline.workspace_abs_path,
+                branch_name=self.get_sandbox_branch_name(),
             )
             self.helper.setup_sandbox()
 

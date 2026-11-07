@@ -17,7 +17,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from api.docbot.registry import docbot_registry
-from api.docbot.session import DocBotSession
+from api.docbot.session import DocBotSession, _docbot_subject
+from core.models.models import PullRequestKind
 
 
 @pytest.fixture(autouse=True)
@@ -377,3 +378,72 @@ async def test_handle_bot_end_no_helper_doesnt_call_cleanup():
         # This would fail if helper.cleanup() was called on None
         assert session.helper is None
         mock_pull_request_insert.assert_not_called()
+
+
+def test_docbot_subject_is_non_empty_and_prefixed():
+    assert _docbot_subject("Improve architecture docs\n\nMore details") == (
+        "DocBot: Improve architecture docs"
+    )
+    assert _docbot_subject("# DocBot: update API docs") == "DocBot: update API docs"
+    assert _docbot_subject("docbot refreshes docs") == "docbot refreshes docs"
+    assert _docbot_subject("") == "DocBot: Documentation updated by DocBot"
+    assert len(_docbot_subject("x" * 500)) == 200
+
+
+@pytest.mark.asyncio
+async def test_handle_bot_end_creates_documentation_pull_request():
+    """DocBot PRs carry kind, subject, author and the unique sandbox branch."""
+    session = DocBotSession(pipeline_id="test_pipeline", task_id="test_task")
+    session.has_updates = True
+
+    mock_repo = MagicMock()
+    mock_repo.git.commit = MagicMock()
+    mock_repo.git.diff = MagicMock(return_value="diff --git a/doc.md b/doc.md\n")
+
+    mock_helper = MagicMock()
+    mock_helper.get_repo = MagicMock(return_value=mock_repo)
+    mock_helper.branch_name = "docbot/test_task/abc12345"
+    mock_helper.cleanup = MagicMock()
+    session.helper = mock_helper
+    session.session_result = {"summary": "# Updated architecture\n\nDetails"}
+
+    mock_pr = MagicMock()
+    mock_pr.insert = AsyncMock()
+
+    with (
+        patch("api.docbot.session.PullRequest", return_value=mock_pr) as mock_pr_class,
+        patch("api.docbot.session.manager.broadcast", new_callable=AsyncMock),
+    ):
+        await session._handle_bot_end()
+
+    mock_pr_class.assert_called_once()
+    kwargs = mock_pr_class.call_args.kwargs
+    assert kwargs["pipeline_id"] == "test_pipeline"
+    assert kwargs["task_id"] == "test_task"
+    assert kwargs["kind"] == PullRequestKind.DOCUMENTATION
+    assert kwargs["subject"] == "DocBot: Updated architecture"
+    assert kwargs["summary"] == "# Updated architecture\n\nDetails"
+    assert kwargs["author"] == "docbot"
+    assert kwargs["branch_name"] == "docbot/test_task/abc12345"
+    assert kwargs["patch"] == "diff --git a/doc.md b/doc.md\n"
+    assert kwargs["status"].value == "open"
+    mock_pr.insert.assert_awaited_once()
+    mock_helper.cleanup.assert_called_once()
+
+
+def test_two_docbot_sessions_for_same_task_get_distinct_branches():
+    """Each DocBot run gets its own branch, even for the same task."""
+    fake_uuids = [
+        MagicMock(hex="aaaaaaaa11111111"),
+        MagicMock(hex="bbbbbbbb22222222"),
+    ]
+    session_one = DocBotSession(pipeline_id="test_pipeline", task_id="test_task")
+    session_two = DocBotSession(pipeline_id="test_pipeline", task_id="test_task")
+
+    with patch("api.docbot.session.uuid.uuid4", side_effect=fake_uuids):
+        branch_one = session_one.get_sandbox_branch_name()
+        branch_two = session_two.get_sandbox_branch_name()
+
+    assert branch_one == "docbot/test_task/aaaaaaaa"
+    assert branch_two == "docbot/test_task/bbbbbbbb"
+    assert branch_one != branch_two
