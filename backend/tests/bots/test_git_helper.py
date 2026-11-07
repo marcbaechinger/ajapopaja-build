@@ -160,7 +160,9 @@ def test_branch_name_can_be_overridden():
 
 def test_setup_sandbox_without_base_checks_out_new_branch(tmp_path):
     """Without a base the sandbox branches off the cloned default branch."""
-    helper = SandboxGitHelper("coderbot", "task_id", Path("/fake/path"))
+    helper = SandboxGitHelper(
+        "coderbot", "task_id", Path("/fake/path"), workspace_path=tmp_path / "sandbox"
+    )
     repo = MagicMock()
 
     with patch("api.bot.git_helper.git.Repo.clone_from", return_value=repo):
@@ -179,7 +181,9 @@ def test_setup_sandbox_with_base_fetches_and_checks_out_fetch_head(tmp_path):
         ref="refs/heads/coderbot/t1",
         commit="abc123",
     )
-    helper = SandboxGitHelper("coderbot", "t2", Path("/fake/path"), base=base)
+    helper = SandboxGitHelper(
+        "coderbot", "t2", Path("/fake/path"), workspace_path=tmp_path / "sandbox", base=base
+    )
     repo = MagicMock()
 
     with patch("api.bot.git_helper.git.Repo.clone_from", return_value=repo):
