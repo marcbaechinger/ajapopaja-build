@@ -21,6 +21,11 @@ import { StatsDialog } from '../../../components/dialogs/StatsDialog.ts';
 import type { ContentTab } from '../../../../core/PipelineRoute.ts';
 import type { HashWriteMode } from '../PipelineSubRoute.ts';
 import type { PipelineDetailCtx } from '../PipelineDetailCtx.ts';
+import {
+  BacklogView,
+  BACKLOG_SECTION_KEYS,
+  type BacklogSectionKey,
+} from '../../../components/pipeline/BacklogView.ts';
 
 export interface MiscActionsDeps {
   /** The mounted view root; `create_task` re-reads the live title input. */
@@ -41,6 +46,9 @@ export interface MiscActionsDeps {
  * `copy_commit_hash`, `open_stats`, `open_history`, `open_dev_server_dialog`,
  * `open_quickfix`, `open_diff_view`, `create_task`, `prev_history_page`,
  * `next_history_page` and `toggle_backlog_sidebar`.
+ *
+ * It also registers `toggle_backlog_section`, which independently collapses or
+ * expands the Proposed, Backlog and Queue sections of the left sidebar.
  *
  * The handlers were extracted verbatim from `PipelineDetailView`. All mutable
  * state comes from `ctx.state` and every repaint goes through `ctx.refresh`;
@@ -70,6 +78,23 @@ export function registerMiscActions(ctx: PipelineDetailCtx, deps: MiscActionsDep
     ctx.state.sidebarCollapsed = !ctx.state.sidebarCollapsed;
     deps.persistSidebarCollapsed(ctx.state.sidebarCollapsed);
     deps.applySidebarState();
+  });
+
+  // Collapse/expand one of the three backlog sections independently. The
+  // section header is a native <summary>, but this action keeps the state in
+  // sync so a later backlog repaint does not reopen the section.
+  actionRegistry.register('toggle_backlog_section', (_e, el) => {
+    const section = (el.getAttribute('data-backlog-toggle') ||
+      el.closest('[data-backlog-collapsible]')?.getAttribute('data-backlog-collapsible')) as
+      BacklogSectionKey | null;
+    if (!section || !BACKLOG_SECTION_KEYS.includes(section)) return;
+
+    const root = el.closest('#backlog-view') ?? el.closest('[data-backlog-collapsible]') ?? el.parentElement;
+    if (!root) return;
+
+    const collapsed = BacklogView.toggleSection(root, section);
+    if (collapsed) ctx.state.collapsedBacklogSections.add(section);
+    else ctx.state.collapsedBacklogSections.delete(section);
   });
 
   actionRegistry.register('copy_pipeline_id', async (_e, el) => {

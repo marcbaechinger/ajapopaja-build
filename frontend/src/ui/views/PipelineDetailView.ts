@@ -62,6 +62,8 @@ export class PipelineDetailView extends View {
   private set allLoadedTasks(value: Task[]) { this.ctx.state.allLoadedTasks = value; }
   private get collapsedTasks(): Set<string> { return this.ctx.state.collapsedTasks; }
   private set collapsedTasks(value: Set<string>) { this.ctx.state.collapsedTasks = value; }
+  private get collapsedBacklogSections(): Set<string> { return this.ctx.state.collapsedBacklogSections; }
+  private set collapsedBacklogSections(value: Set<string>) { this.ctx.state.collapsedBacklogSections = value; }
   private isFirstLoad: boolean = true;
   private keydownHandler: ((e: KeyboardEvent) => void) | null = null;
   private get gitStatus(): GitStatusDetails | undefined { return this.ctx.state.gitStatus; }
@@ -922,6 +924,10 @@ export class PipelineDetailView extends View {
         ? this.selectedTask.id
         : undefined;
 
-    backlogEl.innerHTML = BacklogView.render({ tasks: backlogTasks, selectedTaskId });
+    backlogEl.innerHTML = BacklogView.render({
+      tasks: backlogTasks,
+      selectedTaskId,
+      collapsedSections: this.collapsedBacklogSections,
+    });
   }
 }

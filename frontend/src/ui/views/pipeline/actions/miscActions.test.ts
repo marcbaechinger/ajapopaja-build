@@ -137,6 +137,7 @@ describe('registerMiscActions', () => {
         'open_stats',
         'prev_history_page',
         'toggle_backlog_sidebar',
+        'toggle_backlog_section',
       ].sort(),
     );
   });

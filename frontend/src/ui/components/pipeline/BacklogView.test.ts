@@ -180,4 +180,83 @@ describe('BacklogView', () => {
     expect(html).not.toContain('bg-app-accent-1/10');
     expect(html).not.toContain('ring-app-accent-1/40');
   });
+
+  describe('collapsible sections', () => {
+    const mount = (html: string): HTMLElement => {
+      const container = document.createElement('div');
+      container.innerHTML = html;
+      return container;
+    };
+
+    it('renders all three sections expanded by default', () => {
+      const container = mount(BacklogView.render({ tasks: [] }));
+      const sections = container.querySelectorAll<HTMLDetailsElement>('[data-backlog-collapsible]');
+      expect(sections).toHaveLength(3);
+      sections.forEach(section => expect(section.open).toBe(true));
+      expect(
+        container.querySelector('[data-backlog-header="proposed"]')!.getAttribute('aria-expanded')
+      ).toBe('true');
+    });
+
+    it('renders only the requested sections collapsed', () => {
+      const tasks = [
+        makeTask({ id: 'p1', status: TaskStatus.PROPOSED, design_doc: '# d' }),
+        makeTask({ id: 'c1', status: TaskStatus.CREATED }),
+        makeTask({ id: 'q1', status: TaskStatus.SCHEDULED }),
+      ];
+      const container = mount(
+        BacklogView.render({ tasks, collapsedSections: new Set(['proposed', 'queue']) })
+      );
+
+      expect(container.querySelector<HTMLDetailsElement>('[data-backlog-collapsible="proposed"]')!.open).toBe(false);
+      expect(container.querySelector<HTMLDetailsElement>('[data-backlog-collapsible="backlog"]')!.open).toBe(true);
+      expect(container.querySelector<HTMLDetailsElement>('[data-backlog-collapsible="queue"]')!.open).toBe(false);
+      expect(container.querySelector('[data-backlog-section="proposed"]')!.classList.contains('hidden')).toBe(true);
+      expect(container.querySelector('[data-backlog-section="backlog"]')!.classList.contains('hidden')).toBe(false);
+
+      // Counts stay visible in the collapsed header.
+      expect(container.querySelector('[data-backlog-count="proposed"]')!.textContent).toBe('1');
+      expect(container.querySelector('[data-backlog-count="queue"]')!.textContent).toBe('1');
+    });
+
+    it('supports collapsed section aliases and individual flags', () => {
+      const byAlias = mount(BacklogView.render({ tasks: [], sectionsCollapsed: ['backlog'] }));
+      expect(byAlias.querySelector<HTMLDetailsElement>('[data-backlog-collapsible="backlog"]')!.open).toBe(false);
+
+      const byFlag = mount(BacklogView.render({ tasks: [], collapsedQueue: true }));
+      expect(byFlag.querySelector<HTMLDetailsElement>('[data-backlog-collapsible="queue"]')!.open).toBe(false);
+      expect(byFlag.querySelector<HTMLDetailsElement>('[data-backlog-collapsible="proposed"]')!.open).toBe(true);
+    });
+
+    it('applies collapsed state to an already mounted view', () => {
+      const container = mount(BacklogView.render({ tasks: [] }));
+
+      BacklogView.applySectionCollapsed(container, 'backlog', true);
+      const details = container.querySelector<HTMLDetailsElement>('[data-backlog-collapsible="backlog"]')!;
+      const body = container.querySelector<HTMLElement>('[data-backlog-section="backlog"]')!;
+      const header = container.querySelector<HTMLElement>('[data-backlog-header="backlog"]')!;
+      expect(details.open).toBe(false);
+      expect(body.classList.contains('hidden')).toBe(true);
+      expect(header.getAttribute('aria-expanded')).toBe('false');
+
+      expect(BacklogView.toggleSection(container, 'backlog')).toBe(false);
+      expect(details.open).toBe(true);
+      expect(body.classList.contains('hidden')).toBe(false);
+      expect(header.getAttribute('aria-expanded')).toBe('true');
+    });
+
+    it('applies a complete collapsed-section state', () => {
+      const container = mount(BacklogView.render({ tasks: [] }));
+
+      BacklogView.applySectionsCollapsed(container, { proposed: true, queue: true });
+      expect(container.querySelector<HTMLDetailsElement>('[data-backlog-collapsible="proposed"]')!.open).toBe(false);
+      expect(container.querySelector<HTMLDetailsElement>('[data-backlog-collapsible="backlog"]')!.open).toBe(true);
+      expect(container.querySelector<HTMLDetailsElement>('[data-backlog-collapsible="queue"]')!.open).toBe(false);
+
+      BacklogView.applySectionsCollapsed(container, false);
+      container.querySelectorAll<HTMLDetailsElement>('[data-backlog-collapsible]').forEach(section => {
+        expect(section.open).toBe(true);
+      });
+    });
+  });
 });

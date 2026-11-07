@@ -86,6 +86,8 @@ export interface PipelineDetailState {
   selectedTask: Task | null;
   collapsedTasks: Set<string>;
   collapsedSpecs: Set<string>;
+  /** Backlog sections (proposed/backlog/queue) hidden by the user. */
+  collapsedBacklogSections: Set<string>;
   activeEditors: Map<string, EasyMDE>;
   pendingSpecEditTaskId: string | null;
   pendingScheduleFocusTaskId: string | null;
@@ -143,6 +145,7 @@ export function createPipelineDetailState(): PipelineDetailState {
     selectedTask: null,
     collapsedTasks: new Set<string>(),
     collapsedSpecs: new Set<string>(),
+    collapsedBacklogSections: new Set<string>(),
     activeEditors: new Map<string, EasyMDE>(),
     pendingSpecEditTaskId: null,
     pendingScheduleFocusTaskId: null,
