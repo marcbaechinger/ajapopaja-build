@@ -178,12 +178,6 @@ export class PipelineDetailLayout {
               Getting Started
             </button>
             </div>
-            <button id="open-pipeline-guide" data-action-click="open_pipeline_guide" type="button"
-              class="ml-auto shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-app-border bg-app-bg text-[10px] font-bold uppercase tracking-wider text-app-muted hover:text-app-accent-2 hover:border-app-accent-2/40 transition-all cursor-pointer"
-              title="Open the getting started guide in a dialog">
-              <svg class="w-3 h-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
-              Guide
-            </button>
           </div>`;
   }
 

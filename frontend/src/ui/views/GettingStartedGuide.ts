@@ -26,8 +26,7 @@ import { Icon } from '../components/common/Icon.ts';
  *   pipelines are present.
  * - {@link renderPipelineGettingStartedGuide} is the pipeline workbench guide.
  *   It is the landing tab while the pipeline has no tasks (or no task is
- *   selected) and can be reopened as a wide-but-readable overlay from the
- *   *Guide* button beside the content tabs.
+ *   selected) and can also be reopened as a wide-but-readable overlay.
  *
  * Both guides are served as **static HTML files** (`/getting-started/*.html`)
  * and fetched on demand the first time they are shown. The fetch is cached, so
@@ -43,8 +42,8 @@ import { Icon } from '../components/common/Icon.ts';
  *
  * The owning views register the action handlers and delegate clicks through the
  * shared action registry (`create_pipeline`, `create_pipeline_from_guide`,
- * `open_getting_started`, `open_pipeline_guide`, `focus_new_task`,
- * `copy_project_prompt`, `toggle_assistant`).
+ * `open_getting_started`, `focus_new_task`, `copy_project_prompt`,
+ * `toggle_assistant`).
  */
 
 /** Which of the two getting-started pages to load. */
@@ -191,9 +190,9 @@ export class GettingStartedDialog extends GettingStartedDialogBase {
 }
 
 /**
- * Overlay wrapper around {@link renderPipelineGettingStartedGuide}. Opened from
- * the small *Guide* button beside the pipeline tabs, so the onboarding reference
- * stays available after the first tasks exist without occupying a tab.
+ * Overlay wrapper around {@link renderPipelineGettingStartedGuide}. Keeps the
+ * onboarding reference available after the first tasks exist without occupying
+ * a tab.
  *
  * The width is deliberately capped at `max-w-3xl`: wide enough for the two-up
  * card grids, but narrow enough to stay comfortable to read.

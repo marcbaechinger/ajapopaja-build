@@ -40,7 +40,6 @@ import { registerTaskSpecActions } from './pipeline/actions/taskSpecActions.ts';
 import { registerTaskModelActions } from './pipeline/actions/taskModelActions.ts';
 import { registerTaskDesignDocActions } from './pipeline/actions/taskDesignDocActions.ts';
 import { registerTaskLifecycleActions } from './pipeline/actions/taskLifecycleActions.ts';
-import { PipelineGettingStartedDialog } from './GettingStartedGuide.ts';
 import EasyMDE from 'easymde';
 import { LocalStorageManager } from '../../core/LocalStorageManager.ts';
 
@@ -397,12 +396,6 @@ export class PipelineDetailView extends View {
         return;
       }
       this.setContentTab(tab, { hash: 'push' });
-    });
-
-    // Opens the pipeline onboarding guide as a dialog so it stays available for
-    // reference after the first tasks exist (the Guide button beside the tabs).
-    this.context.actionRegistry.register('open_pipeline_guide', () => {
-      void new PipelineGettingStartedDialog().show();
     });
 
     // Focuses the header's "What needs to be done?" input from the guide CTA.

@@ -135,10 +135,8 @@ describe('PipelineDetailLayout', () => {
       expect(selected).toHaveLength(1);
       expect(selected[0].id).toBe('tab-task-editor');
 
-      // The guide dialog re-opens the same content as a focused overlay.
-      const guideButton = root.querySelector('#open-pipeline-guide') as HTMLElement;
-      expect(guideButton).not.toBeNull();
-      expect(guideButton.getAttribute('data-action-click')).toBe('open_pipeline_guide');
+      // The redundant guide button is no longer rendered beside the tabs.
+      expect(root.querySelector('#open-pipeline-guide')).toBeNull();
     });
   });
 

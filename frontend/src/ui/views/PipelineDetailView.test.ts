@@ -1083,25 +1083,4 @@ describe('PipelineDetailView Getting Started', () => {
     expect((view as any).selectedTask).toBeNull();
     expect((view as any).contentTab).toBe('getting-started');
   });
-
-  it('opens the pipeline guide dialog from the open_pipeline_guide action', async () => {
-    // JSDOM does not implement the native dialog methods.
-    HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) {
-      this.open = true;
-    });
-    HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) {
-      this.open = false;
-    });
-
-    new PipelineDetailView(mockContext, { id: 'p1' });
-    getAction('open_pipeline_guide')();
-    await flushPromises();
-
-    const dialog = document.querySelector('dialog');
-    expect(dialog).not.toBeNull();
-    expect(dialog!.textContent).toContain('Pipeline Getting Started');
-    expect(dialog!.textContent).toContain('Jump-start a new project');
-    // Close it so the shared BaseDialog singleton does not leak into other tests.
-    (dialog!.querySelector('#dialog-close-btn') as HTMLElement).click();
-  });
 });
