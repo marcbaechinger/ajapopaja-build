@@ -259,6 +259,22 @@ describe('PipelineRealtimeController', () => {
       expect(context.dataManager.updateTask).not.toHaveBeenCalled();
     });
 
+    it('refreshes the PR section on a PULL_REQUEST_UPDATED event', async () => {
+      host.innerHTML = '<div id="pull-request-section"></div>';
+      const ctrl = makeController();
+      ctrl.start();
+
+      const updatedPr = { ...PR, subject: 'Updated PR' };
+      context.pullRequestClient.getPullRequestsByPipeline.mockResolvedValue([updatedPr]);
+
+      handlers['ws:PULL_REQUEST_UPDATED:p1']({ task_id: 't1' });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(context.pullRequestClient.getPullRequestsByPipeline).toHaveBeenCalledWith('p1');
+      expect(host.querySelector('#pull-request-section')!.innerHTML).toContain('Updated PR');
+      expect(callbacks.refreshTasks).not.toHaveBeenCalled();
+    });
+
     it('fetchPullRequests stores the PRs then triggers a full task refresh', async () => {
       context.pullRequestClient.getPullRequestsByPipeline.mockResolvedValue([PR]);
 

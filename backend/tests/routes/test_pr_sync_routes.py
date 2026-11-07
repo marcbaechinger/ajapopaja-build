@@ -26,10 +26,11 @@ import pytest
 from fastapi import status
 
 from api.auth import get_current_user
-from api.git_hosting.branch_notifier import PrStateNotifier, SyncResult
+from api.git_hosting.branch_notifier import NotifyResult, PrStateNotifier, SyncResult
 from api.git_hosting.pr_poller import (
     _release_pipeline_sync,
     _try_acquire_pipeline_sync,
+    reconcile_pipeline_pull_requests,
     reconcile_submitted_pull_requests,
 )
 from api.main import app
@@ -304,6 +305,37 @@ async def test_sync_endpoint_commit_not_found_is_sync_failed(
     assert body["reconciled"] == []
     # The unverified merge must not be mirrored.
     assert (await PullRequest.get(pr.id)).status == PullRequestStatus.SUBMITTED
+
+
+@pytest.mark.asyncio
+async def test_poller_event_carries_local_pr_identity(init_mock_db):
+    """The poller passes the Gitea index and the local remote URL."""
+    pipeline, _task, pr = await _insert_pipeline_and_pr()
+    fake = _fake_gitea(_merged_payload())
+    captured = []
+
+    async def _capture(_pipeline_id, event):
+        captured.append(event)
+        return NotifyResult(
+            status="mirrored",
+            branch=event.branch,
+            commit_hash=event.commit_hash,
+            pipeline_id=str(pipeline.id),
+        )
+
+    notifier = PrStateNotifier()
+    with (
+        patch("api.git_hosting.pr_poller.GiteaClient", new=lambda *a, **k: fake),
+        patch.object(
+            PrStateNotifier, "on_pr_state", new=AsyncMock(side_effect=_capture)
+        ),
+    ):
+        await reconcile_pipeline_pull_requests(notifier, str(pipeline.id))
+
+    assert len(captured) == 1
+    event = captured[0]
+    assert event.pr_number == 42
+    assert event.remote_pr_url == pr.remote_pr_url
 
 
 @pytest.mark.asyncio

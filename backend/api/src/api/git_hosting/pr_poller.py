@@ -24,7 +24,7 @@ same :class:`PrStateNotifier.on_pr_state` used by the webhook receiver.
 import asyncio
 import logging
 
-from api.git_hosting.branch_events import PrStateEvent
+from api.git_hosting.branch_events import PrStateEvent, pr_index_from_url
 from api.git_hosting.branch_notifier import PrStateNotifier
 from api.git_hosting.gitea import GiteaClient
 from core import config
@@ -32,20 +32,6 @@ from core.models.models import Pipeline, PullRequest, PullRequestStatus, Task
 from core.utils import git_utils
 
 logger = logging.getLogger(__name__)
-
-
-def pr_index_from_url(remote_pr_url: str | None) -> int | None:
-    """Extract the Gitea pull-request number from its web URL.
-
-    ``remote_pr_url`` is ``{base}/{owner}/{repo}/pulls/{number}``; the trailing
-    path segment is the PR index. Returns ``None`` when it cannot be parsed.
-    """
-    if not remote_pr_url:
-        return None
-    try:
-        return int(remote_pr_url.rstrip("/").rsplit("/", 1)[-1])
-    except (ValueError, IndexError):
-        return None
 
 
 # Pipelines with an in-flight reconciliation. The guard is shared by the
@@ -192,8 +178,16 @@ async def reconcile_pipeline_pull_requests(
                 state="merged" if data.get("merged") else "closed",
                 commit_hash=data.get("merge_commit_sha"),
                 base_branch=base_branch,
+                pr_number=index,
+                remote_pr_url=pr.remote_pr_url,
             )
-            event_key = (event.base_branch, event.state, event.commit_hash)
+            event_key = (
+                event.remote_pr_url,
+                event.pr_number,
+                event.base_branch,
+                event.state,
+                event.commit_hash,
+            )
             if event_key in seen_events:
                 continue
             seen_events.add(event_key)

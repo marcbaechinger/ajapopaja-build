@@ -32,6 +32,30 @@ from typing import Any, Dict, Literal, Optional
 _ZERO_SHA = "0" * 40
 
 
+def pr_index_from_url(remote_pr_url: str | None) -> int | None:
+    """Extract the Gitea pull-request number from its web URL.
+
+    ``remote_pr_url`` is ``{base}/{owner}/{repo}/pulls/{number}``; the trailing
+    path segment is the PR index. Returns ``None`` when it cannot be parsed.
+    """
+    if not remote_pr_url:
+        return None
+    try:
+        return int(remote_pr_url.rstrip("/").rsplit("/", 1)[-1])
+    except (ValueError, IndexError):
+        return None
+
+
+def _as_int(value: Any) -> Optional[int]:
+    """Best-effort integer coercion for optional webhook identity fields."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 @dataclass
 class PrStateEvent:
     """A remote PR/branch state change that must be mirrored onto local state.
@@ -45,6 +69,8 @@ class PrStateEvent:
     state: Literal["merged", "closed"]
     commit_hash: Optional[str] = None
     base_branch: Optional[str] = None
+    pr_number: Optional[int] = None
+    remote_pr_url: Optional[str] = None
 
 
 def parse_gitea_push_payload(payload: Dict[str, Any]) -> Optional[PrStateEvent]:
@@ -89,6 +115,9 @@ def parse_gitea_pr_payload(payload: Dict[str, Any]) -> Optional[PrStateEvent]:
     if not isinstance(pull_request, dict):
         return None
 
+    pr_number = _as_int(pull_request.get("number"))
+    remote_pr_url = pull_request.get("html_url")
+
     repo = payload.get("repository") or {}
     repo_full_name = repo.get("full_name", "") if isinstance(repo, dict) else ""
 
@@ -106,6 +135,8 @@ def parse_gitea_pr_payload(payload: Dict[str, Any]) -> Optional[PrStateEvent]:
             state="merged",
             commit_hash=commit_hash,
             base_branch=base_branch,
+            pr_number=pr_number,
+            remote_pr_url=remote_pr_url,
         )
 
     # Closed without merge: a remote reject. There is no new commit to verify.
@@ -118,6 +149,8 @@ def parse_gitea_pr_payload(payload: Dict[str, Any]) -> Optional[PrStateEvent]:
         state="closed",
         commit_hash=None,
         base_branch=base_branch,
+        pr_number=pr_number,
+        remote_pr_url=remote_pr_url,
     )
 
 
@@ -145,6 +178,8 @@ def parse_normalized_payload(payload: Dict[str, Any]) -> Optional[PrStateEvent]:
         state=state,
         commit_hash=payload.get("commit_hash"),
         base_branch=payload.get("base_branch") or branch or None,
+        pr_number=_as_int(payload.get("pr_number")),
+        remote_pr_url=payload.get("remote_pr_url"),
     )
 
 

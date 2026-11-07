@@ -205,6 +205,9 @@ export class PipelineRealtimeController {
         // list in place so the sidebar stays accurate without a full re-render.
         this.removeTaskFromInProgressOnPullRequest(p?.task_id);
       },
+      'PULL_REQUEST_UPDATED': () => {
+        this.refreshPullRequests();
+      },
     };
 
     Object.entries(eventHandlers).forEach(([event, handler]) => {

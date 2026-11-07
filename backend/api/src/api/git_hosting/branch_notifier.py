@@ -32,7 +32,7 @@ from typing import List, Optional
 import git
 from beanie.operators import In
 
-from api.git_hosting.branch_events import PrStateEvent
+from api.git_hosting.branch_events import PrStateEvent, pr_index_from_url
 from api.websocket_manager import WSMessage, manager as ws_manager
 from core.models.models import (
     NotificationAction,
@@ -251,11 +251,38 @@ class PrStateNotifier:
     def _matching_prs(
         self, prs: List[PullRequest], event: PrStateEvent
     ) -> List[PullRequest]:
-        """Select ``SUBMITTED`` PRs whose base branch matches the event's."""
+        """Select the local PR(s) an event belongs to.
+
+        PR identity (URL, then number) is authoritative. A base-branch match is
+        only a fallback for events that carry no PR identity (notably push
+        events); if that leaves more than one candidate the event is ambiguous
+        and matches none.
+        """
+        if event.remote_pr_url:
+            candidates = [pr for pr in prs if pr.remote_pr_url == event.remote_pr_url]
+        elif event.pr_number is not None:
+            candidates = [
+                pr
+                for pr in prs
+                if pr_index_from_url(pr.remote_pr_url) == event.pr_number
+            ]
+        else:
+            target = event.base_branch or event.branch
+            if not target:
+                return []
+            candidates = [pr for pr in prs if pr.base_branch == target]
+
+        if len(candidates) <= 1:
+            return candidates
+
         target = event.base_branch or event.branch
-        if not target:
-            return list(prs)
-        return [pr for pr in prs if pr.base_branch == target]
+        logger.warning(
+            "Ambiguous PR state event for base %s (%d candidates); "
+            "not reconciling any PR",
+            target,
+            len(candidates),
+        )
+        return []
 
     def _event_target_branch(self, event: PrStateEvent) -> Optional[str]:
         """Branch an event reconciled to (the PR base, or the pushed branch).
@@ -354,19 +381,45 @@ class PrStateNotifier:
         for pr in matching:
             if pr.status != PullRequestStatus.SUBMITTED:
                 continue
+
+            if pr.kind == PullRequestKind.DOCUMENTATION:
+                # A documentation PR carries no implementation transition. Mark
+                # only the PR itself so the task keeps its implementation
+                # commit, completion summary and review metadata.
+                pr.status = (
+                    PullRequestStatus.ACCEPTED
+                    if event.state == "merged"
+                    else PullRequestStatus.REJECTED
+                )
+                await pr.save()
+                await ws_manager.broadcast(
+                    WSMessage(
+                        type="PULL_REQUEST_UPDATED",
+                        payload=pr.model_dump(mode="json"),
+                    )
+                )
+                # Release the PR's artefacts only after the mirror and
+                # broadcast; cleanup is best-effort and must not undo them.
+                try:
+                    await git_utils.cleanup_completed_pull_request(pipeline, pr)
+                except Exception:
+                    logger.warning(
+                        "Failed to clean up completed PR %s in pipeline %s",
+                        pr.id,
+                        pipeline_id,
+                        exc_info=True,
+                    )
+                continue
+
             task = await Task.get(pr.task_id)
             if task is None or task.status != TaskStatus.SUBMITTED:
                 continue
 
             if event.state == "merged":
-                # The merge commit belongs to the pull request. Only an
-                # implementation PR may overwrite the task's implementation
-                # commit; a documentation PR must leave the task's original
-                # commit/summary/review metadata intact.
+                # The merge commit belongs to the implementation pull request.
                 pr.status = PullRequestStatus.ACCEPTED
                 pr.commit_hash = event.commit_hash
-                if pr.kind == PullRequestKind.IMPLEMENTATION:
-                    task.commit_hash = event.commit_hash
+                task.commit_hash = event.commit_hash
                 await pr.save()
                 await task_queries.transition_task(
                     str(task.id), TaskStatus.IMPLEMENTED, actor="system", task=task

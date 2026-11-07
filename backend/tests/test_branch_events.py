@@ -102,6 +102,52 @@ def test_parse_gitea_pr_closed_without_merge_is_rejected():
     )
 
 
+def test_parse_gitea_pr_carries_identity():
+    payload = {
+        "action": "closed",
+        "repository": {"full_name": "owner/repo"},
+        "pull_request": {
+            "number": 42,
+            "html_url": "https://host/owner/repo/pulls/42",
+            "merged": True,
+            "merge_commit_sha": "merge-sha",
+            "base": {"ref": "main"},
+            "head": {"ref": "feature/x", "sha": "head-sha"},
+        },
+    }
+    event = parse_gitea_pr_payload(payload)
+    assert event.pr_number == 42
+    assert event.remote_pr_url == "https://host/owner/repo/pulls/42"
+
+
+def test_parse_gitea_pr_reject_carries_identity():
+    payload = {
+        "action": "closed",
+        "pull_request": {
+            "number": "7",
+            "html_url": "https://host/owner/repo/pulls/7",
+            "merged": False,
+            "base": {"ref": "main"},
+            "head": {"ref": "feature/x"},
+        },
+    }
+    event = parse_gitea_pr_payload(payload)
+    assert event.pr_number == 7
+    assert event.remote_pr_url == "https://host/owner/repo/pulls/7"
+
+
+def test_parse_gitea_push_has_no_pr_identity():
+    event = parse_gitea_push_payload(
+        {
+            "ref": "refs/heads/main",
+            "after": "abc123def456",
+            "repository": {"full_name": "owner/repo"},
+        }
+    )
+    assert event.pr_number is None
+    assert event.remote_pr_url is None
+
+
 def test_parse_gitea_pr_non_closed_actions_are_ignored():
     for action in ("opened", "reopened", "synchronized", "edited"):
         assert parse_gitea_pr_payload({"action": action}) is None
@@ -131,13 +177,23 @@ def test_parse_normalized_payload_closed():
     assert event.commit_hash is None
 
 
+def test_parse_normalized_payload_carries_optional_identity():
+    payload = {
+        "repo": "owner/name",
+        "branch": "main",
+        "state": "closed",
+        "pr_number": 11,
+        "remote_pr_url": "https://host/owner/name/pulls/11",
+    }
+    event = parse_normalized_payload(payload)
+    assert event.pr_number == 11
+    assert event.remote_pr_url == "https://host/owner/name/pulls/11"
+
+
 def test_parse_pr_state_payload_dispatches_by_shape():
     assert (
-        parse_pr_state_payload({"ref": "refs/heads/main", "after": "abc"})
-        is not None
+        parse_pr_state_payload({"ref": "refs/heads/main", "after": "abc"}) is not None
     )
-    assert (
-        parse_pr_state_payload({"action": "opened", "pull_request": {}}) is None
-    )
+    assert parse_pr_state_payload({"action": "opened", "pull_request": {}}) is None
     assert parse_pr_state_payload({"state": "merged", "branch": "main"}) is not None
     assert parse_pr_state_payload({"state": "opened"}) is None
