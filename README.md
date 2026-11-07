@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/marcbaechinger/ajapopaja-build/actions/workflows/ci.yml/badge.svg)](https://github.com/marcbaechinger/ajapopaja-build/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Version](https://img.shields.io/badge/version-0.4.0-green.svg)](https://github.com/marcbaechinger/ajapopaja-build/releases)
+[![Version](https://img.shields.io/badge/version-0.4.1-green.svg)](https://github.com/marcbaechinger/ajapopaja-build/releases)
 
 Welcome to **Ajapopaja Build** – an automated task‑pipeline manager for Coding AI
 agents, with a human‑supervised management layer. It helps you break work into
@@ -237,7 +237,7 @@ python scripts/generate_db_overview.py --uri mongodb://host:27017 --db prod \
 
 ## Release history
 
-See [**`RELEASENOTES.md`**](RELEASENOTES.md). The current release is **0.4.0**.
+See [**`RELEASENOTES.md`**](RELEASENOTES.md). The current release is **0.4.1**.
 
 ---
 

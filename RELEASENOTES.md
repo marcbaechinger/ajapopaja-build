@@ -1,5 +1,15 @@
 # Release Notes
 
+## 0.4.1 – GitHub pull‑request support
+
+* **Remote GitHub repositories can now open pull requests** – the remote PR
+  submission flow was Gitea‑specific: it used `{host}/api/v1` with `token`
+  auth, so a GitHub `repo_uri` pushed the feature branch but never opened a PR.
+  A new `GitHubClient` targets `https://api.github.com` with `Bearer` auth (for
+  fine‑grained personal access tokens), so accepting a change on a GitHub
+  remote now opens a real pull request. Requires `REMOTE_PR_MODE=gitea_pr` and
+  a token with `Contents` and `Pull requests` write access.
+
 ## 0.4.0 – IDE‑style workspace, remote repositories, interactive sessions, and richer agent tooling
 
 This release rebuilds the dashboard around an IDE‑style workspace, adds
