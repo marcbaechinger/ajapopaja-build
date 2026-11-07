@@ -15,7 +15,7 @@
 import os
 import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -48,23 +48,11 @@ async def test_docbot_tools_flow():
             filename = "test_doc.md"
             content = "# Test Doc\nContent here."
             reason = "Initial documentation"
-            with (
-                patch("api.docbot.tools.set_preview") as mock_set_preview,
-                patch("core.utils.git_utils.get_repo") as mock_get_repo,
-                patch("api.docbot.tools.manager.broadcast") as mock_broadcast,
-            ):
-                # Setup mock repo to return a dummy diff
-                mock_repo_instance = MagicMock()
-                mock_get_repo.return_value = mock_repo_instance
-                mock_repo_instance.git.diff.return_value = "dummy diff"
-
-                result = await update_ref_doc(
-                    pipeline_id, filename, content, reason, task_id="test_task_id"
-                )
-                assert "Successfully updated" in result
-                assert os.path.isfile(os.path.join(tmp_dir, "design", filename))
-                assert mock_set_preview.called
-                assert mock_broadcast.called
+            result = await update_ref_doc(
+                pipeline_id, filename, content, reason, task_id="test_task_id"
+            )
+            assert "Successfully updated" in result
+            assert os.path.isfile(os.path.join(tmp_dir, "design", filename))
 
             # 3. Test list_ref_docs (with file)
             result = await list_ref_docs(pipeline_id)
@@ -76,25 +64,14 @@ async def test_docbot_tools_flow():
 
             # 5. Test update_ref_doc (update)
             new_content = "# Updated Doc\nNew content."
-            with (
-                patch("api.docbot.tools.set_preview") as mock_set_preview,
-                patch("core.utils.git_utils.get_repo") as mock_get_repo,
-                patch("api.docbot.tools.manager.broadcast") as mock_broadcast,
-            ):
-                mock_repo_instance = MagicMock()
-                mock_get_repo.return_value = mock_repo_instance
-                mock_repo_instance.git.diff.return_value = "dummy diff"
-
-                result = await update_ref_doc(
-                    pipeline_id,
-                    filename,
-                    new_content,
-                    "Updated info",
-                    task_id="test_task_id",
-                )
-                assert "Successfully updated" in result
-                assert mock_set_preview.called
-                assert mock_broadcast.called
+            result = await update_ref_doc(
+                pipeline_id,
+                filename,
+                new_content,
+                "Updated info",
+                task_id="test_task_id",
+            )
+            assert "Successfully updated" in result
 
             # 6. Test read_ref_doc (verify update)
             result = await read_ref_doc(pipeline_id, filename)
@@ -155,16 +132,11 @@ async def test_docbot_tools_recursive():
             content = "# New Feature\nDetails."
             reason = "Documentation for sub-feature"
 
-            with (
-                patch("api.docbot.tools.set_preview"),
-                patch("core.utils.git_utils.get_repo"),
-                patch("api.docbot.tools.manager.broadcast"),
-            ):
-                result = await update_ref_doc(pipeline_id, filename, content, reason)
-                assert "Successfully updated" in result
-                assert os.path.isfile(
-                    os.path.join(tmp_dir, "design", "implemented", "new_feature.md")
-                )
+            result = await update_ref_doc(pipeline_id, filename, content, reason)
+            assert "Successfully updated" in result
+            assert os.path.isfile(
+                os.path.join(tmp_dir, "design", "implemented", "new_feature.md")
+            )
 
             # 2. Test list_ref_docs (recursive)
             # Create another file in root

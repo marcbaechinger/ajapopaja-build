@@ -159,39 +159,3 @@ async def test_trigger_docbot_rejects_commit_missing_from_workspace(
     assert "missing-sha" in response.json()["detail"]
     assert "not present in the pipeline workspace" in response.json()["detail"]
     mock_process.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_get_preview_not_found(async_client):
-    with patch("api.routes.docbot.get_preview") as mock_get:
-        mock_get.return_value = None
-        response = await async_client.get("/api/pipelines/p1/docbot/preview/t1")
-        assert response.status_code == status.HTTP_404_NOT_FOUND
-
-
-@pytest.mark.asyncio
-async def test_commit_docbot_change_success(async_client, init_mock_db):
-    with patch("api.routes.docbot.get_preview") as mock_get:
-        preview = MagicMock()
-        preview.file_path = "some/path"
-        preview.filename = "file.txt"
-        mock_get.return_value = preview
-
-        with patch(
-            "api.routes.docbot.pipeline_queries.get_pipeline_by_id",
-            new_callable=AsyncMock,
-        ) as mock_p_get:
-            pipeline = Pipeline(name="P1", workspace_path="p1")
-            mock_p_get.return_value = pipeline
-
-            with patch("core.utils.git_utils.get_repo") as mock_get_repo:
-                mock_repo = MagicMock()
-                mock_get_repo.return_value = mock_repo
-
-                response = await async_client.post(
-                    "/api/pipelines/p1/docbot/review/commit/t1",
-                    json={"commit_msg": "docs improved"},
-                )
-                assert response.status_code == status.HTTP_200_OK
-                assert mock_repo.git.add.called
-                assert mock_repo.git.commit.called

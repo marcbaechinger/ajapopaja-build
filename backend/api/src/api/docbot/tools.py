@@ -20,13 +20,10 @@ from typing import Any, List, Optional
 from api.assistant.tools.file_tools import list_project_structure, read_source_file
 from api.assistant.tools.git_tools import git_show_commit
 from api.assistant.tools.search_tools import grep
-from api.websocket_manager import WSMessage, manager
 from core.queries import pipeline as pipeline_queries
-from core.utils import git_utils
 from core.utils.path_utils import safe_join
 from pathlib import Path
 
-from .cache import DocBotPreview, set_preview
 from .registry import register_doc_tool
 from .registry import docbot_registry
 
@@ -265,48 +262,12 @@ async def update_ref_doc(
         if session and hasattr(session, "has_updates"):
             session.has_updates = True
 
-        # Capture diff and cache preview if task_id is available
-        if tid:
-            try:
-                effective_root = get_effective_root(pipeline, session)
-                repo = git_utils.get_repo(str(effective_root))
-
-                # Intent-to-add so untracked files show up in diff
-                repo.git.add(file_path, N=True)
-
-                # Capture diff for this specific file
-                # Use --unified=3 for standard context
-                diff = repo.git.diff("--unified=3", file_path)
-
-                # Derived commit message
-                commit_msg = f"[doc] Update {fname}\n\n{resn}"
-
-                await set_preview(
-                    tid,
-                    DocBotPreview(
-                        task_id=tid,
-                        pipeline_id=pipeline_id,
-                        diff=diff,
-                        commit_msg=commit_msg,
-                        file_path=str(file_path),
-                        filename=fname,
-                    ),
-                )
-
-                if session and hasattr(session, "session_result"):
-                    session.session_result = {
-                        "status": "update_needed",
-                        "filename": fname,
-                        "reason": resn,
-                    }
-
-                # WebSocket notification
-                await manager.broadcast(
-                    WSMessage(type="DOCBOT_PREVIEW_READY", payload={"task_id": tid})
-                )
-                logger.info(f"update_ref_doc: Preview cached and notified for {tid}")
-            except Exception as e:
-                logger.error(f"update_ref_doc: Failed to capture diff/notify: {e}")
+        if session and hasattr(session, "session_result"):
+            session.session_result = {
+                "status": "update_needed",
+                "filename": fname,
+                "reason": resn,
+            }
 
         return f"Successfully updated {pipeline.doc_root}/{fname}."
     except Exception as e:
@@ -415,7 +376,6 @@ async def update_markdown_section(
     heading = (markdown_heading or "").strip()
     section = (markdown_section or "").strip()
     resn = reason or kwargs.get("summary") or kwargs.get("reasoning")
-    tid = task_id or kwargs.get("task_id")
 
     if not fname or not heading or not section:
         return "Error: filename, markdown_heading, and markdown_section are required."
@@ -460,36 +420,14 @@ async def update_markdown_section(
         if session and hasattr(session, "has_updates"):
             session.has_updates = True
 
+        if session and hasattr(session, "session_result"):
+            session.session_result = {
+                "status": "update_needed",
+                "filename": fname,
+                "reason": resn,
+            }
+
         logger.info(f"update_markdown_section: Updated '{heading}' in '{fname}'.")
-
-        # Reuse update_ref_doc logic for preview if task_id exists
-        if tid:
-            effective_root = get_effective_root(pipeline, session)
-            repo = git_utils.get_repo(str(effective_root))
-            repo.git.add(file_path, N=True)
-            diff = repo.git.diff("--unified=3", file_path)
-            commit_msg = f"[doc] Update section '{heading}' in {fname}\n\n{resn}"
-
-            await set_preview(
-                tid,
-                DocBotPreview(
-                    task_id=tid,
-                    pipeline_id=pipeline_id,
-                    diff=diff,
-                    commit_msg=commit_msg,
-                    file_path=str(file_path),
-                    filename=fname,
-                ),
-            )
-            if session and hasattr(session, "session_result"):
-                session.session_result = {
-                    "status": "update_needed",
-                    "filename": fname,
-                    "reason": resn,
-                }
-            await manager.broadcast(
-                WSMessage(type="DOCBOT_PREVIEW_READY", payload={"task_id": tid})
-            )
 
         return (
             f"Successfully updated section '{heading}' in {pipeline.doc_root}/{fname}."

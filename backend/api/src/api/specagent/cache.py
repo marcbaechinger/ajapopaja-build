@@ -20,9 +20,9 @@ which stores a :class:`SpecProposal` here. The UI fetches the outstanding
 proposal, presents it for accept/reject, and only on accept is ``task.spec``
 updated through the regular task update endpoint.
 
-The store mirrors the DocBot preview cache (``api/docbot/cache.py``): a small
-JSON file on disk keyed by task id, so an outstanding proposal survives a page
-reload instead of living only in transient WebSocket state.
+The store is a small JSON file on disk keyed by task id, so an outstanding
+proposal survives a page reload instead of living only in transient WebSocket
+state.
 """
 
 import json
@@ -34,7 +34,7 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-# Cache file path (mirrors the DocBot preview cache convention).
+# Cache file path.
 CACHE_FILE = ".logs/specagent_proposals.json"
 
 
