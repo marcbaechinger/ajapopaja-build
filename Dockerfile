@@ -9,11 +9,14 @@ RUN npm run build
 # Stage 2: Build the backend and final image
 FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim AS final
 WORKDIR /app
-# Install system dependencies
+# Install system dependencies. JDK 17 is required by Android Gradle Plugin 8.x;
+# unzip is needed to install the Android command-line tools below.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     tree \
     curl \
+    openjdk-17-jdk-headless \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
 
 # The container runs as root, but mounted workspaces (e.g. /home) may be owned
@@ -25,6 +28,28 @@ RUN git config --global --add safe.directory '*'
 # accepting a pull request). Overridable at runtime via GIT_USER_NAME/GIT_USER_EMAIL.
 RUN git config --global user.name "Ajapopaja Build" \
     && git config --global user.email "ajapopaja-build@localhost"
+
+# Java and Android build toolchain.
+#
+# Android projects are built with their own Gradle wrapper, which downloads the
+# matching Gradle distribution on first use. We only bake in the JDK and the
+# Android command-line tools, accept the SDK licenses, and let AGP download the
+# project-specific platform/build-tools on demand. This keeps the image much
+# smaller than bundling a full SDK and works for any compileSdk version.
+ARG ANDROID_CMDLINE_TOOLS_VERSION=11076708
+ARG ANDROID_CMDLINE_TOOLS_URL=https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+ENV ANDROID_HOME=/opt/android-sdk
+ENV ANDROID_SDK_ROOT=/opt/android-sdk
+ENV PATH="${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${PATH}"
+
+RUN mkdir -p "${ANDROID_HOME}/cmdline-tools" \
+    && curl -fsSL -o /tmp/android-cmdline-tools.zip "${ANDROID_CMDLINE_TOOLS_URL}" \
+    && unzip -q /tmp/android-cmdline-tools.zip -d "${ANDROID_HOME}/cmdline-tools" \
+    && mv "${ANDROID_HOME}/cmdline-tools/cmdline-tools" "${ANDROID_HOME}/cmdline-tools/latest" \
+    && rm /tmp/android-cmdline-tools.zip \
+    && yes | sdkmanager --licenses > /dev/null \
+    && sdkmanager --install "platform-tools"
 
 # Install Node.js (pi requires Node >= 22.19.0) and the pi coding agent
 ARG PI_VERSION=1.5.0

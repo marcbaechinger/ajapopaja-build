@@ -195,6 +195,36 @@ python3 ./mcp_client.py --url http://localhost:${PORT:-8081} update-task-spec <t
 - If you get a `307 Redirect` or `405 Method Not Allowed`, ensure the URL ends with `/mcp/` or use the `--url http://localhost:${PORT:-8081}` default which handles it.
 - Ensure the FastAPI server is running on the specified port (default `8081`, configurable via `$PORT`).
 
+## Building Android Projects
+
+The container ships JDK 17 and the Android command-line tools, with
+`JAVA_HOME`, `ANDROID_HOME` and `ANDROID_SDK_ROOT` already configured. Use the
+project's Gradle wrapper to build:
+
+```bash
+./gradlew assembleDebug
+```
+
+Guidance:
+
+- **Do not rely on `local.properties`.** It is machine-specific. If a checked-out
+  repository contains one, remove it (or make sure its `sdk.dir` points at
+  `$ANDROID_HOME`). Never commit a new `local.properties`; the image's
+  `ANDROID_HOME`/`ANDROID_SDK_ROOT` is all AGP needs. Add it to `.gitignore` if
+  the project does not already ignore it.
+- The Android SDK licenses are accepted in the image. The command-line tools are
+  installed, but project-specific platforms and build-tools are not. AGP downloads
+  the versions required by the project on the first build, so that build needs
+  network access to Google's Maven/SDK repositories (`maven.google.com`,
+  `dl.google.com`) and to `services.gradle.org` for the Gradle distribution.
+- Kotlin is resolved through the Kotlin Gradle plugin from Maven; no separate
+  Kotlin compiler is required.
+- Build artifacts such as `app/build/outputs/apk/debug/app-debug.apk` remain in
+  the workspace. Installing or running them on a device/emulator is out of
+  scope.
+- The NDK and CMake are not pre-installed. For native projects, install the
+  required versions on demand with `sdkmanager --install "ndk;<version>"`.
+
 ## Running a Dev Server
 
 A dev server started in the container is only reachable from the host if it:

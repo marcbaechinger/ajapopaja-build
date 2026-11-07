@@ -82,6 +82,10 @@ Agents work on real code inside isolated sandboxes and report back through the U
   `x` clear, `s` stop, `t` thinking, `b` collapse, `e` error visibility, `k`
   show search bar) that can be per‑instance remapped via the `keyboardBindings`
   option.
+- **Android build support** – the container ships JDK 17 and the Android SDK
+  command-line tools with accepted licenses. Agents build Android projects with
+  the repository's Gradle wrapper; AGP downloads the project-specific platform
+  and build-tools on demand (see [`howtos/android_builds.md`](howtos/android_builds.md)).
 - **Secure by default** – JWT‑based authentication across the API, sandboxed
   workspaces with path‑traversal protection, and Markdown sanitization.
 

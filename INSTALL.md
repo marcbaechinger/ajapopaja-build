@@ -63,6 +63,14 @@ docker build --build-arg BUILD_VERSION=$(git rev-parse --short HEAD) \
 - The compiled frontend (served from `/app/frontend_dist`).
 - The Python backend (installed with `uv sync --frozen --no-dev`).
 - **Node.js 22** and the **`pi` coding agent** (installed globally via npm).
+- **JDK 17** (`JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64`) and the **Android
+  command-line tools** for building Kotlin/Java Android projects. The SDK lives
+  at `/opt/android-sdk` (exposed as `ANDROID_HOME`/`ANDROID_SDK_ROOT`) with
+  accepted licenses and `platform-tools`. Project-specific platforms and
+  build-tools are downloaded on demand by the Android Gradle Plugin, so the
+  first Android build needs network access to `dl.google.com`,
+  `maven.google.com`, Maven Central and `services.gradle.org`. See
+  [`howtos/android_builds.md`](howtos/android_builds.md).
 - A pi model configuration at `/root/.pi/agent/models.json` exposing only the
   models listed in `docker/pi-agent/models.json`
   (`qwen3.6:27b` and `deepseek-v4.1-flash:cloud`). Models are global: every Pi
@@ -561,6 +569,15 @@ To verify persistence manually:
    that resuming it replays the history (`events.jsonl`).
 4. Confirm the files exist on the host under
    `/data/ajapopaja/pi_sessions/<uid>/` and are root-owned.
+
+### An Android build fails because of `local.properties`
+
+Android projects should not commit `local.properties`; it contains a
+machine-specific `sdk.dir`. If a checked-out project has a stale file that points
+at a path outside the container, remove it and rebuild. AGP then uses the image's
+`ANDROID_HOME`/`ANDROID_SDK_ROOT` (`/opt/android-sdk`). See
+[`howtos/android_builds.md`](howtos/android_builds.md) for the installed
+toolchain and SDK download behavior.
 
 ### The pipeline dev server is not reachable from the host
 
