@@ -435,6 +435,50 @@ describe('PipelineRealtimeController', () => {
       expect(ctx.refresh.header).toHaveBeenCalledTimes(1);
     });
 
+    it('refreshes the PR section after a DocBot documentation PR is created', async () => {
+      host.innerHTML = '<div id="pull-request-section"></div>';
+      const fetchSpy = vi.fn();
+      vi.stubGlobal('fetch', fetchSpy);
+
+      const docPr = {
+        ...PR,
+        id: 'doc-pr',
+        _id: 'doc-pr',
+        subject: 'DocBot: Update architecture docs',
+        kind: 'documentation',
+      };
+      context.pullRequestClient.getPullRequestsByPipeline.mockResolvedValue([docPr]);
+
+      const ctrl = makeController();
+      ctrl.start();
+
+      handlers['ws:DOCBOT_STARTED:p1']({ task_id: 't1' });
+      expect(ctx.state.docbotState).toEqual({ status: 'inProgress', taskId: 't1' });
+
+      handlers['ws:PULL_REQUEST_CREATED:p1']({
+        id: 'doc-pr',
+        task_id: 't1',
+        summary: 'DocBot: Update architecture docs',
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(context.pullRequestClient.getPullRequestsByPipeline).toHaveBeenCalledWith('p1');
+      expect(host.querySelector('#pull-request-section')!.innerHTML).toContain(
+        'DocBot: Update architecture docs'
+      );
+
+      handlers['ws:DOCBOT_COMPLETED:p1']({
+        task_id: 't1',
+        result: { status: 'update_needed' },
+      });
+      expect(ctx.state.docbotState).toEqual({ status: 'prCreated', taskId: 't1' });
+
+      // The PR is reviewed through the normal PR section; no preview endpoint
+      // or dialog is involved.
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(ctx.refresh.header).toHaveBeenCalled();
+    });
+
     it('sets error with the reason when PR creation fails', () => {
       const ctrl = makeController();
       ctrl.start();

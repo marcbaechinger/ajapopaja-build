@@ -558,3 +558,58 @@ def test_two_docbot_sessions_for_same_task_get_distinct_branches():
     assert branch_one == "docbot/test_task/aaaaaaaa"
     assert branch_two == "docbot/test_task/bbbbbbbb"
     assert branch_one != branch_two
+
+
+@pytest.mark.asyncio
+async def test_two_docbot_runs_create_prs_on_distinct_branches():
+    """Two DocBot PRs for the same task must not share a branch."""
+    fake_uuids = [
+        MagicMock(hex="aaaaaaaa11111111"),
+        MagicMock(hex="bbbbbbbb22222222"),
+    ]
+    expected_branches = [
+        "docbot/test_task/aaaaaaaa",
+        "docbot/test_task/bbbbbbbb",
+    ]
+    created_branches = []
+
+    with patch("api.docbot.session.uuid.uuid4", side_effect=fake_uuids):
+        for expected_branch in expected_branches:
+            session = DocBotSession(
+                pipeline_id="test_pipeline", task_id="test_task"
+            )
+            session.has_updates = True
+
+            mock_repo = MagicMock()
+            mock_repo.git.commit = MagicMock()
+            mock_repo.git.diff = MagicMock(
+                return_value="diff --git a/doc.md b/doc.md\n"
+            )
+
+            mock_helper = MagicMock()
+            mock_helper.get_repo = MagicMock(return_value=mock_repo)
+            mock_helper.branch_name = session.get_sandbox_branch_name()
+            mock_helper.cleanup = MagicMock()
+            session.helper = mock_helper
+            session.session_result = {"summary": "Updated docs"}
+
+            mock_pr = MagicMock()
+            mock_pr.id = "pr-123"
+            mock_pr.branch_name = mock_helper.branch_name
+            mock_pr.insert = AsyncMock()
+
+            with (
+                patch(
+                    "api.docbot.session.PullRequest", return_value=mock_pr
+                ) as mock_pr_class,
+                patch(
+                    "api.docbot.session.manager.broadcast", new_callable=AsyncMock
+                ),
+            ):
+                await session._handle_bot_end()
+
+            branch_name = mock_pr_class.call_args.kwargs["branch_name"]
+            assert branch_name == expected_branch
+            created_branches.append(branch_name)
+
+    assert len(set(created_branches)) == 2

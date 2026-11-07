@@ -141,6 +141,15 @@ describe('DocBotClient', () => {
     });
   });
 
+  describe('API surface', () => {
+    it('exposes only the trigger operation', () => {
+      const methods = Object.getOwnPropertyNames(DocBotClient.prototype).filter(
+        (name) => name !== 'constructor'
+      );
+      expect(methods).toEqual(['triggerDocBot']);
+    });
+  });
+
   describe('URL construction', () => {
     it('should construct URLs with pipelineId and taskId in path', async () => {
       (fetch as any).mockResolvedValue({ ok: true });

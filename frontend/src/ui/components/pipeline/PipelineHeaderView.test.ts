@@ -76,6 +76,7 @@ describe('PipelineHeaderView', () => {
     const html = PipelineHeaderView.render(props);
     expect(html).toContain('Documentation PR created.');
     expect(html).toContain('Review it in the PR section.');
+    expect(html).not.toContain('data-action-click="open_docbot');
   });
 
   it('renders the DocBot error reason with a dismiss action', () => {

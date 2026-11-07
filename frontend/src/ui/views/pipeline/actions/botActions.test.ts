@@ -253,6 +253,19 @@ describe('registerBotActions', () => {
     });
   });
 
+  describe('DocBot actions', () => {
+    it('registers only the trigger and dismiss actions', () => {
+      const docbotActions = [...registry.keys()]
+        .filter((name) => name.includes('docbot'))
+        .sort();
+
+      expect(docbotActions).toEqual([
+        'dismiss_docbot_banner',
+        'trigger_docbot',
+      ]);
+    });
+  });
+
   describe('trigger_docbot', () => {
     it('pulses the button and clears the pulse after success', async () => {
       vi.useFakeTimers();
