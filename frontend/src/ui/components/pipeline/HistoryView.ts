@@ -17,10 +17,15 @@
 import type { ActionHandler, ActionRegistry } from '../../../core/ActionRegistry.ts';
 import type { CommitDiff, GitLogEntry, GitStatusDetails } from '../../../core/domain.ts';
 import type { PipelineClient } from '../../../core/clients/PipelineClient.ts';
+import type {
+  PullRequestClient,
+  PullRequestSyncResult,
+} from '../../../core/clients/PullRequestClient.ts';
 import { DiffView } from '../common/DiffView.ts';
 import { Icon } from '../common/Icon.ts';
 import { PaginationControl } from '../common/PaginationControl.ts';
 import { escapeHtml } from '../utils/html.ts';
+import { showPullRequestSyncToast } from '../utils/prSync.ts';
 
 /** Number of commits shown per page in the History tab. */
 export const HISTORY_PAGE_SIZE = 25;
@@ -29,6 +34,14 @@ export interface HistoryViewOptions {
   pipelineId: string;
   client: PipelineClient;
   actionRegistry: ActionRegistry;
+  /**
+   * Optional PR client used by the History tab's own sync handler. In the
+   * normal pipeline view `sync_from_gitea` is already registered globally, so
+   * this is mainly useful for embedding the view on its own.
+   */
+  pullRequestClient?: PullRequestClient;
+  /** Optional direct sync callback, taking precedence over the PR client. */
+  syncPullRequests?: (pipelineId: string) => Promise<PullRequestSyncResult>;
 }
 
 /**
@@ -47,6 +60,8 @@ export class HistoryView {
   private pipelineId: string;
   private client: PipelineClient;
   private registry: ActionRegistry;
+  private pullRequestClient?: PullRequestClient;
+  private syncPullRequests?: (pipelineId: string) => Promise<PullRequestSyncResult>;
 
   private page = 0;
   private readonly pageSize = HISTORY_PAGE_SIZE;
@@ -56,7 +71,9 @@ export class HistoryView {
   private statusError: string | null = null;
   private logError: string | null = null;
   private pullError: string | null = null;
+  private prSyncError: string | null = null;
   private pulling = false;
+  private syncingPrs = false;
   private loading = true;
 
   private expanded: Set<string> = new Set();
@@ -73,6 +90,8 @@ export class HistoryView {
     this.pipelineId = options.pipelineId;
     this.client = options.client;
     this.registry = options.actionRegistry;
+    this.pullRequestClient = options.pullRequestClient;
+    this.syncPullRequests = options.syncPullRequests;
   }
 
   render(): void {
@@ -179,6 +198,63 @@ export class HistoryView {
     }
   }
 
+  /**
+   * Reconcile submitted pull requests with the remote repository. The normal
+   * pipeline view already registers `sync_from_gitea` globally; the History tab
+   * reuses that action. When the view is embedded without it, the handler below
+   * calls the injected PR client directly.
+   */
+  private async handleSyncPrs(event?: Event, element?: HTMLElement): Promise<void> {
+    if (this.syncingPrs) return;
+    const sync = this.resolveSyncPullRequests();
+    if (!sync) {
+      // Defer to the globally registered action when this view has no client.
+      if (event && element) {
+        await this.registry.execute('sync_from_gitea', event, element);
+      }
+      return;
+    }
+
+    this.syncingPrs = true;
+    this.prSyncError = null;
+    this.setSyncPrsButtonState();
+    this.renderStatusStrip();
+
+    try {
+      const result = await sync(this.pipelineId);
+      showPullRequestSyncToast(result);
+    } catch (e: any) {
+      this.prSyncError = e?.message || 'Failed to sync pull requests.';
+    } finally {
+      this.syncingPrs = false;
+      this.setSyncPrsButtonState();
+      if (!this.destroyed) await this.load();
+      this.renderStatusStrip();
+    }
+  }
+
+  private resolveSyncPullRequests(): ((pipelineId: string) => Promise<PullRequestSyncResult>) | null {
+    if (this.syncPullRequests) return this.syncPullRequests;
+    if (this.pullRequestClient) {
+      return (pipelineId) => this.pullRequestClient!.syncPullRequests(pipelineId);
+    }
+    const client = this.client as unknown as {
+      syncPullRequests?: (pipelineId: string) => Promise<PullRequestSyncResult>;
+    };
+    if (typeof client.syncPullRequests === 'function') {
+      return (pipelineId) => client.syncPullRequests!(pipelineId);
+    }
+    return null;
+  }
+
+  private hasRegisteredAction(name: string): boolean {
+    const registry = this.registry as any;
+    if (typeof registry.has === 'function') {
+      return registry.has(name) === true;
+    }
+    return registry.handlers instanceof Map && registry.handlers.has(name);
+  }
+
   // --- actions ------------------------------------------------------------
 
   private registerActions(): void {
@@ -193,6 +269,23 @@ export class HistoryView {
       if (this.destroyed) return;
       void this.handlePull();
     });
+    register('history_git_sync_prs', (event, element) => {
+      if (this.destroyed) return;
+      void this.handleSyncPrs(event, element);
+    });
+    register('history_sync_prs', (event, element) => {
+      if (this.destroyed) return;
+      void this.handleSyncPrs(event, element);
+    });
+    // In the pipeline view `sync_from_gitea` is registered by the shell and
+    // already refreshes PR/task state, so only provide a local fallback when no
+    // such handler exists (for example when this view is mounted on its own).
+    if (!this.hasRegisteredAction('sync_from_gitea') && this.resolveSyncPullRequests()) {
+      register('sync_from_gitea', (event, element) => {
+        if (this.destroyed) return;
+        void this.handleSyncPrs(event, element);
+      });
+    }
     register('history_git_prev_page', () => {
       if (this.destroyed) return;
       this.setPage(this.page - 1);
@@ -252,6 +345,13 @@ export class HistoryView {
               title="Pull latest changes from origin">
               ${Icon.render('refresh', { size: 14 })}
               <span>Pull</span>
+            </button>
+            <button id="history-sync-prs-btn" type="button"
+              data-action-click="sync_from_gitea"
+              class="inline-flex items-center gap-1.5 rounded-md border border-app-border bg-app-surface px-2.5 py-1 text-xs font-semibold text-app-text hover:bg-app-bg hover:border-app-accent-1 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Fetch the latest pull-request state and mirror it locally">
+              ${Icon.render('refresh', { size: 14 })}
+              <span>Sync PRs</span>
             </button>
           </div>
         </div>
@@ -397,7 +497,16 @@ export class HistoryView {
   private renderStatusStrip(): void {
     const el = this.root.querySelector('#history-status-strip');
     if (!el) return;
-    el.innerHTML = `${this.renderPullError()}${this.renderStatus()}`;
+    el.innerHTML = `${this.renderPrSyncError()}${this.renderPullError()}${this.renderStatus()}`;
+  }
+
+  private renderPrSyncError(): string {
+    if (!this.prSyncError) return '';
+    return `
+      <span class="inline-flex items-center gap-1 rounded border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-red-400" role="alert" data-role="history-pr-sync-error">
+        ${escapeHtml(this.prSyncError)}
+      </span>
+    `;
   }
 
   private renderPullError(): string {
@@ -490,6 +599,14 @@ export class HistoryView {
     button.disabled = this.pulling;
     const label = button.querySelector('span');
     if (label) label.textContent = this.pulling ? 'Pulling…' : 'Pull';
+  }
+
+  private setSyncPrsButtonState(): void {
+    const button = this.root.querySelector('#history-sync-prs-btn') as HTMLButtonElement | null;
+    if (!button) return;
+    button.disabled = this.syncingPrs;
+    const label = button.querySelector('span');
+    if (label) label.textContent = this.syncingPrs ? 'Syncing…' : 'Sync PRs';
   }
 
   // --- helpers ------------------------------------------------------------

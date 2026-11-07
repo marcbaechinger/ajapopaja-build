@@ -348,6 +348,9 @@ export class ContentTabsController {
       pipelineId: this.deps.ctx.pipelineId,
       client: this.deps.ctx.context.pipelineClient,
       actionRegistry: this.deps.ctx.context.actionRegistry,
+      // The view's own fallback sync handler; the shell also registers the
+      // shared `sync_from_gitea` action that the header button uses normally.
+      pullRequestClient: this.deps.ctx.context.pullRequestClient,
     });
     this.historyView.render();
   }
