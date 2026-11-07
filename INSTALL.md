@@ -98,7 +98,7 @@ DEV_SERVER_PORT=1224
 OLLAMA_HOST=http://host.docker.internal:11434
 # OLLAMA_MODEL=gpt-oss:20b
 # ONE_PROMPT_OLLAMA_MODEL=gpt-oss:20b  # optional; defaults to OLLAMA_MODEL
-WORKSPACES_ROOT=/home/yourname/path/to/your/repos
+# WORKSPACES_ROOT=/home/yourname/path/to/your/repos  # optional; only for LOCAL pipelines
 PI_SESSIONS_ROOT=/data/ajapopaja/pi_sessions
 SANDBOX_ROOT=/data/ajapopaja/sandboxes
 REMOTE_WORKSPACES_ROOT=/data/ajapopaja/remote_workspaces
@@ -112,8 +112,9 @@ template is `deploy/staging.env.example` (see
 For a **local** run (building with `./docker-build.sh` and starting with
 `docker compose up` — outside systemd), Docker Compose reads a `.env` file in
 the project directory instead. Copy `.env.example` to `.env` and set
-`WORKSPACES_ROOT` there; the compose file requires it and fails with a clear
-error if it is missing.
+`WORKSPACES_ROOT` there if you use local (host-path) pipelines; remote-only
+deployments can leave it unset (the compose file falls back to the built-in
+`/workspaces`).
 
 ### 3.2 Variable reference
 
@@ -129,7 +130,7 @@ error if it is missing.
 | `OLLAMA_MODEL` | No | Default model for the built-in AI Assistant. Default: `gpt-oss:20b` (or `gpt-oss:120b` when `OLLAMA_API_KEY` is set). |
 | `ONE_PROMPT_OLLAMA_MODEL` | No | Model used by the one-shot AI prompt framework (Elaborate, session title generation). Falls back to `OLLAMA_MODEL` when unset. `OLLAMA_HOST`/`OLLAMA_API_KEY` remain shared. |
 | `OLLAMA_API_KEY` | No | Optional API key for cloud-hosted/proxied Ollama. When set, the app connects to `https://ollama.com`. |
-| `WORKSPACES_ROOT` | **Yes** | Absolute path (on the host) to the directory containing the git repositories the app manages. Must exist and be mounted into the container. |
+| `WORKSPACES_ROOT` | No | Absolute path (on the host) to the directory containing the git repositories the app manages for **local** (host-path) pipelines. Optional: remote pipelines (with a `repo_uri`) clone under `REMOTE_WORKSPACES_ROOT` and never use it, so remote-only deployments can leave it unset. When set, it must exist and be mounted into the container. Default: `/workspaces` (the image's built-in, empty directory). |
 | `PI_SESSIONS_ROOT` | No | Absolute path where interactive and batch Pi sessions are persisted. Default: `/data/ajapopaja/pi_sessions`. The path is created on demand, but it must be mounted **identically** (`host:container`) into the container to survive restarts (see 3.3). |
 | `CODERBOT_DEFAULT_MODEL` | No | Model used by the CoderBot when spawning `pi` sessions. If unset, no `--model` flag is passed to `pi`. |
 | `SANDBOX_ROOT` | No | Directory where bot sandboxes are created. Default: `/data/ajapopaja/sandboxes`. Mounted `host:container` 1:1 so sandboxes survive restarts. |
@@ -148,11 +149,13 @@ error if it is missing.
 
 ### 3.3 Important notes
 
-- **`WORKSPACES_ROOT` must be mounted into the container.** The shipped
-  `docker-compose.yml` mounts exactly one source root — `WORKSPACES_ROOT` —
-  `host:container` 1:1 (the host and container paths must be identical, because
-  the backend stores absolute paths). Set it in the env file (or in `.env` for
-  local runs); the compose file no longer mounts entire home directories.
+- **`WORKSPACES_ROOT` is optional; it must be mounted only when you use local
+  (host-path) pipelines.** The shipped `docker-compose.yml` mounts exactly one
+  source root — `WORKSPACES_ROOT` — `host:container` 1:1 (the host and container
+  paths must be identical, because the backend stores absolute paths). Remote
+  pipelines clone under `REMOTE_WORKSPACES_ROOT` and work without it. Set it in
+  the env file (or in `.env` for local runs); the compose file no longer mounts
+  entire home directories.
 - **`PI_SESSIONS_ROOT` must be mounted into the container.** Interactive and
   batch Pi sessions are persisted under this root so they survive container
   restarts. The shipped `docker-compose.yml` mounts
@@ -234,7 +237,7 @@ services:
       - "127.0.0.1:${PORT:-8081}:${PORT:-8081}"
       - "127.0.0.1:${DEV_SERVER_PORT:-1224}:${DEV_SERVER_PORT:-1224}"
     volumes:
-      - ${WORKSPACES_ROOT:?WORKSPACES_ROOT is not set. Copy .env.example to .env and edit it.}:${WORKSPACES_ROOT:?WORKSPACES_ROOT is not set. Copy .env.example to .env and edit it.}
+      - ${WORKSPACES_ROOT:-/workspaces}:${WORKSPACES_ROOT:-/workspaces}
       - /tmp/nvimsocket:/tmp/nvimsocket
       - ${PI_SESSIONS_ROOT:-/data/ajapopaja/pi_sessions}:${PI_SESSIONS_ROOT:-/data/ajapopaja/pi_sessions}
       - ${SANDBOX_ROOT:-/data/ajapopaja/sandboxes}:${SANDBOX_ROOT:-/data/ajapopaja/sandboxes}
@@ -246,10 +249,11 @@ services:
 `env_file` forwards **every** variable in `${AJAPOPAJA_ENV_FILE}` into the
 container automatically, so you never need to list individual `-e` flags. The
 same variables drive the `${...}` interpolation, which is what lets the same
-compose file serve both production and staging. `WORKSPACES_ROOT` is required
-(no default): set it in the env file, or copy `.env.example` to `.env` for
-local runs. Note that `SANDBOX_ROOT`, `REMOTE_WORKSPACES_ROOT` and
-`WORKSPACES_ROOT` are now mounted (persisted) on the host as well.
+compose file serve both production and staging. `WORKSPACES_ROOT` is optional
+(no default beyond the image's built-in `/workspaces`): set it in the env file
+or in `.env` only when you use local (host-path) pipelines. Note that
+`SANDBOX_ROOT`, `REMOTE_WORKSPACES_ROOT` and `WORKSPACES_ROOT` are now mounted
+(persisted) on the host as well.
 
 ### 4.3 Install the service
 
@@ -522,9 +526,11 @@ compose file includes the `extra_hosts` entry
 
 ### `WORKSPACES_ROOT` does not exist error
 
-The path set in `WORKSPACES_ROOT` must exist on the host and be mounted into the
-container. Create the directory and add a matching `volumes` entry to
-`docker-compose.yml` if it is not under `/home` or `/Users`.
+`WORKSPACES_ROOT` is only needed for local (host-path) pipelines. If you use
+local pipelines and the configured path does not exist, create the directory
+and add a matching `volumes` entry to `docker-compose.yml` (or set
+`WORKSPACES_ROOT` in `.env`). Remote pipelines clone under
+`REMOTE_WORKSPACES_ROOT` and are unaffected by a missing `WORKSPACES_ROOT`.
 
 ### Interactive or batch sessions are lost after a restart
 

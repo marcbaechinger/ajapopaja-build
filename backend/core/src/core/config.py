@@ -14,12 +14,16 @@
 
 import os
 import re
+import warnings
 from pathlib import Path
 from typing import Optional
 
 # Default to the image's built-in workspace directory; override via env var.
 # Inside the container this is overridden by WORKSPACES_ROOT from the env file
-# (see .env.example / deploy/*.env.example).
+# (see .env.example / deploy/*.env.example). WORKSPACES_ROOT is only used by
+# LOCAL (host-path) pipelines; remote pipelines resolve under
+# REMOTE_WORKSPACES_ROOT and never touch it, so a remote-only deployment can
+# leave it unset.
 WORKSPACES_ROOT = Path(
     os.getenv("WORKSPACES_ROOT", "/workspaces")
 ).resolve()
@@ -34,10 +38,17 @@ REMOTE_WORKSPACES_ROOT = Path(
 ).resolve()
 
 if not WORKSPACES_ROOT.is_dir():
-    raise RuntimeError(
+    # Warn rather than raise: WORKSPACES_ROOT is only needed by local
+    # (host-path) pipelines. Remote pipelines clone under REMOTE_WORKSPACES_ROOT
+    # and work fine without it, so a remote-only deployment must be allowed to
+    # start with an unset/missing WORKSPACES_ROOT. Local pipeline creation
+    # validates the resolved path independently (see validate_pipeline_repository).
+    warnings.warn(
         f"WORKSPACES_ROOT '{WORKSPACES_ROOT}' does not exist or is not a directory. "
-        "Please create it or configure the WORKSPACES_ROOT environment variable "
-        "correctly."
+        "Local (host-path) pipelines will fail to resolve until it is configured; "
+        "remote pipelines are unaffected.",
+        RuntimeWarning,
+        stacklevel=2,
     )
 
 # Common directories to ignore across all file and search tools
