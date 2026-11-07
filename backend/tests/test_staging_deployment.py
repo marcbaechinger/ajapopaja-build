@@ -80,7 +80,7 @@ def test_staging_service_is_isolated():
 def test_compose_parameterizes_instance_identity_and_roots():
     compose = _read("docker-compose.yml")
     assert "${CONTAINER_NAME:-ajapopaja-build}" in compose
-    assert "${AJAPOPAJA_ENV_FILE:-/etc/ajapopaja-build.env}" in compose
+    assert "${AJAPOPAJA_ENV_FILE:-.env}" in compose
     for variable in (
         "PI_SESSIONS_ROOT",
         "SANDBOX_ROOT",

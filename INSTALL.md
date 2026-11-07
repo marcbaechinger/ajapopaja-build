@@ -111,8 +111,10 @@ template is `deploy/staging.env.example` (see
 
 For a **local** run (building with `./docker-build.sh` and starting with
 `docker compose up` — outside systemd), Docker Compose reads a `.env` file in
-the project directory instead. Copy `.env.example` to `.env` and set
-`WORKSPACES_ROOT` there if you use local (host-path) pipelines; remote-only
+the project directory instead. Copy `.env.example` to `.env`; that single file
+is fully self-contained — it drives both the `${...}` interpolation in the
+compose file and (via `env_file:`) the container's runtime environment. Set
+`WORKSPACES_ROOT` there only if you use local (host-path) pipelines; remote-only
 deployments can leave it unset (the compose file falls back to the built-in
 `/workspaces`).
 
@@ -123,7 +125,7 @@ deployments can leave it unset (the compose file falls back to the built-in
 | `MONGODB_URI` | **Yes** | MongoDB connection string. Use `host.docker.internal` to reach a MongoDB running on the host. |
 | `DATABASE_NAME` | No | Name of the MongoDB database. Default: `ajapopaja_build_prod`. |
 | `CONTAINER_NAME` | No | Docker container name, used by `docker-compose.yml`. Default: `ajapopaja-build`. Staging uses `ajapopaja-build-staging`. |
-| `AJAPOPAJA_ENV_FILE` | No | Path of the env file the compose file forwards into the container. Default: `/etc/ajapopaja-build.env`. |
+| `AJAPOPAJA_ENV_FILE` | No | Path of the env file the compose file forwards into the container. Default: `.env` for local runs; the server deployment sets it to `/etc/ajapopaja-build.env`. |
 | `PORT` | No | HTTP port the app listens on. Default: `8081`. |
 | `DEV_SERVER_PORT` | No | Port published to the host on which a user-started pipeline dev server listens. Injected into serve commands as `$DEV_SERVER_PORT` (and `$PORT`). Default: `1224`. |
 | `OLLAMA_HOST` | **Yes** (for AI features) | URL of the Ollama server. Use `http://host.docker.internal:11434` to reach Ollama on the host. |
@@ -232,7 +234,8 @@ services:
     container_name: ${CONTAINER_NAME:-ajapopaja-build}
     restart: always
     env_file:
-      - ${AJAPOPAJA_ENV_FILE:-/etc/ajapopaja-build.env}
+      - path: ${AJAPOPAJA_ENV_FILE:-.env}
+        required: false
     ports:
       - "127.0.0.1:${PORT:-8081}:${PORT:-8081}"
       - "127.0.0.1:${DEV_SERVER_PORT:-1224}:${DEV_SERVER_PORT:-1224}"
@@ -247,12 +250,15 @@ services:
 ```
 
 `env_file` forwards **every** variable in `${AJAPOPAJA_ENV_FILE}` into the
-container automatically, so you never need to list individual `-e` flags. The
-same variables drive the `${...}` interpolation, which is what lets the same
-compose file serve both production and staging. `WORKSPACES_ROOT` is optional
-(no default beyond the image's built-in `/workspaces`): set it in the env file
-or in `.env` only when you use local (host-path) pipelines. Note that
-`SANDBOX_ROOT`, `REMOTE_WORKSPACES_ROOT` and `WORKSPACES_ROOT` are now mounted
+container automatically, so you never need to list individual `-e` flags. For a
+local run this defaults to `.env` (the same file Docker Compose reads for
+`${...}` interpolation), so a single `.env` is fully self-contained; `required:
+false` lets a fresh checkout run on image defaults before `.env` exists. On the
+server the systemd unit sets `AJAPOPAJA_ENV_FILE=/etc/ajapopaja-build.env`, so
+each instance forwards its own env file. `WORKSPACES_ROOT` is optional (no
+default beyond the image's built-in `/workspaces`): set it in the env file or in
+`.env` only when you use local (host-path) pipelines. Note that `SANDBOX_ROOT`,
+`REMOTE_WORKSPACES_ROOT` and `WORKSPACES_ROOT` are now mounted
 (persisted) on the host as well.
 
 ### 4.3 Install the service

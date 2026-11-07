@@ -5,11 +5,15 @@ services:
     # staging overrides them from its own env file (see deploy/staging.env.example).
     container_name: ${CONTAINER_NAME:-ajapopaja-build}
     restart: always
-    # Runtime variables for the container. The path is resolved from the
-    # *interpolation* environment (the systemd unit's EnvironmentFile), so each
-    # instance forwards its own env file into its own container.
+    # Runtime variables for the container. Locally this is `.env` (the same
+    # file Docker Compose reads for `${...}` interpolation), so a single `.env`
+    # is fully self-contained. On the server the systemd unit sets
+    # AJAPOPAJA_ENV_FILE=/etc/ajapopaja-build.env, so each instance forwards its
+    # own env file. `required: false` lets a fresh checkout run on image
+    # defaults before `.env` exists.
     env_file:
-      - ${AJAPOPAJA_ENV_FILE:-/etc/ajapopaja-build.env}
+      - path: ${AJAPOPAJA_ENV_FILE:-.env}
+        required: false
     # Publish on loopback only. nginx on the host is the single entry point
     # (see deploy/ajapopaja-nginx.conf), so the API and dev-server ports stay off
     # the LAN/WiFi and off Docker's IPv6 publishing while remaining reachable
