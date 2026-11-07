@@ -112,7 +112,6 @@ Server-derived state held **locally**, mirroring or duplicating `DataManager`:
 | `gitStatus: GitStatusDetails` | Domain | ❌ Absent | Fetched via `PipelineClient.getGitStatus`, debounced locally |
 | `docbotState` / `reviewbotState` / `archbotState` / `coderbotState` | Process/domain | ❌ Absent (only re-broadcast) | Driven by `ws:${event}:${pipelineId}` queries |
 | `pendingReviews: string[]` | Derived domain | ❌ Absent | Persisted under `pipeline:pending_reviews:${id}`; also derivable from `task.review_md` |
-| `docbotPreviewData` | Domain (preview) | ❌ Absent | Loaded via **raw `fetch()`**, not a client |
 
 Pure **UI / ephemeral** state (correctly local to the view):
 
@@ -169,23 +168,20 @@ view touches it.
    first-class domain state but are not in `DataManager`; they are fetched and
    cached ad hoc in `PipelineDetailView`.
 6. **Inconsistent typing.** `pullRequests: any[]` while `PullRequest` is a
-   domain class. `docbotPreviewData: any`.
-7. **Client bypass.** `PipelineDetailView.fetchDocBotPreview()` uses a raw
-   `fetch('/api/...')`, violating the `dd_spa_architecture.md` rule that UI code
-   never makes raw HTTP calls. (There is no `DocBotClient.getPreview` method.)
-8. **Bot state split across layers.** `CoderBotService` tracks the lifecycle of
+   domain class.
+7. **Bot state split across layers.** `CoderBotService` tracks the lifecycle of
    the active session (`isSessionActive`, `currentTaskId`, `currentPipelineId`)
    while `PipelineDetailView.coderbotState` tracks a UI interpretation of the
    same lifecycle. `docbot`/`reviewbot`/`archbot` states have no home other than
    the view.
-9. **Inconsistent persistence.** `CoderBotService` writes a raw
+8. **Inconsistent persistence.** `CoderBotService` writes a raw
    `ajapopaja:coderbot:session` key instead of using `LocalStorageManager`; the
    theme is not persisted at all, so it resets on reload even though the DOM
    attribute is read at boot.
-10. **Redundant derived state.** `pendingReviews` is persisted locally, yet the
-    same information is derivable from `task.review_md` in the task cache;
-    persisted and server-derived values can disagree.
-11. **Ad-hoc query strings.** `DataManager.on()` uses string keys
+9. **Redundant derived state.** `pendingReviews` is persisted locally, yet the
+   same information is derivable from `task.review_md` in the task cache;
+   persisted and server-derived values can disagree.
+10. **Ad-hoc query strings.** `DataManager.on()` uses string keys
     (`pipeline:tasks:<id>`, `ws:<TYPE>:<id>`) with no typed/central definitions,
     which makes it easy to introduce typos and hard to discover available
     state.
@@ -301,14 +297,12 @@ and testable.
    [`dd_git_status_debounce.md`](./dd_git_status_debounce.md)), but move it
    behind `dataManager.loadGitStatus(...)` / the store so it is not view-local.
 4. Replace `fetchPullRequests()` / `refreshPullRequests()` with store loads.
-5. Replace raw `fetch()` in `fetchDocBotPreview()` with a `DocBotClient` method
-   that returns domain data; cache the preview in `DataManager`.
-6. Replace `removeTaskFromInProgressOnPullRequest()` with a real task update
+5. Replace `removeTaskFromInProgressOnPullRequest()` with a real task update
    once the backend emits one (tracked as a backend follow-up), or at minimum
    route it through `dataManager.updateTask()` so the shadow cache cannot drift.
-7. Derive `pendingReviews` from `task.review_md` in the task cache (or keep a
+6. Derive `pendingReviews` from `task.review_md` in the task cache (or keep a
    small `DataManager` UI slice), removing the duplicate local persistence.
-8. Retain only ephemeral UI fields in the view (selection, collapse, pagination,
+7. Retain only ephemeral UI fields in the view (selection, collapse, pagination,
    editor handles, `enginePiView`, one-shot flow flags).
 
 ### Phase 4 — Consolidate persistence and session state

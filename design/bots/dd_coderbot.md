@@ -104,9 +104,16 @@ class PullRequest(Document):
     pipeline_id: str
     task_id: str
     summary: str
+    subject: str = ""
     branch_name: str
+    kind: str = "implementation"  # "implementation" or "documentation"
+    commit_hash: Optional[str] = None  # set when the PR is accepted/submitted locally
     patch: str
-    status: str  # "open", "accepted", "rejected"
+    status: str  # "open", "accepted", "rejected", "submitted"
     created_at: datetime
     updated_at: datetime
 ```
+
+`kind` distinguishes implementation changes from DocBot documentation PRs, and
+`commit_hash` records the commit produced by acceptance without replacing the
+task's implementation metadata.

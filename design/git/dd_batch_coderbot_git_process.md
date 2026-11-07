@@ -47,7 +47,17 @@ which this document cross-references where the two topics meet.
 | `S` | The **sandbox** the batch session works in. A per-task clone of `R` (or a per-session retained clone). | `CoderBotSession.run()` → `SandboxGitHelper.setup_sandbox()` |
 | `c` | The commit CoderBot creates **inside `S`** on `coderbot/<task_id>`. It exists only in the sandbox. | `_handle_agent_end()` |
 | `c'` | The commit created in `R` when a PR is **accepted** (the patch is re-applied with `git apply --3way`). It has a **different hash** from `c`. In `submit` mode it lives on the feature branch, which is deleted locally and remotely when the Gitea PR completes (completion cleanup, §8.4). | `accept_pull_request()` |
-| `PR` | The `PullRequest` MongoDB document (`status ∈ open / accepted / rejected / submitted`). | `_handle_agent_end()` (insert or update) |
+| `PR` | The `PullRequest` MongoDB document (`status ∈ open / accepted / rejected / submitted`). Its `kind` is `implementation` (the default, also assumed for legacy documents without the field) or `documentation`. | `_handle_agent_end()` / `DocBotSession` (insert or update) |
+
+#### `PullRequest.kind` and `PullRequest.commit_hash`
+
+`kind` distinguishes implementation pull requests from DocBot documentation pull
+requests and drives kind-aware acceptance, chaining, cleanup, and remote
+reconciliation. `commit_hash` is optional: it is empty while an open PR has not
+been applied, and records the commit produced when a PR is accepted/submitted
+locally. For implementation PRs the accepted commit is also copied onto
+`Task.commit_hash`; for documentation PRs the commit stays on the PR so the task's
+implementation metadata is never overwritten.
 
 ### 2.2 Repositories and directories
 
@@ -208,8 +218,8 @@ At the end of `_handle_agent_end()`, once Pi has emitted `agent_end`:
    ```
    pipeline_id, task_id, subject (= task.title),
    author (= GIT_USER_NAME), summary (incl. Verification section),
-   branch_name (= coderbot/<task_id>), patch, status=OPEN,
-   pi_session_uid, created_at/updated_at
+   branch_name (= coderbot/<task_id>), kind=IMPLEMENTATION, patch, status=OPEN,
+   commit_hash (unset until acceptance), pi_session_uid, created_at/updated_at
    ```
 
 5. Link `task.pi_session_uid`; update the `PiSession` record to `COMPLETED` with
@@ -242,6 +252,15 @@ The PR keeps its `id` and status; only its content is refreshed. The task stays
 | `POST /pull_requests/{id}/iterate` | unchanged (`OPEN`) | unchanged (`PULL_REQUEST_AVAILABLE`) |
 | Gitea webhook / poller reports **merged** | `SUBMITTED → ACCEPTED` | `SUBMITTED → IMPLEMENTED` (records the merge commit) |
 | Gitea webhook / poller reports **closed without merge** (remote reject) | `SUBMITTED → REJECTED` | `SUBMITTED → CREATED` (back to backlog) |
+| `POST /pull_requests/{id}/accept` (**documentation** PR) | `OPEN → ACCEPTED` (`merge`/`push`) or `OPEN → SUBMITTED` (`submit`); records the acceptance commit on the PR | Moves to the normal target status; task `commit_hash`, `completion_info`, and `review_md` are unchanged |
+| `POST /pull_requests/{id}/reject` (**documentation** PR) | `OPEN → REJECTED` | Unchanged (no return to backlog, no metadata reset) |
+| Gitea webhook / poller reports merged/closed for a **documentation** PR | `SUBMITTED → ACCEPTED` / `SUBMITTED → REJECTED` | Unchanged; implementation metadata stays intact |
+
+Documentation PRs are orthogonal to the implementation chain. They are ignored
+when resolving older pending PRs, chained start points, and rejected
+predecessors; in `submit` mode they always branch from the clean default branch.
+Their acceptance records the documentation commit on `PullRequest.commit_hash`,
+never on the task, and their rejection/remote close only changes the PR status.
 
 `ACCEPTED` and `REJECTED` are terminal and also trigger completion cleanup
 (§8.4); `SUBMITTED` is not terminal and keeps its patch/branch until the Gitea

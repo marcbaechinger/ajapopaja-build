@@ -300,8 +300,16 @@ external review. A **webhook** (primary) and an optional **polling** reconciler
 
 | Remote event | Local PR | Local task |
 |---|---|---|
-| PR **merged** (push to the base branch) | `ACCEPTED` | `IMPLEMENTED`, `commit_hash` = merge result |
-| PR **closed without merge** (remote reject) | `REJECTED` | `CREATED` (mirrors the local reject) |
+| Implementation PR **merged** (push to the base branch) | `ACCEPTED` | `IMPLEMENTED`, `commit_hash` = merge result |
+| Implementation PR **closed without merge** (remote reject) | `REJECTED` | `CREATED` (mirrors the local reject) |
+| **Documentation** PR merged | `ACCEPTED` | Unchanged; implementation metadata stays intact |
+| **Documentation** PR closed without merge | `REJECTED` | Unchanged; the completed task stays completed |
+
+Reconciliation is kind-aware: a documentation PR (`PullRequest.kind ==
+documentation`) only mirrors its own status and never records a task commit or
+resets the task's implementation metadata. The local `PullRequest.commit_hash`
+records the acceptance/submission commit when the PR was applied locally and
+remains optional for remotely merged documentation PRs.
 
 ### Receiver endpoint
 

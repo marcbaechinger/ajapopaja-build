@@ -192,6 +192,24 @@ async def trigger_testbot(pipeline_id: str, task_id: str):
     return {"status": "success"}
 ```
 
+### Step 7: Use the Standard PullRequest Workflow
+
+A bot that proposes repository changes should not add its own staging, commit,
+revert, or cancel endpoints. Instead, commit the changes in the bot's sandbox and
+create a normal `PullRequest` document with:
+
+- `kind` set to the appropriate `PullRequestKind` (for example `DOCUMENTATION`);
+- a unique branch name (include the task id and a per-run suffix when the bot may
+  run more than once for the same task);
+- a non-empty `subject` and a useful `summary`;
+- the captured `patch` and `status=OPEN`.
+
+The pull request is then reviewed, accepted, or rejected through the standard
+frontend PR section and `/pull_requests/{id}/accept|reject` routes. Acceptance and
+remote reconciliation are kind-aware: a documentation PR records its own commit
+on the `PullRequest` but must never overwrite the task's implementation
+`commit_hash`, `completion_info`, or `review_md`.
+
 ---
 
 ## 3. Conversation & Termination Model

@@ -74,7 +74,7 @@ These events are raised via the `on_event` method, allowing concrete bot session
 
 ### 2.3 Integration with DocBotSession
 
-`DocBotSession` now subclasses `BaseBotSession` and implements the `on_event` hook to broadcast `DOCBOT_STARTED` and `DOCBOT_COMPLETED` messages over the websocket manager. The subclass focuses solely on providing the domain‑specific system instruction, tool list, and terminal tool detection. All loop control, tool execution, and history management remain in the base class.
+`DocBotSession` now subclasses `BaseBotSession` and implements the `on_event` hook to broadcast `DOCBOT_STARTED` and `DOCBOT_COMPLETED` messages over the websocket manager. The subclass provides the domain‑specific system instruction, tool list, terminal tool detection, and the completion hook that turns sandbox documentation changes into a `documentation` `PullRequest`. All loop control, tool execution, and history management remain in the base class.
 
 ```python
 class DocBotSession(BaseBotSession):
@@ -85,7 +85,7 @@ class DocBotSession(BaseBotSession):
         return docbot_registry.list_tools()
 
     def is_terminal_tool(self, tool_name: str) -> bool:
-        return tool_name in ["update_ref_doc", "no_doc_update_needed"]
+        return tool_name in ["document_update_completed", "no_doc_update_needed"]
 
     async def on_event(self, event_name: str, payload: Optional[Dict[str, Any]] = None):
         if event_name == "bot_started":

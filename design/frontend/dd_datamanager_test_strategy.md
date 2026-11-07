@@ -12,7 +12,7 @@ Enhance the `DataManager` test suite to ensure reliable data consistency and cor
 Currently, the test manually extracts handlers from `vi.fn()`. This should be formalized in a helper to easily "emit" events into the `DataManager`.
 
 ### 3.2. Verification of Complex Events
-- **Bot Lifecycle**: Test `DOCBOT_STARTED`, `DOCBOT_COMPLETED`, and `DOCBOT_PREVIEW_READY`. Ensure they notify the correct `pipeline:status:*` and `task:status:*` queries.
+- **Bot Lifecycle**: Test `DOCBOT_STARTED`, `DOCBOT_COMPLETED`, and `PULL_REQUEST_CREATED`. Ensure they notify the correct `pipeline:status:*`, `task:status:*`, and pull-request queries.
 - **Design Doc Updates**: Test `DESIGN_DOC_UPDATED` and verify `DesignDocHistory` objects are correctly instantiated and cached.
 - **ArchBot Completion**: Verify that when `ARCHBOT_COMPLETED` carries a full task object, the cache is updated correctly.
 
