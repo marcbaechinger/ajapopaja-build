@@ -53,4 +53,4 @@ def test_dockerfile_bundles_pi_skill_library():
     dockerfile = (REPO_ROOT / "Dockerfile").read_text()
     assert ".pi/skills" in dockerfile
     assert "PI_SKILLS_LIBRARY_DIR=/opt/ajapopaja/pi/skills" in dockerfile
-    assert "INTERACTIVE_SKILLS=ajapopaja code-review" in dockerfile
+    assert 'INTERACTIVE_SKILLS="ajapopaja code-review"' in dockerfile

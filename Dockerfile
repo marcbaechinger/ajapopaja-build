@@ -45,7 +45,7 @@ COPY docker/pi-agent/models.json /root/.pi/agent/models.json
 # different skill set. Models stay global (the single models.json above).
 COPY .pi/skills /opt/ajapopaja/pi/skills
 ENV PI_SKILLS_LIBRARY_DIR=/opt/ajapopaja/pi/skills
-ENV INTERACTIVE_SKILLS=ajapopaja code-review
+ENV INTERACTIVE_SKILLS="ajapopaja code-review"
 # The bundled ajapopaja skill's mcp_client.py helper requires httpx.
 RUN pip install --no-cache-dir httpx
 # Copy backend workspace definition
