@@ -424,8 +424,11 @@ def ensure_git_identity(repo: git.Repo) -> Dict[str, str]:
     host user's global config) is respected and left untouched.
     """
     reader = repo.config_reader()
-    name = reader.get_value("user", "name", None)
-    email = reader.get_value("user", "email", None)
+    # Use a non-None default: gitpython's get_value only returns the default
+    # when the default is not None, so a missing [user] section (e.g. in CI
+    # without a global git identity) would otherwise raise NoSectionError.
+    name = reader.get_value("user", "name", "")
+    email = reader.get_value("user", "email", "")
     env: Dict[str, str] = {}
     if not name:
         env["GIT_AUTHOR_NAME"] = config.GIT_USER_NAME

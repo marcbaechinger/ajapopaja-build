@@ -187,6 +187,32 @@ def test_ensure_git_identity_fills_missing_fields():
     }
 
 
+def test_ensure_git_identity_no_user_section(tmp_path, monkeypatch):
+    """A config without a ``[user]`` section must not raise.
+
+    gitpython's ``get_value`` raises ``NoSectionError`` for a missing section
+    when the default is ``None``; ``ensure_git_identity`` must fall back to the
+    configured defaults instead (e.g. on CI runners without a global git
+    identity).
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    repo = git.Repo.init(str(tmp_path / "repo"))
+
+    with (
+        patch("core.utils.git_utils.config.GIT_USER_NAME", "Bot"),
+        patch("core.utils.git_utils.config.GIT_USER_EMAIL", "bot@localhost"),
+    ):
+        env = git_utils.ensure_git_identity(repo)
+
+    assert env == {
+        "GIT_AUTHOR_NAME": "Bot",
+        "GIT_COMMITTER_NAME": "Bot",
+        "GIT_AUTHOR_EMAIL": "bot@localhost",
+        "GIT_COMMITTER_EMAIL": "bot@localhost",
+    }
+
+
 def test_ensure_git_identity_respects_existing_identity():
     mock_repo = MagicMock()
     mock_reader = MagicMock()
