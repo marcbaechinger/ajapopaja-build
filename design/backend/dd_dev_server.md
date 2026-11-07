@@ -150,26 +150,18 @@ stateDiagram-v2
 
 ## 5. REST API
 
-`api/routes/dev_server.py` is a thin pass-through over the manager (prefix
-`/pipelines/{pipeline_id}/dev`). All responses include the published `port`.
+The backend exposes a JSON REST API for the dev‑server. The following endpoints are supported:
 
-| Endpoint | Method | Behavior | Errors |
-|----------|--------|----------|--------|
-| `/status` | GET | Returns `status()` snapshot. | — |
-| `/start` | POST | Reads `serve_commands`, calls `start()`. | `400` no commands / spawn error; `409` already running. |
-| `/restart` | POST | `stop()` (ignore not-found) then `start()`. | as `start`. |
-| `/stop` | POST | Calls `stop()`. | `404` not found. |
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/pipelines/{pipeline_id}/dev/start` | Starts the serve commands for the pipeline in its default branch. |
+| `POST` | `/pipelines/{pipeline_id}/dev/restart` | Stops the current dev process (if any) and starts a fresh one in the default branch. |
+| `POST` | `/pipelines/{pipeline_id}/dev/stop` | Stops the running dev process. |
+| `POST` | `/pipelines/{pipeline_id}/dev/default-branch` | Stops the current dev process and starts it on the pipeline’s default branch, overriding any branch that may be running. |
+| `POST` | `/pipelines/{pipeline_id}/pull_requests/{pr_id}/dev/start` | Starts the dev process on the code of the specified pull‑request branch, performing a build if required. |
+| `POST` | `/pipelines/{pipeline_id}/pull_requests/{pr_id}/dev/stop` | Stops the dev process that was started for the pull‑request. |
 
-`start()` response shape:
-
-```json
-{"status": "started", "pipeline_id": "...", "run_id": "...",
- "pid": 1234, "port": 1224, "user": "alice", "started_at": 1720000000.0}
-```
-
-`status()` additionally carries `running`, `exit_code`, and (when idle)
-`"status": "not_started"`.
-
+All responses include the published dev‑server port and, where relevant, the `target` branch or `task_id` that was used to start the process.
 ## 6. WebSocket Streaming
 
 `api/dev_server_ws.py` multiplexes the `dev_process_*` message family over the
