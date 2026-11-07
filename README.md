@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/marcbaechinger/ajapopaja-build/actions/workflows/ci.yml/badge.svg)](https://github.com/marcbaechinger/ajapopaja-build/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Version](https://img.shields.io/badge/version-0.3.0-green.svg)](https://github.com/marcbaechinger/ajapopaja-build/releases)
+[![Version](https://img.shields.io/badge/version-0.4.0-green.svg)](https://github.com/marcbaechinger/ajapopaja-build/releases)
 
 Welcome to **Ajapopaja Build** – an automated task‑pipeline manager for Coding AI
 agents, with a human‑supervised management layer. It helps you break work into
@@ -42,6 +42,10 @@ Agents work on real code inside isolated sandboxes and report back through the U
 
 ## Key features
 
+- **Remote git repositories** – a pipeline can point at a remote repository
+  (`repo_uri`) on Gitea, GitHub, or any git host; the app clones it into a
+  dedicated workspace and, on PR acceptance, pushes back with authenticated
+  credentials that never reach the frontend.
 - **Pull‑request workflow** – every CoderBot change becomes a PR that is reviewed
   and committed (or rejected) in the UI.
 - **Human‑in‑the‑loop design review** – tasks can require a design document that
@@ -128,7 +132,8 @@ environment variables and development guidelines.
 
 ## Usage workflow
 
-1. In the dashboard, create a **Pipeline** and point it at a local workspace.
+1. In the dashboard, create a **Pipeline** and point it at a local workspace or
+   a remote repository.
 2. Create **Tasks** – give each a technical spec and choose whether it needs a
    design document (and which agent should handle it).
 3. Let the agent pick up the task: CoderBot implements it, ArchBot drafts a
@@ -232,7 +237,7 @@ python scripts/generate_db_overview.py --uri mongodb://host:27017 --db prod \
 
 ## Release history
 
-See [**`RELEASENOTES.md`**](RELEASENOTES.md). The current release is **0.3.0**.
+See [**`RELEASENOTES.md`**](RELEASENOTES.md). The current release is **0.4.0**.
 
 ---
 
