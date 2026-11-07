@@ -110,7 +110,5 @@ async def test_specagent_reject_clears_proposal(init_mock_db, tmp_path, monkeypa
 
 @pytest.mark.asyncio
 async def test_specagent_open_returns_ids(init_mock_db):
-    result = await specagent_open(
-        {"pipeline_id": "p1", "task_id": "t1"}, _ctx()
-    )
+    result = await specagent_open({"pipeline_id": "p1", "task_id": "t1"}, _ctx())
     assert result == {"ok": True, "pipeline_id": "p1", "task_id": "t1"}

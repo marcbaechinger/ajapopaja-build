@@ -134,9 +134,7 @@ def test_parse_coderbot_models_ignores_malformed_entries():
 
 def test_list_coderbot_models_reads_file(tmp_path):
     path = tmp_path / "models.json"
-    path.write_text(
-        json.dumps({"providers": {"ollama": {"models": [{"id": "qwen"}]}}})
-    )
+    path.write_text(json.dumps({"providers": {"ollama": {"models": [{"id": "qwen"}]}}}))
     assert list_coderbot_models(path) == ["qwen"]
 
 
@@ -152,9 +150,7 @@ def test_list_coderbot_models_invalid_json_is_empty(tmp_path):
 
 def test_list_coderbot_models_uses_configured_path(monkeypatch, tmp_path):
     path = tmp_path / "custom-models.json"
-    path.write_text(
-        json.dumps({"providers": {"p": {"models": [{"id": "custom"}]}}})
-    )
+    path.write_text(json.dumps({"providers": {"p": {"models": [{"id": "custom"}]}}}))
     monkeypatch.setattr(config, "PI_AGENT_MODELS_PATH", path)
     assert list_coderbot_models() == ["custom"]
 

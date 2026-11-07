@@ -36,9 +36,7 @@ class DocBotManager:
         logger.info(f"Queueing DocBot session for task {task.id}")
         pipeline = None
         try:
-            pipeline = await pipeline_queries.get_pipeline_by_id(
-                str(task.pipeline_id)
-            )
+            pipeline = await pipeline_queries.get_pipeline_by_id(str(task.pipeline_id))
         except Exception:
             pipeline = None
         config = BaseBotSessionConfig(

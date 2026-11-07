@@ -33,9 +33,7 @@ def _messages(caplog):
 async def test_bootstrap_clones_missing_and_leaves_present(init_mock_db, caplog):
     await Pipeline(name="local", workspace_path="local").insert()
     await Pipeline(name="new", repo_uri="https://host/org/new.git").insert()
-    await Pipeline(
-        name="existing", repo_uri="https://host/org/existing.git"
-    ).insert()
+    await Pipeline(name="existing", repo_uri="https://host/org/existing.git").insert()
 
     def fake_status(pipeline):
         if pipeline.name == "new":
@@ -57,12 +55,9 @@ async def test_bootstrap_clones_missing_and_leaves_present(init_mock_db, caplog)
 
     messages = _messages(caplog)
     assert len(messages) == 2
+    assert any("new.git" in m and "cloned (was missing)" in m for m in messages)
     assert any(
-        "new.git" in m and "cloned (was missing)" in m for m in messages
-    )
-    assert any(
-        "existing.git" in m and "already present (no action)" in m
-        for m in messages
+        "existing.git" in m and "already present (no action)" in m for m in messages
     )
     assert not any("local" in m for m in messages)
 
@@ -92,9 +87,7 @@ async def test_bootstrap_failure_is_logged_and_does_not_stop_others(
     assert mock_ensure.call_count == 2
     messages = _messages(caplog)
     assert any("bad.git" in m and "could not be prepared" in m for m in messages)
-    assert any(
-        "good.git" in m and "cloned (was missing)" in m for m in messages
-    )
+    assert any("good.git" in m and "cloned (was missing)" in m for m in messages)
 
 
 @pytest.mark.asyncio

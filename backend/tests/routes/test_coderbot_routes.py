@@ -416,13 +416,16 @@ async def test_patch_session_updates_model(async_client, init_mock_db):
         )
         await record.insert()
 
-        with patch(
-            "api.coderbot.router.coderbot_manager.get_session",
-            new_callable=AsyncMock,
-            return_value=record,
-        ), patch(
-            "api.coderbot.router.ws_manager.broadcast", new_callable=AsyncMock
-        ) as mock_broadcast:
+        with (
+            patch(
+                "api.coderbot.router.coderbot_manager.get_session",
+                new_callable=AsyncMock,
+                return_value=record,
+            ),
+            patch(
+                "api.coderbot.router.ws_manager.broadcast", new_callable=AsyncMock
+            ) as mock_broadcast,
+        ):
             response = await async_client.patch(
                 "/api/coderbot/sessions/u-model",
                 json={"model": "new-model:cloud"},
@@ -454,11 +457,14 @@ async def test_patch_session_clears_model_with_blank(async_client, init_mock_db)
         )
         await record.insert()
 
-        with patch(
-            "api.coderbot.router.coderbot_manager.get_session",
-            new_callable=AsyncMock,
-            return_value=record,
-        ), patch("api.coderbot.router.ws_manager.broadcast", new_callable=AsyncMock):
+        with (
+            patch(
+                "api.coderbot.router.coderbot_manager.get_session",
+                new_callable=AsyncMock,
+                return_value=record,
+            ),
+            patch("api.coderbot.router.ws_manager.broadcast", new_callable=AsyncMock),
+        ):
             response = await async_client.patch(
                 "/api/coderbot/sessions/u-model", json={"model": "   "}
             )

@@ -291,9 +291,7 @@ async def test_route_create_local_missing_path_422(async_client, init_mock_db):
 async def test_route_create_remote_reachable_ok(async_client, init_mock_db):
     with (
         patch("core.utils.git_utils.verify_remote_repo", return_value=None),
-        patch(
-            "core.utils.git_utils.ensure_repo_cloned", new_callable=AsyncMock
-        ),
+        patch("core.utils.git_utils.ensure_repo_cloned", new_callable=AsyncMock),
     ):
         response = await async_client.post(
             "/api/pipelines/",

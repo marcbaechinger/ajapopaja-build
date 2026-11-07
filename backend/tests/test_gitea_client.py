@@ -12,11 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from api.git_hosting.gitea import GiteaApiError, GiteaClient, GitHubClient
+from api.git_hosting.pull_requests import ensure_pr_state_webhook_best_effort
+from core import config
 
 
 @pytest.mark.asyncio
@@ -404,3 +407,45 @@ def test_is_github_host_detects_github():
     assert _is_github_host("git@github.com:owner/repo.git")
     assert not _is_github_host("https://gitea.example.com/owner/repo.git")
     assert not _is_github_host("http://localhost:3000/owner/repo.git")
+
+
+@pytest.mark.asyncio
+async def test_ensure_pr_state_webhook_best_effort_skips_github(monkeypatch):
+    monkeypatch.setattr(config, "AJAPOPAJA_PUBLIC_URL", "https://ajapopaja.example")
+    monkeypatch.setattr(config, "GITEA_WEBHOOK_SECRET", "s3cret")
+    pipeline = SimpleNamespace(
+        id="p1", repo_uri="https://github.com/owner/repo.git", repo_token=None
+    )
+
+    with patch("api.git_hosting.pull_requests.GiteaClient") as mock_client_cls:
+        await ensure_pr_state_webhook_best_effort(pipeline)
+
+    mock_client_cls.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_ensure_pr_state_webhook_best_effort_registers_internal_gitea(
+    monkeypatch,
+):
+    monkeypatch.setattr(config, "AJAPOPAJA_PUBLIC_URL", "https://ajapopaja.example")
+    monkeypatch.setattr(config, "GITEA_WEBHOOK_SECRET", "s3cret")
+    monkeypatch.setattr(config, "GIT_PUSH_TOKEN", "tok")
+    pipeline = SimpleNamespace(
+        id="p1",
+        repo_uri="https://gitea.example.com/org/repo.git",
+        repo_token=None,
+    )
+
+    fake_client = MagicMock()
+    fake_client.ensure_pr_state_webhook = AsyncMock(return_value={"id": 1})
+    fake_client.aclose = AsyncMock()
+
+    with patch(
+        "api.git_hosting.pull_requests.GiteaClient",
+        return_value=fake_client,
+    ) as mock_client_cls:
+        await ensure_pr_state_webhook_best_effort(pipeline)
+
+    mock_client_cls.assert_called_once_with("https://gitea.example.com", "tok")
+    fake_client.ensure_pr_state_webhook.assert_awaited_once()
+    fake_client.aclose.assert_awaited_once()

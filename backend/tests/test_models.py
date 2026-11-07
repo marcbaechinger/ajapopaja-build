@@ -199,8 +199,16 @@ async def test_invalid_task_status(init_mock_db):
 
 
 def test_task_suggested_model_normalizes_blank_to_none(init_mock_db):
-    assert Task(title="T", pipeline_id="123", suggested_model="gpt-oss:120").suggested_model == "gpt-oss:120"
-    assert Task(title="T", pipeline_id="123", suggested_model="   ").suggested_model is None
+    assert (
+        Task(
+            title="T", pipeline_id="123", suggested_model="gpt-oss:120"
+        ).suggested_model
+        == "gpt-oss:120"
+    )
+    assert (
+        Task(title="T", pipeline_id="123", suggested_model="   ").suggested_model
+        is None
+    )
     assert Task(title="T", pipeline_id="123").suggested_model is None
 
 

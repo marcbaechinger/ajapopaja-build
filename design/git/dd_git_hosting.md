@@ -400,6 +400,9 @@ reconciler.
 On remote-pipeline creation Ajapopaja calls `GiteaClient.ensure_pr_state_webhook`
 (best-effort) to register a repository webhook subscribed to **both** `push` and
 `pull_request` events, with a per-pipeline target URL embedding the pipeline ID.
+Registration is skipped for repositories hosted on the public internet (e.g.
+`github.com`), whose servers cannot reach the internal Ajapopaja webhook
+receiver; those pipelines fall back to the on-demand **Sync from Gitea** action.
 
 ### Polling fallback
 

@@ -35,7 +35,10 @@ logger = logging.getLogger(__name__)
 
 def _is_github_host(repo_uri: str) -> bool:
     """Return True when the ``repo_uri`` points at github.com."""
-    base_url, _, _ = git_utils.resolve_gitea_repo(repo_uri)
+    try:
+        base_url, _, _ = git_utils.resolve_gitea_repo(repo_uri)
+    except ValueError:
+        return False
     host = (urlsplit(base_url).hostname or "").lower()
     return host in ("github.com", "www.github.com")
 
@@ -100,10 +103,19 @@ async def ensure_pr_state_webhook_best_effort(pipeline: Pipeline) -> None:
     The webhook reports Gitea ``push``/``pull_request`` events back to the
     ``/api/git_hosting/pipelines/{pipeline_id}/pr-state`` endpoint so a remote
     merge/reject can be reconciled onto local state. Registration is skipped
-    when the pipeline is local or the public URL / webhook secret are not
-    configured, and any failure is logged without failing pipeline creation.
+    when the pipeline is local, the public URL / webhook secret are not
+    configured, or the repository is hosted on the public internet (e.g.
+    ``github.com``) and therefore cannot reach the internal Ajapopaja server.
+    Any failure is logged without failing pipeline creation.
     """
     if not pipeline.repo_uri or not config.AJAPOPAJA_PUBLIC_URL:
+        return
+    if _is_github_host(pipeline.repo_uri):
+        logger.info(
+            "Skipping PR-state webhook registration for pipeline %s: "
+            "github.com hosts cannot reach the internal Ajapopaja server",
+            pipeline.id,
+        )
         return
     if not config.GITEA_WEBHOOK_SECRET:
         logger.warning(

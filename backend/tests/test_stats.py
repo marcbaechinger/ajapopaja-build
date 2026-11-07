@@ -110,7 +110,9 @@ async def test_get_daily_stats_counts_submitted_as_done(init_mock_db):
         status=TaskStatus.SUBMITTED,
         history=[
             StateTransition(
-                to_status=TaskStatus.CREATED, timestamp=now - timedelta(hours=2), by="user"
+                to_status=TaskStatus.CREATED,
+                timestamp=now - timedelta(hours=2),
+                by="user",
             ),
             StateTransition(
                 from_status=TaskStatus.CREATED,

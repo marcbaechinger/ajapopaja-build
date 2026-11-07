@@ -402,9 +402,7 @@ async def test_workspace_override_changes_cwd_and_target_is_surfaced(tmp_path):
 async def test_stream_status_includes_target(tmp_path):
     manager = DevProcessManager.instance()
     with _patch_workspace(manager, str(tmp_path)):
-        await manager.start(
-            "p1", [["sh", "-c", "exit 0"]], target="coderbot/t2"
-        )
+        await manager.start("p1", [["sh", "-c", "exit 0"]], target="coderbot/t2")
 
     info = manager._processes["p1"]
     await asyncio.wait_for(info.task, timeout=5)
@@ -417,9 +415,7 @@ async def test_start_resolves_branch_commit_and_task_id(tmp_path):
     repo = _make_repo(tmp_path / "repo", branch="feature/x")
     manager = DevProcessManager.instance()
     with _patch_workspace(manager, str(repo)):
-        started = await manager.start(
-            "p1", [["sh", "-c", "sleep 30"]], task_id="t1"
-        )
+        started = await manager.start("p1", [["sh", "-c", "sleep 30"]], task_id="t1")
 
     assert started["task_id"] == "t1"
     assert started["branch"] == "feature/x"
@@ -493,9 +489,7 @@ async def test_rebuild_uses_captured_workspace_and_preserves_context(tmp_path):
 
         info = manager._processes["p1"]
         await _wait_until(
-            lambda: "SERVE_STARTED" in "".join(
-                c.text for c in info.buffer.snapshot(0)
-            )
+            lambda: "SERVE_STARTED" in "".join(c.text for c in info.buffer.snapshot(0))
         )
 
     mock_resolve.assert_not_called()
@@ -520,12 +514,8 @@ async def test_rebuild_uses_captured_workspace_and_preserves_context(tmp_path):
 async def test_rebuild_failed_build_never_starts_server(tmp_path):
     manager = DevProcessManager.instance()
     with _patch_workspace(manager, str(tmp_path)):
-        await manager.start(
-            "p1", [["sh", "-c", "echo SERVE_STARTED; sleep 30"]]
-        )
-        await manager.rebuild(
-            "p1", [["sh", "-c", "echo BUILD_FAILED; exit 4"]]
-        )
+        await manager.start("p1", [["sh", "-c", "echo SERVE_STARTED; sleep 30"]])
+        await manager.rebuild("p1", [["sh", "-c", "echo BUILD_FAILED; exit 4"]])
 
     info = manager._processes["p1"]
     await asyncio.wait_for(info.task, timeout=5)
@@ -570,9 +560,7 @@ async def test_stop_during_build_cancels_build_and_serve(tmp_path):
     manager = DevProcessManager.instance()
     with _patch_workspace(manager, str(tmp_path)):
         await manager.start("p1", [["sh", "-c", "sleep 30"]])
-        await manager.rebuild(
-            "p1", [["sh", "-c", "echo BUILDING; sleep 30"]]
-        )
+        await manager.rebuild("p1", [["sh", "-c", "echo BUILDING; sleep 30"]])
         info = manager._processes["p1"]
         await _wait_until(lambda: info.status == "building")
 
@@ -588,12 +576,8 @@ async def test_stop_during_build_cancels_build_and_serve(tmp_path):
 async def test_stream_emits_status_when_phase_changes(tmp_path):
     manager = DevProcessManager.instance()
     with _patch_workspace(manager, str(tmp_path)):
-        await manager.start(
-            "p1", [["sh", "-c", "echo SERVE_STARTED; sleep 30"]]
-        )
-        await manager.rebuild(
-            "p1", [["sh", "-c", "sleep 0.3; echo BUILD_OUTPUT"]]
-        )
+        await manager.start("p1", [["sh", "-c", "echo SERVE_STARTED; sleep 30"]])
+        await manager.rebuild("p1", [["sh", "-c", "sleep 0.3; echo BUILD_OUTPUT"]])
 
     info = manager._processes["p1"]
     events = []

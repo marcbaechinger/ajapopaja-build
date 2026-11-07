@@ -1411,7 +1411,7 @@ class InteractivePiSession(PiRpcProcess):
             "`get-task-details <task_id>`, `search-tasks`, "
             "`update-task-design-doc` (`update-design-doc`) and `complete-task`. "
             "Once you have committed your work, it can also open a pull request "
-            "with `create-pull-request <pipeline_id> --title \"…\" [--body \"…\"] "
+            'with `create-pull-request <pipeline_id> --title "…" [--body "…"] '
             "[--task <task_id>]`: the server pushes your current branch and "
             "creates the Gitea pull request. "
             "The skill is located in this repository at "

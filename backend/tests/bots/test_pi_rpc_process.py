@@ -462,9 +462,7 @@ def test_build_command_includes_resume_session_file():
 
 
 def test_build_command_persist_false_adds_no_session():
-    session = PiRpcProcess(
-        model="m", session_dir="/s", persist=False, session_name="n"
-    )
+    session = PiRpcProcess(model="m", session_dir="/s", persist=False, session_name="n")
     cmd = session.build_command()
     assert cmd == ["pi", "--mode", "rpc", "--model", "m", "--no-session"]
 

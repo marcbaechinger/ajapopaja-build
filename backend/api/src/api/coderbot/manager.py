@@ -200,9 +200,7 @@ class CoderBotManager:
         pipeline = None
         if pipeline_id:
             try:
-                pipeline = await pipeline_queries.get_pipeline_by_id(
-                    str(pipeline_id)
-                )
+                pipeline = await pipeline_queries.get_pipeline_by_id(str(pipeline_id))
             except Exception:
                 pipeline = None
         return resolve_model("coderbot", pipeline, default=self._default_model)
@@ -492,9 +490,7 @@ class CoderBotManager:
             try:
                 await session.stop()
             except Exception:
-                logger.debug(
-                    "Failed to clean up interactive session", exc_info=True
-                )
+                logger.debug("Failed to clean up interactive session", exc_info=True)
             raise
 
         record.status = PiSessionStatus.RUNNING
@@ -742,9 +738,7 @@ class CoderBotManager:
         if owner is not None:
             conditions.append(PiSession.owner == owner)
         records = (
-            await PiSession.find(*conditions)
-            .sort(-PiSession.created_at)
-            .to_list()
+            await PiSession.find(*conditions).sort(-PiSession.created_at).to_list()
         )
         return records
 
@@ -804,20 +798,10 @@ class CoderBotManager:
         if record.status == PiSessionStatus.DISCARDED:
             raise PiSessionNotResumableError(f"Session {uid} has been discarded.")
 
-        if (
-            pause_current
-            and self._running_uid
-            and self._running_uid != uid
-        ):
+        if pause_current and self._running_uid and self._running_uid != uid:
             await self.pause_session(self._running_uid)
-        elif (
-            not pause_current
-            and self._running_uid
-            and self._running_uid != uid
-        ):
-            raise PiSessionBusyError(
-                f"Session {self._running_uid} is already running."
-            )
+        elif not pause_current and self._running_uid and self._running_uid != uid:
+            raise PiSessionBusyError(f"Session {self._running_uid} is already running.")
 
         if record.kind == PiSessionKind.INTERACTIVE:
             session = InteractivePiSession(

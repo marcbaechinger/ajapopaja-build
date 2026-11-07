@@ -871,7 +871,9 @@ async def test_resume_uses_model_updated_while_paused(init_mock_db):
     session = _interactive_session_mock(_started_broadcast=False)
     session.model = "new-model:cloud"
     with (
-        patch("api.coderbot.manager.InteractivePiSession", return_value=session) as mock_cls,
+        patch(
+            "api.coderbot.manager.InteractivePiSession", return_value=session
+        ) as mock_cls,
         patch.object(manager, "_watch_interactive_session", new_callable=AsyncMock),
         patch("api.coderbot.manager.ws_manager.broadcast", new_callable=AsyncMock),
     ):

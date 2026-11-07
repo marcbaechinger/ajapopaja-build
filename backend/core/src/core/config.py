@@ -24,9 +24,7 @@ from typing import Optional
 # LOCAL (host-path) pipelines; remote pipelines resolve under
 # REMOTE_WORKSPACES_ROOT and never touch it, so a remote-only deployment can
 # leave it unset.
-WORKSPACES_ROOT = Path(
-    os.getenv("WORKSPACES_ROOT", "/workspaces")
-).resolve()
+WORKSPACES_ROOT = Path(os.getenv("WORKSPACES_ROOT", "/workspaces")).resolve()
 
 # Root directory for bot sandboxes
 SANDBOX_ROOT = Path(os.getenv("SANDBOX_ROOT", "/data/ajapopaja/sandboxes")).resolve()
@@ -161,9 +159,7 @@ except ValueError as e:  # pragma: no cover - defensive
     raise RuntimeError("PI_SESSION_WORKSPACE_TTL_DAYS must be a number") from e
 
 # Resume the newest interactive session automatically at startup.
-PI_SESSION_AUTO_RESUME = (
-    os.getenv("PI_SESSION_AUTO_RESUME", "false").lower() == "true"
-)
+PI_SESSION_AUTO_RESUME = os.getenv("PI_SESSION_AUTO_RESUME", "false").lower() == "true"
 
 # Number of Pi processes that may run concurrently (1 batch + 1 interactive by
 # default to match the historical behaviour). Values < 1 are clamped to 1.
@@ -183,9 +179,7 @@ except ValueError as e:  # pragma: no cover - defensive
 # injected into the ``session_generate_title`` one-shot prompt and re-applied by
 # the response normaliser so the model and the backend agree on the limit.
 try:
-    SESSION_TITLE_MAX_LENGTH = max(
-        1, int(os.getenv("SESSION_TITLE_MAX_LENGTH", "80"))
-    )
+    SESSION_TITLE_MAX_LENGTH = max(1, int(os.getenv("SESSION_TITLE_MAX_LENGTH", "80")))
 except ValueError as e:  # pragma: no cover - defensive
     raise RuntimeError("SESSION_TITLE_MAX_LENGTH must be an integer") from e
 

@@ -330,7 +330,8 @@ class DevProcessManager:
                 )
 
             resolved_workspace = (
-                workspace if workspace is not None
+                workspace
+                if workspace is not None
                 else await self._resolve_workspace(pipeline_id)
             )
             branch, commit_hash = git_utils.get_head_branch_and_commit(
@@ -662,9 +663,7 @@ class DevProcessManager:
                     f"No dev process found for pipeline {pipeline_id}"
                 )
             if existing.status == "building" and self._is_running(existing):
-                raise DevProcessAlreadyRunningError(
-                    "A rebuild is already in progress"
-                )
+                raise DevProcessAlreadyRunningError("A rebuild is already in progress")
             if not build_commands:
                 raise DevProcessError("No build commands configured")
 

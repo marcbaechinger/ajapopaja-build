@@ -128,9 +128,7 @@ async def test_save_elaborated_spec_emits_targeted_actions_notification(
 
     NotificationManager.set_delivery_sink(sink)
     try:
-        with patch(
-            "api.specagent.tools.manager.broadcast", new_callable=AsyncMock
-        ):
+        with patch("api.specagent.tools.manager.broadcast", new_callable=AsyncMock):
             result = await save_elaborated_spec(
                 str(pipeline.id),
                 str(task.id),
@@ -182,9 +180,7 @@ async def test_save_elaborated_spec_broadcasts_when_requester_unknown(
 
     NotificationManager.set_delivery_sink(sink)
     try:
-        with patch(
-            "api.specagent.tools.manager.broadcast", new_callable=AsyncMock
-        ):
+        with patch("api.specagent.tools.manager.broadcast", new_callable=AsyncMock):
             await save_elaborated_spec(
                 str(pipeline.id), str(task.id), "# Elaborated", session=session
             )

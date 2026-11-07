@@ -183,7 +183,9 @@ async def save_elaborated_spec(
                 payload={"pipeline_id": pipeline_id, "task_id": task_id},
             )
         )
-        logger.info(f"[SpecAgent] (B3) SPECAGENT_SPEC_READY broadcast complete for {task_id}")
+        logger.info(
+            f"[SpecAgent] (B3) SPECAGENT_SPEC_READY broadcast complete for {task_id}"
+        )
 
         # Surface the finished proposal through the notification framework so it
         # reaches the triggering user no matter which pipeline/page they are on.

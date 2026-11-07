@@ -284,11 +284,7 @@ async def sweep_expired_workspaces(
         if not workspace.exists():
             continue
         try:
-            reference = (
-                record.last_active_at
-                or record.updated_at
-                or record.created_at
-            )
+            reference = record.last_active_at or record.updated_at or record.created_at
             if reference is not None:
                 age = (datetime.now(UTC) - reference).total_seconds()
             else:  # pragma: no cover - defensive

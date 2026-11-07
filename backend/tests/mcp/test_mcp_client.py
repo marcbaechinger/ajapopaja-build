@@ -50,9 +50,7 @@ async def test_run_create_pull_request_maps_arguments():
     client = MagicMock()
     client.call_tool = AsyncMock()
 
-    await mcp_client.run_create_pull_request(
-        client, "p1", "Add feature", "Body", "t1"
-    )
+    await mcp_client.run_create_pull_request(client, "p1", "Add feature", "Body", "t1")
 
     client.call_tool.assert_awaited_once_with(
         "create_pull_request",

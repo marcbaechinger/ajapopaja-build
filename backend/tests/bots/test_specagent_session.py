@@ -33,9 +33,7 @@ async def test_specagent_session_init(init_mock_db):
 
 @pytest.mark.asyncio
 async def test_specagent_session_stores_requested_by(init_mock_db):
-    session = SpecAgentSession(
-        pipeline_id="p1", task_id="t1", requested_by="alice"
-    )
+    session = SpecAgentSession(pipeline_id="p1", task_id="t1", requested_by="alice")
     assert session.requested_by == "alice"
 
 

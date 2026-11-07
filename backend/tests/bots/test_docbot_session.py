@@ -575,9 +575,7 @@ async def test_two_docbot_runs_create_prs_on_distinct_branches():
 
     with patch("api.docbot.session.uuid.uuid4", side_effect=fake_uuids):
         for expected_branch in expected_branches:
-            session = DocBotSession(
-                pipeline_id="test_pipeline", task_id="test_task"
-            )
+            session = DocBotSession(pipeline_id="test_pipeline", task_id="test_task")
             session.has_updates = True
 
             mock_repo = MagicMock()
@@ -602,9 +600,7 @@ async def test_two_docbot_runs_create_prs_on_distinct_branches():
                 patch(
                     "api.docbot.session.PullRequest", return_value=mock_pr
                 ) as mock_pr_class,
-                patch(
-                    "api.docbot.session.manager.broadcast", new_callable=AsyncMock
-                ),
+                patch("api.docbot.session.manager.broadcast", new_callable=AsyncMock),
             ):
                 await session._handle_bot_end()
 

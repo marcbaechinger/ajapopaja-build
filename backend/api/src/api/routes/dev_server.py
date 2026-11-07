@@ -208,8 +208,7 @@ async def dev_start_on_pr(
         raise HTTPException(
             status_code=400,
             detail=(
-                "Dev server can only be started on OPEN or SUBMITTED "
-                "pull requests"
+                "Dev server can only be started on OPEN or SUBMITTED pull requests"
             ),
         )
 

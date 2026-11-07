@@ -39,9 +39,7 @@ def mock_auth():
 
 @pytest.mark.asyncio
 async def test_dev_status(async_client, init_mock_db):
-    pipeline = Pipeline(
-        name="Serve", build_commands=[["sh", "-c", "npm run build"]]
-    )
+    pipeline = Pipeline(name="Serve", build_commands=[["sh", "-c", "npm run build"]])
     await pipeline.insert()
 
     with patch.object(
@@ -55,9 +53,7 @@ async def test_dev_status(async_client, init_mock_db):
             "exit_code": None,
             "port": 1224,
         }
-        response = await async_client.get(
-            f"/api/pipelines/{pipeline.id}/dev/status"
-        )
+        response = await async_client.get(f"/api/pipelines/{pipeline.id}/dev/status")
         assert response.status_code == status.HTTP_200_OK
         assert response.json() == {
             "running": False,
@@ -109,9 +105,7 @@ async def test_dev_status_reports_build_commands_not_configured(
             "exit_code": None,
             "port": 1224,
         }
-        response = await async_client.get(
-            f"/api/pipelines/{pipeline.id}/dev/status"
-        )
+        response = await async_client.get(f"/api/pipelines/{pipeline.id}/dev/status")
 
     assert response.status_code == status.HTTP_200_OK
     assert response.json()["build_commands_configured"] is False
@@ -304,9 +298,7 @@ async def test_dev_rebuild_passes_build_commands(async_client, init_mock_db):
             "pid": 42,
             "port": 1224,
         }
-        response = await async_client.post(
-            f"/api/pipelines/{pipeline.id}/dev/rebuild"
-        )
+        response = await async_client.post(f"/api/pipelines/{pipeline.id}/dev/rebuild")
 
     assert response.status_code == status.HTTP_200_OK
     assert response.json()["status"] == "rebuilding"
@@ -326,9 +318,7 @@ async def test_dev_rebuild_without_build_commands(async_client, init_mock_db):
     with patch.object(
         DevProcessManager, "rebuild", new_callable=AsyncMock
     ) as mock_rebuild:
-        response = await async_client.post(
-            f"/api/pipelines/{pipeline.id}/dev/rebuild"
-        )
+        response = await async_client.post(f"/api/pipelines/{pipeline.id}/dev/rebuild")
 
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert "No build commands" in response.json()["detail"]
@@ -346,9 +336,7 @@ async def test_dev_rebuild_not_found(async_client, init_mock_db):
         new_callable=AsyncMock,
         side_effect=DevProcessNotFoundError("no process"),
     ):
-        response = await async_client.post(
-            f"/api/pipelines/{pipeline.id}/dev/rebuild"
-        )
+        response = await async_client.post(f"/api/pipelines/{pipeline.id}/dev/rebuild")
 
     assert response.status_code == status.HTTP_404_NOT_FOUND
     assert "no process" in response.json()["detail"]
@@ -365,9 +353,7 @@ async def test_dev_rebuild_already_in_progress(async_client, init_mock_db):
         new_callable=AsyncMock,
         side_effect=DevProcessAlreadyRunningError("already rebuilding"),
     ):
-        response = await async_client.post(
-            f"/api/pipelines/{pipeline.id}/dev/rebuild"
-        )
+        response = await async_client.post(f"/api/pipelines/{pipeline.id}/dev/rebuild")
 
     assert response.status_code == status.HTTP_409_CONFLICT
     assert "already rebuilding" in response.json()["detail"]
@@ -384,9 +370,7 @@ async def test_dev_rebuild_maps_service_error_to_400(async_client, init_mock_db)
         new_callable=AsyncMock,
         side_effect=DevProcessError("bad rebuild"),
     ):
-        response = await async_client.post(
-            f"/api/pipelines/{pipeline.id}/dev/rebuild"
-        )
+        response = await async_client.post(f"/api/pipelines/{pipeline.id}/dev/rebuild")
 
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert "bad rebuild" in response.json()["detail"]
@@ -574,9 +558,7 @@ async def test_dev_start_on_pr_not_found(async_client, init_mock_db):
 
 @pytest.mark.asyncio
 async def test_dev_start_on_pr_rejects_accepted_pr(async_client, init_mock_db):
-    pipeline = Pipeline(
-        name="Serve", serve_commands=[["sh", "-c", "sleep 30"]]
-    )
+    pipeline = Pipeline(name="Serve", serve_commands=[["sh", "-c", "sleep 30"]])
     await pipeline.insert()
     pr = PullRequest(
         pipeline_id=str(pipeline.id),

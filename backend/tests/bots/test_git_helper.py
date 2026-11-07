@@ -182,7 +182,11 @@ def test_setup_sandbox_with_base_fetches_and_checks_out_fetch_head(tmp_path):
         commit="abc123",
     )
     helper = SandboxGitHelper(
-        "coderbot", "t2", Path("/fake/path"), workspace_path=tmp_path / "sandbox", base=base
+        "coderbot",
+        "t2",
+        Path("/fake/path"),
+        workspace_path=tmp_path / "sandbox",
+        base=base,
     )
     repo = MagicMock()
 

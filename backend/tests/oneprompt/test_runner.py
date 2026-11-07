@@ -416,9 +416,7 @@ async def test_cancel_in_flight_run(tmp_path):
     started = asyncio.Event()
     runner = OnePromptRunner(
         registry=_registry(tmp_path),
-        ollama_client=FakeOllama(
-            block_event=asyncio.Event(), started_event=started
-        ),
+        ollama_client=FakeOllama(block_event=asyncio.Event(), started_event=started),
         sender=sent.append,
     )
     run = runner.start("greet", {"name": "Ada"}, run_id="run-cancel")
@@ -445,9 +443,7 @@ async def test_cancel_run_awaits_the_task(tmp_path):
     started = asyncio.Event()
     runner = OnePromptRunner(
         registry=_registry(tmp_path),
-        ollama_client=FakeOllama(
-            block_event=asyncio.Event(), started_event=started
-        ),
+        ollama_client=FakeOllama(block_event=asyncio.Event(), started_event=started),
         sender=lambda message: None,
     )
     run = runner.start("greet", {"name": "Ada"}, run_id="run-cancel-2")

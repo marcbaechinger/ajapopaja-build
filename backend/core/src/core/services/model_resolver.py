@@ -113,9 +113,7 @@ def resolve_model(
         if override:
             return override
         if use_case in _GENERAL_OLLAMA_USE_CASES:
-            general = _normalize_model_override(
-                getattr(pipeline, "ollama_model", None)
-            )
+            general = _normalize_model_override(getattr(pipeline, "ollama_model", None))
             if general:
                 return general
 
