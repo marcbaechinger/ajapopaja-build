@@ -28,6 +28,7 @@ from core.models.models import (
     PiSessionKind,
     PiSessionStatus,
     PullRequest,
+    PullRequestKind,
     PullRequestStatus,
 )
 from core.utils import git_utils
@@ -86,6 +87,7 @@ async def _make_pr(
     patch: str | None = "diff --git a/a b/a\n+change\n",
     status: PullRequestStatus = PullRequestStatus.ACCEPTED,
     pi_session_uid: str | None = None,
+    kind: PullRequestKind = PullRequestKind.IMPLEMENTATION,
 ) -> PullRequest:
     pr = PullRequest(
         pipeline_id="p1",
@@ -93,6 +95,7 @@ async def _make_pr(
         subject=task_id,
         summary=task_id,
         branch_name=branch_name,
+        kind=kind,
         patch=patch,
         status=status,
         pi_session_uid=pi_session_uid,
@@ -302,6 +305,77 @@ async def test_t_d_non_chained_pr_cleans_immediately(
     }
     assert "coderbot/t1" not in {b.name for b in git.Repo(str(repo)).branches}
     assert (await PullRequest.get(pr.id)).patch is None
+
+
+@pytest.mark.asyncio
+async def test_documentation_pr_cleanup_never_defers_on_chained_descendant(
+    init_mock_db, tmp_path, fake_gitea
+):
+    repo = _make_repo(tmp_path / "r")
+    pipeline = _make_pipeline(repo, repo_uri="https://host/org/ws.git")
+    _commit_file(repo, "docbot/task/t1", "one.txt", "one\n")
+    _git(repo, ["checkout", "main"])
+
+    doc_pr = await _make_pr(
+        task_id="t1",
+        branch_name="docbot/task/t1",
+        pi_session_uid="u1",
+        kind=PullRequestKind.DOCUMENTATION,
+    )
+    descendant = await _make_pr(
+        task_id="t2",
+        branch_name="coderbot/t2",
+        status=PullRequestStatus.OPEN,
+        pi_session_uid="u2",
+    )
+    await _make_session("u1", pull_request_ids=[str(doc_pr.id)])
+    await _make_session("u2", chained_from="u1", pull_request_ids=[str(descendant.id)])
+
+    result = await git_utils.cleanup_completed_pull_request(pipeline, doc_pr)
+
+    assert result["deferred"] is False
+    assert result["local_branch_deleted"] is True
+    assert result["patch_cleared"] is True
+    assert "docbot/task/t1" not in {b.name for b in git.Repo(str(repo)).branches}
+    assert (await PullRequest.get(doc_pr.id)).patch is None
+    assert _remote_deleted_branches(fake_gitea) == ["docbot/task/t1"]
+
+
+@pytest.mark.asyncio
+async def test_cleanup_one_documentation_pr_keeps_another_documentation_branch(
+    init_mock_db, tmp_path, fake_gitea
+):
+    repo = _make_repo(tmp_path / "r")
+    pipeline = _make_pipeline(repo, repo_uri="https://host/org/ws.git")
+    _commit_file(repo, "docbot/task/t1", "one.txt", "one\n")
+    _commit_file(repo, "docbot/task/t2", "two.txt", "two\n")
+    _git(repo, ["checkout", "main"])
+
+    doc_pr1 = await _make_pr(
+        task_id="t1",
+        branch_name="docbot/task/t1",
+        pi_session_uid="u1",
+        kind=PullRequestKind.DOCUMENTATION,
+    )
+    doc_pr2 = await _make_pr(
+        task_id="t2",
+        branch_name="docbot/task/t2",
+        status=PullRequestStatus.OPEN,
+        pi_session_uid="u2",
+        kind=PullRequestKind.DOCUMENTATION,
+    )
+    await _make_session("u1", pull_request_ids=[str(doc_pr1.id)])
+    await _make_session("u2", pull_request_ids=[str(doc_pr2.id)])
+
+    result = await git_utils.cleanup_completed_pull_request(pipeline, doc_pr1)
+
+    assert result["deferred"] is False
+    assert result["local_branch_deleted"] is True
+    branches = {b.name for b in git.Repo(str(repo)).branches}
+    assert "docbot/task/t1" not in branches
+    assert "docbot/task/t2" in branches
+    assert (await PullRequest.get(doc_pr2.id)).patch is not None
+    assert _remote_deleted_branches(fake_gitea) == ["docbot/task/t1"]
 
 
 @pytest.mark.asyncio

@@ -121,7 +121,14 @@ async def find_older_open_pull_request(pr: PullRequest) -> Optional[PullRequest]
     Both ``OPEN`` and ``SUBMITTED`` count as pending: a ``SUBMITTED`` PR is a
     Gitea pull request awaiting external review and is still a valid chaining
     predecessor that has not yet landed.
+
+    Documentation PRs are orthogonal to the implementation chain: they are
+    neither ordered themselves nor treated as predecessors for implementation
+    PRs. Legacy documents without ``kind`` are matched by the ``$ne`` query and
+    remain implementation candidates.
     """
+    if getattr(pr, "kind", None) == PullRequestKind.DOCUMENTATION:
+        return None
     if not pr.pipeline_id or pr.created_at is None:
         return None
     return (
@@ -131,6 +138,7 @@ async def find_older_open_pull_request(pr: PullRequest) -> Optional[PullRequest]
                 PullRequest.status,
                 [PullRequestStatus.OPEN, PullRequestStatus.SUBMITTED],
             ),
+            PullRequest.kind != PullRequestKind.DOCUMENTATION,
             PullRequest.id != pr.id,
             PullRequest.created_at < pr.created_at,
         )
@@ -147,8 +155,10 @@ async def find_rejected_predecessor_pr(pr: PullRequest) -> Optional[PullRequest]
     delta has no valid base to apply onto, so acceptance must be blocked rather
     than silently producing a partial ``git apply --3way``. Returns ``None``
     when the PR is not chained, the predecessor cannot be resolved, or the
-    predecessor PR was not rejected.
+    predecessor PR was not rejected. Documentation PRs are never chained.
     """
+    if getattr(pr, "kind", None) == PullRequestKind.DOCUMENTATION:
+        return None
     if not pr.pi_session_uid:
         return None
     try:
@@ -186,9 +196,12 @@ async def _resolve_chained_start_point(
     must be applied on top of the predecessor's accepted work. In Gitea-PR mode
     the predecessor's accepted commit lives on its local feature branch (the
     default branch is deliberately kept clean), so return that branch when it is
-    present. Returns ``None`` for non-chained PRs or when the predecessor branch
-    is not available locally; callers then fall back to the default branch.
+    present. Returns ``None`` for non-chained PRs, documentation PRs, or when
+    the predecessor branch is not available locally; callers then fall back to
+    the default branch.
     """
+    if getattr(pr, "kind", None) == PullRequestKind.DOCUMENTATION:
+        return None
     try:
         branch = await pi_session_queries.find_chained_predecessor_branch(
             pr.pi_session_uid
@@ -618,7 +631,11 @@ async def accept_pull_request(
             # A chained PR's patch is a delta against its predecessor's commit.
             # Stack its branch on the predecessor's accepted feature branch when
             # one exists; otherwise branch off the clean default branch.
+            # Documentation PRs are never chained, so they always start from the
+            # current default branch.
             start_point = await _resolve_chained_start_point(repo, pr)
+            if getattr(pr, "kind", None) == PullRequestKind.DOCUMENTATION:
+                start_point = default_branch
             git_utils.ensure_feature_branch(
                 repo, pr.branch_name, start_point=start_point
             )

@@ -33,6 +33,7 @@ from core.models.models import (
     Pipeline,
     PiSession,
     PullRequest,
+    PullRequestKind,
     PullRequestStatus,
     RepoBootstrapStatus,
 )
@@ -1020,8 +1021,11 @@ async def _collect_patch_chain(pr: PullRequest) -> List[PullRequest]:
 
     When a chained PR has to be re-materialised from its patch, every
     predecessor patch must be applied first because each patch is a delta
-    relative to its predecessor's tip.
+    relative to its predecessor's tip. Documentation PRs are not part of the
+    implementation chain, so their patch is replayed on its own.
     """
+    if getattr(pr, "kind", None) == PullRequestKind.DOCUMENTATION:
+        return [pr]
     chain: List[PullRequest] = []
     current: Optional[PullRequest] = pr
     seen = set()
@@ -1037,6 +1041,8 @@ async def _resolve_chained_start_point_for_repo(
     repo: git.Repo, pr: PullRequest
 ) -> Optional[str]:
     """Return the local branch a chained PR's patch fallback must start from."""
+    if getattr(pr, "kind", None) == PullRequestKind.DOCUMENTATION:
+        return None
     try:
         branch = await pi_session_queries.find_chained_predecessor_branch(
             pr.pi_session_uid
@@ -1101,7 +1107,14 @@ async def cleanup_completed_pull_request(
 
     deferred = False
     pipeline_id = getattr(pipeline, "id", None)
-    if pr.pi_session_uid and pipeline_id is not None:
+    # Documentation PRs are orthogonal to the implementation chain: they may
+    # share a task with a chained implementation PR, but their unique branch is
+    # never a start point for a descendant, so they must not defer cleanup.
+    if (
+        getattr(pr, "kind", None) != PullRequestKind.DOCUMENTATION
+        and pr.pi_session_uid
+        and pipeline_id is not None
+    ):
         try:
             deferred = await pi_session_queries.has_pending_chained_descendant(
                 pr.pi_session_uid, pipeline_id=str(pipeline_id)

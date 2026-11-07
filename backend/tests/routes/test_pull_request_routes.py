@@ -249,6 +249,218 @@ async def test_accept_documentation_pr_preserves_task_metadata(
 
 
 @pytest.mark.asyncio
+async def test_find_older_open_pull_request_excludes_documentation(init_mock_db):
+    base = datetime(2026, 1, 1, tzinfo=UTC)
+    older_impl = PullRequest(
+        pipeline_id="pipe_order_doc",
+        task_id="task_impl",
+        summary="implementation",
+        branch_name="coderbot/impl",
+        patch="patch",
+        status=PullRequestStatus.OPEN,
+        created_at=base,
+    )
+    await older_impl.insert()
+    doc_pr = PullRequest(
+        pipeline_id="pipe_order_doc",
+        task_id="task_doc",
+        summary="documentation",
+        branch_name="docbot/task/doc",
+        patch="patch",
+        status=PullRequestStatus.OPEN,
+        kind=PullRequestKind.DOCUMENTATION,
+        created_at=base + timedelta(hours=1),
+    )
+    await doc_pr.insert()
+
+    assert await pr_routes.find_older_open_pull_request(doc_pr) is None
+
+
+@pytest.mark.asyncio
+async def test_find_older_open_pull_request_ignores_older_documentation(init_mock_db):
+    base = datetime(2026, 1, 1, tzinfo=UTC)
+    older_doc = PullRequest(
+        pipeline_id="pipe_order_impl",
+        task_id="task_doc",
+        summary="documentation",
+        branch_name="docbot/task/doc",
+        patch="patch",
+        status=PullRequestStatus.OPEN,
+        kind=PullRequestKind.DOCUMENTATION,
+        created_at=base,
+    )
+    await older_doc.insert()
+    newer_impl = PullRequest(
+        pipeline_id="pipe_order_impl",
+        task_id="task_impl",
+        summary="implementation",
+        branch_name="coderbot/impl",
+        patch="patch",
+        status=PullRequestStatus.OPEN,
+        created_at=base + timedelta(hours=1),
+    )
+    await newer_impl.insert()
+
+    assert await pr_routes.find_older_open_pull_request(newer_impl) is None
+
+
+@pytest.mark.asyncio
+async def test_find_older_open_pull_request_keeps_legacy_without_kind(init_mock_db):
+    base = datetime(2026, 1, 1, tzinfo=UTC)
+    legacy_id = ObjectId()
+    await PullRequest.get_pymongo_collection().insert_one(
+        {
+            "_id": legacy_id,
+            "pipeline_id": "pipe_legacy",
+            "task_id": "task_legacy",
+            "summary": "legacy",
+            "subject": "legacy",
+            "branch_name": "coderbot/legacy",
+            "patch": "patch",
+            "status": PullRequestStatus.OPEN.value,
+            "created_at": base,
+        }
+    )
+    newer_impl = PullRequest(
+        pipeline_id="pipe_legacy",
+        task_id="task_new",
+        summary="new",
+        branch_name="coderbot/new",
+        patch="patch",
+        status=PullRequestStatus.OPEN,
+        created_at=base + timedelta(hours=1),
+    )
+    await newer_impl.insert()
+
+    found = await pr_routes.find_older_open_pull_request(newer_impl)
+
+    assert found is not None
+    assert str(found.id) == str(legacy_id)
+
+
+@pytest.mark.asyncio
+async def test_resolve_chained_start_point_skips_documentation():
+    doc_pr = PullRequest(
+        pipeline_id="pipe_doc",
+        task_id="task_doc",
+        summary="documentation",
+        branch_name="docbot/task/doc",
+        kind=PullRequestKind.DOCUMENTATION,
+        pi_session_uid="doc-session",
+    )
+
+    with patch(
+        "api.routes.pull_request.pi_session_queries.find_chained_predecessor_branch",
+        new_callable=AsyncMock,
+    ) as mock_find_branch:
+        start_point = await pr_routes._resolve_chained_start_point(
+            MagicMock(), doc_pr
+        )
+
+    assert start_point is None
+    mock_find_branch.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_accept_documentation_pr_ignores_order_and_implementation_chain(
+    async_client, init_mock_db
+):
+    """A DocBot PR can be accepted while an older implementation PR is pending
+    and always branches from the default branch, never the implementation
+    chain."""
+    mock_user = AsyncMock()
+    mock_user.username = "testuser"
+    app.dependency_overrides[get_current_user] = lambda: mock_user
+
+    pipeline = Pipeline(
+        name="doc-pipeline",
+        workspace_path="/tmp/doc_repo",
+        repo_uri="https://host/owner/repo.git",
+    )
+    await pipeline.insert()
+    task = Task(
+        title="Implementation task",
+        pipeline_id=str(pipeline.id),
+        status=TaskStatus.PULL_REQUEST_AVAILABLE,
+        commit_hash="impl-commit",
+        completion_info="implementation summary",
+    )
+    await task.insert()
+
+    base = datetime(2026, 1, 1, tzinfo=UTC)
+    older_impl = PullRequest(
+        pipeline_id=str(pipeline.id),
+        task_id=str(task.id),
+        summary="older implementation",
+        branch_name="coderbot/older",
+        patch="patch",
+        status=PullRequestStatus.OPEN,
+        created_at=base,
+    )
+    await older_impl.insert()
+    doc_pr = PullRequest(
+        pipeline_id=str(pipeline.id),
+        task_id=str(task.id),
+        summary="DocBot: update architecture docs",
+        branch_name="docbot/task/abc123",
+        patch="diff --git a/doc.md b/doc.md\n",
+        status=PullRequestStatus.OPEN,
+        kind=PullRequestKind.DOCUMENTATION,
+        created_at=base + timedelta(hours=1),
+        pi_session_uid="doc-session",
+    )
+    await doc_pr.insert()
+
+    mock_repo = MagicMock()
+    try:
+        with (
+            patch("api.routes.pull_request.git_utils.get_repo", return_value=mock_repo),
+            patch(
+                "api.routes.pull_request.validate_workspace_clean",
+                new_callable=AsyncMock,
+            ),
+            patch("api.routes.pull_request.apply_patch", new_callable=AsyncMock),
+            patch("api.routes.pull_request.format_workspace", new_callable=AsyncMock),
+            patch(
+                "api.routes.pull_request.commit_changes", return_value="doc-commit"
+            ),
+            patch(
+                "api.routes.pull_request.git_utils.current_default_branch",
+                return_value="main",
+            ),
+            patch(
+                "api.routes.pull_request.git_utils.ensure_feature_branch"
+            ) as mock_ensure,
+            patch(
+                "api.routes.pull_request.pi_session_queries.find_chained_predecessor_branch",
+                new_callable=AsyncMock,
+                return_value="coderbot/older",
+            ) as mock_find_branch,
+            patch(
+                "api.routes.pull_request._submit_as_gitea_pr",
+                new_callable=AsyncMock,
+                return_value="https://host/owner/repo/pulls/2",
+            ),
+            patch(
+                "api.routes.pull_request.git_utils.remove_pr_worktree",
+                new_callable=AsyncMock,
+            ),
+            patch.object(pr_routes.config, "REMOTE_PR_MODE", "gitea_pr"),
+        ):
+            response = await async_client.post(f"/api/pull_requests/{doc_pr.id}/accept")
+
+        assert response.status_code == 200, response.text
+        mock_find_branch.assert_not_awaited()
+        mock_ensure.assert_called_once_with(
+            mock_repo, "docbot/task/abc123", start_point="main"
+        )
+        assert (await PullRequest.get(doc_pr.id)).status == PullRequestStatus.SUBMITTED
+        assert (await PullRequest.get(older_impl.id)).status == PullRequestStatus.OPEN
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
 async def test_get_pull_request_unauthenticated(async_client, init_mock_db):
     response = await async_client.get("/api/pull_requests/pr_123")
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
