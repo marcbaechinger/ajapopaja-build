@@ -540,6 +540,11 @@ class PullRequestStatus(str, Enum):
     SUBMITTED = "submitted"  # Gitea PR created, awaiting external review
 
 
+class PullRequestKind(str, Enum):
+    IMPLEMENTATION = "implementation"
+    DOCUMENTATION = "documentation"
+
+
 class PullRequest(Document):
     pipeline_id: str
     task_id: str
@@ -547,6 +552,8 @@ class PullRequest(Document):
     subject: str = ""
     author: Optional[str] = None
     branch_name: str
+    kind: PullRequestKind = PullRequestKind.IMPLEMENTATION
+    commit_hash: Optional[str] = None
     # The git diff output. Cleared when the pull request reaches a terminal
     # state and its completion cleanup runs (see
     # design/git/dd_batch_coderbot_git_process.md).

@@ -239,6 +239,13 @@ export const PullRequestStatus = {
 
 export type PullRequestStatus = typeof PullRequestStatus[keyof typeof PullRequestStatus];
 
+export const PullRequestKind = {
+  IMPLEMENTATION: "implementation",
+  DOCUMENTATION: "documentation",
+} as const;
+
+export type PullRequestKind = typeof PullRequestKind[keyof typeof PullRequestKind];
+
 export class PullRequest {
   id?: string;
   pipeline_id: string = '';
@@ -247,6 +254,8 @@ export class PullRequest {
   subject: string = '';
   author?: string;
   branch_name: string = '';
+  kind: PullRequestKind = PullRequestKind.IMPLEMENTATION;
+  commit_hash?: string | null;
   patch: string = '';
   status: PullRequestStatus = PullRequestStatus.OPEN;
   remote_pr_url?: string;
@@ -268,6 +277,8 @@ export class PullRequest {
     if (json.subject !== undefined) this.subject = String(json.subject);
     if (json.author !== undefined) this.author = String(json.author);
     if (json.branch_name !== undefined) this.branch_name = String(json.branch_name);
+    if (json.kind !== undefined) this.kind = json.kind as PullRequestKind;
+    if (json.commit_hash !== undefined) this.commit_hash = json.commit_hash;
     // A completed PR may have its patch cleaned up by the backend (null).
     // Keep patch a string on the model, but never turn null into "null".
     this.patch = json.patch != null ? String(json.patch) : '';

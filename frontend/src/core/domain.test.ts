@@ -26,6 +26,7 @@ import {
   NotificationSeverity,
   isProcessedStatus,
   PullRequest,
+  PullRequestKind,
   PullRequestStatus,
 } from './domain';
 
@@ -208,6 +209,23 @@ describe('Domain Models', () => {
       const pr = new PullRequest({ status: PullRequestStatus.ACCEPTED, patch: null });
       expect(pr.status).toBe(PullRequestStatus.ACCEPTED);
       expect(pr.patch).toBe('');
+    });
+  });
+
+  describe('PullRequest kind and commit hash', () => {
+    it('defaults to implementation and no commit hash', () => {
+      const pr = new PullRequest({});
+      expect(pr.kind).toBe(PullRequestKind.IMPLEMENTATION);
+      expect(pr.commit_hash).toBeUndefined();
+    });
+
+    it('preserves an explicit documentation kind and commit hash', () => {
+      const pr = new PullRequest({
+        kind: PullRequestKind.DOCUMENTATION,
+        commit_hash: 'abc123',
+      });
+      expect(pr.kind).toBe(PullRequestKind.DOCUMENTATION);
+      expect(pr.commit_hash).toBe('abc123');
     });
   });
 

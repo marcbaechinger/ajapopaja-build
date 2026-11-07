@@ -24,6 +24,8 @@ from core.models.models import (
     DesignDocHistory,
     Pipeline,
     PipelineStatus,
+    PullRequest,
+    PullRequestKind,
     StateTransition,
     Task,
     TaskStatus,
@@ -94,6 +96,50 @@ async def test_task_defaults_and_history(init_mock_db):
     assert saved_task.history[0].to_status == TaskStatus.SCHEDULED
     assert saved_task.history[0].by == "user"
     assert isinstance(saved_task.history[0].timestamp, datetime)
+
+
+def test_pull_request_defaults_to_implementation(init_mock_db):
+    pr = PullRequest(
+        pipeline_id="pipeline_123",
+        task_id="task_123",
+        summary="Implement the feature",
+        branch_name="feature/test",
+    )
+    assert pr.kind == PullRequestKind.IMPLEMENTATION
+    assert pr.kind == "implementation"
+    assert pr.commit_hash is None
+
+
+def test_pull_request_accepts_explicit_documentation_kind(init_mock_db):
+    pr = PullRequest(
+        pipeline_id="pipeline_123",
+        task_id="task_123",
+        summary="Document the feature",
+        branch_name="docs/test",
+        kind=PullRequestKind.DOCUMENTATION,
+        commit_hash="abc123",
+    )
+    assert pr.kind == PullRequestKind.DOCUMENTATION
+    assert pr.kind == "documentation"
+    assert pr.commit_hash == "abc123"
+
+
+def test_legacy_pull_request_document_defaults_to_implementation(init_mock_db):
+    # Documents created before the fields existed have neither key; Pydantic
+    # fills in the defaults without requiring a data migration.
+    pr = PullRequest.model_validate(
+        {
+            "pipeline_id": "pipeline_123",
+            "task_id": "task_123",
+            "summary": "Legacy pull request",
+            "branch_name": "feature/legacy",
+        }
+    )
+    assert pr.kind == PullRequestKind.IMPLEMENTATION
+    assert pr.commit_hash is None
+    data = pr.model_dump(mode="json")
+    assert data["kind"] == "implementation"
+    assert data["commit_hash"] is None
 
 
 @pytest.mark.asyncio
