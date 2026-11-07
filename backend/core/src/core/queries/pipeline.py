@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 from typing import Any, List, Optional
 
 from core.exceptions import EntityNotFoundError, ValidationError, VersionMismatchError
@@ -22,6 +23,8 @@ from core.models.models import (
     _normalize_model_override,
     _validate_command_lists,
 )
+
+logger = logging.getLogger(__name__)
 
 #: Sentinel marking a model override that was not supplied in a partial update.
 _UNSET: Any = object()
@@ -102,6 +105,21 @@ async def create_pipeline(pipeline: Pipeline) -> Pipeline:
     # Ensure version is set to 1 for new pipelines
     pipeline.version = 1
     await pipeline.insert()
+    # Clone remote repos immediately so the checkout exists without waiting for
+    # a container restart (the startup bootstrap only sees pre-existing
+    # pipelines). Best-effort: a failed clone is logged but never rolls back the
+    # persisted pipeline; the pull UI or a restart can retry it.
+    if pipeline.repo_uri:
+        from core.utils import git_utils
+
+        try:
+            await git_utils.ensure_repo_cloned(pipeline)
+        except Exception as e:
+            logger.warning(
+                "Failed to clone remote repo for pipeline '%s' after creation: %s",
+                pipeline.name,
+                e,
+            )
     return pipeline
 
 

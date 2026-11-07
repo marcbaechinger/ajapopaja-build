@@ -199,6 +199,41 @@ async def test_create_pipeline_local_valid_persisted(
     assert len(await pipeline_queries.get_all_pipelines()) == 1
 
 
+@pytest.mark.asyncio
+async def test_create_pipeline_remote_clones_repo(init_mock_db):
+    pipeline = Pipeline(name="Remote", repo_uri="https://host/org/my-app.git")
+    with (
+        patch.object(git_utils, "verify_remote_repo", return_value=None),
+        patch.object(git_utils, "_resolve_credentials", return_value=("u", "t")),
+        patch.object(
+            git_utils, "ensure_repo_cloned", new_callable=AsyncMock
+        ) as mock_clone,
+    ):
+        created = await pipeline_queries.create_pipeline(pipeline)
+    mock_clone.assert_awaited_once_with(pipeline)
+    assert created.version == 1
+    assert len(await pipeline_queries.get_all_pipelines()) == 1
+
+
+@pytest.mark.asyncio
+async def test_create_pipeline_remote_clone_failure_still_persists(init_mock_db):
+    pipeline = Pipeline(name="Remote", repo_uri="https://host/org/my-app.git")
+    with (
+        patch.object(git_utils, "verify_remote_repo", return_value=None),
+        patch.object(git_utils, "_resolve_credentials", return_value=("u", "t")),
+        patch.object(
+            git_utils,
+            "ensure_repo_cloned",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("clone boom"),
+        ),
+    ):
+        created = await pipeline_queries.create_pipeline(pipeline)
+    # A clone failure is logged but the pipeline is still persisted (best-effort).
+    assert created.version == 1
+    assert len(await pipeline_queries.get_all_pipelines()) == 1
+
+
 # ---------------------------------------------------------------------------
 # Route-level (HTTP) sanitization
 # ---------------------------------------------------------------------------
@@ -254,7 +289,12 @@ async def test_route_create_local_missing_path_422(async_client, init_mock_db):
 
 @pytest.mark.asyncio
 async def test_route_create_remote_reachable_ok(async_client, init_mock_db):
-    with patch("core.utils.git_utils.verify_remote_repo", return_value=None):
+    with (
+        patch("core.utils.git_utils.verify_remote_repo", return_value=None),
+        patch(
+            "core.utils.git_utils.ensure_repo_cloned", new_callable=AsyncMock
+        ),
+    ):
         response = await async_client.post(
             "/api/pipelines/",
             json={"name": "Remote", "repo_uri": "https://host/org/good.git"},
