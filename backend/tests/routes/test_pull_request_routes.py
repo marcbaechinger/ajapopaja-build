@@ -52,6 +52,7 @@ async def test_keep_task_pending_review_transitions_to_submitted(init_mock_db):
         task_id=str(task.id),
         summary="summary",
         branch_name="branch",
+        kind=PullRequestKind.IMPLEMENTATION,
     )
 
     await pr_routes.keep_task_pending_review(
@@ -67,10 +68,40 @@ async def test_keep_task_pending_review_transitions_to_submitted(init_mock_db):
 
 
 @pytest.mark.asyncio
+async def test_update_task_status_implementation_transitions_to_implemented(
+    init_mock_db,
+):
+    """Local acceptance still finalizes an implementation PR."""
+    task = Task(
+        title="Task 1",
+        pipeline_id="pipe_123",
+        status=TaskStatus.PULL_REQUEST_AVAILABLE,
+        commit_hash="old-commit",
+        completion_info="old summary",
+    )
+    await task.insert()
+    pr = PullRequest(
+        pipeline_id="pipe_123",
+        task_id=str(task.id),
+        summary="implementation summary",
+        branch_name="coderbot/branch",
+        kind=PullRequestKind.IMPLEMENTATION,
+    )
+
+    await pr_routes.update_task_status(task, "impl-commit", "impl summary", pr)
+
+    assert task.status == TaskStatus.IMPLEMENTED
+    assert task.commit_hash == "impl-commit"
+    assert task.completion_info == "impl summary"
+    assert task.history[-1].from_status == TaskStatus.PULL_REQUEST_AVAILABLE
+    assert task.history[-1].to_status == TaskStatus.IMPLEMENTED
+
+
+@pytest.mark.asyncio
 async def test_update_task_status_documentation_preserves_implementation_metadata(
     init_mock_db,
 ):
-    """A documentation PR must not overwrite the implementation metadata."""
+    """A documentation PR must not transition or overwrite the task."""
     task = Task(
         title="Task 1",
         pipeline_id="pipe_123",
@@ -80,6 +111,7 @@ async def test_update_task_status_documentation_preserves_implementation_metadat
         review_md="https://host/owner/repo/pulls/1",
     )
     await task.insert()
+    history_before = list(task.history)
     pr = PullRequest(
         pipeline_id="pipe_123",
         task_id=str(task.id),
@@ -90,10 +122,11 @@ async def test_update_task_status_documentation_preserves_implementation_metadat
 
     await pr_routes.update_task_status(task, "doc-commit", "doc summary", pr)
 
-    assert task.status == TaskStatus.IMPLEMENTED
+    assert task.status == TaskStatus.SUBMITTED
     assert task.commit_hash == "impl-commit"
     assert task.completion_info == "implementation summary"
     assert task.review_md == "https://host/owner/repo/pulls/1"
+    assert task.history == history_before
 
 
 @pytest.mark.asyncio
@@ -109,6 +142,7 @@ async def test_keep_task_pending_review_documentation_preserves_implementation_m
         review_md="https://host/owner/repo/pulls/1",
     )
     await task.insert()
+    history_before = list(task.history)
     pr = PullRequest(
         pipeline_id="pipe_123",
         task_id=str(task.id),
@@ -125,22 +159,21 @@ async def test_keep_task_pending_review_documentation_preserves_implementation_m
         pr,
     )
 
-    assert task.status == TaskStatus.SUBMITTED
+    assert task.status == TaskStatus.IMPLEMENTED
     assert task.commit_hash == "impl-commit"
     assert task.completion_info == "implementation summary"
     assert task.review_md == "https://host/owner/repo/pulls/1"
-    assert task.history[-1].from_status == TaskStatus.IMPLEMENTED
-    assert task.history[-1].to_status == TaskStatus.SUBMITTED
+    assert task.history == history_before
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "gitea_pr,initial_status,expected_status",
     [
-        (True, TaskStatus.IMPLEMENTED, TaskStatus.SUBMITTED),
+        (True, TaskStatus.IMPLEMENTED, TaskStatus.IMPLEMENTED),
         (True, TaskStatus.SUBMITTED, TaskStatus.SUBMITTED),
         (False, TaskStatus.IMPLEMENTED, TaskStatus.IMPLEMENTED),
-        (False, TaskStatus.SUBMITTED, TaskStatus.IMPLEMENTED),
+        (False, TaskStatus.SUBMITTED, TaskStatus.SUBMITTED),
     ],
 )
 async def test_accept_documentation_pr_preserves_task_metadata(
@@ -150,8 +183,8 @@ async def test_accept_documentation_pr_preserves_task_metadata(
     initial_status,
     expected_status,
 ):
-    """DocBot acceptance works on IMPLEMENTED/SUBMITTED tasks and a quick
-    accept without a commit message succeeds."""
+    """DocBot acceptance leaves an IMPLEMENTED/SUBMITTED task at its prior
+    status and a quick accept without a commit message succeeds."""
     mock_user = AsyncMock()
     mock_user.username = "testuser"
     app.dependency_overrides[get_current_user] = lambda: mock_user

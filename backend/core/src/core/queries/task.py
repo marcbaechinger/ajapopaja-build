@@ -63,11 +63,7 @@ ALLOWED_TRANSITIONS: Dict[TaskStatus, set] = {
         # backlog so it can be reworked (mirrors the local reject path).
         TaskStatus.CREATED,
     },
-    TaskStatus.IMPLEMENTED: {
-        # A documentation PR may be submitted for external review after the
-        # implementation task has already been completed.
-        TaskStatus.SUBMITTED,
-    },
+    TaskStatus.IMPLEMENTED: set(),
     TaskStatus.DISCARDED: set(),
     TaskStatus.FAILED: {TaskStatus.CREATED, TaskStatus.SCHEDULED},
 }

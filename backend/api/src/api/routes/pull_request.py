@@ -371,17 +371,27 @@ async def update_task_status(
 ) -> None:
     """Mark the task as IMPLEMENTED after accepting an implementation PR.
 
-    Documentation pull requests must not overwrite the implementation metadata
-    stored on the task; their commit and URL live on the ``PullRequest``.
+    Documentation pull requests are created after their task has already been
+    implemented, so they must neither transition nor overwrite the task; their
+    commit and URL live on the ``PullRequest``.
     """
-    if task:
-        logger.info(f"Updating status for task {task.id} to IMPLEMENTED")
-        if pr.kind == PullRequestKind.IMPLEMENTATION:
-            task.commit_hash = new_commit_hash
-            task.completion_info = summary
-        await task_queries.transition_task(
-            str(task.id), TaskStatus.IMPLEMENTED, actor="user", task=task
+    if not task:
+        return
+    if pr.kind != PullRequestKind.IMPLEMENTATION:
+        logger.info(
+            "Leaving task %s at its current status %s for %s pull request %s",
+            task.id,
+            task.status,
+            pr.kind,
+            pr.id,
         )
+        return
+    logger.info(f"Updating status for task {task.id} to IMPLEMENTED")
+    task.commit_hash = new_commit_hash
+    task.completion_info = summary
+    await task_queries.transition_task(
+        str(task.id), TaskStatus.IMPLEMENTED, actor="user", task=task
+    )
 
 
 async def keep_task_pending_review(
@@ -393,21 +403,31 @@ async def keep_task_pending_review(
 ) -> None:
     """Mark the task as submitted for external review (Gitea-PR mode).
 
-    The task transitions to SUBMITTED so it is considered completed by the UI
-    and completed-tasks query, but kept distinct from IMPLEMENTED since only
-    external review remains. For implementation PRs the commit and PR URL are
-    recorded on the task for later automation; documentation PRs keep those
-    fields untouched (their metadata is stored on the pull request).
+    Implementation PRs transition to SUBMITTED so they are considered completed
+    by the UI and completed-tasks query, but kept distinct from IMPLEMENTED
+    since only external review remains. Their commit and PR URL are recorded on
+    the task for later automation. Documentation PRs are created after the task
+    is already implemented, so they leave the task and its metadata untouched;
+    their metadata is stored on the pull request.
     """
-    if task:
-        logger.info(f"Marking task {task.id} as SUBMITTED awaiting external review")
-        if pr.kind == PullRequestKind.IMPLEMENTATION:
-            task.commit_hash = new_commit_hash
-            task.completion_info = summary
-            task.review_md = remote_pr_url
-        await task_queries.transition_task(
-            str(task.id), TaskStatus.SUBMITTED, actor="user", task=task
+    if not task:
+        return
+    if pr.kind != PullRequestKind.IMPLEMENTATION:
+        logger.info(
+            "Leaving task %s at its current status %s for %s pull request %s",
+            task.id,
+            task.status,
+            pr.kind,
+            pr.id,
         )
+        return
+    logger.info(f"Marking task {task.id} as SUBMITTED awaiting external review")
+    task.commit_hash = new_commit_hash
+    task.completion_info = summary
+    task.review_md = remote_pr_url
+    await task_queries.transition_task(
+        str(task.id), TaskStatus.SUBMITTED, actor="user", task=task
+    )
 
 
 # =============================================================================

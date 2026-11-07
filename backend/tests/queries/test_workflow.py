@@ -351,8 +351,8 @@ async def test_transition_task_with_task_object_preserves_fields(init_mock_db):
 
 
 @pytest.mark.asyncio
-async def test_transition_implemented_to_submitted_records_history(init_mock_db):
-    """A documentation PR may move an already implemented task to SUBMITTED."""
+async def test_transition_implemented_to_submitted_illegal(init_mock_db):
+    """Documentation PRs must not demote an already implemented task."""
     pipeline = Pipeline(name="Test Pipeline")
     await pipeline.insert()
 
@@ -362,15 +362,16 @@ async def test_transition_implemented_to_submitted_records_history(init_mock_db)
         status=TaskStatus.IMPLEMENTED,
     )
     await task.insert()
+    history_before = list(task.history)
 
-    updated = await task_queries.transition_task(
-        str(task.id), TaskStatus.SUBMITTED, actor="user"
-    )
+    with pytest.raises(ValueError, match="Illegal task transition"):
+        await task_queries.transition_task(
+            str(task.id), TaskStatus.SUBMITTED, actor="user"
+        )
 
-    assert updated.status == TaskStatus.SUBMITTED
-    assert updated.history[-1].from_status == TaskStatus.IMPLEMENTED
-    assert updated.history[-1].to_status == TaskStatus.SUBMITTED
-    assert updated.version == task.version + 1
+    persisted = await Task.get(str(task.id))
+    assert persisted.status == TaskStatus.IMPLEMENTED
+    assert persisted.history == history_before
 
 
 @pytest.mark.asyncio
