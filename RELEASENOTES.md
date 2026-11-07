@@ -1,53 +1,6 @@
 # Release Notes
 
-## Unreleased – Interactive session manager
-
-* **No more surprise logouts when running staging side by side** – the refresh
-  cookie name is no longer hard-coded to `refresh_token`. It is read from
-  `REFRESH_COOKIE_NAME` (defaulting to a name derived from `DATABASE_NAME`), so
-  production and staging on the same host stop overwriting each other's
-  HttpOnly refresh cookie. Because the cookie name changes, every browser does
-  one re-login after upgrading. The access token is now refreshed proactively
-  and only once per burst of concurrent `401`s, and the WebSocket
-  re-authenticates after a refused handshake.
-
-* **Coding Agent tab is always available** – the detached **Start Interactive
-  Session** button above the content area is gone. The Coding Agent tab is now
-  always shown; with no session attached it renders PiView's “No active
-  session…” empty state carrying the **Start Interactive Session** button for
-  remote pipelines (local pipelines show the empty state without it). The
-  embedded view is kept mounted across tab switches and is scoped to its own
-  pipeline, so another pipeline's running session never leaks its log into it.
-
-* **Session manager drawer** – a global right‑hand panel (Sessions button in the
-  dashboard and pipeline headers, `Ctrl/Cmd+J`) lists every durable Pi session
-  grouped by status (Active, Paused, Completed, Failed, Discarded) with search,
-  status filters and a batch‑session toggle. Selecting a paused session pauses
-  the current one and resumes the target atomically.
-* **Per‑pipeline resume** – pipeline detail views show an inline session list
-  of paused/completed sessions; resuming one is a single click from that list.
-  The Coding Agent tab's empty state offers **Start Interactive Session** for
-  pipelines with no session.
-* **Replay‑race fix** – resuming a session no longer loses its replayed history
-  when a late `INTERACTIVE_STARTED` broadcast arrives.
-* **Session rename** – `PATCH /api/coderbot/sessions/{uid}` updates a session
-  label and broadcasts a `SESSION_UPDATED` websocket message.
-* **Simpler interactive controls** – the interactive coding header no longer
-  offers a redundant **Switch session** button (the global Sessions button,
-  `Ctrl/Cmd+J` and the inline session list already cover switching) nor a
-  **Stop Session** button. Pause and Stop were functionally identical: both end
-  the Pi process and leave the durable session `PAUSED` and resumable. Only
-  **Pause** remains; it is disabled while the session is inactive. The genuinely
-  destructive **Discard** action (releases the retained workspace and Pi session
-  file) stays behind its confirmation in the session manager / inline rows.
-* **Sessions survive container restarts** – sessions are now persisted under a
-  dedicated host path (`PI_SESSIONS_ROOT`, default `/data/ajapopaja/pi_sessions`)
-  that is bind-mounted 1:1 into the container, instead of living in the
-  container's writable layer. Interactive and batch sessions therefore survive
-  `docker compose down`, image reloads and systemd restarts.
-
-
-## 0.4.0 – IDE‑style workspace, remote repositories, and richer agent tooling
+## 0.4.0 – IDE‑style workspace, remote repositories, interactive sessions, and richer agent tooling
 
 This release rebuilds the dashboard around an IDE‑style workspace, adds
 first‑class support for remote git repositories, turns the live CoderBot log
@@ -160,6 +113,9 @@ commands and a much broader tool set.
   process manager, with a **Start dev server** button in the pipeline editor.
 * Docker now publishes the user dev‑server port **1224**, so a started server is
   reachable from the host.
+* **Dev server on a pull‑request branch** – the dev server can run against a
+  PR branch, with branch info shown in the dialog and a **back to default
+  branch** button.
 
 ### 🔌 MCP & Pi skill
 
@@ -172,6 +128,9 @@ commands and a much broader tool set.
   `ajapopaja` skill while batch CoderBot sessions expose none by default. Models
   stay global; skills are configurable via `INTERACTIVE_SKILLS` and
   `CODERBOT_SKILLS`.
+* **Pi agent upgrades** – Pi coding agent **1.5.0** on Node.js 24, a bundled
+  `code‑review` skill, a bubblewrap‑sandboxed runtime, and additional models
+  (deepseek‑pro, gpt‑oss:120, qwen3‑coder).
 
 ### 🔒 Security & reliability
 
@@ -188,6 +147,98 @@ commands and a much broader tool set.
   sample task data.
 * Broad new test coverage, including integration tests for the remote‑pipeline
   flow, and pipeline‑specific verification commands (`CommandRunner`, lint).
+* **Faster backend tests** – the suite runs in parallel with `pytest‑xdist` and
+  uses an in‑memory MongoDB, and wall‑clock `asyncio.sleep` delays are removed.
+
+### 💬 Interactive session manager
+
+* **No more surprise logouts when running staging side by side** – the refresh
+  cookie name is no longer hard-coded to `refresh_token`. It is read from
+  `REFRESH_COOKIE_NAME` (defaulting to a name derived from `DATABASE_NAME`), so
+  production and staging on the same host stop overwriting each other's
+  HttpOnly refresh cookie. Because the cookie name changes, every browser does
+  one re-login after upgrading. The access token is now refreshed proactively
+  and only once per burst of concurrent `401`s, and the WebSocket
+  re-authenticates after a refused handshake.
+
+* **Coding Agent tab is always available** – the detached **Start Interactive
+  Session** button above the content area is gone. The Coding Agent tab is now
+  always shown; with no session attached it renders PiView's “No active
+  session…” empty state carrying the **Start Interactive Session** button for
+  remote pipelines (local pipelines show the empty state without it). The
+  embedded view is kept mounted across tab switches and is scoped to its own
+  pipeline, so another pipeline's running session never leaks its log into it.
+
+* **Session manager drawer** – a global right‑hand panel (Sessions button in the
+  dashboard and pipeline headers, `Ctrl/Cmd+J`) lists every durable Pi session
+  grouped by status (Active, Paused, Completed, Failed, Discarded) with search,
+  status filters and a batch‑session toggle. Selecting a paused session pauses
+  the current one and resumes the target atomically.
+* **Per‑pipeline resume** – pipeline detail views show an inline session list
+  of paused/completed sessions; resuming one is a single click from that list.
+  The Coding Agent tab's empty state offers **Start Interactive Session** for
+  pipelines with no session.
+* **Replay‑race fix** – resuming a session no longer loses its replayed history
+  when a late `INTERACTIVE_STARTED` broadcast arrives.
+* **Session rename** – `PATCH /api/coderbot/sessions/{uid}` updates a session
+  label and broadcasts a `SESSION_UPDATED` websocket message.
+* **Simpler interactive controls** – the interactive coding header no longer
+  offers a redundant **Switch session** button (the global Sessions button,
+  `Ctrl/Cmd+J` and the inline session list already cover switching) nor a
+  **Stop Session** button. Pause and Stop were functionally identical: both end
+  the Pi process and leave the durable session `PAUSED` and resumable. Only
+  **Pause** remains; it is disabled while the session is inactive. The genuinely
+  destructive **Discard** action (releases the retained workspace and Pi session
+  file) stays behind its confirmation in the session manager / inline rows.
+* **Sessions survive container restarts** – sessions are now persisted under a
+  dedicated host path (`PI_SESSIONS_ROOT`, default `/data/ajapopaja/pi_sessions`)
+  that is bind-mounted 1:1 into the container, instead of living in the
+  container's writable layer. Interactive and batch sessions therefore survive
+  `docker compose down`, image reloads and systemd restarts.
+
+### 🐳 Docker & deployment
+
+* **Single, self‑contained `.env`** – all host‑specific settings live in one
+  `.env` file (template `.env.example`). Docker Compose reads it for `${VAR}`
+  interpolation *and* forwards it as the container's runtime environment, so a
+  local `docker compose up` works end‑to‑end without editing any script.
+* **One source root, no home‑directory mounts** – the container no longer maps
+  entire `/home` or `/Users` trees. A single optional `WORKSPACES_ROOT` mount
+  exposes local repos; remote‑only deployments need none.
+* **Isolated local / prod / staging instances** – the local template uses
+  distinct ports, container name, database and data roots so all three can run
+  side by side on one host.
+* **Loopback‑bound ports** – published ports bind to `127.0.0.1` so nginx is the
+  only entry point, and nginx now proxies WebSocket connections.
+* **Friendly staging domains** – prod and staging are reachable via `/etc/hosts`
+  names (`ajapopaja`, `ajapopaja.stage`).
+
+### 📝 DocBot documentation PRs
+
+* **Real Gitea documentation PRs** – DocBot now opens complete documentation
+  pull requests (with a PR `kind`, subject and a unique branch) instead of the
+  legacy preview/commit path, which is removed.
+* **Kind‑aware acceptance** – documentation PRs no longer transition tasks or
+  trigger implementation chaining/cleanup, keeping docs separate from code work.
+* **Visible failures** – DocBot PR‑creation failures are surfaced in the session
+  results rather than failing silently.
+
+### 🔁 Pull‑request reconciliation & cleanup
+
+* **Remote PR state reconciled locally** – Gitea PR merges/rejections flow back
+  to the local PR/task via webhook and an on‑demand **Sync from Gitea** action.
+* **Automatic branch/patch cleanup** – completed PRs release their feature
+  branch and patch through a shared cleanup helper (both local accept and the
+  Gitea hook path).
+* **Reliability fixes** – merged/rejected PRs no longer stay stuck in
+  `SUBMITTED`, rejected PRs no longer leak into new CoderBot branches, and
+  chained PRs accept correctly in Gitea‑PR mode.
+
+### 🧵 Pi process server
+
+* The Pi process manager is now a **standalone server** using a std‑I/O
+  subprocess transport, decoupled from the web API.
+
 
 ## 0.3.0 – Autonomous coding agents and pull‑request workflow
 
