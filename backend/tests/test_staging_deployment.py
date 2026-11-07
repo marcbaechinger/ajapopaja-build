@@ -119,3 +119,33 @@ def test_bootstrap_script_exists_and_is_executable():
     assert STAGING_ROOT in script
     assert "setup_test_db.py" in script
     assert "--seed" in script
+
+
+def _env_value(env: str, key: str) -> str | None:
+    for line in env.splitlines():
+        if line.startswith(f"{key}="):
+            return line.split("=", 1)[1]
+    return None
+
+
+def test_local_env_template_is_isolated_from_prod_and_staging():
+    local = _read(".env.example")
+    prod = _read("deploy/prod.env.example")
+    staging = _read("deploy/staging.env.example")
+
+    # Ports, container name, database and writable roots must all be distinct
+    # so the local instance can run alongside the prod and staging systemd
+    # services on the same host.
+    for key in (
+        "PORT",
+        "DEV_SERVER_PORT",
+        "CONTAINER_NAME",
+        "DATABASE_NAME",
+        "PI_SESSIONS_ROOT",
+        "SANDBOX_ROOT",
+        "REMOTE_WORKSPACES_ROOT",
+    ):
+        local_val = _env_value(local, key)
+        assert local_val is not None, f"missing {key} in .env.example"
+        assert local_val != _env_value(prod, key), f"{key} collides with production"
+        assert local_val != _env_value(staging, key), f"{key} collides with staging"
