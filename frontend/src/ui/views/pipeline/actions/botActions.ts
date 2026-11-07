@@ -15,7 +15,6 @@
  */
 
 import { CoderBotDialog } from '../../../components/dialogs/CoderBotDialog.ts';
-import { DocBotDialog, type DocBotDialogProps } from '../../../components/dialogs/DocBotDialog.ts';
 import { ReviewDialog } from '../../../components/dialogs/ReviewDialog.ts';
 import { UpdateDesignDialog } from '../../../components/dialogs/UpdateDesignDialog.ts';
 import { TaskStatus } from '../../../../core/domain.ts';
@@ -24,7 +23,7 @@ import type { HashWriteMode } from '../PipelineSubRoute.ts';
 import type { PipelineDetailCtx } from '../PipelineDetailCtx.ts';
 
 export interface BotActionsDeps {
-  /** The mounted view root; `openDocBotDialog` queries `#docbot-dialog-container`. */
+  /** The mounted view root. */
   getHost(): HTMLElement | null;
   /** Switch the active content tab and write the route (currently the shell; P8 will own it). */
   setContentTab(tab: ContentTab, opts?: { hash?: HashWriteMode }): void;
@@ -34,40 +33,6 @@ export interface BotActionsDeps {
   updateEngineSlot(): void;
   /** Persist `ctx.state.pendingReviews` after `open_review_dialog` consumes one (P6). */
   persistPendingReviews(): void;
-}
-
-/**
- * Opens the DocBot diff/commit dialog into the shell's `#docbot-dialog-container`
- * mount point. Reads live state from `ctx.state`, so a missing host, task id or
- * preview payload is an intentional no-op.
- */
-function openDocBotDialog(ctx: PipelineDetailCtx, deps: BotActionsDeps): void {
-  const dialogContainer = deps
-    .getHost()
-    ?.querySelector('#docbot-dialog-container') as HTMLElement | null;
-  if (!dialogContainer || !ctx.state.docbotState.taskId || !ctx.state.docbotPreviewData) return;
-
-  const props: DocBotDialogProps = {
-    taskId: ctx.state.docbotState.taskId,
-    pipelineId: ctx.pipelineId,
-    diff: ctx.state.docbotPreviewData.diff,
-    commitMsg: ctx.state.docbotPreviewData.commit_msg,
-    filename: ctx.state.docbotPreviewData.filename,
-    context: ctx.context,
-    onClose: () => {
-      dialogContainer.innerHTML = '';
-    },
-    onSuccess: () => {
-      ctx.state.docbotState = {
-        status: 'none',
-        taskId: null,
-      };
-      ctx.state.docbotPreviewData = null;
-      ctx.refresh.header();
-    }
-  };
-
-  new DocBotDialog(dialogContainer, props);
 }
 
 /**
@@ -81,9 +46,8 @@ export function openCoderBotDialog(ctx: PipelineDetailCtx): void {
 /**
  * Registers the bot trigger/dialog actions on the shared action registry:
  * `trigger_reviewbot`, `trigger_archbot`, `trigger_specagent`, `trigger_coderbot`,
- * `trigger_docbot`, `open_spec_proposal`, `open_docbot_dialog`,
- * `dismiss_docbot_banner`, `open_coderbot_dialog`, `update_design` and
- * `open_review_dialog`.
+ * `trigger_docbot`, `open_spec_proposal`, `dismiss_docbot_banner`,
+ * `open_coderbot_dialog`, `update_design` and `open_review_dialog`.
  *
  * The handlers were extracted verbatim from `PipelineDetailView`. All mutable
  * state comes from `ctx.state` and every repaint goes through `ctx.refresh`;
@@ -240,13 +204,8 @@ export function registerBotActions(ctx: PipelineDetailCtx, deps: BotActionsDeps)
     }
   });
 
-  actionRegistry.register('open_docbot_dialog', () => {
-    openDocBotDialog(ctx, deps);
-  });
-
   actionRegistry.register('dismiss_docbot_banner', () => {
     ctx.state.docbotState = { status: 'none', taskId: null };
-    ctx.state.docbotPreviewData = null;
     ctx.refresh.header();
   });
 }

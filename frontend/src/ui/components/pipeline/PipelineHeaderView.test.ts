@@ -71,11 +71,22 @@ describe('PipelineHeaderView', () => {
     expect(running).toContain(':1224');
   });
 
-  it('renders DocBot banner when ready', () => {
-    const props = { ...mockProps, docbotState: { status: 'ready', taskId: 't1' } as any };
+  it('renders a documentation PR hint without a review-dialog action', () => {
+    const props = { ...mockProps, docbotState: { status: 'prCreated', taskId: 't1' } as any };
     const html = PipelineHeaderView.render(props);
-    expect(html).toContain('Doc Ready');
-    expect(html).toContain('Review');
+    expect(html).toContain('Documentation PR created.');
+    expect(html).toContain('Review it in the PR section.');
+  });
+
+  it('renders the DocBot error reason with a dismiss action', () => {
+    const props = {
+      ...mockProps,
+      docbotState: { status: 'error', taskId: 't1', reason: 'PR creation failed' } as any,
+    };
+    const html = PipelineHeaderView.render(props);
+    expect(html).toContain('Documentation update failed');
+    expect(html).toContain('PR creation failed');
+    expect(html).toContain('dismiss_docbot_banner');
   });
 
   it('renders header stats for created', () => {

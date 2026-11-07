@@ -394,32 +394,73 @@ describe('PipelineRealtimeController', () => {
     });
   });
 
-  describe('DocBot preview', () => {
-    it('sets the preview/state and refreshes the header on success', async () => {
-      const fetchMock = vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({ task_id: 't1', diff: 'd' }),
-      });
-      vi.stubGlobal('fetch', fetchMock);
+  describe('DocBot status', () => {
+    it('sets the in-progress state on DOCBOT_STARTED', () => {
+      const ctrl = makeController();
+      ctrl.start();
 
-      await makeController().fetchDocBotPreview('t1');
+      handlers['ws:DOCBOT_STARTED:p1']({ task_id: 't1' });
 
-      expect(fetchMock).toHaveBeenCalledWith('/api/pipelines/p1/docbot/preview/t1', {
-        headers: { Authorization: 'Bearer token' },
-      });
-      expect(ctx.state.docbotPreviewData).toEqual({ task_id: 't1', diff: 'd' });
-      expect(ctx.state.docbotState).toEqual({ status: 'ready', taskId: 't1' });
+      expect(ctx.state.docbotState).toEqual({ status: 'inProgress', taskId: 't1' });
       expect(ctx.refresh.header).toHaveBeenCalledTimes(1);
     });
 
-    it('leaves the state untouched on a non-ok response', async () => {
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
+    it('sets noUpdate with the reason when no documentation update is needed', () => {
+      const ctrl = makeController();
+      ctrl.start();
 
-      await makeController().fetchDocBotPreview('t1');
+      handlers['ws:DOCBOT_COMPLETED:p1']({
+        task_id: 't1',
+        result: { status: 'no_update_needed', reason: 'Already documented' },
+      });
 
-      expect(ctx.state.docbotPreviewData).toBeNull();
+      expect(ctx.state.docbotState).toEqual({
+        status: 'noUpdate',
+        taskId: 't1',
+        reason: 'Already documented',
+      });
+      expect(ctx.refresh.header).toHaveBeenCalledTimes(1);
+    });
+
+    it('points the user at the PR section when documentation updates were made', () => {
+      const ctrl = makeController();
+      ctrl.start();
+
+      handlers['ws:DOCBOT_COMPLETED:p1']({
+        task_id: 't1',
+        result: { status: 'update_needed' },
+      });
+
+      expect(ctx.state.docbotState).toEqual({ status: 'prCreated', taskId: 't1' });
+      expect(ctx.refresh.header).toHaveBeenCalledTimes(1);
+    });
+
+    it('sets error with the reason when PR creation fails', () => {
+      const ctrl = makeController();
+      ctrl.start();
+
+      handlers['ws:DOCBOT_COMPLETED:p1']({
+        task_id: 't1',
+        result: { status: 'pr_creation_failed', reason: 'Git push failed' },
+      });
+
+      expect(ctx.state.docbotState).toEqual({
+        status: 'error',
+        taskId: 't1',
+        reason: 'Git push failed',
+      });
+      expect(ctx.refresh.header).toHaveBeenCalledTimes(1);
+    });
+
+    it('resets to none for an unknown or missing result', () => {
+      const ctrl = makeController();
+      ctrl.start();
+
+      handlers['ws:DOCBOT_COMPLETED:p1']({ task_id: 't1', result: { status: 'other' } });
       expect(ctx.state.docbotState).toEqual({ status: 'none', taskId: null });
-      expect(ctx.refresh.header).not.toHaveBeenCalled();
+
+      handlers['ws:DOCBOT_COMPLETED:p1']({ task_id: 't1' });
+      expect(ctx.state.docbotState).toEqual({ status: 'none', taskId: null });
     });
   });
 

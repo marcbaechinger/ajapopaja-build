@@ -54,7 +54,6 @@ export interface DevProcessState {
  * - `#engine-piview-mount`            CoderBot PiView slot      (P3, inner id)
  * - `#pipeline-session-list`          inline session rows       (P4)
  * - `#pull-request-section`           PR list container         (P6)
- * - `#docbot-dialog-container`        dialog host               (P5b)
  *
  * Converting the existing string selectors to this map is out of scope for P0;
  * new code should prefer the constant so the contract has a single source.
@@ -73,7 +72,6 @@ export const PIPELINE_DOM_IDS = {
   enginePiViewMount: 'engine-piview-mount',
   pipelineSessionList: 'pipeline-session-list',
   pullRequestSection: 'pull-request-section',
-  docbotDialogContainer: 'docbot-dialog-container',
 } as const;
 
 /**
@@ -108,7 +106,6 @@ export interface PipelineDetailState {
   pendingReviews: string[];
   pendingSpecProposals: SpecProposal[];
   pullRequests: any[];
-  docbotPreviewData: any;
 
   // Git status polling (kept on the shell until it gets its own owner).
   gitStatus: GitStatusDetails | undefined;
@@ -164,7 +161,6 @@ export function createPipelineDetailState(): PipelineDetailState {
     pendingReviews: [],
     pendingSpecProposals: [],
     pullRequests: [],
-    docbotPreviewData: null,
 
     gitStatus: undefined,
   };

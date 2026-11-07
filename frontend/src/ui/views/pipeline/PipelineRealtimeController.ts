@@ -120,14 +120,13 @@ export class PipelineRealtimeController {
         if (result?.status === 'no_update_needed') {
           ctx.state.docbotState = { status: 'noUpdate', taskId: p.task_id, reason: result.reason };
         } else if (result?.status === 'update_needed') {
-          if (ctx.state.docbotState.status !== 'ready') {
-            this.fetchDocBotPreview(p.task_id);
-          }
-        } else if (ctx.state.docbotState.status !== 'ready') {
+          ctx.state.docbotState = { status: 'prCreated', taskId: p.task_id };
+        } else if (result?.status === 'pr_creation_failed') {
+          ctx.state.docbotState = { status: 'error', taskId: p.task_id, reason: result.reason };
+        } else {
           ctx.state.docbotState = { status: 'none', taskId: null };
         }
       },
-      'DOCBOT_PREVIEW_READY': (p) => { this.fetchDocBotPreview(p.task_id); },
       'REVIEWBOT_STARTED': (p) => { ctx.state.reviewbotState = { status: 'inProgress', taskId: p.task_id }; },
       'REVIEWBOT_COMPLETED': () => { ctx.state.reviewbotState = { status: 'none', taskId: null }; },
       'REVIEWBOT_REVIEW_READY': (p) => {
@@ -292,29 +291,6 @@ export class PipelineRealtimeController {
     const engine = host?.querySelector('#execution-engine-view');
     if (engine) {
       ExecutionEngineView.removeInProgressItem(engine as HTMLElement, taskId);
-    }
-  }
-
-  async fetchDocBotPreview(taskId: string): Promise<void> {
-    const { ctx } = this.deps;
-    try {
-      const response = await fetch(`/api/pipelines/${ctx.pipelineId}/docbot/preview/${taskId}`, {
-        headers: {
-          'Authorization': `Bearer ${ctx.context.authService.getAccessToken()}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        ctx.state.docbotPreviewData = data;
-        ctx.state.docbotState = {
-          status: 'ready',
-          taskId: data.task_id,
-        };
-        ctx.refresh.header();
-      }
-    } catch (error) {
-      console.error('Failed to fetch DocBot preview:', error);
     }
   }
 

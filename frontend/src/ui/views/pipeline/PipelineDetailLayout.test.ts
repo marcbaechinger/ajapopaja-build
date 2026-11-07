@@ -34,7 +34,6 @@ describe('PipelineDetailLayout', () => {
       expect(html).toContain('id="backlog-sidebar"');
       expect(html).toContain('id="backlog-view"');
       expect(html).toContain('id="execution-engine-view"');
-      expect(html).toContain('id="docbot-dialog-container"');
       expect(html).toContain(headerHtml);
     });
 

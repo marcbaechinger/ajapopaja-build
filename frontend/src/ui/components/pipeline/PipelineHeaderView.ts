@@ -26,7 +26,7 @@ import { Icon } from '../common/Icon.ts';
 import type { SpecProposal } from '../../../core/clients/SpecBotClient.ts';
 
 export interface DocbotState {
-  status: 'none' | 'ready' | 'inProgress' | 'noUpdate';
+  status: 'none' | 'prCreated' | 'error' | 'inProgress' | 'noUpdate';
   taskId: string | null;
   reason?: string;
 }
@@ -93,13 +93,24 @@ export class PipelineHeaderView {
           </button>
         </div>
       `;
-    } else if (docbotState.status === 'ready') {
+    } else if (docbotState.status === 'prCreated') {
       docbotBannerHtml = `
         <div class="inline-flex bg-yellow-500/10 border border-yellow-500/30 text-yellow-500 rounded-full px-3 py-1 text-[10px] shadow-sm items-center gap-2">
-          <span class="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse"></span>
-          <span class="font-bold uppercase tracking-wider">Doc Ready</span>
-          <button data-action-click="open_docbot_dialog" class="font-black underline hover:text-yellow-400 transition-colors cursor-pointer ml-1">Review</button>
+          <span class="w-1.5 h-1.5 rounded-full bg-yellow-500"></span>
+          <span class="font-bold uppercase tracking-wider">Documentation PR created.</span>
+          <span class="text-yellow-600/80">Review it in the PR section.</span>
           <button data-action-click="dismiss_docbot_banner" class="ml-1 text-yellow-700 hover:text-yellow-500 transition-colors cursor-pointer">
+            ${Icon.render('close', { size: 12 })}
+          </button>
+        </div>
+      `;
+    } else if (docbotState.status === 'error') {
+      docbotBannerHtml = `
+        <div class="inline-flex bg-red-500/10 border border-red-500/30 text-red-400 rounded-full px-3 py-1 text-[10px] shadow-sm items-center gap-2" title="${docbotState.reason || ''}">
+          <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+          <span class="font-bold uppercase tracking-wider">Documentation update failed</span>
+          ${docbotState.reason ? `<span class="text-red-300/80">${docbotState.reason}</span>` : ''}
+          <button data-action-click="dismiss_docbot_banner" class="ml-1 text-red-700 hover:text-red-400 transition-colors cursor-pointer">
             ${Icon.render('close', { size: 12 })}
           </button>
         </div>

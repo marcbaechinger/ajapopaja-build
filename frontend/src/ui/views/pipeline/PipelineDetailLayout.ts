@@ -113,7 +113,6 @@ export class PipelineDetailLayout {
           </aside>
         </div>
       </div>
-      <div id="docbot-dialog-container"></div>
     `;
   }
 

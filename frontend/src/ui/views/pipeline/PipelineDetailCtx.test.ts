@@ -66,7 +66,6 @@ describe('createPipelineDetailState', () => {
     expect(state.pendingReviews).toEqual([]);
     expect(state.pendingSpecProposals).toEqual([]);
     expect(state.pullRequests).toEqual([]);
-    expect(state.docbotPreviewData).toBeNull();
 
     expect(state.gitStatus).toBeUndefined();
   });
@@ -189,7 +188,6 @@ describe('PIPELINE_DOM_IDS', () => {
       enginePiViewMount: 'engine-piview-mount',
       pipelineSessionList: 'pipeline-session-list',
       pullRequestSection: 'pull-request-section',
-      docbotDialogContainer: 'docbot-dialog-container',
     });
   });
 });

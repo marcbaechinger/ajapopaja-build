@@ -33,35 +33,4 @@ export class DocBotClient extends BaseClient {
       method: 'POST',
     });
   }
-
-  /**
-   * Commits the reviewed changes proposed by DocBot.
-   */
-  public async commitChanges(pipelineId: string, taskId: string, commitMsg: string): Promise<void> {
-    await this.fetch(`${this.apiBaseUrl}/pipelines/${pipelineId}/docbot/review/commit/${taskId}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ commit_msg: commitMsg }),
-    });
-  }
-
-  /**
-   * Reverts the reviewed changes proposed by DocBot.
-   */
-  public async revertChanges(pipelineId: string, taskId: string): Promise<void> {
-    await this.fetch(`${this.apiBaseUrl}/pipelines/${pipelineId}/docbot/review/revert/${taskId}`, {
-      method: 'POST',
-    });
-  }
-
-  /**
-   * Cancels the DocBot review, notifying the backend.
-   */
-  public async cancelReview(pipelineId: string, taskId: string): Promise<void> {
-    await this.fetch(`${this.apiBaseUrl}/pipelines/${pipelineId}/docbot/review/cancel/${taskId}`, {
-      method: 'POST',
-    });
-  }
 }

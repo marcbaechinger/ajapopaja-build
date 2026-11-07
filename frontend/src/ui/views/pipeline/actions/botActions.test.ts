@@ -21,7 +21,6 @@ import { createPipelineDetailState } from '../PipelineDetailCtx.ts';
 import type { PipelineDetailCtx } from '../PipelineDetailCtx.ts';
 import type { ActionHandler } from '../../../../core/ActionRegistry.ts';
 import { CoderBotDialog } from '../../../components/dialogs/CoderBotDialog.ts';
-import { DocBotDialog } from '../../../components/dialogs/DocBotDialog.ts';
 import { ReviewDialog } from '../../../components/dialogs/ReviewDialog.ts';
 import { UpdateDesignDialog } from '../../../components/dialogs/UpdateDesignDialog.ts';
 import { Task, TaskStatus } from '../../../../core/domain.ts';
@@ -30,10 +29,6 @@ vi.mock('../../../components/dialogs/CoderBotDialog.ts', () => ({
   CoderBotDialog: vi.fn(function CoderBotDialog() {
     return { show: vi.fn() };
   }),
-}));
-
-vi.mock('../../../components/dialogs/DocBotDialog.ts', () => ({
-  DocBotDialog: vi.fn(function DocBotDialog() {}),
 }));
 
 vi.mock('../../../components/dialogs/ReviewDialog.ts', () => ({
@@ -124,7 +119,6 @@ describe('registerBotActions', () => {
       [
         'dismiss_docbot_banner',
         'open_coderbot_dialog',
-        'open_docbot_dialog',
         'open_review_dialog',
         'open_spec_proposal',
         'trigger_archbot',
@@ -336,88 +330,13 @@ describe('registerBotActions', () => {
     });
   });
 
-  describe('open_docbot_dialog', () => {
-    const hostWithContainer = (): HTMLElement => {
-      const host = document.createElement('div');
-      host.innerHTML = '<div id="docbot-dialog-container"></div>';
-      return host;
-    };
-
-    it('is a no-op without a host', async () => {
-      ctx.state.docbotState = { status: 'ready', taskId: 't1' };
-      ctx.state.docbotPreviewData = { diff: 'd', commit_msg: 'm', filename: 'f' };
-      (deps.getHost as any).mockReturnValue(null);
-
-      await getAction('open_docbot_dialog')(noEvent, button());
-
-      expect(DocBotDialog).not.toHaveBeenCalled();
-    });
-
-    it('is a no-op without a task id or preview data', async () => {
-      (deps.getHost as any).mockReturnValue(hostWithContainer());
-
-      await getAction('open_docbot_dialog')(noEvent, button());
-      expect(DocBotDialog).not.toHaveBeenCalled();
-
-      ctx.state.docbotState = { status: 'ready', taskId: 't1' };
-      ctx.state.docbotPreviewData = null;
-      await getAction('open_docbot_dialog')(noEvent, button());
-      expect(DocBotDialog).not.toHaveBeenCalled();
-    });
-
-    it('constructs DocBotDialog with the mapped props and resets on success', async () => {
-      const host = hostWithContainer();
-      (deps.getHost as any).mockReturnValue(host);
-      ctx.state.docbotState = { status: 'ready', taskId: 't1' };
-      ctx.state.docbotPreviewData = { diff: 'DIFF', commit_msg: 'MSG', filename: 'file.ts' };
-
-      await getAction('open_docbot_dialog')(noEvent, button());
-
-      const container = host.querySelector('#docbot-dialog-container');
-      expect(DocBotDialog).toHaveBeenCalledTimes(1);
-      expect((DocBotDialog as any).mock.calls[0][0]).toBe(container);
-      expect((DocBotDialog as any).mock.calls[0][1]).toMatchObject({
-        taskId: 't1',
-        pipelineId: 'p1',
-        diff: 'DIFF',
-        commitMsg: 'MSG',
-        filename: 'file.ts',
-      });
-      expect((DocBotDialog as any).mock.calls[0][1].context).toBe(ctx.context);
-
-      const props = (DocBotDialog as any).mock.calls[0][1];
-      props.onSuccess();
-
-      expect(ctx.state.docbotState).toEqual({ status: 'none', taskId: null });
-      expect(ctx.state.docbotPreviewData).toBeNull();
-      expect(ctx.refresh.header).toHaveBeenCalled();
-    });
-
-    it('clears the dialog container on close', async () => {
-      const host = hostWithContainer();
-      (deps.getHost as any).mockReturnValue(host);
-      ctx.state.docbotState = { status: 'ready', taskId: 't1' };
-      ctx.state.docbotPreviewData = { diff: 'DIFF', commit_msg: 'MSG', filename: 'file.ts' };
-
-      await getAction('open_docbot_dialog')(noEvent, button());
-
-      const container = host.querySelector('#docbot-dialog-container') as HTMLElement;
-      const props = (DocBotDialog as any).mock.calls[0][1];
-      props.onClose();
-
-      expect(container.innerHTML).toBe('');
-    });
-  });
-
   describe('dismiss_docbot_banner', () => {
     it('resets the DocBot state and refreshes the header', async () => {
-      ctx.state.docbotState = { status: 'ready', taskId: 't1' };
-      ctx.state.docbotPreviewData = { diff: 'd' };
+      ctx.state.docbotState = { status: 'prCreated', taskId: 't1' };
 
       await getAction('dismiss_docbot_banner')(noEvent, button());
 
       expect(ctx.state.docbotState).toEqual({ status: 'none', taskId: null });
-      expect(ctx.state.docbotPreviewData).toBeNull();
       expect(ctx.refresh.header).toHaveBeenCalled();
     });
   });

@@ -39,7 +39,7 @@ describe('DocBotClient', () => {
     it('should remove trailing slash from apiBaseUrl', async () => {
       const clientWithSlash = new DocBotClient('http://api.test/', mockAuthService);
       (fetch as any).mockResolvedValue({ ok: true });
-      
+
       await clientWithSlash.triggerDocBot('pipe-1', 'task-1');
       const url = new URL((fetch as any).mock.calls[0][0]);
       expect(url.toString()).toBe('http://api.test/pipelines/pipe-1/docbot/trigger/task-1');
@@ -48,7 +48,7 @@ describe('DocBotClient', () => {
     it('should keep apiBaseUrl without trailing slash', async () => {
       const clientNoSlash = new DocBotClient('http://api.test', mockAuthService);
       (fetch as any).mockResolvedValue({ ok: true });
-      
+
       await clientNoSlash.triggerDocBot('pipe-1', 'task-1');
       const url = new URL((fetch as any).mock.calls[0][0]);
       expect(url.toString()).toBe('http://api.test/pipelines/pipe-1/docbot/trigger/task-1');
@@ -89,108 +89,6 @@ describe('DocBotClient', () => {
     });
   });
 
-  describe('commitChanges', () => {
-    it('should commit changes with correct URL and body', async () => {
-      (fetch as any).mockResolvedValue({ ok: true });
-
-      await client.commitChanges('pipe-1', 'task-1', 'Fix bug in module');
-
-      const callArgs = (fetch as any).mock.calls[0];
-      const callHeaders = new Headers(callArgs[1].headers);
-      
-      expect(callArgs[0]).toBe('http://api.test/pipelines/pipe-1/docbot/review/commit/task-1');
-      expect(callArgs[1].method).toBe('POST');
-      expect(callHeaders.get('Content-Type')).toBe('application/json');
-      expect(callHeaders.get('Authorization')).toBe('Bearer token123');
-      expect(JSON.parse(callArgs[1].body as string)).toEqual({ commit_msg: 'Fix bug in module' });
-    });
-
-    it('should handle empty commit message', async () => {
-      (fetch as any).mockResolvedValue({ ok: true });
-
-      await client.commitChanges('pipe-1', 'task-1', '');
-
-      const callArgs = (fetch as any).mock.calls[0];
-      expect(JSON.parse(callArgs[1].body as string)).toEqual({ commit_msg: '' });
-    });
-
-    it('should handle special characters in commit message', async () => {
-      (fetch as any).mockResolvedValue({ ok: true });
-
-      await client.commitChanges('pipe-1', 'task-1', 'Fix: "bug" & features');
-
-      const callArgs = (fetch as any).mock.calls[0];
-      expect(JSON.parse(callArgs[1].body as string)).toEqual({ commit_msg: 'Fix: "bug" & features' });
-    });
-  });
-
-  describe('revertChanges', () => {
-    it('should revert changes with correct URL', async () => {
-      (fetch as any).mockResolvedValue({ ok: true });
-
-      await client.revertChanges('pipe-1', 'task-1');
-
-      expect(fetch).toHaveBeenCalledWith(
-        'http://api.test/pipelines/pipe-1/docbot/review/revert/task-1',
-        expect.objectContaining({
-          method: 'POST',
-        })
-      );
-    });
-
-    it('should include Authorization header', async () => {
-      (fetch as any).mockResolvedValue({ ok: true });
-
-      await client.revertChanges('pipe-1', 'task-1');
-
-      const callHeaders = new Headers((fetch as any).mock.calls[0][1].headers);
-      expect(callHeaders.get('Authorization')).toBe('Bearer token123');
-    });
-
-    it('should not send a body for revert request', async () => {
-      (fetch as any).mockResolvedValue({ ok: true });
-
-      await client.revertChanges('pipe-1', 'task-1');
-
-      // Check that body is undefined or not present
-      const requestBody = (fetch as any).mock.calls[0][1].body;
-      expect(requestBody).toBeUndefined();
-    });
-  });
-
-  describe('cancelReview', () => {
-    it('should cancel review with correct URL', async () => {
-      (fetch as any).mockResolvedValue({ ok: true });
-
-      await client.cancelReview('pipe-1', 'task-1');
-
-      expect(fetch).toHaveBeenCalledWith(
-        'http://api.test/pipelines/pipe-1/docbot/review/cancel/task-1',
-        expect.objectContaining({
-          method: 'POST',
-        })
-      );
-    });
-
-    it('should include Authorization header', async () => {
-      (fetch as any).mockResolvedValue({ ok: true });
-
-      await client.cancelReview('pipe-1', 'task-1');
-
-      const callHeaders = new Headers((fetch as any).mock.calls[0][1].headers);
-      expect(callHeaders.get('Authorization')).toBe('Bearer token123');
-    });
-
-    it('should not send a body for cancel request', async () => {
-      (fetch as any).mockResolvedValue({ ok: true });
-
-      await client.cancelReview('pipe-1', 'task-1');
-
-      const requestBody = (fetch as any).mock.calls[0][1].body;
-      expect(requestBody).toBeUndefined();
-    });
-  });
-
   describe('error handling', () => {
     it('should throw error for non-OK responses', async () => {
       (fetch as any).mockResolvedValue({
@@ -221,29 +119,8 @@ describe('DocBotClient', () => {
         json: () => Promise.resolve({ detail: 'Task not found' }),
       });
 
-      await expect(commitChanges(client, 'pipe-1', 'task-1', 'test'))
+      await expect(client.triggerDocBot('pipe-1', 'task-1'))
         .rejects.toThrow('Task not found');
-    });
-
-    it('should handle all methods with error responses', async () => {
-      const errorResponse = {
-        ok: false,
-        status: 400,
-        json: () => Promise.resolve({ detail: 'Bad request' }),
-      };
-
-      // Each test needs its own mock setup since they run sequentially
-      (fetch as any).mockResolvedValue(errorResponse);
-      await expect(client.triggerDocBot('pipe-1', 'task-1')).rejects.toThrow('Bad request');
-
-      (fetch as any).mockResolvedValue(errorResponse);
-      await expect(client.commitChanges('pipe-1', 'task-1', 'test')).rejects.toThrow('Bad request');
-
-      (fetch as any).mockResolvedValue(errorResponse);
-      await expect(client.revertChanges('pipe-1', 'task-1')).rejects.toThrow('Bad request');
-
-      (fetch as any).mockResolvedValue(errorResponse);
-      await expect(client.cancelReview('pipe-1', 'task-1')).rejects.toThrow('Bad request');
     });
 
     it('should handle 401 unauthorized and attempt token refresh', async () => {
@@ -254,13 +131,9 @@ describe('DocBotClient', () => {
       const errorResponse = { ok: false, status: 401 };
       const successResponse = { ok: true };
 
-      (fetch as any) // @ts-ignore
-        .mockImplementation(() => {
-          if ((fetch as any).mock.calls.length === 1) {
-            return Promise.resolve(errorResponse);
-          }
-          return Promise.resolve(successResponse);
-        });
+      (fetch as any)
+        .mockResolvedValueOnce(errorResponse)
+        .mockResolvedValueOnce(successResponse);
 
       await expect(client.triggerDocBot('pipe-1', 'task-1')).resolves.toBeUndefined();
       expect(mockAuthService.refreshToken).toHaveBeenCalled();
@@ -269,38 +142,12 @@ describe('DocBotClient', () => {
   });
 
   describe('URL construction', () => {
-    it('should construct URLs with pipelineId in path', async () => {
+    it('should construct URLs with pipelineId and taskId in path', async () => {
       (fetch as any).mockResolvedValue({ ok: true });
       await client.triggerDocBot('pipeline-abc-123', 'task-xyz');
-      
+
       const url = new URL((fetch as any).mock.calls[0][0]);
       expect(url.pathname).toBe('/pipelines/pipeline-abc-123/docbot/trigger/task-xyz');
     });
-
-    it('should construct URLs with taskId in path', async () => {
-      (fetch as any).mockResolvedValue({ ok: true });
-      await client.commitChanges('pipe-1', 'task-999', 'test');
-      
-      const url = new URL((fetch as any).mock.calls[0][0]);
-      expect(url.pathname).toBe('/pipelines/pipe-1/docbot/review/commit/task-999');
-    });
-
-    it('should have different endpoints for different actions', async () => {
-      (fetch as any).mockResolvedValue({ ok: true });
-
-      await client.triggerDocBot('pipe-1', 'task-1');
-      await client.commitChanges('pipe-1', 'task-1', 'test');
-      await client.revertChanges('pipe-1', 'task-1');
-      await client.cancelReview('pipe-1', 'task-1');
-
-      expect((fetch as any).mock.calls[0][0]).toContain('/docbot/trigger/task-1');
-      expect((fetch as any).mock.calls[1][0]).toContain('/docbot/review/commit/task-1');
-      expect((fetch as any).mock.calls[2][0]).toContain('/docbot/review/revert/task-1');
-      expect((fetch as any).mock.calls[3][0]).toContain('/docbot/review/cancel/task-1');
-    });
   });
 });
-
-function commitChanges(client: DocBotClient, pipelineId: string, taskId: string, commitMsg: string) {
-  return client.commitChanges(pipelineId, taskId, commitMsg);
-}
