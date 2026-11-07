@@ -9,6 +9,12 @@
   fine‑grained personal access tokens), so accepting a change on a GitHub
   remote now opens a real pull request. Requires `REMOTE_PR_MODE=gitea_pr` and
   a token with `Contents` and `Pull requests` write access.
+* **No webhook for internet-hosted repos** – the Gitea PR-state webhook is no
+  longer registered for repos on the public internet (e.g. `github.com`), since
+  our internal server is unreachable from there; manual sync is used instead.
+* **Manual sync works for GitHub** – the “Sync” button now reconciles remote PR
+  state for GitHub repos (using the GitHub client), so a user can manually
+  reconcile PR acceptance/rejection when a webhook cannot deliver.
 
 ## 0.4.0 – IDE‑style workspace, remote repositories, interactive sessions, and richer agent tooling
 
