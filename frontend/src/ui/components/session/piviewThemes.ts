@@ -604,9 +604,12 @@ const INTERACTIVE_CHAT_CSS = `
   box-shadow: var(--piview-shadow-block);
 }
 
-.piview-bash,
-.piview-thinking {
+.piview-bash {
   border-radius: var(--piview-radius-block);
+}
+
+.piview-thinking {
+  border-radius: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
