@@ -71,13 +71,7 @@ def _workspace_version(pipeline: Pipeline) -> Optional[str]:
 
 def _build_commands_configured(pipeline: Pipeline) -> bool:
     """Whether the pipeline has at least one configured build command."""
-    commands = getattr(pipeline, "build_commands", None)
-    if commands is None:
-        return False
-    try:
-        return len(commands) > 0
-    except TypeError:
-        return bool(commands)
+    return bool(pipeline.build_commands)
 
 
 def _optional_text(value: Any) -> Optional[str]:
