@@ -18,6 +18,7 @@ import type { RenderBlock } from '../../../core/CoderBotService.ts';
 import { Icon } from '../common/Icon.ts';
 import { KeybindingManager } from './KeybindingManager.ts';
 import { renderMarkdown } from '../utils/markdown.ts';
+import { copyToClipboard } from '../../utils/clipboard.ts';
 import './Keybinding.css';
 
 /**
@@ -2118,32 +2119,11 @@ export class PiView {
 
   private async copyToClipboard(text: string, message: string) {
     try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-      } else {
-        this.fallbackCopy(text);
-      }
+      await copyToClipboard(text);
       this.showToast(message);
     } catch {
-      this.fallbackCopy(text);
       this.showToast(message);
     }
-  }
-
-  private fallbackCopy(text: string) {
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.position = 'fixed';
-    ta.style.opacity = '0';
-    document.body.appendChild(ta);
-    ta.focus();
-    ta.select();
-    try {
-      document.execCommand('copy');
-    } catch {
-      /* ignore */
-    }
-    document.body.removeChild(ta);
   }
 
   private showToast(msg: string) {

@@ -43,6 +43,7 @@ import yaml from 'highlight.js/lib/languages/yaml';
 import type { ActionHandler, ActionRegistry } from '../../../core/ActionRegistry.ts';
 import type { FileContent } from '../../../core/domain.ts';
 import { Icon } from '../common/Icon.ts';
+import { copyToClipboard } from '../../utils/clipboard.ts';
 import {
   escapeHtml,
   formatFileSize,
@@ -239,7 +240,7 @@ export class FileView {
       const path = element.getAttribute('data-path');
       if (!path) return;
       try {
-        await navigator.clipboard.writeText(path);
+        await copyToClipboard(path);
         this.showCopiedFeedback(element);
       } catch (error) {
         console.error('Failed to copy file path:', error);

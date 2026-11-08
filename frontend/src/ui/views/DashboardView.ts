@@ -22,6 +22,7 @@ import { PipelineEditDialog } from '../components/dialogs/PipelineEditDialog.ts'
 import { Icon } from '../components/common/Icon.ts';
 import { PipelineItemView } from '../components/pipeline/PipelineItemView.ts';
 import { SessionManagerButton } from '../components/session/SessionManagerButton.ts';
+import { copyToClipboard } from '../utils/clipboard.ts';
 import {
   GettingStartedDialog,
   renderGettingStartedGuide,
@@ -108,7 +109,7 @@ export class DashboardView extends View {
       const text = pre?.textContent ?? '';
       if (!text) return;
       try {
-        await navigator.clipboard.writeText(text);
+        await copyToClipboard(text);
         const label = el.querySelector('.copy-label');
         if (label) {
           const original = label.textContent ?? 'Copy prompt';

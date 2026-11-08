@@ -15,6 +15,7 @@
  */
 
 import type { PipelineDetailCtx } from '../PipelineDetailCtx.ts';
+import { copyToClipboard } from '../../../utils/clipboard.ts';
 
 export interface TaskSpecActionsDeps {
   /** P7: close the title editor and open/focus the specification textarea. */
@@ -194,7 +195,7 @@ export function registerTaskSpecActions(
     if (!spec) return;
 
     try {
-      await navigator.clipboard.writeText(spec);
+      await copyToClipboard(spec);
       const originalHtml = el.innerHTML;
       el.innerHTML = `<svg class="w-3 h-3 text-green-500 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`;
       setTimeout(() => {

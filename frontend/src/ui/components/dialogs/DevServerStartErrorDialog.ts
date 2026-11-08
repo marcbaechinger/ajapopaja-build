@@ -17,6 +17,7 @@
 import { BaseDialog } from './dialog_common.ts';
 import { Icon } from '../common/Icon.ts';
 import { escapeHtml } from '../utils/html.ts';
+import { copyToClipboard } from '../../utils/clipboard.ts';
 
 export interface DevServerStartErrorDialogProps {
   /** Pipeline the failed dev-server start was attempted on. */
@@ -173,7 +174,7 @@ export class DevServerStartErrorDialog extends BaseDialog<void> {
     if (!text) return;
 
     try {
-      await navigator.clipboard.writeText(text);
+      await copyToClipboard(text);
       const label = btn.querySelector('.copy-label');
       if (label) {
         const original = label.textContent ?? 'Copy';

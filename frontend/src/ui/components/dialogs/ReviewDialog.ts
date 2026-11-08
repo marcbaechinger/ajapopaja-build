@@ -21,6 +21,7 @@ import { ConfirmationDialog } from './ConfirmationDialog.ts';
 import { renderMarkdown } from '../utils/markdown.ts';
 import { renderQuickPromptButton, type PromptConfig } from '../common/QuickPromptButton.ts';
 import { Icon } from '../common/Icon.ts';
+import { copyToClipboard } from '../../utils/clipboard.ts';
 
 const PROMPT_CONFIGS: PromptConfig[] = [
   {
@@ -131,7 +132,7 @@ export class ReviewDialog extends BaseDialog<void> {
 
     if (prompt) {
       try {
-        await navigator.clipboard.writeText(prompt);
+        await copyToClipboard(prompt);
         const originalHtml = btn.innerHTML;
         btn.innerHTML = `${Icon.render('check', { size: 12, className: 'text-green-500 animate-bounce' })} Copied!`;
         btn.classList.add('bg-green-500/10', 'border-green-500/30');

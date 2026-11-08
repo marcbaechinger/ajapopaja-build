@@ -21,6 +21,7 @@ import { StatsDialog } from '../../../components/dialogs/StatsDialog.ts';
 import type { ContentTab } from '../../../../core/PipelineRoute.ts';
 import type { HashWriteMode } from '../PipelineSubRoute.ts';
 import type { PipelineDetailCtx } from '../PipelineDetailCtx.ts';
+import { copyToClipboard } from '../../../utils/clipboard.ts';
 import {
   BacklogView,
   BACKLOG_SECTION_KEYS,
@@ -99,7 +100,7 @@ export function registerMiscActions(ctx: PipelineDetailCtx, deps: MiscActionsDep
 
   actionRegistry.register('copy_pipeline_id', async (_e, el) => {
     try {
-      await navigator.clipboard.writeText(ctx.pipelineId);
+      await copyToClipboard(ctx.pipelineId);
       const originalHtml = el.innerHTML;
       el.innerHTML = `<svg class="w-3 h-3 text-green-500 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`;
       setTimeout(() => {
@@ -114,7 +115,7 @@ export function registerMiscActions(ctx: PipelineDetailCtx, deps: MiscActionsDep
     const taskId = el.closest('[data-task-id]')?.getAttribute('data-task-id');
     if (!taskId) return;
     try {
-      await navigator.clipboard.writeText(taskId);
+      await copyToClipboard(taskId);
       const originalHtml = el.innerHTML;
       el.innerHTML = `<svg class="w-3 h-3 text-green-500 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`;
       setTimeout(() => {
@@ -129,7 +130,7 @@ export function registerMiscActions(ctx: PipelineDetailCtx, deps: MiscActionsDep
     const commitHash = el.dataset.commitHash;
     if (!commitHash) return;
     try {
-      await navigator.clipboard.writeText(commitHash);
+      await copyToClipboard(commitHash);
       const originalHtml = el.innerHTML;
       el.innerHTML = `<svg class="w-3 h-3 text-green-500 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`;
       setTimeout(() => {

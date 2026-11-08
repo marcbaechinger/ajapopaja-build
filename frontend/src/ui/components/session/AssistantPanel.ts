@@ -20,6 +20,7 @@ import { Icon } from '../common/Icon.ts';
 import { LocalStorageManager } from '../../../core/LocalStorageManager.ts';
 import { expandTemplate, filterCommands, findCommand } from '../utils/slashCommands.ts';
 import { renderMarkdown } from '../utils/markdown.ts';
+import { copyToClipboard } from '../../utils/clipboard.ts';
 
 type PanelPosition = 'tl' | 'tc' | 'tr' | 'bl' | 'bc' | 'br' | 'center' | 'full';
 type PanelSize = 'normal' | 'expanded';
@@ -439,7 +440,7 @@ export class AssistantPanel {
 
   private async copyToClipboard(text: string, btn: HTMLButtonElement) {
     try {
-      await navigator.clipboard.writeText(text);
+      await copyToClipboard(text);
       const originalIcon = btn.innerHTML;
       btn.innerHTML = `
         ${Icon.render('check', { size: 14, className: 'text-green-500' })}

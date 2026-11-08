@@ -77,8 +77,12 @@ describe('AssistantPanel', () => {
 
     expect(writeTextMock).toHaveBeenCalledWith('Hello world');
 
-    // Check visual feedback (green icon)
-    expect(copyBtn.innerHTML).toContain('text-green-500');
+    // Check visual feedback (green icon). The shared clipboard helper is async,
+    // so wait for the button update rather than assuming it happens in the same
+    // microtask as the click.
+    await vi.waitFor(() => {
+      expect(copyBtn.innerHTML).toContain('text-green-500');
+    });
   });
 
   describe('slash commands', () => {
