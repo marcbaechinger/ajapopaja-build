@@ -73,15 +73,6 @@ Relevant building blocks already exist:
 | `CommandRunner` (`api/assistant/tools/command_runner.py`) | Async argv runner with a `register_on_complete` callback | Reuse for build completion notification |
 | File browser (`core/services/file_browser.py`, `api/routes/file_browser.py`) | Safe path resolution, `FileEntry` metadata, raw-file download with short-lived tokens | Reuse `resolve_file`/`FileResponse`/token pattern for artifact download |
 | MCP server (`backend/mcp`) + `ajapopaja` skill + `mcp_client.py` | Task-management tools and a self-contained CLI | Extend for artifact query/download |
-| `docker-compose.yml` | Mounts `${REMOTE_WORKSPACES_ROOT}` and `${WORKSPACES_ROOT}` 1:1 into the container | Artifact files are technically visible on the host at the same absolute path |
-
-The 1:1 volume mounts are worth calling out explicitly: because
-`/data/ajapopaja/remote_workspaces` is mounted at the same path inside and
-outside the container, the artifact already exists on the host filesystem at the
-same absolute path. The design below deliberately does **not** rely on that
-mount as the primary mechanism (staging, non-mounted storage, and future
-deployments may not have it), but it is a valid shortcut and a useful fallback
-(see §8, Option D).
 
 ## 4. Requirements
 
@@ -178,9 +169,9 @@ download token --> GET /artifact/download?token=...
                                                             adb install -r <apk>
 ```
 
-## 7. Design Options
+## 7. Design Approach
 
-### 7.1 Option A — Dedicated artifact API (MCP metadata + REST download)
+### 7.1 Dedicated artifact API (MCP metadata + REST download)
 
 Add a dedicated `/artifact` REST surface and two MCP tools. Metadata is served
 as JSON; the binary is streamed over HTTP with a short-lived, pipeline-bound
@@ -191,48 +182,6 @@ the web UI).
   metadata (JSON) and bytes (stream); no large base64 payloads; works without a
   shared filesystem mount.
 - **Cons**: a little new endpoint/tool code (though it reuses existing helpers).
-
-### 7.2 Option B — Reuse the existing file-browser raw endpoints only
-
-The file browser already has `GET /files/raw` (streams a file) and
-`POST /files/raw-url` (mints a short-lived, *user-bound* token). We could tell
-agents to use those, plus `GET /files/meta` for metadata.
-
-- **Pros**: zero new download code.
-- **Cons**: raw tokens are bound to a *username* and minted behind
-  `get_current_user`, which the MCP server (running without a user JWT) cannot
-  mint; there is no "the artifact" semantic, no provenance fields (commit,
-  sha256), and no guard preventing download of arbitrary files. This forces the
-  host agent to know a concrete path and to carry a user login, which is
-  brittle. Rejected as the primary mechanism; the raw viewer remains a nice
-  fallback for the human web UI.
-
-### 7.3 Option C — Return the file bytes through the MCP tool result
-
-Encode the artifact as base64 in the MCP `tools/call` result.
-
-- **Pros**: one call; no separate HTTP hop.
-- **Cons**: APKs/ZIPs are routinely tens of MB; base64 inflates them ~33%; MCP
-  JSON-RPC/SSE message size limits and memory become a problem; the MCP tool
-  runs inside the container and would still need the caller to write the bytes
-  to the *host*. Rejected.
-
-### 7.4 Option D — Shared host mount as the canonical path
-
-Because the workspace volume is mounted 1:1, the host agent could simply `adb
-install /data/ajapopaja/remote_workspaces/.../app-debug.apk`.
-
-- **Pros**: zero API; fastest possible.
-- **Cons**: couples the host workflow to the exact mount path and deployment
-  layout; provides no metadata/provenance query, no auth, no way to discover the
-  path generically, and breaks for staging or any non-mounted artifact location.
-
-### 7.5 Recommendation
-
-**Option A**, with Option D documented in the skill as an optional
-shortcut/fallback and Option B's raw viewer retained for the human web UI. This
-keeps the mechanism generic, authenticated, and independent of the deployment's
-mount layout, while still reusing the existing safe-path and token machinery.
 
 ## 8. Data Model Changes
 
@@ -361,8 +310,7 @@ acceptable shapes:
   streams bytes to a local file (see §12). No `download_build_artifact` MCP tool
   is needed.
 - **(Optional) server-side proxy**: add `download_build_artifact` that reads the
-  file and returns base64. This is Option C and is **not** recommended for large
-  artifacts.
+  file and returns base64. This is **not** recommended for large artifacts.
 
 Decision: implement only `get_build_artifact` in MCP; keep byte transfer as a
 direct REST download from the host.
