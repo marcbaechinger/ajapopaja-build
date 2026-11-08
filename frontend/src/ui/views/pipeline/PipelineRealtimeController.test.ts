@@ -622,6 +622,48 @@ describe('PipelineRealtimeController', () => {
       expect(document.body.textContent).toContain('Build failed');
       expect(document.body.textContent).toContain('make failed');
     });
+
+    it('ignores a completion for a different pipeline_id', async () => {
+      context.pipelineClient = {
+        getArtifact: vi.fn().mockResolvedValue({ configured: true, exists: true }),
+      };
+      ctx.state.buildInProgress = true;
+      const ctrl = makeController();
+      ctrl.start();
+
+      handlers['ws:BUILD_RUN_COMPLETED:global']({
+        pipeline_id: 'p2',
+        run_id: 'run-3',
+        passed: true,
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(ctx.state.buildInProgress).toBe(true);
+      expect(context.pipelineClient.getArtifact).not.toHaveBeenCalled();
+      expect(document.body.textContent).not.toContain('Build completed');
+    });
+
+    it('reacts to a completion addressed to its own pipeline_id', async () => {
+      context.pipelineClient = {
+        getArtifact: vi.fn().mockResolvedValue({ configured: true, exists: true, path: 'dist/app.zip' }),
+      };
+      ctx.state.buildInProgress = true;
+      const ctrl = makeController();
+      ctrl.start();
+
+      handlers['ws:BUILD_RUN_COMPLETED:global']({
+        pipeline_id: 'p1',
+        run_id: 'run-4',
+        passed: true,
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(ctx.state.buildInProgress).toBe(false);
+      expect(context.pipelineClient.getArtifact).toHaveBeenCalledWith('p1');
+      expect(document.body.textContent).toContain('Build completed');
+    });
   });
 
   describe('stop()', () => {

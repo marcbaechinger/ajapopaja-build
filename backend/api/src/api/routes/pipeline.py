@@ -268,6 +268,7 @@ async def _run_pipeline_commands(
                 WSMessage(
                     type="BUILD_RUN_COMPLETED",
                     payload={
+                        "pipeline_id": pipeline_id,
                         "run_id": results.get("run_id", run_id),
                         "passed": results.get("passed"),
                         "commands": results.get("commands", []),
