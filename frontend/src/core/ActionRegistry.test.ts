@@ -50,6 +50,41 @@ describe('ActionRegistry', () => {
     document.body.removeChild(button);
   });
 
+  it('should not activate a clickable row when an inline editable control is clicked', async () => {
+    const registry = new ActionRegistry();
+    const handler = vi.fn();
+    registry.register('test_nested_control_click', handler);
+
+    const row = document.createElement('div');
+    row.setAttribute('data-action-click', 'test_nested_control_click');
+    const input = document.createElement('input');
+    input.type = 'number';
+    row.appendChild(input);
+    document.body.appendChild(row);
+
+    input.click();
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(handler).not.toHaveBeenCalled();
+    document.body.removeChild(row);
+  });
+
+  it('should execute a click action declared on an editable control itself', async () => {
+    const registry = new ActionRegistry();
+    const handler = vi.fn();
+    registry.register('test_control_click', handler);
+
+    const input = document.createElement('input');
+    input.setAttribute('data-action-click', 'test_control_click');
+    document.body.appendChild(input);
+
+    input.click();
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(handler).toHaveBeenCalled();
+    document.body.removeChild(input);
+  });
+
   it('should trigger handler on form submit with data-action-submit', async () => {
     const registry = new ActionRegistry();
     const handler = vi.fn();

@@ -432,5 +432,45 @@ describe('registerTaskLifecycleActions', () => {
       expect(ctx.refresh.backlog).not.toHaveBeenCalled();
       expect(ctx.refresh.selectedTask).not.toHaveBeenCalled();
     });
+
+    it.each(['input', 'textarea', 'select'])(
+      'ignores a click that originates from an inline %s control',
+      (tagName) => {
+        ctx.state.allLoadedTasks = [makeTask('t1')];
+        const row = document.createElement('div');
+        row.setAttribute('data-view-id', 't1');
+        const control = document.createElement(tagName);
+        row.appendChild(control);
+        document.body.appendChild(row);
+
+        const event = { target: control } as unknown as Event;
+        getAction('select_task')(event, row);
+
+        expect(ctx.state.selectedTask).toBeNull();
+        expect(setContentTab).not.toHaveBeenCalled();
+        expect(ctx.refresh.backlog).not.toHaveBeenCalled();
+        expect(ctx.refresh.selectedTask).not.toHaveBeenCalled();
+      },
+    );
+
+    it('ignores a click inside a contenteditable element', () => {
+      ctx.state.allLoadedTasks = [makeTask('t1')];
+      const row = document.createElement('div');
+      row.setAttribute('data-view-id', 't1');
+      const editor = document.createElement('div');
+      editor.setAttribute('contenteditable', 'true');
+      const child = document.createElement('span');
+      editor.appendChild(child);
+      row.appendChild(editor);
+      document.body.appendChild(row);
+
+      const event = { target: child } as unknown as Event;
+      getAction('select_task')(event, row);
+
+      expect(ctx.state.selectedTask).toBeNull();
+      expect(setContentTab).not.toHaveBeenCalled();
+      expect(ctx.refresh.backlog).not.toHaveBeenCalled();
+      expect(ctx.refresh.selectedTask).not.toHaveBeenCalled();
+    });
   });
 });

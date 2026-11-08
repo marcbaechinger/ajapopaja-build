@@ -16,6 +16,23 @@
 
 export type ActionHandler = (event: Event, element: HTMLElement) => void | Promise<void>;
 
+/** Form controls whose clicks must stay inside the control (e.g. focus/typing). */
+const EDITABLE_SELECTOR =
+  'input, textarea, select, option, [contenteditable=""], [contenteditable="true"]';
+
+/**
+ * Returns whether a click landed on an editable control nested inside a larger
+ * clickable action element. Such a click must not activate the enclosing row
+ * (for example selecting a backlog item) because re-rendering the row would
+ * remove the control and drop its focus.
+ *
+ * A control that itself declares a click action is allowed to handle the click.
+ */
+function isNestedEditableControl(target: HTMLElement, actionElement: HTMLElement): boolean {
+  const control = target.closest?.(EDITABLE_SELECTOR) as HTMLElement | null;
+  return !!control && control !== actionElement && actionElement.contains(control);
+}
+
 export class ActionRegistry {
   private handlers: Map<string, ActionHandler> = new Map();
 
@@ -31,6 +48,10 @@ export class ActionRegistry {
       if (actionElement) {
         const actionName = actionElement.getAttribute('data-action-click');
         if (actionName) {
+          // Keep inline editors (such as the backlog priority input) from
+          // activating their enclosing row, which would rerender it and drop
+          // the control's focus.
+          if (isNestedEditableControl(target, actionElement)) return;
           this.execute(actionName, event, actionElement);
         }
       }
