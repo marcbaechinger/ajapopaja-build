@@ -18,7 +18,7 @@ import { describe, it, expect } from 'vitest';
 import { PipelineHeaderView } from './PipelineHeaderView';
 import type { PipelineHeaderViewProps } from './PipelineHeaderView';
 import { TaskStatusCounter } from './TaskStatusCounter';
-import { Pipeline, Task, TaskStatus, PipelineStatus } from '../../../core/domain';
+import { BuildArtifactInfo, Pipeline, Task, TaskStatus, PipelineStatus } from '../../../core/domain';
 
 describe('PipelineHeaderView', () => {
   const mockPipeline: Pipeline = {
@@ -54,6 +54,33 @@ describe('PipelineHeaderView', () => {
     expect(html).toContain("data-action-click=\"toggle_assistant\"")
     expect(html).toContain("data-action-click=\"perform_logout\"")
     expect(html).toContain("data-action-click=\"open_health_check\"")
+  });
+
+  it('places the build and artifact controls after the new-task input, separated by a delimiter', () => {
+    const props: PipelineHeaderViewProps = {
+      ...mockProps,
+      pipeline: {
+        ...mockPipeline,
+        build_commands: [['make', 'build']],
+        build_artifact: { path: 'dist/app.zip', label: 'App bundle' },
+      } as Pipeline,
+      artifactInfo: new BuildArtifactInfo({
+        configured: true,
+        path: 'dist/app.zip',
+        label: 'App bundle',
+        exists: false,
+      }),
+    };
+
+    const html = PipelineHeaderView.render(props);
+    const taskFormIndex = html.indexOf('id="create_task"');
+    const buildButtonIndex = html.indexOf('data-action-click="run_build"');
+    const artifactRowIndex = html.indexOf('data-build-artifact-row="true"');
+
+    expect(taskFormIndex).toBeGreaterThan(-1);
+    expect(buildButtonIndex).toBeGreaterThan(taskFormIndex);
+    expect(artifactRowIndex).toBeGreaterThan(buildButtonIndex);
+    expect(html.slice(taskFormIndex, artifactRowIndex)).toContain('w-px');
   });
 
   it('renders the dev-server indicator only when a process is running', () => {

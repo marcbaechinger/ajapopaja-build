@@ -88,6 +88,7 @@ export class PipelineHeaderView {
     const buildInProgress = props.buildInProgress ?? props.isBuilding ?? props.building ?? false;
     const expanded = props.artifactDetailsExpanded === true;
     const artifactProps = { pipeline, artifact, buildInProgress, expanded };
+    const artifactHtml = ArtifactView.render(artifactProps);
 
     let docbotBannerHtml = '';
     if (docbotState.status === 'inProgress') {
@@ -234,12 +235,14 @@ export class PipelineHeaderView {
           </div>
         </div>
 
-        <div class="flex items-center justify-center gap-2 min-w-0 shrink-0">
-          ${ArtifactView.render(artifactProps)}
-        </div>
-
         <div class="flex items-center gap-3 shrink-0">
           ${TaskForm.render()}
+          ${artifactHtml ? `
+            <div class="w-px h-6 bg-app-border" aria-hidden="true"></div>
+            <div class="flex items-center justify-center gap-2 min-w-0 shrink-0">
+              ${artifactHtml}
+            </div>
+          ` : ''}
           <div class="w-px h-6 bg-app-border" aria-hidden="true"></div>
           ${HeaderDialogButtons.render(pipelineId)}
           ${UserProfileBadge.render(user)}
