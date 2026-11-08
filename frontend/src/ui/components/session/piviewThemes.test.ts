@@ -28,6 +28,7 @@ import {
 } from './piviewThemes.ts';
 import { PiView, type PiSessionService } from './PiView.ts';
 import type { RenderBlock } from '../../../core/CoderBotService.ts';
+import piViewCss from './PiView.css?raw';
 
 function serviceWithHistory(history: RenderBlock[] = []): PiSessionService {
   return {
@@ -217,5 +218,102 @@ describe('PiView theme registry', () => {
     view.setTheme('unknown-for-test');
     expect(warn).toHaveBeenCalledTimes(1);
     view.destroy();
+  });
+});
+
+/**
+ * The CSS token guard is registry-driven: adding a theme to PI_VIEW_THEMES is
+ * enough for it to be checked. Comments are stripped so prose in the
+ * stylesheet cannot masquerade as a declaration or reference.
+ */
+const PI_VIEW_CSS_SOURCE = piViewCss.replace(/\/\*[\s\S]*?\*\//g, '');
+
+function cssTokenReferences(css: string): Set<string> {
+  return new Set(
+    Array.from(css.matchAll(/var\(\s*(--piview-[a-z0-9-]+)/g), (match) => match[1])
+  );
+}
+
+function cssTokenDeclarations(css: string): Set<string> {
+  return new Set(
+    Array.from(css.matchAll(/(--piview-[a-z0-9-]+)\s*:/g), (match) => match[1])
+  );
+}
+
+describe('PiView theme token guard', () => {
+  it('provides every token referenced by PiView.css from each theme or its defaults', () => {
+    const referenced = cssTokenReferences(PI_VIEW_CSS_SOURCE);
+    const defaults = cssTokenDeclarations(PI_VIEW_CSS_SOURCE);
+
+    // Guard the guard: if the stylesheet stops using tokens, this test would
+    // otherwise pass vacuously.
+    expect(referenced.size).toBeGreaterThan(0);
+
+    for (const theme of Object.values(PI_VIEW_THEMES)) {
+      for (const name of referenced) {
+        const providedByTheme = Object.prototype.hasOwnProperty.call(theme.tokens, name);
+        expect(
+          providedByTheme || defaults.has(name),
+          `${theme.id} does not provide ${name} and PiView.css has no derivation default`
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('resolves every derived role for a theme that supplies only the six base knobs', () => {
+    const sixBaseTokens = {
+      '--piview-bg': '#101820',
+      '--piview-fg': '#e2e8f0',
+      '--piview-accent': '#60a5fa',
+      '--piview-accent-2': '#a78bfa',
+      '--piview-fg-error': '#f87171',
+      '--piview-fg-ok': '#4ade80',
+    };
+    const minimal = registerTestTheme(
+      defineTheme({
+        id: 'test-minimal-six',
+        label: 'Minimal six-token theme',
+        variants: ['batch', 'interactive'],
+        tokens: sixBaseTokens,
+      })
+    );
+
+    const view = new PiView(serviceWithHistory(), mount(), {
+      variant: 'batch',
+      theme: minimal.id,
+    });
+    view.render();
+    const log = view.getRoot().querySelector('#log-content-container') as HTMLElement;
+    const computed = getComputedStyle(log);
+    const referenced = cssTokenReferences(PI_VIEW_CSS_SOURCE);
+
+    for (const name of referenced) {
+      if (Object.prototype.hasOwnProperty.call(sixBaseTokens, name)) continue;
+      expect(
+        computed.getPropertyValue(name).trim(),
+        `${name} did not resolve from the derivation defaults`
+      ).not.toBe('');
+    }
+
+    view.destroy();
+  });
+});
+
+describe('interactive-chat theme', () => {
+  it('is the interactive default with chat density, measure and motion hooks', () => {
+    const chat = PI_VIEW_THEMES[DEFAULT_THEME_FOR_VARIANT.interactive];
+    expect(chat.id).toBe('interactive-chat');
+    expect(chat.variants).toContain('interactive');
+
+    const batch = PI_VIEW_THEMES[DEFAULT_THEME_FOR_VARIANT.batch];
+    expect(chat.tokens['--piview-radius-block']).toBe('10px');
+    expect(chat.tokens['--piview-max-width']).toBe('72ch');
+    expect(chat.tokens['--piview-block-gap']).not.toBe(batch.tokens['--piview-block-gap']);
+    expect(chat.tokens['--piview-surface-formatted-active']).not.toBe(
+      batch.tokens['--piview-surface-formatted-active']
+    );
+    expect(chat.tokens['--piview-motion-pulse']).toBeTruthy();
+    expect(chat.css).toMatch(/piview-chat-fade-in/);
+    expect(chat.css).toMatch(/prefers-reduced-motion:\s*reduce/);
   });
 });

@@ -47,7 +47,7 @@ export class CoderBotDialog extends BaseDialog {
     // Compose the reusable Pi activity-log view into the body container.
     const mount = bodyContainer.querySelector('#coderbot-piview-mount') as HTMLElement;
     if (mount) {
-      this.piView = new PiView(this.coderBotService, mount);
+      this.piView = new PiView(this.coderBotService, mount, { variant: 'batch' });
       this.piView.render();
     }
   }

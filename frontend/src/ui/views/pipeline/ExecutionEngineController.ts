@@ -196,6 +196,7 @@ export class ExecutionEngineController {
     // the rest of the pipeline detail view paints first; the log then fills in on
     // the next animation frame for a snappy page render.
     this.enginePiView = new PiView(this.deps.ctx.context.coderBotService, mount, {
+      variant: 'batch',
       logHeightClass: 'h-[38vh]',
       deferInitialRender: true,
       // Pop this compact sidebar log back out into the full CoderBot dialog.

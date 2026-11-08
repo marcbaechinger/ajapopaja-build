@@ -244,6 +244,7 @@ export class InteractiveCodingView {
       // pipeline's running session never leaks into this view's log.
       this.scopedSession = new PipelineScopedPiSession(this.service, this.pipelineId);
       this.piView = new PiView(this.scopedSession, mount, {
+        variant: 'interactive',
         showFooter: false,
         // Roughly 150% of the previous h-[46vh]: a taller log without making the
         // whole tab area grow to its content. The user can drag the log's bottom

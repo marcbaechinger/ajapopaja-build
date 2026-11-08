@@ -173,10 +173,11 @@ describe('InteractiveCodingView', () => {
     );
   });
 
-  it('mounts the reused PiView with showFooter disabled', () => {
+  it('mounts the reused PiView with showFooter disabled and the interactive theme', () => {
     view.render();
     expect(piViewInstances).toHaveLength(1);
     expect(piViewInstances[0].rendered).toBe(true);
+    expect(piViewInstances[0].options.variant).toBe('interactive');
     expect(piViewInstances[0].options.showFooter).toBe(false);
     expect(piViewInstances[0].root.id).toBe('interactive-piview-mount');
   });

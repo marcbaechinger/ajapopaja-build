@@ -66,7 +66,7 @@ const VALID_VARIANTS: readonly PiViewVariant[] = ['batch', 'interactive'];
 const TOKEN_NAME_RE = /^--piview-[a-z0-9-]+$/;
 const THEME_ID_RE = /^[a-z0-9][a-z0-9_-]*$/;
 
-/** The parity palette (matching the defaults in `PiView.css`). */
+/** The batch-terminal parity palette lifted from the pre-theme PiView token block. */
 export const BASE_DARK_TOKENS: PiViewTokens = {
   '--piview-bg': 'var(--color-black)',
   '--piview-bg-image': 'none',
@@ -342,12 +342,139 @@ const BATCH_TERMINAL_THEME = defineTheme({
   tokens: { ...BASE_DARK_TOKENS },
 });
 
+/**
+ * Chat-specific refinements layered over {@link BASE_CHAT_TOKENS}. The neutral
+ * palette keeps the answer readable without the terminal's green/cyan tints,
+ * and the surface/typography overrides make an interactive session read as a
+ * conversation rather than a dense transcript.
+ */
+const INTERACTIVE_CHAT_OVERRIDES: PiViewTokens = {
+  '--piview-bg': '#0d1117',
+  '--piview-surface': '#161b22',
+  '--piview-surface-sticky': 'color-mix(in oklab, #0d1117 92%, transparent)',
+  '--piview-surface-tool': 'color-mix(in oklab, #161b22 70%, transparent)',
+  '--piview-surface-bash': 'color-mix(in oklab, #0d1117 82%, #000 18%)',
+  '--piview-surface-user': 'color-mix(in oklab, #58a6ff 14%, #161b22)',
+  '--piview-surface-verification-ok': 'color-mix(in oklab, #7ee787 14%, transparent)',
+  '--piview-surface-verification-error': 'color-mix(in oklab, #ff7b72 14%, transparent)',
+  '--piview-surface-formatted-active': 'color-mix(in oklab, #161b22 82%, #58a6ff 18%)',
+  '--piview-surface-pre': '#0d1117',
+  '--piview-surface-code': 'color-mix(in oklab, #161b22 80%, transparent)',
+  '--piview-surface-hover': 'color-mix(in oklab, #161b22 85%, transparent)',
+  '--piview-surface-icon': 'color-mix(in oklab, #161b22 65%, transparent)',
+
+  '--piview-fg': '#d7e1ec',
+  '--piview-fg-dim': 'color-mix(in oklab, #d7e1ec 55%, transparent)',
+  '--piview-fg-faint': 'color-mix(in oklab, #d7e1ec 40%, transparent)',
+  '--piview-fg-title': 'color-mix(in oklab, #d7e1ec 85%, transparent)',
+  '--piview-fg-muted': '#8b98a9',
+  '--piview-fg-tool': '#a9c7e8',
+  '--piview-fg-thinking': 'color-mix(in oklab, #d7e1ec 55%, #f2cc60 45%)',
+  '--piview-fg-notice': '#79c0ff',
+  '--piview-fg-error': '#ff7b72',
+  '--piview-fg-ok': '#7ee787',
+  '--piview-fg-user-label': '#58a6ff',
+  '--piview-fg-status': '#8b98a9',
+  '--piview-fg-heading': '#e6edf3',
+  '--piview-fg-link': '#79c0ff',
+  '--piview-fg-strong': '#e6edf3',
+  '--piview-fg-quote': '#b3c0cf',
+  '--piview-fg-code': '#79c0ff',
+  '--piview-fg-pre': '#d7e1ec',
+  '--piview-fg-icon': '#8b98a9',
+  '--piview-fg-icon-format': '#79c0ff',
+
+  '--piview-border': '#2b3440',
+  '--piview-border-subtle': 'color-mix(in oklab, #2b3440 40%, transparent)',
+  '--piview-border-tool': 'color-mix(in oklab, #2b3440 65%, transparent)',
+  '--piview-border-accent-user': 'color-mix(in oklab, #58a6ff 35%, transparent)',
+  '--piview-border-accent-thinking': 'color-mix(in oklab, #d7e1ec 18%, transparent)',
+  '--piview-border-accent-bash': 'color-mix(in oklab, #79c0ff 30%, transparent)',
+  '--piview-border-accent-quote': '#58a6ff',
+  '--piview-border-verification-ok': 'color-mix(in oklab, #7ee787 55%, transparent)',
+  '--piview-border-verification-error': 'color-mix(in oklab, #ff7b72 55%, transparent)',
+
+  '--piview-accent': '#58a6ff',
+  '--piview-accent-2': '#79c0ff',
+  '--piview-accent-fg': '#0d1117',
+  '--piview-selection': 'color-mix(in oklab, #58a6ff 30%, transparent)',
+  '--piview-focus-ring': '#58a6ff',
+  '--piview-danger': '#da3633',
+  '--piview-danger-hover': '#b62324',
+  '--piview-scrollbar-thumb': '#2b3440',
+  '--piview-scrollbar-track': 'transparent',
+  '--piview-status-dot-idle': 'color-mix(in oklab, #d7e1ec 30%, transparent)',
+  '--piview-status-dot-active': '#7ee787',
+
+  '--piview-block-padding': '0.75rem',
+  '--piview-radius-block': '10px',
+  '--piview-radius-chrome': '8px',
+  '--piview-shadow-block': '0 1px 2px rgba(0, 0, 0, 0.25)',
+  '--piview-max-width': '72ch',
+  '--piview-motion-pulse': 'piview-chat-pulse',
+};
+
 const INTERACTIVE_CHAT_THEME = defineTheme({
   id: 'interactive-chat',
   label: 'Chat',
   description: 'Conversational layout with a calmer, roomier rhythm.',
   variants: ['interactive'],
-  tokens: { ...BASE_CHAT_TOKENS },
+  tokens: { ...BASE_CHAT_TOKENS, ...INTERACTIVE_CHAT_OVERRIDES },
+  css: `
+@keyframes piview-chat-pulse {
+  50% { opacity: 0.65; }
+}
+
+@keyframes piview-chat-fade-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+#log-blocks > [data-block-id] {
+  animation: piview-chat-fade-in 180ms ease-out both;
+}
+
+#piview-status-dot[data-state="active"] {
+  animation: var(--piview-motion-pulse) 2.4s ease-in-out infinite;
+}
+
+#piview-status-bar {
+  border-bottom-color: transparent;
+}
+
+[data-kind="user"] {
+  border-left-width: 0;
+  border-radius: calc(var(--piview-radius-block) + 4px);
+  padding: calc(var(--piview-block-padding) * 0.75) var(--piview-block-padding);
+  box-shadow: var(--piview-shadow-block);
+}
+
+.piview-text.piview-formatted-active {
+  background-color: var(--piview-surface-formatted-active);
+  border-radius: var(--piview-radius-block);
+  padding: var(--piview-block-padding);
+  box-shadow: var(--piview-shadow-block);
+}
+
+.piview-bash,
+.piview-thinking {
+  border-radius: var(--piview-radius-block);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  & {
+    --piview-motion-pulse: none;
+  }
+
+  #log-blocks > [data-block-id] {
+    animation: none;
+  }
+
+  #piview-status-dot[data-state="active"] {
+    animation: none;
+  }
+}
+`,
 });
 
 /**

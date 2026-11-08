@@ -17,73 +17,90 @@
 /*
  * PiView theme tokens.
  *
- * This is the only token block in PiView-owned CSS. Every value reproduces the
- * colours PiView rendered before the de-hardcoding (the log has always been a
- * dark terminal surface, so those are the dark app-theme values). Rules below
- * only consume these tokens through var(); the footer/toolbar deliberately stay
- * on the surrounding app theme and are not themed by PiView.
+ * PiView.css only owns *derivation defaults*: the built-in themes live in
+ * `piviewThemes.ts` and are applied as inline custom properties on the log
+ * element. A theme may therefore supply as few as the six base knobs
+ * (`--piview-bg`, `--piview-fg`, `--piview-accent`, `--piview-accent-2`,
+ * `--piview-fg-error`, `--piview-fg-ok`); every other role below derives from
+ * those knobs. Each derived declaration remains individually overridable by a
+ * theme because themes write the same custom property on the log element.
+ *
+ * Keep this block complete: every PiView token consumed by a rule in this file
+ * must have a default here (or be supplied by the active theme).
  */
 .piview-log {
-  --piview-bg: var(--color-black);
+  /* Base knobs (a minimal theme only needs these). */
+  --piview-bg: #05070a;
   --piview-bg-image: none;
+  --piview-fg: #4ade80;
+  --piview-accent: #38bdf8;
+  --piview-accent-2: #22d3ee;
+  --piview-fg-error: #f87171;
+  --piview-fg-ok: var(--piview-fg);
 
-  --piview-surface: var(--color-slate-900);
-  --piview-surface-sticky: color-mix(in oklab, var(--color-black) 95%, transparent);
-  --piview-surface-tool: color-mix(in oklab, var(--color-slate-900) 40%, transparent);
-  --piview-surface-bash: color-mix(in oklab, var(--color-black) 40%, transparent);
-  --piview-surface-user: color-mix(in oklab, var(--color-sky-400) 10%, transparent);
-  --piview-surface-verification-ok: color-mix(in oklab, var(--color-green-950) 30%, transparent);
-  --piview-surface-verification-error: color-mix(in oklab, var(--color-red-950) 30%, transparent);
-  --piview-surface-formatted-active: color-mix(in oklab, var(--color-black) 20%, transparent);
-  --piview-surface-pre: var(--color-slate-900);
-  --piview-surface-code: color-mix(in oklab, var(--color-slate-900) 80%, transparent);
-  --piview-surface-hover: color-mix(in oklab, var(--color-black) 80%, transparent);
-  --piview-surface-icon: color-mix(in oklab, var(--color-black) 50%, transparent);
+  /* Surfaces. */
+  --piview-surface: color-mix(in oklab, var(--piview-bg) 82%, var(--piview-fg) 18%);
+  --piview-surface-sticky: color-mix(in oklab, var(--piview-bg) 95%, transparent);
+  --piview-surface-tool: color-mix(in oklab, var(--piview-surface) 40%, transparent);
+  --piview-surface-bash: color-mix(in oklab, var(--piview-bg) 60%, #000 40%);
+  --piview-surface-user: color-mix(in oklab, var(--piview-accent) 12%, transparent);
+  --piview-surface-verification-ok:
+    color-mix(in oklab, var(--piview-fg-ok) 18%, transparent);
+  --piview-surface-verification-error:
+    color-mix(in oklab, var(--piview-fg-error) 18%, transparent);
+  --piview-surface-formatted-active:
+    color-mix(in oklab, var(--piview-bg) 20%, transparent);
+  --piview-surface-pre: var(--piview-surface);
+  --piview-surface-code: color-mix(in oklab, var(--piview-surface) 80%, transparent);
+  --piview-surface-hover: color-mix(in oklab, var(--piview-bg) 80%, transparent);
+  --piview-surface-icon: color-mix(in oklab, var(--piview-bg) 50%, transparent);
 
-  --piview-fg: var(--color-green-400);
-  --piview-fg-dim: color-mix(in oklab, var(--color-slate-100) 50%, transparent);
-  --piview-fg-faint: color-mix(in oklab, var(--color-slate-100) 40%, transparent);
-  --piview-fg-title: color-mix(in oklab, var(--color-slate-100) 70%, transparent);
-  --piview-fg-muted: var(--color-slate-400);
-  --piview-fg-tool: var(--color-green-300);
-  --piview-fg-thinking: var(--color-yellow-200);
-  --piview-fg-notice: var(--color-cyan-400);
-  --piview-fg-error: var(--color-red-400);
-  --piview-fg-ok: var(--color-green-400);
-  --piview-fg-user-label: var(--color-sky-400);
-  --piview-fg-status: var(--color-green-300);
-  --piview-fg-heading: var(--color-sky-400);
-  --piview-fg-link: var(--color-sky-400);
-  --piview-fg-strong: var(--color-cyan-400);
-  --piview-fg-quote: var(--color-slate-100);
-  --piview-fg-code: var(--color-cyan-400);
-  --piview-fg-pre: var(--color-slate-100);
-  --piview-fg-icon: var(--color-green-300);
-  --piview-fg-icon-format: var(--color-cyan-300);
+  /* Foreground roles. */
+  --piview-fg-dim: color-mix(in oklab, var(--piview-fg) 45%, transparent);
+  --piview-fg-faint: color-mix(in oklab, var(--piview-fg) 35%, transparent);
+  --piview-fg-title: color-mix(in oklab, var(--piview-fg) 85%, transparent);
+  --piview-fg-muted: color-mix(in oklab, var(--piview-fg) 65%, var(--piview-bg) 35%);
+  --piview-fg-tool: color-mix(in oklab, var(--piview-fg) 80%, var(--piview-accent-2) 20%);
+  --piview-fg-thinking: color-mix(in oklab, var(--piview-fg) 55%, #fde68a 45%);
+  --piview-fg-notice: var(--piview-accent-2);
+  --piview-fg-user-label: var(--piview-accent);
+  --piview-fg-status: color-mix(in oklab, var(--piview-fg) 80%, var(--piview-accent-2) 20%);
+  --piview-fg-heading: var(--piview-accent);
+  --piview-fg-link: var(--piview-accent);
+  --piview-fg-strong: var(--piview-accent-2);
+  --piview-fg-quote: var(--piview-fg);
+  --piview-fg-code: var(--piview-accent-2);
+  --piview-fg-pre: var(--piview-fg);
+  --piview-fg-icon: color-mix(in oklab, var(--piview-fg) 80%, var(--piview-accent-2) 20%);
+  --piview-fg-icon-format: var(--piview-accent-2);
 
-  --piview-border: var(--color-slate-800);
-  --piview-border-subtle: color-mix(in oklab, var(--color-slate-800) 40%, transparent);
-  --piview-border-tool: color-mix(in oklab, var(--color-slate-800) 60%, transparent);
-  --piview-border-accent-user: color-mix(in oklab, var(--color-sky-400) 60%, transparent);
-  --piview-border-accent-thinking: color-mix(in oklab, var(--color-slate-100) 20%, transparent);
-  --piview-border-accent-bash: color-mix(in oklab, var(--color-cyan-400) 40%, transparent);
-  --piview-border-accent-quote: var(--color-sky-400);
-  --piview-border-verification-ok: color-mix(in oklab, var(--color-green-500) 60%, transparent);
-  --piview-border-verification-error: color-mix(in oklab, var(--color-red-500) 60%, transparent);
+  /* Borders and accents. */
+  --piview-border: color-mix(in oklab, var(--piview-fg) 18%, transparent);
+  --piview-border-subtle: color-mix(in oklab, var(--piview-border) 55%, transparent);
+  --piview-border-tool: color-mix(in oklab, var(--piview-border) 60%, transparent);
+  --piview-border-accent-user: color-mix(in oklab, var(--piview-accent) 60%, transparent);
+  --piview-border-accent-thinking: color-mix(in oklab, var(--piview-fg) 20%, transparent);
+  --piview-border-accent-bash: color-mix(in oklab, var(--piview-accent-2) 40%, transparent);
+  --piview-border-accent-quote: var(--piview-accent);
+  --piview-border-verification-ok:
+    color-mix(in oklab, var(--piview-fg-ok) 60%, transparent);
+  --piview-border-verification-error:
+    color-mix(in oklab, var(--piview-fg-error) 60%, transparent);
+  --piview-accent-fg: #fff;
+  --piview-selection: color-mix(in oklab, var(--piview-accent) 30%, transparent);
+  --piview-focus-ring: var(--piview-accent);
+  --piview-danger: var(--piview-fg-error);
+  --piview-danger-hover:
+    color-mix(in oklab, var(--piview-fg-error) 80%, #000 20%);
 
-  --piview-accent: var(--color-sky-400);
-  --piview-accent-2: var(--color-cyan-400);
-  --piview-accent-fg: var(--color-white);
-  --piview-selection: color-mix(in oklab, var(--color-sky-400) 30%, transparent);
+  /* Search highlights. */
   --piview-search-hit: rgba(251, 191, 36, 0.35);
-  --piview-search-hit-fg: inherit;
+  --piview-search-hit-fg: var(--piview-fg);
   --piview-search-current: rgba(251, 191, 36, 0.9);
   --piview-search-current-fg: #000;
   --piview-search-current-outline: rgba(255, 255, 255, 0.7);
-  --piview-focus-ring: var(--color-sky-400);
-  --piview-danger: var(--color-red-600);
-  --piview-danger-hover: var(--color-red-700);
 
+  /* Typography, density and chrome. */
   --piview-font-log: var(--font-mono);
   --piview-font-prose: var(--font-sans);
   --piview-font-size: 11px;
@@ -95,14 +112,25 @@
   --piview-radius-block: 0.25rem;
   --piview-radius-chrome: 0.25rem;
   --piview-shadow-block: none;
-  --piview-scrollbar-thumb: var(--color-slate-800);
+  --piview-scrollbar-thumb: color-mix(in oklab, var(--piview-fg) 20%, transparent);
   --piview-scrollbar-track: transparent;
-  --piview-status-dot-idle: color-mix(in oklab, var(--color-slate-100) 40%, transparent);
-  --piview-status-dot-active: var(--color-green-400);
+  --piview-status-dot-idle: color-mix(in oklab, var(--piview-fg) 40%, transparent);
+  --piview-status-dot-active: var(--piview-fg-ok);
   --piview-motion-pulse: pulse;
   --piview-shortcut-flash: rgba(255, 255, 255, 0.15);
+  --piview-control-active: 0;
 
-  /* Fixed dark syntax palette: the log keeps its terminal colours in every app theme. */
+  /* Markdown rhythm and measure (themes may override these on the log root). */
+  --piview-gap-block: 0.4em;
+  --piview-gap-li: 0.2em;
+  --piview-gap-heading-top: 0.6em;
+  --piview-gap-heading-bottom: 0.2em;
+  --piview-gap-pre: 0.4em;
+  --piview-gap-hr: 0.65em;
+  --piview-max-width: 87ch;
+  --piview-pre-max-width: 130ch;
+
+  /* Fixed dark syntax palette. */
   --piview-syntax-comment: #8b949e;
   --piview-syntax-keyword: #ff7b72;
   --piview-syntax-string: #a5d6ff;
@@ -117,6 +145,9 @@
   background-color: var(--piview-bg);
   background-image: var(--piview-bg-image);
   color: var(--piview-fg);
+  font-family: var(--piview-font-log);
+  font-size: var(--piview-font-size);
+  line-height: var(--piview-leading);
   scrollbar-color: var(--piview-scrollbar-thumb) var(--piview-scrollbar-track);
 }
 
@@ -132,6 +163,37 @@
 
 .piview-log::-webkit-scrollbar-track {
   background-color: var(--piview-scrollbar-track);
+}
+
+/* Token-driven block layout (the built-in batch theme reproduces the previous
+ * utility values, while a roomier theme can raise the same tokens). */
+.piview-log #log-blocks > :not(:last-child) {
+  margin-block-end: var(--piview-block-gap);
+}
+
+.piview-log [data-kind="user"],
+.piview-log .piview-user {
+  border-radius: var(--piview-radius-block);
+  padding: calc(var(--piview-block-padding) * 0.5) var(--piview-block-padding);
+  box-shadow: var(--piview-shadow-block);
+}
+
+.piview-log .piview-toolverify {
+  border-radius: var(--piview-radius-block);
+  padding: var(--piview-block-padding);
+  box-shadow: var(--piview-shadow-block);
+}
+
+.piview-log [data-kind="bash"],
+.piview-log .piview-bash,
+.piview-log [data-kind="thinking"],
+.piview-log .piview-thinking {
+  padding-left: var(--piview-block-padding);
+}
+
+.piview-log [data-kind="divider"],
+.piview-log .piview-divider {
+  padding-top: calc(var(--piview-block-padding) * 0.5);
 }
 
 .piview-log #piview-status-bar {
@@ -327,41 +389,23 @@
 /* Markdown-rendered blocks ("Format as markup" toggle) */
 .piview-formatted {
   /*
-   * One knob per rhythm role. All gaps are `em`-based so they scale with the
-   * container's `12px` font size. Margin collapsing means adjacent siblings use
-   * the larger of the two touching margins, so a `p` followed by a `ul` yields a
-   * single `--piview-gap-block` gap (not the sum), keeping the rhythm even.
-   */
-  --piview-gap-block: 0.4em; /* p, ul, ol, dl, blockquote, figure, table */
-  --piview-gap-li: 0.2em; /* between list items */
-  --piview-gap-heading-top: 0.6em;
-  --piview-gap-heading-bottom: 0.2em;
-  --piview-gap-pre: 0.4em;
-  --piview-gap-hr: 0.65em;
-  /*
-   * A readable measure for rendered Markdown. The surrounding log can grow very
-   * wide (notably in the two-column pipeline layout), and prose lines that span
-   * the full width are hard to track. The limit is `ch`-based so it tracks the
-   * rendered font size. It is applied to the individual prose elements below
-   * (not to this container) so that fenced code blocks and tables can opt out;
-   * a `max-width` here would clamp every descendant. Roughly a third wider than
-   * the previous 65ch measure.
-   */
-  --piview-max-width: 87ch;
-  /*
-   * Fenced code blocks are allowed twice the old prose measure (2 x 65ch) so
-   * wide snippets stay on one line as far as the log allows instead of being
-   * clamped to the prose column.
-   */
-  --piview-pre-max-width: 130ch;
-  /*
-   * The PiView log is a dense, terminal-style surface (`text-[11px]
-   * leading-tight`), so the typography plugin's long-form defaults
-   * (`line-height: 1.75`, generous block margins) make rendered Markdown look
-   * bloated next to the raw log. The element carries `prose-theme` for the base
-   * typography; these declarations pin the compact prose size and leading from
-   * the PiView tokens. The leading is inherited by paragraphs, list items and
-   * code blocks alike.
+   * The rhythm and measure knobs are declared on `.piview-log` above so a theme
+   * can override them from the same element it styles. The gaps are `em`-based
+   * and scale with this element's font size. Margin collapsing means adjacent
+   * siblings use the larger of the two touching margins, so a `p` followed by a
+   * `ul` yields a single `--piview-gap-block` gap (not the sum), keeping the
+   * rhythm even.
+   *
+   * The prose measure is applied to the individual prose elements below (not to
+   * this container) so that fenced code blocks and tables can opt out; a
+   * `max-width` here would clamp every descendant.
+   *
+   * The PiView log is a dense, terminal-style surface, so the typography
+   * plugin's long-form defaults (`line-height: 1.75`, generous block margins)
+   * make rendered Markdown look bloated next to the raw log. The element
+   * carries `prose-theme` for the base typography; these declarations pin the
+   * compact prose size and leading from the PiView tokens. The leading is
+   * inherited by paragraphs, list items and code blocks alike.
    */
   font-size: var(--piview-font-size-prose);
   line-height: var(--piview-leading-prose);
@@ -398,7 +442,7 @@
  * `.piview-formatted` subtree. The spacing is kept compact for the dense
  * terminal-style log while still giving paragraphs, list items and the
  * `p <-> ul` boundary a comfortably larger gap than the raw log's line height.
- * The values are declared once as the `--piview-gap-*` custom properties above
+ * The values are declared once as the PiView gap custom properties above
  * so the whole rhythm is tunable from one place. `pre` needs `!important` to win
  * over the shared `.prose-theme pre` rule above, which pins block
  * padding/margins with `!` utilities for the document editors.
