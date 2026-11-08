@@ -434,7 +434,7 @@ export class SessionManagerPanel {
     this.container.querySelectorAll<HTMLElement>('[data-session-filter]').forEach((btn) => {
       const active = btn.dataset.sessionFilter === this.filter;
       btn.classList.toggle('bg-app-accent-2', active);
-      btn.classList.toggle('text-white', active);
+      btn.classList.toggle('text-app-accent-fg', active);
       btn.classList.toggle('border-app-accent-2', active);
       btn.classList.toggle('border-app-border', !active);
       btn.classList.toggle('text-app-muted', !active);
@@ -465,7 +465,7 @@ export class SessionManagerPanel {
       <div class="mx-3 mt-3 flex items-center gap-2 rounded-lg border border-app-accent-2/40 bg-app-accent-2/10 px-3 py-2">
         <span class="text-[11px] text-app-text min-w-0 truncate">Resume your last session: <strong>${escapeHtml(sessionDisplayLabel(hint))}</strong></span>
         <button type="button" data-session-action="switch" data-session-uid="${escapeHtml(hint.uid)}"
-                class="ml-auto text-[11px] px-2 py-1 rounded bg-app-accent-2 text-white hover:brightness-110 cursor-pointer shrink-0">Resume</button>
+                class="ml-auto text-[11px] px-2 py-1 rounded bg-app-accent-2 text-app-accent-fg hover:brightness-110 cursor-pointer shrink-0">Resume</button>
         <button type="button" data-session-hint-dismiss class="text-app-muted hover:text-app-text cursor-pointer shrink-0" aria-label="Dismiss">✕</button>
       </div>
     `;
@@ -653,7 +653,7 @@ export function renderSessionTitleResult(
           ${escapeHtml(rejectLabel)}
         </button>
         <button type="button" data-oneprompt-action="accept"
-                class="px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider bg-app-accent-2 text-white hover:brightness-110 transition-all cursor-pointer">
+                class="px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider bg-app-accent-2 text-app-accent-fg hover:brightness-110 transition-all cursor-pointer">
           ${escapeHtml(acceptLabel)}
         </button>
       </div>

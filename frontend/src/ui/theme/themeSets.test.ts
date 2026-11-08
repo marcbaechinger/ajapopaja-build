@@ -37,6 +37,7 @@ import {
 } from '../components/session/piviewThemes.ts';
 import { PiView, type PiSessionService } from '../components/session/PiView.ts';
 import type { RenderBlock } from '../../core/CoderBotService.ts';
+import styleCss from '../../style.css?raw';
 
 const DARK_TOKENS = {
   '--app-bg': 'var(--color-slate-950)',
@@ -46,6 +47,7 @@ const DARK_TOKENS = {
   '--app-border': 'var(--color-slate-800)',
   '--app-accent-1': 'var(--color-sky-400)',
   '--app-accent-2': 'var(--color-cyan-400)',
+  '--app-accent-fg': 'var(--color-slate-950)',
 };
 
 const LIGHT_TOKENS = {
@@ -56,6 +58,7 @@ const LIGHT_TOKENS = {
   '--app-border': 'var(--color-slate-200)',
   '--app-accent-1': 'var(--color-sky-700)',
   '--app-accent-2': 'var(--color-cyan-700)',
+  '--app-accent-fg': 'var(--color-slate-50)',
 };
 
 function tokenValue(theme: PiViewTheme, name: string): string | undefined {
@@ -124,6 +127,7 @@ describe('deriveAppTokens', () => {
       '--app-border': 'border',
       '--app-accent-1': 'accent',
       '--app-accent-2': 'accent-2',
+      '--app-accent-fg': 'bg',
     });
   });
 
@@ -133,6 +137,24 @@ describe('deriveAppTokens', () => {
     expect(set.appTokens.light).toEqual(LIGHT_TOKENS);
     expect(set.appTokens.dark).toEqual(deriveAppTokens(set.palette.dark!));
     expect(set.appTokens.light).toEqual(deriveAppTokens(set.palette.light!));
+  });
+
+  it('keeps the pre-JS stylesheet fallbacks in sync with the default set', () => {
+    function staticAppTokens(selector: string): Record<string, string> {
+      const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const block = styleCss.match(new RegExp(`${escaped}\\s*\\{([\\s\\S]*?)\\}`));
+      expect(block, `missing ${selector} block`).not.toBeNull();
+      return Object.fromEntries(
+        Array.from(block![1].matchAll(/(--app-[a-z0-9-]+)\s*:\s*([^;]+);/g), (match) => [
+          match[1],
+          match[2].trim(),
+        ])
+      );
+    }
+
+    const set = THEME_SETS[DEFAULT_THEME_SET];
+    expect(staticAppTokens(':root')).toEqual(set.appTokens.dark);
+    expect(staticAppTokens("[data-theme='light']")).toEqual(set.appTokens.light);
   });
 });
 
@@ -325,6 +347,7 @@ describe('palette parity and propagation', () => {
       ...deriveAppTokens(base),
       '--app-bg': 'sentinel-bg',
       '--app-accent-1': 'sentinel-accent',
+      '--app-accent-fg': 'sentinel-bg',
     });
 
     const batch = derivePiviewTheme(changed, 'compact');

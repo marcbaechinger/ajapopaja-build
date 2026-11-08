@@ -106,7 +106,7 @@ export class NotificationDialog extends BaseDialog<NotificationAction | null> {
   private buttonClass(style: string): string {
     const base = 'px-4 py-2 rounded-lg transition-all font-bold cursor-pointer';
     if (style === 'primary') {
-      return `${base} bg-app-accent-1 hover:brightness-110 text-white shadow-lg`;
+      return `${base} bg-app-accent-1 hover:brightness-110 text-app-accent-fg shadow-lg`;
     }
     if (style === 'danger') {
       return `${base} bg-red-600 hover:bg-red-500 text-white shadow-lg`;

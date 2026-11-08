@@ -725,6 +725,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
     const buttonClass = running
       ? 'bg-red-500/80 hover:bg-red-500'
       : 'bg-app-accent-1 hover:brightness-110';
+    const buttonTextClass = running ? 'text-white' : 'text-app-accent-fg';
     const disabledClass = busy ? ' opacity-60 cursor-not-allowed' : '';
     const label = busy
       ? running
@@ -740,7 +741,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
           <span class="text-[10px] font-bold uppercase tracking-wider text-app-muted">Dev Server</span>
           <span id="dev-server-status" class="text-xs font-medium ${statusClass} truncate">${statusText}</span>
         </div>
-        <button type="button" id="pipeline-dev-toggle" ${busy ? 'disabled' : ''} class="shrink-0 px-3 py-1.5 rounded text-white text-[10px] font-bold uppercase tracking-widest transition-all shadow-md cursor-pointer ${buttonClass}${disabledClass}">
+        <button type="button" id="pipeline-dev-toggle" ${busy ? 'disabled' : ''} class="shrink-0 px-3 py-1.5 rounded ${buttonTextClass} text-[10px] font-bold uppercase tracking-widest transition-all shadow-md cursor-pointer ${buttonClass}${disabledClass}">
           ${label}
         </button>
       </div>
@@ -772,7 +773,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
     return `
       <div class="flex gap-2 justify-end p-4 border-t border-app-border bg-app-surface/50 rounded-b-2xl">
         <button id="pipeline-edit-cancel" class="px-4 py-2 rounded text-xs font-bold uppercase tracking-widest text-app-muted hover:bg-app-bg transition-all cursor-pointer">Cancel</button>
-        <button id="pipeline-edit-save" class="px-6 py-2 rounded bg-app-accent-1 text-white text-xs font-bold uppercase tracking-widest hover:brightness-110 transition-all shadow-md cursor-pointer">${create ? 'Create Pipeline' : 'Save Changes'}</button>
+        <button id="pipeline-edit-save" class="px-6 py-2 rounded bg-app-accent-1 text-app-accent-fg text-xs font-bold uppercase tracking-widest hover:brightness-110 transition-all shadow-md cursor-pointer">${create ? 'Create Pipeline' : 'Save Changes'}</button>
       </div>
     `;
   }

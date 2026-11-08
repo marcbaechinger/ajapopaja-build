@@ -100,7 +100,7 @@ export function renderSpecProposalResult(
           ${escapeHtml(rejectLabel)}
         </button>
         <button type="button" data-spec-proposal-action="accept"
-                class="px-4 py-1 rounded text-[10px] font-bold uppercase tracking-wider bg-app-accent-1 text-white hover:brightness-110 transition-all shadow-md cursor-pointer">
+                class="px-4 py-1 rounded text-[10px] font-bold uppercase tracking-wider bg-app-accent-1 text-app-accent-fg hover:brightness-110 transition-all shadow-md cursor-pointer">
           ${escapeHtml(acceptLabel)}
         </button>
       </div>
@@ -217,7 +217,7 @@ export function renderSpecSection(task: Task, isSpecExpanded: boolean): string {
           <button data-action-click="cancel_spec_edit" class="px-3 py-1 text-app-muted hover:text-app-text transition-colors cursor-pointer">
             Cancel
           </button>
-          <button data-action-click="save_spec" class="px-4 py-1 bg-app-accent-1 text-white rounded hover:brightness-110 transition-all shadow-md cursor-pointer">
+          <button data-action-click="save_spec" class="px-4 py-1 bg-app-accent-1 text-app-accent-fg rounded hover:brightness-110 transition-all shadow-md cursor-pointer">
             Save Specification
           </button>
         </div>

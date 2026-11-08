@@ -72,7 +72,7 @@ export class PullRequestSection {
                ${Icon.render('eye', { size: 14 })}
                View Task
              </button>
-             <button data-action-click="open_pr_dialog" data-task-id="${pr.task_id}" data-pr-id="${pr.id}" class="px-4 py-2 bg-app-accent-2 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-app-accent-2/80 transition-all shadow-lg shadow-app-accent-2/20 cursor-pointer flex items-center gap-2">
+             <button data-action-click="open_pr_dialog" data-task-id="${pr.task_id}" data-pr-id="${pr.id}" class="px-4 py-2 bg-app-accent-2 text-app-accent-fg text-[10px] font-black uppercase tracking-widest rounded-xl hover:brightness-105 transition-all shadow-lg shadow-app-accent-2/20 cursor-pointer flex items-center gap-2">
                ${Icon.render('git-pull-request', { size: 14 })}
                Review
              </button>

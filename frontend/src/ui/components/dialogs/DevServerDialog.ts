@@ -98,10 +98,10 @@ export class DevServerDialog extends BaseDialog<void> {
         <div id="dev-server-dialog-error" class="hidden mb-2 text-xs text-red-400" aria-live="polite"></div>
         <div class="flex justify-between items-center">
           <div class="flex items-center gap-2">
-            <button id="dev-server-dialog-default-branch-btn" type="button" class="hidden px-4 py-1.5 rounded text-xs font-bold bg-app-accent-2 text-white hover:bg-app-accent-2/80 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+            <button id="dev-server-dialog-default-branch-btn" type="button" class="hidden px-4 py-1.5 rounded text-xs font-bold bg-app-accent-2 text-app-accent-fg hover:brightness-105 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
               Back to default branch
             </button>
-            <button id="dev-server-dialog-rebuild-btn" type="button" class="hidden px-4 py-1.5 rounded text-xs font-bold bg-app-accent-1 text-white hover:bg-app-accent-1/80 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+            <button id="dev-server-dialog-rebuild-btn" type="button" class="hidden px-4 py-1.5 rounded text-xs font-bold bg-app-accent-1 text-app-accent-fg hover:brightness-105 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
               Rebuild
             </button>
           </div>

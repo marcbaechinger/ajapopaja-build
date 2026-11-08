@@ -225,7 +225,7 @@ export class SessionListItemView {
         class="text-[11px] px-3 py-1 rounded bg-amber-600 text-white hover:bg-amber-700 transition-colors cursor-pointer font-medium">Pause</button>`;
     } else if (meta.resumable) {
       primaryAction = `<button type="button" data-session-action="switch" data-session-uid="${escapeHtml(uid)}"
-        class="text-[11px] px-3 py-1 rounded bg-app-accent-2 text-white hover:brightness-110 transition-colors cursor-pointer font-medium flex items-center gap-1 ${isSwitching ? 'opacity-60 cursor-wait' : ''}"
+        class="text-[11px] px-3 py-1 rounded bg-app-accent-2 text-app-accent-fg hover:brightness-110 transition-colors cursor-pointer font-medium flex items-center gap-1 ${isSwitching ? 'opacity-60 cursor-wait' : ''}"
         ${isSwitching ? 'disabled' : ''}>${isSwitching ? 'Switching…' : 'Switch ▸'}</button>`;
     }
 

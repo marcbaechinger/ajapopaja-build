@@ -15,6 +15,7 @@
   --color-app-border: var(--app-border);
   --color-app-accent-1: var(--app-accent-1);
   --color-app-accent-2: var(--app-accent-2);
+  --color-app-accent-fg: var(--app-accent-fg);
 }
 
 /* Default Theme (Dark - Sky Primary)
@@ -36,6 +37,8 @@
   --app-accent-1: var(--color-sky-400);
   /* Cyan as secondary accent - matches 'Sky' better than Indigo */
   --app-accent-2: var(--color-cyan-400);
+  /* Ink for text/icons on an accent-filled background */
+  --app-accent-fg: var(--color-slate-950);
 }
 
 /* Light Theme (Sky/Cyan adjusted for light background) */
@@ -48,6 +51,7 @@
   
   --app-accent-1: var(--color-sky-700);
   --app-accent-2: var(--color-cyan-700);
+  --app-accent-fg: var(--color-slate-50);
 }
 
 /* Ensure body uses the theme background and text colors */

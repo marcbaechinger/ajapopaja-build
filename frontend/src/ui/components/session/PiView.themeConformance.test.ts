@@ -566,6 +566,8 @@ function missingTokenKeys(theme: PiViewTheme, requiredKeys: readonly string[]): 
 const APP_CONTRAST_PAIRS = [
   { name: 'app body', fg: '--app-text', bg: '--app-bg' },
   { name: 'app accent', fg: '--app-accent-1', bg: '--app-surface' },
+  { name: 'app accent button', fg: '--app-accent-fg', bg: '--app-accent-1' },
+  { name: 'app accent-2 button', fg: '--app-accent-fg', bg: '--app-accent-2' },
 ] as const;
 
 function resolveAppToken(

@@ -256,12 +256,12 @@ export class ProcessIoView {
     if (!actions) return;
     actions.innerHTML = `
       <div class="flex gap-2">
-        <button id="process-io-follow" type="button" class="px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer ${this.followMode ? 'bg-app-accent-1 text-white hover:brightness-110' : 'bg-app-bg border border-app-border text-app-muted hover:text-app-text'}">Follow Mode: ${this.followMode ? 'ON' : 'OFF'}</button>
+        <button id="process-io-follow" type="button" class="px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer ${this.followMode ? 'bg-app-accent-1 text-app-accent-fg hover:brightness-110' : 'bg-app-bg border border-app-border text-app-muted hover:text-app-text'}">Follow Mode: ${this.followMode ? 'ON' : 'OFF'}</button>
         <button id="process-io-clear" type="button" class="px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider bg-app-bg border border-app-border text-app-muted hover:text-app-text transition-colors cursor-pointer">Clear</button>
       </div>
       <div class="flex gap-2">
         <button id="process-io-stop" type="button" class="px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider bg-red-500/80 text-white hover:bg-red-500 transition-colors cursor-pointer">Stop</button>
-        <button id="process-io-open" type="button" ${this.currentPort == null ? 'disabled' : ''} class="px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider bg-app-accent-2/80 text-white hover:bg-app-accent-2 transition-colors cursor-pointer ${this.currentPort == null ? 'opacity-50 cursor-not-allowed' : ''}">Open</button>
+        <button id="process-io-open" type="button" ${this.currentPort == null ? 'disabled' : ''} class="px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider bg-app-accent-2 text-app-accent-fg hover:brightness-105 transition-colors cursor-pointer ${this.currentPort == null ? 'opacity-50 cursor-not-allowed' : ''}">Open</button>
       </div>
     `;
 

@@ -110,7 +110,7 @@ export class RegisterView extends View {
               </div>
             </div>
             <button type="submit" 
-                    class="w-full py-4 mt-4 bg-app-accent-2 text-white font-black uppercase tracking-widest rounded-xl hover:brightness-110 transition-all shadow-lg shadow-app-accent-2/20 active:scale-[0.98]">
+                    class="w-full py-4 mt-4 bg-app-accent-2 text-app-accent-fg font-black uppercase tracking-widest rounded-xl hover:brightness-110 transition-all shadow-lg shadow-app-accent-2/20 active:scale-[0.98]">
               Register
             </button>
           </form>

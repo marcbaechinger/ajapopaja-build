@@ -76,7 +76,7 @@ export class LogViewerDialog extends BaseDialog {
     return `
       <div class="p-3 border-t border-app-border flex justify-between items-center bg-app-surface/50">
         <div class="flex gap-2">
-          <button data-action="toggle-follow" id="follow-btn" class="px-3 py-1.5 rounded text-xs font-medium bg-app-accent-1 text-white hover:bg-app-accent-1/80 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer">
+          <button data-action="toggle-follow" id="follow-btn" class="px-3 py-1.5 rounded text-xs font-medium bg-app-accent-1 text-app-accent-fg hover:brightness-105 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer">
             ${Icon.render('refresh', { size: 14 })}
             Follow Mode: ON
           </button>
@@ -155,7 +155,7 @@ export class LogViewerDialog extends BaseDialog {
         : `${Icon.render('clock', { size: 14 })} Follow Mode: OFF`;
       
       btn.className = this.isFollowMode
-        ? 'px-3 py-1.5 rounded text-xs font-medium bg-app-accent-1 text-white hover:bg-app-accent-1/80 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer'
+        ? 'px-3 py-1.5 rounded text-xs font-medium bg-app-accent-1 text-app-accent-fg hover:brightness-105 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer'
         : 'px-3 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer';
     }
   }

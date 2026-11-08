@@ -73,7 +73,7 @@ export class LoginView extends View {
                      placeholder="••••••••">
             </div>
             <button type="submit" 
-                    class="w-full py-4 bg-app-accent-1 text-white font-black uppercase tracking-widest rounded-xl hover:brightness-110 transition-all shadow-lg shadow-app-accent-1/20 active:scale-[0.98]">
+                    class="w-full py-4 bg-app-accent-1 text-app-accent-fg font-black uppercase tracking-widest rounded-xl hover:brightness-110 transition-all shadow-lg shadow-app-accent-1/20 active:scale-[0.98]">
               Sign In
             </button>
           </form>

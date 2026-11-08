@@ -190,7 +190,7 @@ export class AssistantPanel {
                     class="w-full bg-app-surface border border-app-border rounded-xl pl-4 pr-12 py-3 text-sm text-app-text outline-none focus:ring-2 focus:ring-app-accent-2 transition-all resize-none max-h-32"
                     placeholder="Ask me anything... (Use \`/\` to see available slash commands)"
                     rows="1"></textarea>
-          <button type="submit" class="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-app-accent-2 text-white rounded-lg hover:brightness-110 transition-all shadow-lg cursor-pointer focus:ring-2 focus:ring-offset-2 focus:ring-app-accent-2 outline-none" aria-label="Send Message">
+          <button type="submit" class="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-app-accent-2 text-app-accent-fg rounded-lg hover:brightness-110 transition-all shadow-lg cursor-pointer focus:ring-2 focus:ring-offset-2 focus:ring-app-accent-2 outline-none" aria-label="Send Message">
              ${Icon.render('arrowRight', { size: 16 })}
           </button>
         </form>
@@ -477,7 +477,7 @@ export class AssistantPanel {
     const maxWidthClass = isUser ? 'max-w-[80%] ml-auto' : '';
     msgEl.innerHTML = `
       <div class="relative ${maxWidthClass}">
-        <div class="${isUser ? 'bg-app-accent-2 text-white rounded-tr-none' : (isError ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-app-bg border-app-border text-app-text rounded-tl-none')} 
+        <div class="${isUser ? 'bg-app-accent-2 text-app-accent-fg rounded-tr-none' : (isError ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-app-bg border-app-border text-app-text rounded-tl-none')} 
                     p-3 rounded-2xl border text-sm prose-theme prose-xs prose-p:my-0 shadow-sm">
           ${thinkingHtml}
           <div class="bubble-content">${isUser ? text : (text ? renderMarkdown(text) : '<span class="animate-pulse">...</span>')}</div>
@@ -564,7 +564,7 @@ export class AssistantPanel {
         <button class="reject-tool flex-grow bg-app-surface border border-app-border text-app-text py-1.5 rounded-lg text-xs font-bold hover:bg-app-bg transition-all cursor-pointer focus:ring-2 focus:ring-offset-2 focus:ring-app-accent-2 outline-none">
           Reject
         </button>
-        <button class="confirm-tool flex-grow bg-app-accent-2 text-white py-1.5 rounded-lg text-xs font-bold hover:brightness-110 transition-all cursor-pointer focus:ring-2 focus:ring-offset-2 focus:ring-app-accent-2 outline-none">
+        <button class="confirm-tool flex-grow bg-app-accent-2 text-app-accent-fg py-1.5 rounded-lg text-xs font-bold hover:brightness-110 transition-all cursor-pointer focus:ring-2 focus:ring-offset-2 focus:ring-app-accent-2 outline-none">
           Confirm & Execute
         </button>
       </div>

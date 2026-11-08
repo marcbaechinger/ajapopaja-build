@@ -229,7 +229,7 @@ export class InteractivePromptView {
           class="flex-1 resize-y px-3 py-2 rounded-lg text-xs bg-black/30 border border-app-border text-app-text placeholder:text-app-muted/60 focus:outline-none focus:border-app-accent-2/60"
           placeholder="${placeholder}"></textarea>
         <button id="interactive-prompt-send" type="button"
-          class="px-3 py-2 rounded text-xs font-medium bg-app-accent-2 text-white hover:bg-app-accent-2/80 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer">
+          class="px-3 py-2 rounded text-xs font-medium bg-app-accent-2 text-app-accent-fg hover:brightness-105 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer">
           ${Icon.render('arrowRight', { size: 14 })} Send
         </button>
       </div>

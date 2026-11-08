@@ -41,10 +41,10 @@ export class SessionManagerButton {
     const compact = options.compact ?? false;
     const badge = pausedCount > 0
       ? `<span data-session-badge
-              class="text-[10px] font-bold bg-app-accent-2 text-white px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center"
+              class="text-[10px] font-bold bg-app-accent-2 text-app-accent-fg px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center"
               aria-label="Paused session count">${pausedCount}</span>`
       : `<span data-session-badge
-              class="hidden text-[10px] font-bold bg-app-accent-2 text-white px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center"
+              class="hidden text-[10px] font-bold bg-app-accent-2 text-app-accent-fg px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center"
               aria-label="Paused session count"></span>`;
 
     return `

@@ -106,6 +106,9 @@ export function deriveAppTokens(palette: PalettePrimitives): Record<string, stri
     '--app-border': palette['--palette-border'],
     '--app-accent-1': palette['--palette-accent'],
     '--app-accent-2': palette['--palette-accent-2'],
+    // On-accent ink: the palette background is dark on dark sets and light on
+    // light sets, so it stays readable on either accent without a mode branch.
+    '--app-accent-fg': palette['--palette-bg'],
   };
 }
 

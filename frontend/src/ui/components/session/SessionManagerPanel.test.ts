@@ -211,7 +211,7 @@ describe('SessionManagerPanel', () => {
 
     // The highlight must follow the newly selected filter.
     expect(chipFor('completed').classList.contains('bg-app-accent-2')).toBe(true);
-    expect(chipFor('completed').classList.contains('text-white')).toBe(true);
+    expect(chipFor('completed').classList.contains('text-app-accent-fg')).toBe(true);
     expect(chipFor('completed').classList.contains('border-app-accent-2')).toBe(true);
     expect(chipFor('all').classList.contains('bg-app-accent-2')).toBe(false);
     expect(chipFor('all').classList.contains('text-app-muted')).toBe(true);

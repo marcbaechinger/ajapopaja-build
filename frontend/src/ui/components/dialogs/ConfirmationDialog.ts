@@ -61,7 +61,7 @@ export class ConfirmationDialog extends BaseDialog<boolean> {
         <button id="dialog-cancel" class="px-4 py-2 text-app-muted hover:text-app-text transition-colors cursor-pointer font-medium">
           ${this.cancelLabel}
         </button>
-        <button id="dialog-confirm" class="px-6 py-2 bg-app-accent-1 hover:brightness-110 text-white rounded-lg transition-all font-bold shadow-lg cursor-pointer">
+        <button id="dialog-confirm" class="px-6 py-2 bg-app-accent-1 hover:brightness-110 text-app-accent-fg rounded-lg transition-all font-bold shadow-lg cursor-pointer">
           ${this.confirmLabel}
         </button>
       </div>

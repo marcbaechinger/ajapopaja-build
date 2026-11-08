@@ -192,7 +192,7 @@ export class PullRequestDialog extends BaseDialog<void> {
         </button>
         ${this.pr.remote_pr_url ? `
         <div class="flex gap-3">
-          <a id="pr-open-gitea-link" href="${escapeHtml(this.pr.remote_pr_url)}" target="_blank" rel="noopener noreferrer" class="px-8 py-2 rounded bg-app-accent-2 text-white text-xs font-black uppercase tracking-widest hover:bg-app-accent-2/80 transition-all cursor-pointer shadow-lg shadow-app-accent-2/20 inline-flex items-center gap-2">
+          <a id="pr-open-gitea-link" href="${escapeHtml(this.pr.remote_pr_url)}" target="_blank" rel="noopener noreferrer" class="px-8 py-2 rounded bg-app-accent-2 text-app-accent-fg text-xs font-black uppercase tracking-widest hover:brightness-105 transition-all cursor-pointer shadow-lg shadow-app-accent-2/20 inline-flex items-center gap-2">
             ${Icon.render('arrowRight', { size: 16 })}
             Open in Gitea
           </a>
@@ -208,7 +208,7 @@ export class PullRequestDialog extends BaseDialog<void> {
           Close
         </button>
         <div class="flex gap-3">
-          <a id="pr-open-gitea-link" href="${escapeHtml(this.pr.remote_pr_url || '#')}" target="_blank" rel="noopener noreferrer" class="px-8 py-2 rounded bg-app-accent-2 text-white text-xs font-black uppercase tracking-widest hover:bg-app-accent-2/80 transition-all cursor-pointer shadow-lg shadow-app-accent-2/20 inline-flex items-center gap-2">
+          <a id="pr-open-gitea-link" href="${escapeHtml(this.pr.remote_pr_url || '#')}" target="_blank" rel="noopener noreferrer" class="px-8 py-2 rounded bg-app-accent-2 text-app-accent-fg text-xs font-black uppercase tracking-widest hover:brightness-105 transition-all cursor-pointer shadow-lg shadow-app-accent-2/20 inline-flex items-center gap-2">
             ${Icon.render('arrowRight', { size: 16 })}
             Open in Gitea
           </a>
@@ -228,7 +228,7 @@ export class PullRequestDialog extends BaseDialog<void> {
           <button id="pr-accept-anyway-btn" class="px-4 py-2 rounded text-xs font-bold uppercase tracking-widest text-app-text border border-app-border hover:bg-app-surface transition-all cursor-pointer">
             Accept anyway
           </button>
-          <button id="pr-sync-retry-btn" class="px-6 py-2 rounded bg-app-accent-2 text-white text-xs font-black uppercase tracking-widest hover:bg-app-accent-2/80 transition-all cursor-pointer shadow-lg shadow-app-accent-2/20 inline-flex items-center gap-2">
+          <button id="pr-sync-retry-btn" class="px-6 py-2 rounded bg-app-accent-2 text-app-accent-fg text-xs font-black uppercase tracking-widest hover:brightness-105 transition-all cursor-pointer shadow-lg shadow-app-accent-2/20 inline-flex items-center gap-2">
             ${Icon.render('refresh', { size: 16 })}
             Sync from Gitea & retry
           </button>

@@ -511,7 +511,7 @@ export class TaskItem {
                          value="${escapeHtml(task.title)}" placeholder="Task title" data-action-keydown="save_title">
                   <div class="flex gap-2 justify-end">
                     <button data-action-click="cancel_title_edit" class="text-[10px] text-app-muted hover:text-app-text px-2 py-1 cursor-pointer">Cancel</button>
-                    <button data-action-click="save_title" class="text-[10px] bg-app-accent-1 text-white px-3 py-1 rounded hover:brightness-110 cursor-pointer">Save</button>
+                    <button data-action-click="save_title" class="text-[10px] bg-app-accent-1 text-app-accent-fg px-3 py-1 rounded hover:brightness-110 cursor-pointer">Save</button>
                   </div>
                 </div>
               ` : ''}
@@ -573,7 +573,7 @@ export class TaskItem {
               </button>
               ${canSchedule ? `
                 <button data-action-click="schedule_task" data-version="${task.version}"
-                        class="${headerButtonBase} bg-app-accent-1 hover:brightness-110 text-white shadow-lg">
+                        class="${headerButtonBase} bg-app-accent-1 hover:brightness-110 text-app-accent-fg shadow-lg">
                   <span>Schedule Execution</span>
                 </button>
               ` : ''}

@@ -103,7 +103,7 @@ export function renderDesignDocSection(task: Task, isProposed: boolean): string 
             <button data-action-click="cancel_design_doc" class="px-3 py-1 text-app-muted hover:text-app-text transition-colors cursor-pointer">
               Cancel
             </button>
-            <button data-action-click="save_design_doc" class="px-4 py-1 bg-app-accent-2 text-white rounded hover:brightness-110 transition-all shadow-md cursor-pointer">
+            <button data-action-click="save_design_doc" class="px-4 py-1 bg-app-accent-2 text-app-accent-fg rounded hover:brightness-110 transition-all shadow-md cursor-pointer">
               Save Changes
             </button>
           </div>
