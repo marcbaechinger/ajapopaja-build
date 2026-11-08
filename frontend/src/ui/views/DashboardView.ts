@@ -299,6 +299,10 @@ export class DashboardView extends View {
             </div>
           </button>
           <div class="w-px h-8 bg-app-border mx-2"></div>
+          ${this.themeSetPicker.render()}
+          <button data-action-click="open_health_check" class="p-2 hover:bg-app-bg rounded-lg transition-colors cursor-pointer text-app-muted hover:text-green-500" title="System Health">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          </button>
           <div class="flex items-center gap-3 bg-app-bg px-4 py-2 rounded-xl border border-app-border">
             <div class="flex flex-col items-end">
               <span class="text-xs font-bold text-app-text">${user?.username || 'User'}</span>
@@ -308,10 +312,6 @@ export class DashboardView extends View {
               <svg class="w-4 h-4 group-hover/logout:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
             </button>
           </div>
-          <button data-action-click="open_health_check" class="p-2 hover:bg-app-bg rounded-lg transition-colors cursor-pointer text-app-muted hover:text-green-500" title="System Health">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-          </button>
-          ${this.themeSetPicker.render()}
         </div>
       </header>
 

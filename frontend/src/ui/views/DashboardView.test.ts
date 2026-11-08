@@ -142,6 +142,29 @@ describe('DashboardView', () => {
     view.unmount();
   });
 
+  it('orders the right-aligned controls as theme picker, health, then profile/logout', () => {
+    const view = new DashboardView(mockContext);
+    container.innerHTML = view.render();
+
+    const headerHtml = container.querySelector('header')?.innerHTML ?? '';
+    const pickerIndex = headerHtml.indexOf('data-theme-set-picker');
+    const healthIndex = headerHtml.indexOf('data-action-click="open_health_check"');
+    const logoutIndex = headerHtml.indexOf('data-action-click="perform_logout"');
+
+    expect(pickerIndex).toBeGreaterThan(-1);
+    expect(healthIndex).toBeGreaterThan(pickerIndex);
+    expect(logoutIndex).toBeGreaterThan(healthIndex);
+
+    // The profile badge (with logout) is the very last header control.
+    const logout = container.querySelector('[data-action-click="perform_logout"]');
+    const profileBadge = logout?.parentElement;
+    const rightControls = profileBadge?.parentElement;
+    expect(rightControls?.lastElementChild).toBe(profileBadge);
+    expect(container.querySelector('header')?.lastElementChild).toBe(rightControls);
+
+    view.unmount();
+  });
+
   it('opens and closes the theme-set picker through its registered action', () => {
     const view = new DashboardView(mockContext);
     container.innerHTML = view.render();
