@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { Pipeline, PipelineStatus, CommitDiff, type GitStatusDetails, type GitLogResponse } from '../domain.ts';
+import { Pipeline, PipelineStatus, CommitDiff, BuildArtifactSpec, type GitStatusDetails, type GitLogResponse } from '../domain.ts';
 import { BaseClient } from './BaseClient.ts';
 import { AuthService } from '../AuthService.ts';
 
@@ -76,6 +76,7 @@ export class PipelineClient extends BaseClient {
     lint_commands?: string[][] | null;
     serve_commands?: string[][] | null;
     build_commands?: string[][] | null;
+    build_artifact?: BuildArtifactSpec | null;
     ollama_model?: string | null;
     one_prompt_model?: string | null;
     assistant_model?: string | null;
@@ -93,7 +94,7 @@ export class PipelineClient extends BaseClient {
     return new Pipeline(await response.json());
   }
 
-  async update(id: string, version: number, partial: { name?: string, status?: PipelineStatus, workspace_path?: string | null, repo_uri?: string | null, repo_username?: string | null, repo_token?: string | null, doc_root?: string, test_commands?: string[][] | null, lint_commands?: string[][] | null, serve_commands?: string[][] | null, build_commands?: string[][] | null, ollama_model?: string | null, one_prompt_model?: string | null, assistant_model?: string | null, archbot_model?: string | null, reviewbot_model?: string | null, docbot_model?: string | null, specagent_model?: string | null, coderbot_model?: string | null }): Promise<Pipeline> {
+  async update(id: string, version: number, partial: { name?: string, status?: PipelineStatus, workspace_path?: string | null, repo_uri?: string | null, repo_username?: string | null, repo_token?: string | null, doc_root?: string, test_commands?: string[][] | null, lint_commands?: string[][] | null, serve_commands?: string[][] | null, build_commands?: string[][] | null, build_artifact?: BuildArtifactSpec | null, ollama_model?: string | null, one_prompt_model?: string | null, assistant_model?: string | null, archbot_model?: string | null, reviewbot_model?: string | null, docbot_model?: string | null, specagent_model?: string | null, coderbot_model?: string | null }): Promise<Pipeline> {
     try {
       const response = await this.fetch(`${this.baseUrl}/pipelines/${id}`, {
         method: 'PATCH',

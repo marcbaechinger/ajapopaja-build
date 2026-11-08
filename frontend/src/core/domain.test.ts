@@ -122,6 +122,30 @@ describe('Domain Models', () => {
       const pipeline = new Pipeline({ name: 'Invalid Status', status: 'junk' });
       expect(pipeline.status).toBe(PipelineStatus.ACTIVE); 
     });
+
+    it('should map the build_artifact declaration', () => {
+      const pipeline = new Pipeline({
+        name: 'Android',
+        build_artifact: {
+          path: 'app/build/outputs/apk/debug/app-debug.apk',
+          label: 'Debug APK',
+          description: 'Installable debug build',
+          media_type: 'application/vnd.android.package-archive',
+        },
+      });
+
+      expect(pipeline.build_artifact).toMatchObject({
+        path: 'app/build/outputs/apk/debug/app-debug.apk',
+        label: 'Debug APK',
+        description: 'Installable debug build',
+        media_type: 'application/vnd.android.package-archive',
+      });
+    });
+
+    it('should preserve an empty build_artifact declaration as null', () => {
+      const pipeline = new Pipeline({ name: 'No artifact', build_artifact: null });
+      expect(pipeline.build_artifact).toBeNull();
+    });
   });
 
   describe('AppNotification', () => {

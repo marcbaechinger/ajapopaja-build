@@ -17,6 +17,7 @@ from typing import Any, List, Optional
 
 from core.exceptions import EntityNotFoundError, ValidationError, VersionMismatchError
 from core.models.models import (
+    BuildArtifactSpec,
     Pipeline,
     PipelineStatus,
     Task,
@@ -137,6 +138,7 @@ async def update_pipeline(
     lint_commands: Optional[List[List[str]]] = None,
     serve_commands: Optional[List[List[str]]] = None,
     build_commands: Optional[List[List[str]]] = None,
+    build_artifact: Any = _UNSET,
     ollama_model: Any = _UNSET,
     one_prompt_model: Any = _UNSET,
     assistant_model: Any = _UNSET,
@@ -194,6 +196,19 @@ async def update_pipeline(
         pipeline.build_commands = _validate_command_lists(
             build_commands, "build_commands", "build", ValidationError
         )
+
+    # Build artifact declarations use the same sentinel as model overrides: an
+    # explicit ``null`` clears the declaration, while an omitted field leaves
+    # the stored value untouched.
+    if build_artifact is not _UNSET:
+        if build_artifact is None:
+            pipeline.build_artifact = None
+        elif isinstance(build_artifact, BuildArtifactSpec):
+            pipeline.build_artifact = build_artifact
+        elif isinstance(build_artifact, dict):
+            pipeline.build_artifact = BuildArtifactSpec(**build_artifact)
+        else:
+            pipeline.build_artifact = build_artifact
 
     # Model overrides use a sentinel so an explicit ``null`` clears the override
     # while an omitted field (partial PATCH) leaves the stored value untouched.

@@ -169,6 +169,26 @@ export function isPipelineStatus(value: any): value is PipelineStatus {
   return Object.values(PipelineStatus).includes(value);
 }
 
+/**
+ * Declaration of a pipeline's single build output file. Mirrors the backend
+ * ``BuildArtifactSpec`` model. The path is repository-relative; the file
+ * itself is never persisted, only this configuration.
+ */
+export class BuildArtifactSpec {
+  path: string = '';
+  label?: string | null;
+  description?: string | null;
+  media_type?: string | null;
+
+  constructor(json: any) {
+    if (!json) return;
+    if (json.path !== undefined) this.path = String(json.path);
+    if (json.label !== undefined) this.label = json.label === null ? null : String(json.label);
+    if (json.description !== undefined) this.description = json.description === null ? null : String(json.description);
+    if (json.media_type !== undefined) this.media_type = json.media_type === null ? null : String(json.media_type);
+  }
+}
+
 export class Pipeline {
   id?: string;
   name: string = '';
@@ -184,6 +204,7 @@ export class Pipeline {
   lint_commands?: string[][] | null;
   serve_commands?: string[][] | null;
   build_commands?: string[][] | null;
+  build_artifact?: BuildArtifactSpec | null;
   ollama_model?: string | null;
   one_prompt_model?: string | null;
   assistant_model?: string | null;
@@ -215,6 +236,9 @@ export class Pipeline {
     if (json.lint_commands !== undefined) this.lint_commands = Array.isArray(json.lint_commands) ? json.lint_commands : null;
     if (json.serve_commands !== undefined) this.serve_commands = Array.isArray(json.serve_commands) ? json.serve_commands : null;
     if (json.build_commands !== undefined) this.build_commands = Array.isArray(json.build_commands) ? json.build_commands : null;
+    if (json.build_artifact !== undefined) {
+      this.build_artifact = json.build_artifact === null ? null : new BuildArtifactSpec(json.build_artifact);
+    }
     if (json.ollama_model !== undefined) this.ollama_model = json.ollama_model;
     if (json.one_prompt_model !== undefined) this.one_prompt_model = json.one_prompt_model;
     if (json.assistant_model !== undefined) this.assistant_model = json.assistant_model;

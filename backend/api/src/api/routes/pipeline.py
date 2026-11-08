@@ -25,6 +25,7 @@ from api.git_hosting.pull_requests import ensure_pr_state_webhook_best_effort
 from api.websocket_manager import WSMessage, manager
 from core.exceptions import EntityNotFoundError
 from core.models.models import (
+    BuildArtifactSpec,
     GitLogEntry,
     GitStatusInfo,
     Pipeline,
@@ -61,6 +62,7 @@ class PipelineUpdateRequest(BaseModel):
     lint_commands: Optional[List[List[str]]] = None
     serve_commands: Optional[List[List[str]]] = None
     build_commands: Optional[List[List[str]]] = None
+    build_artifact: Optional[BuildArtifactSpec] = None
     ollama_model: Optional[str] = None
     one_prompt_model: Optional[str] = None
     assistant_model: Optional[str] = None

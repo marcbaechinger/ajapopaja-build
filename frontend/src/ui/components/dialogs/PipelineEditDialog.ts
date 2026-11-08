@@ -15,7 +15,7 @@
  */
 
 import { BaseDialog } from './dialog_common.ts';
-import { Pipeline, PipelineStatus } from '../../../core/domain.ts';
+import { Pipeline, PipelineStatus, BuildArtifactSpec } from '../../../core/domain.ts';
 import type { AppContext } from '../../../core/AppContext.ts';
 import { Icon } from '../common/Icon.ts';
 import { escapeHtml } from '../utils/html.ts';
@@ -277,6 +277,56 @@ export class PipelineEditDialog extends BaseDialog<void> {
         this.pipeline[field] = parseTestCommands(el.value);
       }
     }
+    this.captureBuildArtifactInputs();
+  }
+
+  /**
+   * Reads the build-artifact declaration from the Build tab, if it is
+   * currently rendered. Returns ``undefined`` when the tab is not visible so
+   * callers can preserve the stored value instead of clearing it.
+   */
+  private readBuildArtifactInput(): BuildArtifactSpec | null | undefined {
+    const pathEl = this.dialog.querySelector('input[name="build_artifact_path"]') as HTMLInputElement | null;
+    if (!pathEl) return undefined;
+
+    const read = (name: string): string => {
+      const el = this.dialog.querySelector(`input[name="${name}"]`) as HTMLInputElement | null;
+      return el ? el.value.trim() : '';
+    };
+
+    const path = pathEl.value.trim();
+    if (!path) return null;
+    return new BuildArtifactSpec({
+      path,
+      label: read('build_artifact_label') || null,
+      description: read('build_artifact_description') || null,
+      media_type: read('build_artifact_media_type') || null,
+    });
+  }
+
+  private captureBuildArtifactInputs() {
+    const artifact = this.readBuildArtifactInput();
+    if (artifact !== undefined) this.pipeline.build_artifact = artifact;
+  }
+
+  /**
+   * Builds the artifact part of a create/update payload. A blank path means
+   * "no artifact configured" and is sent as ``null`` so an existing
+   * declaration can be cleared. Optional blank fields are omitted.
+   */
+  private buildArtifactPayload(): BuildArtifactSpec | null {
+    const artifact = this.pipeline.build_artifact;
+    const path = artifact?.path?.trim();
+    if (!path) return null;
+
+    const payload: BuildArtifactSpec = { path } as BuildArtifactSpec;
+    const label = artifact?.label?.trim();
+    const description = artifact?.description?.trim();
+    const mediaType = artifact?.media_type?.trim();
+    if (label) payload.label = label;
+    if (description) payload.description = description;
+    if (mediaType) payload.media_type = mediaType;
+    return payload;
   }
 
   /**
@@ -460,13 +510,52 @@ export class PipelineEditDialog extends BaseDialog<void> {
   }
 
   private renderBuildCommands(): string {
-    return this.renderCommandTextarea(
-      'build_commands',
-      'Build Commands',
-      this.pipeline.build_commands || [],
-      'One command per line, e.g.&#10;cd frontend &amp;&amp; npm run build&#10;cd backend &amp;&amp; uv build',
-      'Commands run to build the project. One per line. Leave empty to skip building.'
-    );
+    return `
+      ${this.renderCommandTextarea(
+        'build_commands',
+        'Build Commands',
+        this.pipeline.build_commands || [],
+        'One command per line, e.g.&#10;cd frontend &amp;&amp; npm run build&#10;cd backend &amp;&amp; uv build',
+        'Commands run to build the project. One per line. Leave empty to skip building.'
+      )}
+      ${this.renderBuildArtifactFields()}
+    `;
+  }
+
+  /**
+   * Renders the optional build-artifact declaration that accompanies the
+   * build commands. The path is repository-relative and points at the single
+   * file produced by a successful build.
+   */
+  private renderBuildArtifactFields(): string {
+    const artifact = this.pipeline.build_artifact;
+    const path = escapeHtml(artifact?.path || '');
+    const label = escapeHtml(artifact?.label || '');
+    const description = escapeHtml(artifact?.description || '');
+    const mediaType = escapeHtml(artifact?.media_type || '');
+    return `
+      <div class="mt-1 pt-3 border-t border-app-border flex flex-col gap-3">
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Build Artifact Path (Optional)</label>
+          <input type="text" name="build_artifact_path" value="${path}" placeholder="app/build/outputs/apk/debug/app-debug.apk" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1 font-mono">
+          <p class="text-[10px] text-app-muted">Repository-relative path to the single file produced by the build commands. Leave empty to disable artifact delivery.</p>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Artifact Label (Optional)</label>
+            <input type="text" name="build_artifact_label" value="${label}" placeholder="Debug APK" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1">
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Media Type (Optional)</label>
+            <input type="text" name="build_artifact_media_type" value="${mediaType}" placeholder="application/vnd.android.package-archive" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1 font-mono">
+          </div>
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-app-muted mb-1">Artifact Description (Optional)</label>
+          <input type="text" name="build_artifact_description" value="${description}" placeholder="Short description of the build output" class="w-full bg-app-bg border border-app-border rounded px-3 py-1.5 text-sm text-app-text outline-none focus:ring-1 focus:ring-app-accent-1">
+        </div>
+      </div>
+    `;
   }
 
   /** Returns the markup for the currently selected command tab. */
@@ -842,6 +931,9 @@ export class PipelineEditDialog extends BaseDialog<void> {
 
     // Make sure the latest model selections are reflected in the pipeline.
     this.captureModelInputs();
+    // Capture artifact fields before building the payload (the Build tab may
+    // not be the active tab, in which case the stored value is preserved).
+    this.captureBuildArtifactInputs();
 
     const nameInput = this.dialog.querySelector('input[name="pipeline_name"]') as HTMLInputElement;
     const statusSelect = this.dialog.querySelector('select[name="pipeline_status"]') as HTMLSelectElement;
@@ -875,6 +967,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
     const lintCommands = parseTestCommands(lintText);
     const buildCommands = parseTestCommands(buildText);
     const serveCommands = parseTestCommands(serveText);
+    const buildArtifact = this.buildArtifactPayload();
 
     const btnLabel = create ? 'Create Pipeline' : 'Save Changes';
     saveBtn.disabled = true;
@@ -893,6 +986,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
           lint_commands?: string[][] | null;
           build_commands?: string[][] | null;
           serve_commands?: string[][] | null;
+          build_artifact?: BuildArtifactSpec | null;
           ollama_model?: string | null;
           one_prompt_model?: string | null;
           assistant_model?: string | null;
@@ -908,6 +1002,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
           lint_commands: lintCommands.length > 0 ? lintCommands : null,
           build_commands: buildCommands.length > 0 ? buildCommands : null,
           serve_commands: serveCommands.length > 0 ? serveCommands : null,
+          build_artifact: buildArtifact,
           ...this.modelPayload(),
         };
 
@@ -946,6 +1041,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
           lint_commands?: string[][] | null;
           build_commands?: string[][] | null;
           serve_commands?: string[][] | null;
+          build_artifact?: BuildArtifactSpec | null;
           ollama_model?: string | null;
           one_prompt_model?: string | null;
           assistant_model?: string | null;
@@ -959,6 +1055,7 @@ export class PipelineEditDialog extends BaseDialog<void> {
           lint_commands: lintCommands,
           build_commands: buildCommands,
           serve_commands: serveCommands,
+          build_artifact: buildArtifact,
           ...this.modelPayload(),
         };
 

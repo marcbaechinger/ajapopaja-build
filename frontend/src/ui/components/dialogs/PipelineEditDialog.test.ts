@@ -474,6 +474,76 @@ describe('PipelineEditDialog', () => {
     expect(updateCall[2].build_commands).toEqual([]);
   });
 
+  it('should prefill and save the build_artifact declaration', async () => {
+    mockProps.pipeline!.build_artifact = {
+      path: 'app/build/outputs/apk/debug/app-debug.apk',
+      label: 'Debug APK',
+      media_type: 'application/vnd.android.package-archive',
+    } as any;
+    const dialog = new PipelineEditDialog(mockProps);
+    const showPromise = dialog.show();
+
+    switchToCmdTab('build');
+    const pathInput = document.querySelector('input[name="build_artifact_path"]') as HTMLInputElement;
+    const labelInput = document.querySelector('input[name="build_artifact_label"]') as HTMLInputElement;
+    const mediaTypeInput = document.querySelector('input[name="build_artifact_media_type"]') as HTMLInputElement;
+    expect(pathInput.value).toBe('app/build/outputs/apk/debug/app-debug.apk');
+    expect(labelInput.value).toBe('Debug APK');
+    expect(mediaTypeInput.value).toBe('application/vnd.android.package-archive');
+
+    pathInput.value = 'dist/app.zip';
+    labelInput.value = 'Release bundle';
+    mediaTypeInput.value = 'application/zip';
+
+    const saveBtn = document.querySelector('#pipeline-edit-save') as HTMLButtonElement;
+    saveBtn.click();
+    await showPromise;
+
+    const updateCall = (mockProps.context.pipelineClient.update as any).mock.calls[0];
+    expect(updateCall[2].build_artifact).toEqual({
+      path: 'dist/app.zip',
+      label: 'Release bundle',
+      media_type: 'application/zip',
+    });
+  });
+
+  it('should clear build_artifact when the artifact path is blank', async () => {
+    mockProps.pipeline!.build_artifact = { path: 'dist/app.zip' } as any;
+    const dialog = new PipelineEditDialog(mockProps);
+    const showPromise = dialog.show();
+
+    switchToCmdTab('build');
+    const pathInput = document.querySelector('input[name="build_artifact_path"]') as HTMLInputElement;
+    pathInput.value = '';
+
+    const saveBtn = document.querySelector('#pipeline-edit-save') as HTMLButtonElement;
+    saveBtn.click();
+    await showPromise;
+
+    const updateCall = (mockProps.context.pipelineClient.update as any).mock.calls[0];
+    expect(updateCall[2].build_artifact).toBeNull();
+  });
+
+  it('should preserve build_artifact when saving from another command tab', async () => {
+    mockProps.pipeline!.build_artifact = {
+      path: 'dist/app.zip',
+      label: 'Bundle',
+    } as any;
+    const dialog = new PipelineEditDialog(mockProps);
+    const showPromise = dialog.show();
+
+    switchToCmdTab('test');
+    const saveBtn = document.querySelector('#pipeline-edit-save') as HTMLButtonElement;
+    saveBtn.click();
+    await showPromise;
+
+    const updateCall = (mockProps.context.pipelineClient.update as any).mock.calls[0];
+    expect(updateCall[2].build_artifact).toEqual({
+      path: 'dist/app.zip',
+      label: 'Bundle',
+    });
+  });
+
   it('should preserve build_commands when saving from the test tab', async () => {
     mockProps.pipeline!.build_commands = [['sh', '-c', 'make build']];
     const dialog = new PipelineEditDialog(mockProps);
