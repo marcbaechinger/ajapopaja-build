@@ -22,6 +22,7 @@ import {
   THEME_SETS,
   THEME_SET_STORAGE_KEY,
   ThemeManager,
+  defineThemeSet,
   deriveAppTokens,
   derivePiviewTheme,
   themeManager,
@@ -184,15 +185,20 @@ describe('validateThemeSet', () => {
 
   it('requires every supported mode palette and its derived app tokens', () => {
     const set = THEME_SETS[DEFAULT_THEME_SET];
-    const broken: ThemeSet = {
+    const broken = {
       ...set,
       palette: { dark: set.palette.dark },
       appTokens: { dark: set.appTokens.dark },
-    };
+    } as unknown as ThemeSet;
 
     const issues = validateThemeSet(broken);
     expect(issues.some((issue) => issue.includes('palette.light'))).toBe(true);
     expect(issues.some((issue) => issue.includes('appTokens.light'))).toBe(true);
+  });
+
+  it('rejects an invalid set eagerly instead of registering undefined data', () => {
+    const bad = { ...THEME_SETS[DEFAULT_THEME_SET], id: 'Not Valid!' };
+    expect(() => defineThemeSet(bad)).toThrow(/Invalid theme set/);
   });
 });
 
@@ -211,6 +217,15 @@ describe('theme set registry', () => {
         expect(set.interactiveTheme[mode]).toBeDefined();
       }
     }
+  });
+
+  it('creates every registry entry through the validating helper', () => {
+    for (const set of Object.values(THEME_SETS)) {
+      expect(Object.isFrozen(set), `${set.id} must be frozen`).toBe(true);
+    }
+
+    const copy = defineThemeSet({ ...THEME_SETS[DEFAULT_THEME_SET], id: 'copy' });
+    expect(Object.isFrozen(copy)).toBe(true);
   });
 
   it('reuses the compact/roomy density roles in both sets', () => {

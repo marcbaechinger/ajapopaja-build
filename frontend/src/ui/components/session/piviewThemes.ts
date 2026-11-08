@@ -502,9 +502,10 @@ function interactiveChatRefinements(palette: PalettePrimitives): PiViewTokens {
 
 /**
  * Roles whose dark-mode derivation is not accessible enough on the light
- * palette. Syntax and search are deliberately absent: they are derived from the
- * light palette like every other set-dependent role, so no fixed hue family is
- * layered on top.
+ * palette. The light accents themselves stay sky-700/cyan-700 in
+ * {@link LIGHT_PALETTE}; this list only corrects non-accent roles. Syntax and
+ * search are deliberately absent: they are derived from the light palette like
+ * every other set-dependent role, so no fixed hue family is layered on top.
  */
 const LIGHT_DEFAULT_OVERRIDES: PiViewTokens = {
   '--piview-surface-bash':

@@ -34,7 +34,7 @@ three surfaces under one palette — plus:
     `muted=slate-400`, `border=slate-800`, `accent-1=sky-400`,
     `accent-2=cyan-400`.
   - light: `bg=slate-50`, `surface=white`, `text=slate-900`, `muted=slate-500`,
-    `border=slate-200`, `accent-1=sky-600`, `accent-2=cyan-600`.
+    `border=slate-200`, `accent-1=sky-700`, `accent-2=cyan-700`.
 - `frontend/src/core/AppContext.ts`: `AppState.theme` is `'light' | 'dark'`
   (line 50), initialised from the `data-theme` attribute with a `'dark'` default
   (line 112) — **no localStorage persistence**. The `toggle_theme` action

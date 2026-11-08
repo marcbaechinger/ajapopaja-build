@@ -52,23 +52,45 @@ export type { PalettePrimitives, PiViewDensity };
 /** The light/dark mode selected within a theme set. */
 export type ThemeMode = 'dark' | 'light';
 
-export interface ThemeSet {
+type BothModes<T> = { dark: T; light: T };
+type ModeMap<T> = Partial<Record<ThemeMode, T>>;
+
+interface ThemeSetBase {
   id: string;
   label: string;
   description?: string;
-  /** 'dark' | 'light' | 'both' — the modes the set supports. */
-  mode: ThemeMode | 'both';
-  /** One primitive palette per mode the set supports. */
-  palette: Partial<Record<ThemeMode, PalettePrimitives>>;
-  /** `--app-*` tokens derived from `palette`, per mode. */
-  appTokens: Partial<Record<ThemeMode, Record<string, string>>>;
-  /**
-   * The two PiView themes, selected per mode. A `'both'` set declares both
-   * entries; a single-mode set only needs the entry for its mode.
-   */
-  interactiveTheme: Partial<Record<ThemeMode, PiViewTheme>>;
-  batchTheme: Partial<Record<ThemeMode, PiViewTheme>>;
 }
+
+/**
+ * A set's per-mode data. A `'both'` set must declare dark and light data for
+ * every map, so a missing entry is a compile error rather than `undefined`.
+ * Single-mode sets keep the partial maps so tests and temporary local sets can
+ * declare only the mode they support.
+ */
+export type ThemeSet = ThemeSetBase &
+  (
+    | {
+        /** 'dark' | 'light' | 'both' — the modes the set supports. */
+        mode: 'both';
+        /** One primitive palette per mode the set supports. */
+        palette: BothModes<PalettePrimitives>;
+        /** `--app-*` tokens derived from `palette`, per mode. */
+        appTokens: BothModes<Record<string, string>>;
+        /**
+         * The two PiView themes, selected per mode. A `'both'` set declares
+         * both entries; a single-mode set only needs the entry for its mode.
+         */
+        interactiveTheme: BothModes<PiViewTheme>;
+        batchTheme: BothModes<PiViewTheme>;
+      }
+    | {
+        mode: ThemeMode;
+        palette: ModeMap<PalettePrimitives>;
+        appTokens: ModeMap<Record<string, string>>;
+        interactiveTheme: ModeMap<PiViewTheme>;
+        batchTheme: ModeMap<PiViewTheme>;
+      }
+  );
 
 /** Stable storage key for the active set + mode. */
 export const THEME_SET_STORAGE_KEY = 'ajapopaja:theme-set';
@@ -218,7 +240,20 @@ export function validateThemeSet(set: ThemeSet): string[] {
   return issues;
 }
 
-const DEFAULT_SET: ThemeSet = {
+/**
+ * Create an immutable registry entry after eager validation. This mirrors
+ * `defineTheme` and only validates/freezes data: it has no document or storage
+ * side effects, so importing the registry is safe in any environment.
+ */
+export function defineThemeSet(set: ThemeSet): ThemeSet {
+  const issues = validateThemeSet(set);
+  if (issues.length > 0) {
+    throw new Error(`Invalid theme set "${String(set?.id)}": ${issues.join('; ')}`);
+  }
+  return Object.freeze(set);
+}
+
+const DEFAULT_SET: ThemeSet = defineThemeSet({
   id: 'default',
   label: 'Default',
   description: 'Slate neutrals with sky and cyan accents.',
@@ -239,13 +274,13 @@ const DEFAULT_SET: ThemeSet = {
     dark: PI_VIEW_THEMES['batch-default'],
     light: PI_VIEW_THEMES['batch-default-light'],
   },
-};
+});
 
 /**
  * The alternative warm set. It reuses the default set's density roles verbatim
  * (compact batch, roomy interactive); only the palette primitives differ.
  */
-const EMBER_SET: ThemeSet = {
+const EMBER_SET: ThemeSet = defineThemeSet({
   id: 'ember',
   label: 'Ember',
   description: 'Warm amber-and-rose palette.',
@@ -266,7 +301,7 @@ const EMBER_SET: ThemeSet = {
     dark: PI_VIEW_THEMES['batch-ember'],
     light: PI_VIEW_THEMES['batch-ember-light'],
   },
-};
+});
 
 /** The single source of truth for available theme sets. */
 export const THEME_SETS: Record<string, ThemeSet> = {
@@ -484,5 +519,5 @@ export class ThemeManager {
   }
 }
 
-/** Module singleton used by the app (and, later, by PiView defaults). */
+/** Module singleton used by the app and PiView to apply the active theme set. */
 export const themeManager = new ThemeManager();
