@@ -108,8 +108,11 @@ async def create_download_token(
 ):
     """Mint a short-lived token that authorises downloading the artifact.
 
-    The path is validated up front so an invalid/missing artifact surfaces
-    immediately instead of when the browser follows the download link.
+    Path safety (traversal, ``.git`` exclusion, symlink escape) and existence
+    are validated up front via ``FileBrowserService.resolve_file``, so an
+    invalid path or missing/non-regular artifact is rejected here instead of
+    when the browser follows the download link. The normalized repo-relative
+    path is embedded in the token.
     """
     pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
     spec = coerce_build_artifact_spec(pipeline)
