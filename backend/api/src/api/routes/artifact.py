@@ -74,10 +74,6 @@ async def _artifact_info_response(
 ) -> ArtifactInfoResponse:
     """Compute metadata and add the REST-only pipeline/configured fields."""
     info = get_artifact_info(pipeline, include_hash=include_hash)
-    # ``BuildArtifactInfo`` is awaitable to support both sync and async callers;
-    # tests may also substitute an async service function.
-    if hasattr(info, "__await__"):
-        info = await info
 
     data = info if isinstance(info, dict) else info.model_dump()
     return ArtifactInfoResponse(

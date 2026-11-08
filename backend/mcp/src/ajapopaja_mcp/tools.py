@@ -708,10 +708,6 @@ async def get_build_artifact(pipeline_id: str) -> Any:
 
     try:
         info = get_artifact_info(pipeline)
-        # ``BuildArtifactInfo`` is awaitable so both sync and async service
-        # implementations (including test doubles) work here.
-        if hasattr(info, "__await__"):
-            info = await info
     except Exception as e:
         return {"error": f"An unexpected error occurred: {str(e)}"}
 

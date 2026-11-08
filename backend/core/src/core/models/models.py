@@ -208,19 +208,6 @@ class BuildArtifactInfo(BaseModel):
     label: Optional[str] = None
     description: Optional[str] = None
 
-    def __await__(self):
-        """Allow callers to await a synchronously computed result.
-
-        The artifact service is intentionally synchronous (it only stats,
-        hashes and reads git metadata), but consumers may reasonably use it
-        from an async context. Returning ``self`` makes both
-        ``get_artifact_info(pipeline)`` and
-        ``await get_artifact_info(pipeline)`` work.
-        """
-        if False:  # pragma: no cover - makes this method a generator
-            yield None
-        return self
-
 
 class RepoBootstrapStatus(str, Enum):
     """Outcome of the startup clone-if-missing check for a remote repo."""
