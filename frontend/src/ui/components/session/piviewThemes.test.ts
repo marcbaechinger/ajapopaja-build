@@ -107,7 +107,7 @@ describe('PiView theme registry', () => {
     ).toThrow();
   });
 
-  it('resolves explicit theme -> variant default -> batch-terminal', () => {
+  it('resolves explicit theme -> variant default -> batch-default', () => {
     const custom = registerTestTheme(
       defineTheme({
         id: 'test-resolution',
@@ -126,7 +126,10 @@ describe('PiView theme registry', () => {
       PI_VIEW_THEMES[DEFAULT_THEME_FOR_VARIANT.batch]
     );
     expect(PI_VIEW_THEMES.batchTerminal).toBeUndefined();
-    expect(PI_VIEW_THEMES['batch-terminal']).toBeDefined();
+    expect(PI_VIEW_THEMES['batch-terminal']).toBe(PI_VIEW_THEMES['batch-default']);
+    expect(PI_VIEW_THEMES['interactive-chat']).toBe(
+      PI_VIEW_THEMES['interactive-default']
+    );
   });
 
   it('applies tokens to one element and removes stale overrides on switch', () => {
@@ -203,9 +206,9 @@ describe('PiView theme registry', () => {
     const listener = vi.fn();
     const unsubscribe = view.onThemeChange(listener);
     view.setTheme('batch-terminal');
-    expect(view.getThemeId()).toBe('batch-terminal');
-    expect(log.getAttribute('data-piview-theme')).toBe('batch-terminal');
-    expect(listener).toHaveBeenCalledWith('batch-terminal');
+    expect(view.getThemeId()).toBe('batch-default');
+    expect(log.getAttribute('data-piview-theme')).toBe('batch-default');
+    expect(listener).toHaveBeenCalledWith('batch-default');
 
     unsubscribe();
     view.setTheme(custom.id);
@@ -215,8 +218,8 @@ describe('PiView theme registry', () => {
 
   it('uses each variant default when the host mounts without an explicit theme', () => {
     for (const [variant, themeId] of [
-      ['batch', 'batch-terminal'],
-      ['interactive', 'interactive-chat'],
+      ['batch', 'batch-default'],
+      ['interactive', 'interactive-default'],
     ] as Array<[PiViewVariant, string]>) {
       const view = new PiView(serviceWithHistory(), mount(), { variant });
       view.render();
@@ -245,16 +248,16 @@ describe('PiView theme registry', () => {
     view.render();
     const log = view.getRoot().querySelector('#log-content-container') as HTMLElement;
     expect(view.getVariant()).toBe('interactive');
-    expect(view.getThemeId()).toBe('interactive-chat');
+    expect(view.getThemeId()).toBe('interactive-default');
     expect(log.getAttribute('data-piview-variant')).toBe('interactive');
 
     // A session state change re-resolves the optional hint and its default theme.
     kind = 'batch';
     stateListeners.forEach((listener) => listener(true));
     expect(view.getVariant()).toBe('batch');
-    expect(view.getThemeId()).toBe('batch-terminal');
+    expect(view.getThemeId()).toBe('batch-default');
     expect(log.getAttribute('data-piview-variant')).toBe('batch');
-    expect(log.getAttribute('data-piview-theme')).toBe('batch-terminal');
+    expect(log.getAttribute('data-piview-theme')).toBe('batch-default');
     view.destroy();
 
     // An explicit host variant always wins over the service hint.
@@ -263,7 +266,7 @@ describe('PiView theme registry', () => {
     }), mount(), { variant: 'batch' });
     explicit.render();
     expect(explicit.getVariant()).toBe('batch');
-    expect(explicit.getThemeId()).toBe('batch-terminal');
+    expect(explicit.getThemeId()).toBe('batch-default');
     explicit.destroy();
   });
 
@@ -360,10 +363,10 @@ describe('PiView theme token guard', () => {
   });
 });
 
-describe('interactive-chat theme', () => {
+describe('interactive-default theme', () => {
   it('is the interactive default with chat density, measure and motion hooks', () => {
     const chat = PI_VIEW_THEMES[DEFAULT_THEME_FOR_VARIANT.interactive];
-    expect(chat.id).toBe('interactive-chat');
+    expect(chat.id).toBe('interactive-default');
     expect(chat.variants).toContain('interactive');
 
     const batch = PI_VIEW_THEMES[DEFAULT_THEME_FOR_VARIANT.batch];

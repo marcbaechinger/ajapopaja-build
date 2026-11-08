@@ -222,7 +222,7 @@ describe('ExecutionEngineController', () => {
       expect(coderBotService.reconnect).toHaveBeenCalledTimes(2);
     });
 
-    it('mounts the sidebar log with the batch variant and batch-terminal theme', () => {
+    it('mounts the sidebar log with the batch variant and batch-default theme', () => {
       coderBotService.getCurrentSession.mockReturnValue({ pipelineId: 'p1', taskId: 't1', active: true });
       mountEngineShell();
       const controller = makeController();
@@ -232,7 +232,7 @@ describe('ExecutionEngineController', () => {
       const log = engineMount().querySelector('#log-content-container') as HTMLElement;
       expect(controller['enginePiView']?.getVariant()).toBe('batch');
       expect(log.getAttribute('data-piview-variant')).toBe('batch');
-      expect(log.getAttribute('data-piview-theme')).toBe('batch-terminal');
+      expect(log.getAttribute('data-piview-theme')).toBe('batch-default');
     });
 
     it('re-mounts when the mounted session key changes', () => {

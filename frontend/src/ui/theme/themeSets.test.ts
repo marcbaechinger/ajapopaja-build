@@ -215,7 +215,7 @@ describe('ThemeManager', () => {
 
   it('maps variants to the batch and interactive themes', () => {
     const manager = new ThemeManager();
-    expect(manager.themeForVariant('batch')).toBe(PI_VIEW_THEMES['batch-terminal']);
-    expect(manager.themeForVariant('interactive')).toBe(PI_VIEW_THEMES['interactive-chat']);
+    expect(manager.themeForVariant('batch')).toBe(PI_VIEW_THEMES['batch-default']);
+    expect(manager.themeForVariant('interactive')).toBe(PI_VIEW_THEMES['interactive-default']);
   });
 });

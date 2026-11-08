@@ -15,33 +15,34 @@
  */
 
 import {
+  DARK_PALETTE,
+  DENSITY_COMPACT,
+  DENSITY_PRESETS,
+  DENSITY_ROOMY,
+  LIGHT_PALETTE,
   PI_VIEW_THEMES,
+  derivePiviewTheme,
   validateTheme,
+  type PalettePrimitives,
+  type PiViewDensity,
   type PiViewTheme,
   type PiViewVariant,
 } from '../components/session/piviewThemes.ts';
 
+// Re-export the shared palette/derivation API from the theme-set module, which
+// is the public entry point for theme data.
+export {
+  DARK_PALETTE,
+  DENSITY_COMPACT,
+  DENSITY_PRESETS,
+  DENSITY_ROOMY,
+  LIGHT_PALETTE,
+  derivePiviewTheme,
+};
+export type { PalettePrimitives, PiViewDensity };
+
 /** The light/dark mode selected within a theme set. */
 export type ThemeMode = 'dark' | 'light';
-
-/**
- * The shared hue family: the only place a hue is chosen. Every surface token
- * (app and, in later phases, PiView) is derived from these primitives.
- */
-export interface PalettePrimitives {
-  '--palette-bg': string;
-  '--palette-surface': string;
-  '--palette-elevated': string;
-  '--palette-text': string;
-  '--palette-muted': string;
-  '--palette-border': string;
-  '--palette-accent': string;
-  '--palette-accent-2': string;
-  '--palette-ok': string;
-  '--palette-error': string;
-  '--palette-warn': string;
-  '--palette-info': string;
-}
 
 export interface ThemeSet {
   id: string;
@@ -183,36 +184,6 @@ export function validateThemeSet(set: ThemeSet): string[] {
   return issues;
 }
 
-const DARK_PALETTE: PalettePrimitives = {
-  '--palette-bg': 'var(--color-slate-950)',
-  '--palette-surface': 'var(--color-slate-900)',
-  '--palette-elevated': 'var(--color-slate-800)',
-  '--palette-text': 'var(--color-slate-100)',
-  '--palette-muted': 'var(--color-slate-400)',
-  '--palette-border': 'var(--color-slate-800)',
-  '--palette-accent': 'var(--color-sky-400)',
-  '--palette-accent-2': 'var(--color-cyan-400)',
-  '--palette-ok': 'var(--color-green-400)',
-  '--palette-error': 'var(--color-red-400)',
-  '--palette-warn': 'var(--color-amber-400)',
-  '--palette-info': 'var(--color-cyan-400)',
-};
-
-const LIGHT_PALETTE: PalettePrimitives = {
-  '--palette-bg': 'var(--color-slate-50)',
-  '--palette-surface': 'var(--color-white)',
-  '--palette-elevated': 'var(--color-white)',
-  '--palette-text': 'var(--color-slate-900)',
-  '--palette-muted': 'var(--color-slate-500)',
-  '--palette-border': 'var(--color-slate-200)',
-  '--palette-accent': 'var(--color-sky-600)',
-  '--palette-accent-2': 'var(--color-cyan-600)',
-  '--palette-ok': 'var(--color-green-600)',
-  '--palette-error': 'var(--color-red-600)',
-  '--palette-warn': 'var(--color-amber-600)',
-  '--palette-info': 'var(--color-cyan-600)',
-};
-
 const DEFAULT_SET: ThemeSet = {
   id: 'default',
   label: 'Default',
@@ -226,8 +197,8 @@ const DEFAULT_SET: ThemeSet = {
     dark: deriveAppTokens(DARK_PALETTE),
     light: deriveAppTokens(LIGHT_PALETTE),
   },
-  interactiveTheme: PI_VIEW_THEMES['interactive-chat'],
-  batchTheme: PI_VIEW_THEMES['batch-terminal'],
+  interactiveTheme: PI_VIEW_THEMES['interactive-default'],
+  batchTheme: PI_VIEW_THEMES['batch-default'],
 };
 
 /** The single source of truth for available theme sets. */

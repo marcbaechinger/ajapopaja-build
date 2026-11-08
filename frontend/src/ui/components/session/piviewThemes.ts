@@ -32,15 +32,15 @@
  * working while new themes opt into new roles.
  *
  * Themes do not need to be complete. `PiView.css` supplies the default
- * (batch-terminal parity) values for every token, so a theme may override only
+ * (batch-default parity) values for every token, so a theme may override only
  * the handful of roles it cares about.
  *
- * Builtins: `batch-terminal` is the dark, dense parity/fallback transcript;
- * `batch-paper` is a light, print/archival transcript; `interactive-chat` is
- * the default roomy conversation; and `interactive-focus` is a low-chrome,
- * high-contrast reading mode for long conversations. The two presets are
- * code-selectable only (no picker or persistence) and are built entirely from
- * the shared light/chat token bases below.
+ * Builtins: `batch-default` is the dark, dense transcript; `batch-paper` is a
+ * light, print/archival transcript; `interactive-default` is the roomy
+ * conversation; and `interactive-focus` is a low-chrome, high-contrast reading
+ * mode for long conversations. The two presets are code-selectable only (no
+ * picker or persistence). The deprecated ids `batch-terminal` and
+ * `interactive-chat` remain registered as aliases of the two defaults.
  */
 
 /** The two PiView session variants. Each has its own default theme. */
@@ -73,76 +73,62 @@ const VALID_VARIANTS: readonly PiViewVariant[] = ['batch', 'interactive'];
 const TOKEN_NAME_RE = /^--piview-[a-z0-9-]+$/;
 const THEME_ID_RE = /^[a-z0-9][a-z0-9_-]*$/;
 
-/** The batch-terminal parity palette lifted from the pre-theme PiView token block. */
-export const BASE_DARK_TOKENS: PiViewTokens = {
-  '--piview-bg': 'var(--color-black)',
-  '--piview-bg-image': 'none',
+/**
+ * The shared palette primitives. A theme set is the only place a hue is
+ * chosen; both the app tokens and the PiView themes are derived from these
+ * values.
+ */
+export interface PalettePrimitives {
+  '--palette-bg': string;
+  '--palette-surface': string;
+  '--palette-elevated': string;
+  '--palette-text': string;
+  '--palette-muted': string;
+  '--palette-border': string;
+  '--palette-accent': string;
+  '--palette-accent-2': string;
+  '--palette-ok': string;
+  '--palette-error': string;
+  '--palette-warn': string;
+  '--palette-info': string;
+}
 
-  '--piview-surface': 'var(--color-slate-900)',
-  '--piview-surface-sticky': 'color-mix(in oklab, var(--color-black) 95%, transparent)',
-  '--piview-surface-tool': 'color-mix(in oklab, var(--color-slate-900) 40%, transparent)',
-  '--piview-surface-bash': 'color-mix(in oklab, var(--color-black) 40%, transparent)',
-  '--piview-surface-user': 'color-mix(in oklab, var(--color-sky-400) 10%, transparent)',
-  '--piview-surface-verification-ok':
-    'color-mix(in oklab, var(--color-green-950) 30%, transparent)',
-  '--piview-surface-verification-error':
-    'color-mix(in oklab, var(--color-red-950) 30%, transparent)',
-  '--piview-surface-formatted-active':
-    'color-mix(in oklab, var(--color-black) 20%, transparent)',
-  '--piview-surface-pre': 'var(--color-slate-900)',
-  '--piview-surface-code': 'color-mix(in oklab, var(--color-slate-900) 80%, transparent)',
-  '--piview-surface-hover': 'color-mix(in oklab, var(--color-black) 80%, transparent)',
-  '--piview-surface-icon': 'color-mix(in oklab, var(--color-black) 50%, transparent)',
+/** The default set's dark palette (the app's slate + sky/cyan family). */
+export const DARK_PALETTE: PalettePrimitives = {
+  '--palette-bg': 'var(--color-slate-950)',
+  '--palette-surface': 'var(--color-slate-900)',
+  '--palette-elevated': 'var(--color-slate-800)',
+  '--palette-text': 'var(--color-slate-100)',
+  '--palette-muted': 'var(--color-slate-400)',
+  '--palette-border': 'var(--color-slate-800)',
+  '--palette-accent': 'var(--color-sky-400)',
+  '--palette-accent-2': 'var(--color-cyan-400)',
+  '--palette-ok': 'var(--color-green-400)',
+  '--palette-error': 'var(--color-red-400)',
+  '--palette-warn': 'var(--color-amber-400)',
+  '--palette-info': 'var(--color-cyan-400)',
+};
 
-  '--piview-fg': 'var(--color-green-400)',
-  '--piview-fg-dim': 'color-mix(in oklab, var(--color-slate-100) 50%, transparent)',
-  '--piview-fg-faint': 'color-mix(in oklab, var(--color-slate-100) 40%, transparent)',
-  '--piview-fg-title': 'color-mix(in oklab, var(--color-slate-100) 70%, transparent)',
-  '--piview-fg-muted': 'var(--color-slate-400)',
-  '--piview-fg-tool': 'var(--color-green-300)',
-  '--piview-fg-thinking': 'var(--color-yellow-200)',
-  '--piview-fg-notice': 'var(--color-cyan-400)',
-  '--piview-fg-error': 'var(--color-red-400)',
-  '--piview-fg-ok': 'var(--color-green-400)',
-  '--piview-fg-user-label': 'var(--color-sky-400)',
-  '--piview-fg-status': 'var(--color-green-300)',
-  '--piview-fg-heading': 'var(--color-sky-400)',
-  '--piview-fg-link': 'var(--color-sky-400)',
-  '--piview-fg-strong': 'var(--color-cyan-400)',
-  '--piview-fg-quote': 'var(--color-slate-100)',
-  '--piview-fg-code': 'var(--color-cyan-400)',
-  '--piview-fg-pre': 'var(--color-slate-100)',
-  '--piview-fg-icon': 'var(--color-green-300)',
-  '--piview-fg-icon-format': 'var(--color-cyan-300)',
+/** The default set's light palette. */
+export const LIGHT_PALETTE: PalettePrimitives = {
+  '--palette-bg': 'var(--color-slate-50)',
+  '--palette-surface': 'var(--color-white)',
+  '--palette-elevated': 'var(--color-white)',
+  '--palette-text': 'var(--color-slate-900)',
+  '--palette-muted': 'var(--color-slate-500)',
+  '--palette-border': 'var(--color-slate-200)',
+  '--palette-accent': 'var(--color-sky-600)',
+  '--palette-accent-2': 'var(--color-cyan-600)',
+  '--palette-ok': 'var(--color-green-600)',
+  '--palette-error': 'var(--color-red-600)',
+  '--palette-warn': 'var(--color-amber-600)',
+  '--palette-info': 'var(--color-cyan-600)',
+};
 
-  '--piview-border': 'var(--color-slate-800)',
-  '--piview-border-subtle': 'color-mix(in oklab, var(--color-slate-800) 40%, transparent)',
-  '--piview-border-tool': 'color-mix(in oklab, var(--color-slate-800) 60%, transparent)',
-  '--piview-border-accent-user': 'color-mix(in oklab, var(--color-sky-400) 60%, transparent)',
-  '--piview-border-accent-thinking':
-    'color-mix(in oklab, var(--color-slate-100) 20%, transparent)',
-  '--piview-border-accent-bash': 'color-mix(in oklab, var(--color-cyan-400) 40%, transparent)',
-  '--piview-border-accent-quote': 'var(--color-sky-400)',
-  '--piview-border-verification-ok':
-    'color-mix(in oklab, var(--color-green-500) 60%, transparent)',
-  '--piview-border-verification-error':
-    'color-mix(in oklab, var(--color-red-500) 60%, transparent)',
+/** The two surface-role density presets. Palette and density are orthogonal. */
+export type PiViewDensity = 'compact' | 'roomy';
 
-  '--piview-accent': 'var(--color-sky-400)',
-  '--piview-accent-2': 'var(--color-cyan-400)',
-  '--piview-accent-fg': 'var(--color-white)',
-  '--piview-selection': 'color-mix(in oklab, var(--color-sky-400) 30%, transparent)',
-  '--piview-search-hit': 'rgba(251, 191, 36, 0.35)',
-  '--piview-search-hit-fg': 'inherit',
-  '--piview-search-current': 'rgba(251, 191, 36, 0.9)',
-  '--piview-search-current-fg': '#000',
-  '--piview-search-current-outline': 'rgba(255, 255, 255, 0.7)',
-  '--piview-focus-ring': 'var(--color-sky-400)',
-  '--piview-danger': 'var(--color-red-600)',
-  '--piview-danger-hover': 'var(--color-red-700)',
-
-  '--piview-font-log': 'var(--font-mono)',
-  '--piview-font-prose': 'var(--font-sans)',
+export const DENSITY_COMPACT: PiViewTokens = {
   '--piview-font-size': '11px',
   '--piview-leading': '1.25',
   '--piview-font-size-prose': '12px',
@@ -151,25 +137,160 @@ export const BASE_DARK_TOKENS: PiViewTokens = {
   '--piview-block-padding': '0.5rem',
   '--piview-radius-block': '0.25rem',
   '--piview-radius-chrome': '0.25rem',
-  '--piview-shadow-block': 'none',
-  '--piview-scrollbar-thumb': 'var(--color-slate-800)',
-  '--piview-scrollbar-track': 'transparent',
-  '--piview-status-dot-idle': 'color-mix(in oklab, var(--color-slate-100) 40%, transparent)',
-  '--piview-status-dot-active': 'var(--color-green-400)',
-  '--piview-motion-pulse': 'pulse',
-  '--piview-shortcut-flash': 'rgba(255, 255, 255, 0.15)',
-
-  '--piview-syntax-comment': '#8b949e',
-  '--piview-syntax-keyword': '#ff7b72',
-  '--piview-syntax-string': '#a5d6ff',
-  '--piview-syntax-number': '#79c0ff',
-  '--piview-syntax-built-in': '#ffa657',
-  '--piview-syntax-title': '#d2a8ff',
-  '--piview-syntax-tag': '#7ee787',
-  '--piview-syntax-meta': '#8b949e',
-  '--piview-syntax-addition': '#7ee787',
-  '--piview-syntax-deletion': '#ffa198',
 };
+
+export const DENSITY_ROOMY: PiViewTokens = {
+  '--piview-font-size': '12px',
+  '--piview-leading': '1.5',
+  '--piview-font-size-prose': '13px',
+  '--piview-leading-prose': '1.55',
+  '--piview-block-gap': '1rem',
+  '--piview-block-padding': '0.75rem',
+  '--piview-radius-block': '10px',
+  '--piview-radius-chrome': '8px',
+};
+
+export const DENSITY_PRESETS: Record<PiViewDensity, PiViewTokens> = {
+  compact: DENSITY_COMPACT,
+  roomy: DENSITY_ROOMY,
+};
+
+function mix(color: string, percentage: number): string {
+  return `color-mix(in oklab, ${color} ${percentage}%, transparent)`;
+}
+
+function blend(first: string, firstPercentage: number, second: string, secondPercentage: number): string {
+  return `color-mix(in oklab, ${first} ${firstPercentage}%, ${second} ${secondPercentage}%)`;
+}
+
+/**
+ * Map the shared palette onto PiView's semantic roles. The optional density
+ * preset (or token map) layers typography/spacing on top, and
+ * `chatRefinements` adds the interactive conversation's card/motion tokens.
+ * No hue is chosen here: every colour comes from the palette primitives.
+ */
+export function derivePiviewTheme(
+  palette: PalettePrimitives,
+  density: PiViewDensity | PiViewTokens,
+  chatRefinements: PiViewTokens = {}
+): PiViewTokens {
+  const densityTokens = typeof density === 'string' ? DENSITY_PRESETS[density] : density;
+
+  const bg = palette['--palette-bg'];
+  const surface = palette['--palette-surface'];
+  const elevated = palette['--palette-elevated'];
+  const text = palette['--palette-text'];
+  const muted = palette['--palette-muted'];
+  const border = palette['--palette-border'];
+  const accent = palette['--palette-accent'];
+  const accent2 = palette['--palette-accent-2'];
+  const ok = palette['--palette-ok'];
+  const error = palette['--palette-error'];
+  const warn = palette['--palette-warn'];
+  const info = palette['--palette-info'];
+
+  return {
+    '--piview-bg': bg,
+    '--piview-bg-image': 'none',
+
+    '--piview-surface': surface,
+    '--piview-surface-sticky': blend(bg, 95, 'transparent', 5),
+    '--piview-surface-tool': blend(surface, 40, 'transparent', 60),
+    '--piview-surface-bash': blend(bg, 60, '#000', 40),
+    '--piview-surface-user': mix(accent, 12),
+    '--piview-surface-verification-ok': mix(ok, 18),
+    '--piview-surface-verification-error': mix(error, 18),
+    '--piview-surface-formatted-active': blend(elevated, 82, accent, 18),
+    '--piview-surface-pre': surface,
+    '--piview-surface-code': blend(surface, 80, 'transparent', 20),
+    '--piview-surface-hover': blend(bg, 80, 'transparent', 20),
+    '--piview-surface-icon': blend(bg, 50, 'transparent', 50),
+
+    '--piview-fg': text,
+    '--piview-fg-dim': mix(text, 50),
+    '--piview-fg-faint': mix(text, 40),
+    '--piview-fg-title': mix(text, 70),
+    '--piview-fg-muted': muted,
+    '--piview-fg-tool': blend(text, 80, accent2, 20),
+    '--piview-fg-thinking': warn,
+    '--piview-fg-notice': info,
+    '--piview-fg-error': error,
+    '--piview-fg-ok': ok,
+    '--piview-fg-user-label': accent,
+    '--piview-fg-status': muted,
+    '--piview-fg-heading': accent,
+    '--piview-fg-link': accent,
+    '--piview-fg-strong': accent2,
+    '--piview-fg-quote': text,
+    '--piview-fg-code': accent2,
+    '--piview-fg-pre': text,
+    '--piview-fg-icon': muted,
+    '--piview-fg-icon-format': accent2,
+
+    '--piview-border': border,
+    '--piview-border-subtle': mix(border, 40),
+    '--piview-border-tool': mix(border, 60),
+    '--piview-border-accent-user': mix(accent, 60),
+    '--piview-border-accent-thinking': mix(text, 20),
+    '--piview-border-accent-bash': mix(accent2, 40),
+    '--piview-border-accent-quote': accent,
+    '--piview-border-verification-ok': mix(ok, 60),
+    '--piview-border-verification-error': mix(error, 60),
+
+    '--piview-accent': accent,
+    '--piview-accent-2': accent2,
+    '--piview-accent-fg': bg,
+    '--piview-selection': mix(accent, 30),
+    '--piview-search-hit': 'rgba(251, 191, 36, 0.35)',
+    '--piview-search-hit-fg': 'inherit',
+    '--piview-search-current': 'rgba(251, 191, 36, 0.9)',
+    '--piview-search-current-fg': '#000',
+    '--piview-search-current-outline': 'rgba(255, 255, 255, 0.7)',
+    '--piview-focus-ring': accent,
+    '--piview-danger': error,
+    '--piview-danger-hover': blend(error, 80, '#000', 20),
+
+    '--piview-font-log': 'var(--font-mono)',
+    '--piview-font-prose': 'var(--font-sans)',
+    '--piview-shadow-block': 'none',
+    '--piview-scrollbar-thumb': border,
+    '--piview-scrollbar-track': 'transparent',
+    '--piview-status-dot-idle': mix(text, 40),
+    '--piview-status-dot-active': ok,
+    '--piview-motion-pulse': 'pulse',
+    '--piview-shortcut-flash': 'rgba(255, 255, 255, 0.15)',
+
+    '--piview-gap-block': '0.4em',
+    '--piview-gap-li': '0.2em',
+    '--piview-gap-heading-top': '0.6em',
+    '--piview-gap-heading-bottom': '0.2em',
+    '--piview-gap-pre': '0.4em',
+    '--piview-gap-hr': '0.65em',
+    '--piview-max-width': '87ch',
+    '--piview-pre-max-width': '130ch',
+
+    '--piview-syntax-comment': '#8b949e',
+    '--piview-syntax-keyword': '#ff7b72',
+    '--piview-syntax-string': '#a5d6ff',
+    '--piview-syntax-number': 'var(--color-sky-300)',
+    '--piview-syntax-built-in': '#ffa657',
+    '--piview-syntax-title': '#d2a8ff',
+    '--piview-syntax-tag': '#7ee787',
+    '--piview-syntax-meta': '#8b949e',
+    '--piview-syntax-addition': '#7ee787',
+    '--piview-syntax-deletion': '#ffa198',
+
+    ...densityTokens,
+    ...chatRefinements,
+  };
+}
+
+/**
+ * The neutral dark transcript palette. Kept as an exported token base for the
+ * print/focus presets and for theme authors; the default batch theme is derived
+ * from {@link DARK_PALETTE}, so it shares the app's palette.
+ */
+export const BASE_DARK_TOKENS: PiViewTokens = derivePiviewTheme(DARK_PALETTE, 'compact');
 
 /**
  * A light base palette for print/paper-like themes. It starts from the dark
@@ -250,14 +371,7 @@ export const BASE_LIGHT_TOKENS: PiViewTokens = {
  */
 export const BASE_CHAT_TOKENS: PiViewTokens = {
   ...BASE_DARK_TOKENS,
-  '--piview-font-size': '12px',
-  '--piview-leading': '1.5',
-  '--piview-font-size-prose': '13px',
-  '--piview-leading-prose': '1.55',
-  '--piview-block-gap': '1rem',
-  '--piview-block-padding': '0.75rem',
-  '--piview-radius-block': '0.625rem',
-  '--piview-radius-chrome': '0.5rem',
+  ...DENSITY_ROOMY,
 };
 
 /**
@@ -341,93 +455,22 @@ export function defineTheme(theme: PiViewTheme): PiViewTheme {
   return Object.freeze(withDescription);
 }
 
-const BATCH_TERMINAL_THEME = defineTheme({
-  id: 'batch-terminal',
-  label: 'Terminal',
-  description: 'Dense terminal-style transcript on a dark surface.',
-  variants: ['batch', 'interactive'],
-  tokens: { ...BASE_DARK_TOKENS },
-});
-
 /**
- * Chat-specific refinements layered over {@link BASE_CHAT_TOKENS}. The neutral
- * palette keeps the answer readable without the terminal's green/cyan tints,
- * and the surface/typography overrides make an interactive session read as a
- * conversation rather than a dense transcript.
+ * The interactive conversation's token refinements. Everything colour-related
+ * comes from the shared palette; these are only the card, measure and motion
+ * choices that make a chat read differently from a dense transcript.
  */
-const INTERACTIVE_CHAT_OVERRIDES: PiViewTokens = {
-  '--piview-bg': '#0d1117',
-  '--piview-surface': '#161b22',
-  '--piview-surface-sticky': 'color-mix(in oklab, #0d1117 92%, transparent)',
-  '--piview-surface-tool': 'color-mix(in oklab, #161b22 70%, transparent)',
-  '--piview-surface-bash': 'color-mix(in oklab, #0d1117 82%, #000 18%)',
-  '--piview-surface-user': 'color-mix(in oklab, #58a6ff 14%, #161b22)',
-  '--piview-surface-verification-ok': 'color-mix(in oklab, #7ee787 14%, transparent)',
-  '--piview-surface-verification-error': 'color-mix(in oklab, #ff7b72 14%, transparent)',
-  '--piview-surface-formatted-active': 'color-mix(in oklab, #161b22 82%, #58a6ff 18%)',
-  '--piview-surface-pre': '#0d1117',
-  '--piview-surface-code': 'color-mix(in oklab, #161b22 80%, transparent)',
-  '--piview-surface-hover': 'color-mix(in oklab, #161b22 85%, transparent)',
-  '--piview-surface-icon': 'color-mix(in oklab, #161b22 65%, transparent)',
+function interactiveChatRefinements(palette: PalettePrimitives): PiViewTokens {
+  return {
+    '--piview-surface-formatted-active':
+      `color-mix(in oklab, ${palette['--palette-surface']} 80%, ${palette['--palette-accent']} 20%)`,
+    '--piview-max-width': '72ch',
+    '--piview-shadow-block': '0 1px 2px rgba(0, 0, 0, 0.25)',
+    '--piview-motion-pulse': 'piview-chat-pulse',
+  };
+}
 
-  '--piview-fg': '#d7e1ec',
-  '--piview-fg-dim': 'color-mix(in oklab, #d7e1ec 55%, transparent)',
-  '--piview-fg-faint': 'color-mix(in oklab, #d7e1ec 40%, transparent)',
-  '--piview-fg-title': 'color-mix(in oklab, #d7e1ec 85%, transparent)',
-  '--piview-fg-muted': '#8b98a9',
-  '--piview-fg-tool': '#a9c7e8',
-  '--piview-fg-thinking': 'color-mix(in oklab, #d7e1ec 55%, #f2cc60 45%)',
-  '--piview-fg-notice': '#79c0ff',
-  '--piview-fg-error': '#ff7b72',
-  '--piview-fg-ok': '#7ee787',
-  '--piview-fg-user-label': '#58a6ff',
-  '--piview-fg-status': '#8b98a9',
-  '--piview-fg-heading': '#e6edf3',
-  '--piview-fg-link': '#79c0ff',
-  '--piview-fg-strong': '#e6edf3',
-  '--piview-fg-quote': '#b3c0cf',
-  '--piview-fg-code': '#79c0ff',
-  '--piview-fg-pre': '#d7e1ec',
-  '--piview-fg-icon': '#8b98a9',
-  '--piview-fg-icon-format': '#79c0ff',
-
-  '--piview-border': '#2b3440',
-  '--piview-border-subtle': 'color-mix(in oklab, #2b3440 40%, transparent)',
-  '--piview-border-tool': 'color-mix(in oklab, #2b3440 65%, transparent)',
-  '--piview-border-accent-user': 'color-mix(in oklab, #58a6ff 35%, transparent)',
-  '--piview-border-accent-thinking': 'color-mix(in oklab, #d7e1ec 18%, transparent)',
-  '--piview-border-accent-bash': 'color-mix(in oklab, #79c0ff 30%, transparent)',
-  '--piview-border-accent-quote': '#58a6ff',
-  '--piview-border-verification-ok': 'color-mix(in oklab, #7ee787 55%, transparent)',
-  '--piview-border-verification-error': 'color-mix(in oklab, #ff7b72 55%, transparent)',
-
-  '--piview-accent': '#58a6ff',
-  '--piview-accent-2': '#79c0ff',
-  '--piview-accent-fg': '#0d1117',
-  '--piview-selection': 'color-mix(in oklab, #58a6ff 30%, transparent)',
-  '--piview-focus-ring': '#58a6ff',
-  '--piview-danger': '#da3633',
-  '--piview-danger-hover': '#b62324',
-  '--piview-scrollbar-thumb': '#2b3440',
-  '--piview-scrollbar-track': 'transparent',
-  '--piview-status-dot-idle': 'color-mix(in oklab, #d7e1ec 30%, transparent)',
-  '--piview-status-dot-active': '#7ee787',
-
-  '--piview-block-padding': '0.75rem',
-  '--piview-radius-block': '10px',
-  '--piview-radius-chrome': '8px',
-  '--piview-shadow-block': '0 1px 2px rgba(0, 0, 0, 0.25)',
-  '--piview-max-width': '72ch',
-  '--piview-motion-pulse': 'piview-chat-pulse',
-};
-
-const INTERACTIVE_CHAT_THEME = defineTheme({
-  id: 'interactive-chat',
-  label: 'Chat',
-  description: 'Conversational layout with a calmer, roomier rhythm.',
-  variants: ['interactive'],
-  tokens: { ...BASE_CHAT_TOKENS, ...INTERACTIVE_CHAT_OVERRIDES },
-  css: `
+const INTERACTIVE_CHAT_CSS = `
 @keyframes piview-chat-pulse {
   50% { opacity: 0.65; }
 }
@@ -481,7 +524,29 @@ const INTERACTIVE_CHAT_THEME = defineTheme({
     animation: none;
   }
 }
-`,
+`;
+
+/** The dense default transcript, sharing the app's palette. */
+const BATCH_DEFAULT_THEME = defineTheme({
+  id: 'batch-default',
+  label: 'Default',
+  description: 'Dense, neutral transcript on the shared dark palette.',
+  variants: ['batch', 'interactive'],
+  tokens: derivePiviewTheme(DARK_PALETTE, 'compact'),
+});
+
+/** The roomy default conversation, sharing the same palette as the app. */
+const INTERACTIVE_DEFAULT_THEME = defineTheme({
+  id: 'interactive-default',
+  label: 'Chat',
+  description: 'Conversational layout with a calmer, roomier rhythm.',
+  variants: ['interactive'],
+  tokens: derivePiviewTheme(
+    DARK_PALETTE,
+    'roomy',
+    interactiveChatRefinements(DARK_PALETTE)
+  ),
+  css: INTERACTIVE_CHAT_CSS,
 });
 
 const BATCH_PAPER_THEME = defineTheme({
@@ -553,32 +618,32 @@ const INTERACTIVE_FOCUS_THEME = defineTheme({
     '--piview-fg-notice': '#7cc4e8',
     '--piview-fg-error': '#ff8a80',
     '--piview-fg-ok': '#7ee787',
-    '--piview-fg-user-label': '#79c0ff',
+    '--piview-fg-user-label': 'var(--color-sky-400)',
     '--piview-fg-status': '#7f8c9d',
     '--piview-fg-heading': '#f8fbff',
-    '--piview-fg-link': '#79c0ff',
+    '--piview-fg-link': 'var(--color-sky-400)',
     '--piview-fg-strong': '#ffffff',
     '--piview-fg-quote': '#c6d2df',
-    '--piview-fg-code': '#9ecbff',
+    '--piview-fg-code': 'var(--color-cyan-300)',
     '--piview-fg-pre': '#eef4fa',
     '--piview-fg-icon': '#7f8c9d',
-    '--piview-fg-icon-format': '#79c0ff',
+    '--piview-fg-icon-format': 'var(--color-sky-400)',
 
     '--piview-border': '#232d39',
     '--piview-border-subtle': 'color-mix(in oklab, #232d39 35%, transparent)',
     '--piview-border-tool': 'color-mix(in oklab, #232d39 45%, transparent)',
-    '--piview-border-accent-user': 'color-mix(in oklab, #79c0ff 30%, transparent)',
+    '--piview-border-accent-user': 'color-mix(in oklab, var(--color-sky-400) 30%, transparent)',
     '--piview-border-accent-thinking': 'color-mix(in oklab, #eef4fa 14%, transparent)',
-    '--piview-border-accent-bash': 'color-mix(in oklab, #9ecbff 25%, transparent)',
-    '--piview-border-accent-quote': '#79c0ff',
+    '--piview-border-accent-bash': 'color-mix(in oklab, var(--color-cyan-300) 25%, transparent)',
+    '--piview-border-accent-quote': 'var(--color-sky-400)',
     '--piview-border-verification-ok': 'color-mix(in oklab, #7ee787 50%, transparent)',
     '--piview-border-verification-error': 'color-mix(in oklab, #ff8a80 50%, transparent)',
 
-    '--piview-accent': '#79c0ff',
-    '--piview-accent-2': '#9ecbff',
+    '--piview-accent': 'var(--color-sky-400)',
+    '--piview-accent-2': 'var(--color-cyan-300)',
     '--piview-accent-fg': '#0b0f14',
-    '--piview-selection': 'color-mix(in oklab, #79c0ff 30%, transparent)',
-    '--piview-focus-ring': '#79c0ff',
+    '--piview-selection': 'color-mix(in oklab, var(--color-sky-400) 30%, transparent)',
+    '--piview-focus-ring': 'var(--color-sky-400)',
     '--piview-danger': '#da3633',
     '--piview-danger-hover': '#b62324',
     '--piview-scrollbar-thumb': '#232d39',
@@ -605,25 +670,31 @@ const INTERACTIVE_FOCUS_THEME = defineTheme({
  * token base plus the roles their intent changes.
  */
 export const PI_VIEW_THEMES: Record<string, PiViewTheme> = {
-  [BATCH_TERMINAL_THEME.id]: BATCH_TERMINAL_THEME,
+  [BATCH_DEFAULT_THEME.id]: BATCH_DEFAULT_THEME,
   [BATCH_PAPER_THEME.id]: BATCH_PAPER_THEME,
-  [INTERACTIVE_CHAT_THEME.id]: INTERACTIVE_CHAT_THEME,
+  [INTERACTIVE_DEFAULT_THEME.id]: INTERACTIVE_DEFAULT_THEME,
   [INTERACTIVE_FOCUS_THEME.id]: INTERACTIVE_FOCUS_THEME,
+
+  // Deprecated ids kept as aliases so existing `PiViewOptions.theme` strings
+  // keep resolving to the harmonized defaults. The aliases are the same frozen
+  // theme objects, so `data-piview-theme` and `getThemeId()` expose the new id.
+  'batch-terminal': BATCH_DEFAULT_THEME,
+  'interactive-chat': INTERACTIVE_DEFAULT_THEME,
 };
 
 /** Hard fallback if a variant has no (or an unknown) default theme. */
-const HARD_FALLBACK_THEME_ID = 'batch-terminal';
+const HARD_FALLBACK_THEME_ID = 'batch-default';
 
 /** The default theme for each session variant. */
 export const DEFAULT_THEME_FOR_VARIANT: Record<PiViewVariant, string> = {
-  batch: 'batch-terminal',
-  interactive: 'interactive-chat',
+  batch: 'batch-default',
+  interactive: 'interactive-default',
 };
 
 /**
  * Resolve the effective theme for a variant. Resolution order is:
  *
- *   explicit id/theme -> variant default -> `batch-terminal` hard fallback.
+ *   explicit id/theme -> variant default -> `batch-default` hard fallback.
  *
  * Unknown ids deliberately resolve to the variant default instead of throwing,
  * so a stale persisted/embedding option can never break the log.
@@ -645,7 +716,7 @@ export function resolveTheme(
   return (
     variantDefault ??
     PI_VIEW_THEMES[HARD_FALLBACK_THEME_ID] ??
-    BATCH_TERMINAL_THEME
+    BATCH_DEFAULT_THEME
   );
 }
 
