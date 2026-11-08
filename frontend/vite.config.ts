@@ -19,8 +19,9 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     // Vitest stubs CSS imports to an empty module by default. The PiView
-    // vertical-rhythm guard test reads `style.css` with Vite's `?raw` query,
-    // so process just that file (all other CSS stays stubbed).
-    css: { include: [/style\.css/] },
+    // stylesheet-ownership guard tests read `style.css` and `PiView.css` with
+    // Vite's `?raw` query, so process just those files (all other CSS stays
+    // stubbed).
+    css: { include: [/style\.css/, /PiView\.css/] },
   },
 })

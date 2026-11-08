@@ -30,15 +30,15 @@ import './PiView.css';
  * monospace font via the typography plugin's `code`/`pre` rules. The readable
  * measure for rendered prose (and the wider code-block / unconstrained table
  * exceptions) is owned solely by the `.piview-formatted` rules in
- * `src/style.css` (tunable via `--piview-max-width` / `--piview-pre-max-width`).
+ * `PiView.css` (tunable via `--piview-max-width` / `--piview-pre-max-width`).
  * Do not reintroduce a container `max-w-*` here: a `max-width` on this element
  * would clamp code blocks and tables too.
  *
  * The block-level vertical rhythm (the spacing between paragraphs, list items,
  * headings, `pre` blocks and rules) is owned *solely* by the `.piview-formatted`
- * rules in `src/style.css` (tunable via the `--piview-gap-*` custom properties).
+ * rules in `PiView.css` (tunable via the `--piview-gap-*` custom properties).
  * Do not re-introduce `prose-*:my-*` utilities here: those layered utilities are
- * inert against the unlayered `style.css` rules and would only create a second,
+ * inert against the unlayered PiView rules and would only create a second,
  * silently disagreeing source of truth.
  */
 const FORMATTED_MARKDOWN_CLASS = 'piview-formatted prose-theme font-sans';
@@ -1261,11 +1261,11 @@ export class PiView {
         el.appendChild(header);
         const body = document.createElement('pre');
         body.setAttribute('data-role', 'body');
-        // `piview-thinking-body` carries the theme-aware thinking text colour
-        // (soft light yellow in dark mode, muted dark grey in light mode) from
-        // `src/style.css`. Keep the colour out of this class list so there is a
-        // single source of truth; `italic`/`opacity-70` keep thinking secondary
-        // to the assistant's actual answer.
+        // `piview-thinking-body` carries the thinking text colour from the
+        // `--piview-fg-thinking` token in `PiView.css`. Keep the colour out of
+        // this class list so there is a single source of truth;
+        // `italic`/`opacity-70` keep thinking secondary to the assistant's
+        // actual answer.
         body.className =
           'piview-thinking-body whitespace-pre-wrap break-all italic opacity-70 mt-0.5 overflow-hidden';
         body.textContent = block.text ?? '';

@@ -18,10 +18,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { marked } from 'marked';
 import { PiView, type PiSessionService } from './PiView.ts';
 import type { RenderBlock } from '../../../core/CoderBotService.ts';
-// Raw CSS source, used by the vertical-rhythm guard tests below. jsdom has no
-// layout engine and the app stylesheet is not loaded in the test environment,
-// so the declared gap values are asserted against the source instead.
+// Raw CSS sources, used by the CSS ownership and vertical-rhythm guard tests
+// below. jsdom has no layout engine and the app stylesheet is not loaded in the
+// test environment, so the declared values are asserted against the source.
 import styleCss from '../../../style.css?raw';
+import piViewCss from './PiView.css?raw';
+import piViewTs from './PiView.ts?raw';
 
 // PiView coalesces block reconciliations onto the next animation frame. Tests
 // drive that frame manually via flushRaf() so DOM assertions stay synchronous.
@@ -1754,22 +1756,24 @@ describe('PiView keyboard tooltips', () => {
 
   it('declares a slightly larger, tunable vertical rhythm for rendered Markdown', () => {
     // The effective rhythm is owned by the unlayered `.piview-formatted` rules
-    // in style.css (they beat Tailwind's layered `prose-*` utilities). jsdom has
-    // no layout engine and the stylesheet is not applied in tests, so guard the
-    // declared values directly: they must stay larger than the old `0.2em`
+    // in PiView.css (they beat Tailwind's layered `prose-*` utilities). jsdom
+    // has no layout engine and the stylesheet is not applied in tests, so guard
+    // the declared values directly: they must stay larger than the old `0.2em`
     // block gap and `0` list-item gap.
-    expect(styleCss).toMatch(/--piview-gap-block:\s*0\.4em/);
-    expect(styleCss).toMatch(/--piview-gap-li:\s*0\.2em/);
-    expect(styleCss).toMatch(/--piview-gap-heading-top:\s*0\.6em/);
-    expect(styleCss).toMatch(/--piview-gap-pre:\s*0\.4em/);
+    expect(piViewCss).toMatch(/--piview-gap-block:\s*0\.4em/);
+    expect(piViewCss).toMatch(/--piview-gap-li:\s*0\.2em/);
+    expect(piViewCss).toMatch(/--piview-gap-heading-top:\s*0\.6em/);
+    expect(piViewCss).toMatch(/--piview-gap-pre:\s*0\.4em/);
 
     // The block/list/heading rules must reference those shared properties so
     // there is a single source of truth for the rhythm.
-    expect(styleCss).toMatch(
+    expect(piViewCss).toMatch(
       /\.piview-formatted :where\(p, ul, ol, dl, blockquote, figure, table\)\s*\{[^}]*var\(--piview-gap-block\)/
     );
-    expect(styleCss).toMatch(/\.piview-formatted :where\(li\)\s*\{[^}]*var\(--piview-gap-li\)/);
-    expect(styleCss).toMatch(
+    expect(piViewCss).toMatch(
+      /\.piview-formatted :where\(li\)\s*\{[^}]*var\(--piview-gap-li\)/
+    );
+    expect(piViewCss).toMatch(
       /\.piview-formatted :where\(h1, h2, h3, h4, h5, h6\)\s*\{[^}]*var\(--piview-gap-heading-top\)/
     );
   });
@@ -1779,26 +1783,26 @@ describe('PiView keyboard tooltips', () => {
     // declared measure values and selectors directly. The measure must sit on
     // the prose elements (not the container) so code blocks and tables can be
     // wider than the prose column.
-    expect(styleCss).toMatch(/--piview-max-width:\s*87ch/);
-    expect(styleCss).toMatch(/--piview-pre-max-width:\s*130ch/);
-    expect(styleCss).toMatch(
+    expect(piViewCss).toMatch(/--piview-max-width:\s*87ch/);
+    expect(piViewCss).toMatch(/--piview-pre-max-width:\s*130ch/);
+    expect(piViewCss).toMatch(
       /\.piview-formatted :where\([^)]*\)\s*\{[^}]*max-width:\s*var\(--piview-max-width\)/
     );
     // Fenced code blocks get their own (2x the old 65ch) measure and scroll
     // horizontally inside their own box...
-    expect(styleCss).toMatch(
+    expect(piViewCss).toMatch(
       /\.piview-formatted pre\s*\{[^}]*max-width:\s*var\(--piview-pre-max-width\)[^}]*overflow-x:\s*auto/
     );
     // ...and tables are width-unconstrained but still scroll internally, so a
     // wide table never pushes the whole log sideways.
-    expect(styleCss).toMatch(
+    expect(piViewCss).toMatch(
       /\.piview-formatted table\s*\{[^}]*max-width:\s*none[^}]*overflow-x:\s*auto/
     );
     // The container itself must carry no `max-width` declaration, or every
     // descendant (including code and tables) would be clamped to the prose
     // column again. (Match a declaration, not the `--piview-max-width` custom
     // property, which is a different thing entirely.)
-    expect(styleCss).not.toMatch(/\.piview-formatted\s*\{[^}]*\n\s*max-width:/);
+    expect(piViewCss).not.toMatch(/\.piview-formatted\s*\{[^}]*\n\s*max-width:/);
 
     const { service, emitBlocks } = createStubService();
     const view = new PiView(service, mount);
@@ -1825,7 +1829,8 @@ describe('PiView keyboard tooltips', () => {
     expect(formatted).not.toBeNull();
     expect(formatted.classList.contains('prose-theme')).toBe(true);
     // The old `prose-p:my-*` / `prose-li:my-*` utilities were silently
-    // overridden by style.css; pin their removal to keep one source of truth.
+    // overridden by the PiView CSS; pin their removal to keep one source of
+    // truth.
     expect(formatted.className).not.toMatch(/prose-[a-z]+:my-/);
 
     view.destroy();
@@ -2242,26 +2247,37 @@ describe('PiView automatic Markdown rendering', () => {
     view.destroy();
   });
 
-  it('keeps the dark terminal palette inside the log scope in light mode', () => {
+  it('keeps PiView styling on its own tokens in every app theme', () => {
     const { service } = createStubService();
     const view = new PiView(service, mount);
     view.render();
 
-    // The always-dark log subtree is anchored with its own class so the
-    // light-theme override in style.css can scope the terminal palette to it
-    // and leave the surrounding page (and the footer) on the active light theme.
+    // The log is self-contained: it stays dark in both app themes without
+    // re-anchoring the surrounding app tokens inside the subtree.
     const logContainer = mount.querySelector('#log-content-container') as HTMLElement;
     expect(logContainer.classList.contains('piview-log')).toBe(true);
 
-    // The light-theme override must re-anchor the semantic theme tokens to their
-    // dark values; otherwise dark-on-light tokens become unreadable against the
-    // black terminal (e.g. rendered Markdown, status text, dividers).
-    expect(styleCss).toMatch(
-      /\[data-theme='light'\]\s*\.piview-log\s*\{[^}]*--app-text:\s*var\(--color-slate-100\)/
-    );
-    expect(styleCss).toMatch(
-      /\[data-theme='light'\]\s*\.piview-log\s*\{[^}]*--app-border:\s*var\(--color-slate-800\)/
-    );
+    const css = piViewCss.replace(/\/\*[\s\S]*?\*\//g, '');
+    const forbidden = /--app-|--syntax-|\[data-theme=/;
+    expect(css).not.toMatch(forbidden);
+
+    // No rule scoped to the log may lean on the app theme's tokens or selectors.
+    const logRuleBodies = Array.from(css.matchAll(/([^{}]+)\{([^{}]*)\}/g))
+      .filter(([, selector]) => selector.includes('.piview-log'))
+      .map(([, , body]) => body);
+    expect(logRuleBodies.length).toBeGreaterThan(0);
+    for (const body of logRuleBodies) {
+      expect(body).not.toMatch(forbidden);
+    }
+
+    // PiView.ts owns state/layout only; it must not reintroduce theme-token or
+    // app-theme-selector references in its class strings.
+    expect(piViewTs).not.toMatch(forbidden);
+
+    // The light-mode re-anchor hack is gone, and style.css no longer owns any
+    // PiView-specific rule (only the shared prose-theme definitions remain).
+    expect(styleCss).not.toMatch(/\[data-theme=['"]light['"]\]\s*\.piview-log/);
+    expect(styleCss).not.toMatch(/\.piview-/);
 
     view.destroy();
   });

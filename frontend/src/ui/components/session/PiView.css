@@ -21,7 +21,7 @@
  * colours PiView rendered before the de-hardcoding (the log has always been a
  * dark terminal surface, so those are the dark app-theme values). Rules below
  * only consume these tokens through var(); the footer/toolbar deliberately stay
- * on the surrounding app theme (--app-*) and are not themed by PiView.
+ * on the surrounding app theme and are not themed by PiView.
  */
 .piview-log {
   --piview-bg: var(--color-black);
@@ -102,16 +102,17 @@
   --piview-motion-pulse: pulse;
   --piview-shortcut-flash: rgba(255, 255, 255, 0.15);
 
-  --piview-syntax-comment: var(--syntax-comment);
-  --piview-syntax-keyword: var(--syntax-keyword);
-  --piview-syntax-string: var(--syntax-string);
-  --piview-syntax-number: var(--syntax-number);
-  --piview-syntax-built-in: var(--syntax-built-in);
-  --piview-syntax-title: var(--syntax-title);
-  --piview-syntax-tag: var(--syntax-tag);
-  --piview-syntax-meta: var(--syntax-meta);
-  --piview-syntax-addition: var(--syntax-addition);
-  --piview-syntax-deletion: var(--syntax-deletion);
+  /* Fixed dark syntax palette: the log keeps its terminal colours in every app theme. */
+  --piview-syntax-comment: #8b949e;
+  --piview-syntax-keyword: #ff7b72;
+  --piview-syntax-string: #a5d6ff;
+  --piview-syntax-number: #79c0ff;
+  --piview-syntax-built-in: #ffa657;
+  --piview-syntax-title: #d2a8ff;
+  --piview-syntax-tag: #7ee787;
+  --piview-syntax-meta: #8b949e;
+  --piview-syntax-addition: #7ee787;
+  --piview-syntax-deletion: #ffa198;
 
   background-color: var(--piview-bg);
   background-image: var(--piview-bg-image);
@@ -323,6 +324,134 @@
   outline: 1px solid var(--piview-search-current-outline);
 }
 
+/* Markdown-rendered blocks ("Format as markup" toggle) */
+.piview-formatted {
+  /*
+   * One knob per rhythm role. All gaps are `em`-based so they scale with the
+   * container's `12px` font size. Margin collapsing means adjacent siblings use
+   * the larger of the two touching margins, so a `p` followed by a `ul` yields a
+   * single `--piview-gap-block` gap (not the sum), keeping the rhythm even.
+   */
+  --piview-gap-block: 0.4em; /* p, ul, ol, dl, blockquote, figure, table */
+  --piview-gap-li: 0.2em; /* between list items */
+  --piview-gap-heading-top: 0.6em;
+  --piview-gap-heading-bottom: 0.2em;
+  --piview-gap-pre: 0.4em;
+  --piview-gap-hr: 0.65em;
+  /*
+   * A readable measure for rendered Markdown. The surrounding log can grow very
+   * wide (notably in the two-column pipeline layout), and prose lines that span
+   * the full width are hard to track. The limit is `ch`-based so it tracks the
+   * rendered font size. It is applied to the individual prose elements below
+   * (not to this container) so that fenced code blocks and tables can opt out;
+   * a `max-width` here would clamp every descendant. Roughly a third wider than
+   * the previous 65ch measure.
+   */
+  --piview-max-width: 87ch;
+  /*
+   * Fenced code blocks are allowed twice the old prose measure (2 x 65ch) so
+   * wide snippets stay on one line as far as the log allows instead of being
+   * clamped to the prose column.
+   */
+  --piview-pre-max-width: 130ch;
+  /*
+   * The PiView log is a dense, terminal-style surface (`text-[11px]
+   * leading-tight`), so the typography plugin's long-form defaults
+   * (`line-height: 1.75`, generous block margins) make rendered Markdown look
+   * bloated next to the raw log. The element carries `prose-theme` for the base
+   * typography; these declarations pin the compact prose size and leading from
+   * the PiView tokens. The leading is inherited by paragraphs, list items and
+   * code blocks alike.
+   */
+  font-size: var(--piview-font-size-prose);
+  line-height: var(--piview-leading-prose);
+}
+
+/*
+ * Measure rules. The prose measure is applied per element rather than to the
+ * `.piview-formatted` container so that code blocks and tables can be wider;
+ * a container `max-width` would clamp every descendant to the prose column.
+ */
+.piview-formatted :where(p, ul, ol, dl, blockquote, figure, h1, h2, h3, h4, h5, h6, hr) {
+  max-width: var(--piview-max-width);
+}
+
+/* Fenced code blocks may use double the previous prose measure and scroll
+ * horizontally inside their own box rather than widening the whole log. */
+.piview-formatted pre {
+  max-width: var(--piview-pre-max-width);
+  overflow-x: auto;
+}
+
+/* Tables are not width-limited by the prose measure: they use the full log
+ * width and scroll horizontally inside their own box only when their content
+ * is wider than the log itself, so a wide table never pushes the log sideways. */
+.piview-formatted table {
+  max-width: none;
+  overflow-x: auto;
+}
+
+/*
+ * The typography plugin tunes its vertical rhythm for long-form documents, so
+ * every Markdown element stands apart with large gaps above and below. These
+ * unlayered PiView rules override the plugin's layered utilities for the
+ * `.piview-formatted` subtree. The spacing is kept compact for the dense
+ * terminal-style log while still giving paragraphs, list items and the
+ * `p <-> ul` boundary a comfortably larger gap than the raw log's line height.
+ * The values are declared once as the `--piview-gap-*` custom properties above
+ * so the whole rhythm is tunable from one place. `pre` needs `!important` to win
+ * over the shared `.prose-theme pre` rule above, which pins block
+ * padding/margins with `!` utilities for the document editors.
+ */
+.piview-formatted :where(p, ul, ol, dl, blockquote, figure, table) {
+  margin-top: var(--piview-gap-block);
+  margin-bottom: var(--piview-gap-block);
+}
+
+.piview-formatted :where(h1, h2, h3, h4, h5, h6) {
+  margin-top: var(--piview-gap-heading-top);
+  margin-bottom: var(--piview-gap-heading-bottom);
+}
+
+.piview-formatted :where(li) {
+  margin-top: var(--piview-gap-li);
+  margin-bottom: var(--piview-gap-li);
+}
+
+/* Keep list ends flush with the list box, mirroring the container-level reset. */
+.piview-formatted :where(li:first-child) {
+  margin-top: 0;
+}
+
+.piview-formatted :where(li:last-child) {
+  margin-bottom: 0;
+}
+
+/* Elements that pin their own (taller) line height: inherit the container's. */
+.piview-formatted :where(pre, table, figcaption) {
+  line-height: inherit;
+}
+
+.piview-formatted :where(hr) {
+  margin-top: var(--piview-gap-hr);
+  margin-bottom: var(--piview-gap-hr);
+}
+
+.piview-formatted pre {
+  margin-top: var(--piview-gap-pre) !important;
+  margin-bottom: var(--piview-gap-pre) !important;
+  padding-top: 0.4rem !important;
+  padding-bottom: 0.4rem !important;
+}
+
+.piview-formatted > :first-child {
+  margin-top: 0;
+}
+
+.piview-formatted > :last-child {
+  margin-bottom: 0;
+}
+
 /* Response element typography --------------------------------------------- */
 
 .piview-log .piview-formatted {
@@ -445,79 +574,70 @@
   color: var(--piview-syntax-deletion);
 }
 
-/*
- * The thinking body's tone is mode-aware today: soft yellow on the dark app
- * theme, muted slate on the light app theme. Preserve that while sourcing the
- * colours from the same token layer.
- */
-[data-theme='light'] .piview-log .piview-thinking-body {
-  color: var(--piview-fg-muted);
-}
-
 /* Footer / toolbar / search bar: app theme, not PiView-themed. -------------- */
 
 .piview-footer {
-  background-color: color-mix(in oklab, var(--app-surface) 50%, transparent);
-  border-top-color: var(--app-border);
+  background-color: color-mix(in oklab, var(--color-app-surface) 50%, transparent);
+  border-top-color: var(--color-app-border);
 }
 
 .piview-footer #piview-search-bar label {
-  color: color-mix(in oklab, var(--app-text) 50%, transparent);
+  color: color-mix(in oklab, var(--color-app-text) 50%, transparent);
 }
 
 .piview-footer #piview-search-input {
   background-color: color-mix(in oklab, var(--color-black) 40%, transparent);
-  border-color: var(--app-border);
+  border-color: var(--color-app-border);
   color: var(--color-green-300);
 }
 
 .piview-footer #piview-search-input::placeholder {
-  color: color-mix(in oklab, var(--app-text) 40%, transparent);
+  color: color-mix(in oklab, var(--color-app-text) 40%, transparent);
 }
 
 .piview-footer #piview-search-input:focus {
-  border-color: color-mix(in oklab, var(--app-accent-1) 60%, transparent);
+  border-color: color-mix(in oklab, var(--color-app-accent-1) 60%, transparent);
   outline: none;
 }
 
 .piview-footer #piview-search-count {
-  color: color-mix(in oklab, var(--app-text) 50%, transparent);
+  color: color-mix(in oklab, var(--color-app-text) 50%, transparent);
 }
 
 .piview-footer #piview-search-prev,
 .piview-footer #piview-search-next,
 .piview-footer [data-action]:not([data-action="toggle-follow"]):not([data-action="stop-bot"]) {
-  background-color: var(--app-surface);
-  border-color: var(--app-border);
-  color: var(--app-text);
+  background-color: var(--color-app-surface);
+  border-color: var(--color-app-border);
+  color: var(--color-app-text);
 }
 
 .piview-footer #piview-search-prev:hover,
 .piview-footer #piview-search-next:hover,
 .piview-footer [data-action]:not([data-action="toggle-follow"]):not([data-action="stop-bot"]):hover {
-  background-color: var(--app-bg);
+  background-color: var(--color-app-bg);
 }
 
 .piview-footer #follow-btn[data-state="on"] {
-  background-color: var(--app-accent-1);
+  background-color: var(--color-app-accent-1);
   color: var(--color-white);
 }
 
 .piview-footer #follow-btn[data-state="on"]:hover {
-  background-color: color-mix(in oklab, var(--app-accent-1) 80%, transparent);
+  background-color: color-mix(in oklab, var(--color-app-accent-1) 80%, transparent);
 }
 
 .piview-footer #follow-btn[data-state="off"] {
-  background-color: var(--app-surface);
-  border: 1px solid var(--app-border);
-  color: var(--app-text);
+  background-color: var(--color-app-surface);
+  border: 1px solid var(--color-app-border);
+  color: var(--color-app-text);
   /* The static button class preserves the on-state elevation; the off state
      remains flat exactly as it did when this was toggled from TypeScript. */
   box-shadow: none;
 }
 
 .piview-footer #follow-btn[data-state="off"]:hover {
-  background-color: var(--app-bg);
+  background-color: var(--color-app-bg);
 }
 
 .piview-footer #stop-bot-btn {
