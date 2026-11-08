@@ -188,7 +188,7 @@ async def run_lint(
     """
     pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
     commands = [c for c in (pipeline.lint_commands or []) if isinstance(c, list) and c]
-    return await _run_pipeline_commands(pipeline_id, commands)
+    return await _run_pipeline_commands(pipeline_id, commands, kind="lint")
 
 
 @router.post("/{pipeline_id}/run/build", response_model=dict)
@@ -206,7 +206,7 @@ async def run_build(
     """
     pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
     commands = [c for c in (pipeline.build_commands or []) if isinstance(c, list) and c]
-    return await _run_pipeline_commands(pipeline_id, commands)
+    return await _run_pipeline_commands(pipeline_id, commands, kind="build")
 
 
 @router.post("/{pipeline_id}/run/test", response_model=dict)
@@ -224,15 +224,19 @@ async def run_test(
     """
     pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
     commands = [c for c in (pipeline.test_commands or []) if isinstance(c, list) and c]
-    return await _run_pipeline_commands(pipeline_id, commands)
+    return await _run_pipeline_commands(pipeline_id, commands, kind="test")
 
 
-async def _run_pipeline_commands(pipeline_id: str, commands: List[List[str]]) -> Dict:
+async def _run_pipeline_commands(
+    pipeline_id: str, commands: List[List[str]], kind: str = "build"
+) -> Dict:
     """Dispatches a command sequence for a pipeline via the shared CommandRunner.
 
     Returns immediately with a ``started`` status and a ``run_id``; the result
-    is delivered asynchronously through the runner's completion handler. When
-    ``commands`` is empty, returns a ``no_commands`` status.
+    is delivered asynchronously through the runner's completion handler. Build
+    runs additionally broadcast a ``BUILD_RUN_COMPLETED`` WebSocket message so
+    REST-initiated builds report their result to the UI. When ``commands`` is
+    empty, returns a ``no_commands`` status.
     """
     if not commands:
         return {
@@ -252,6 +256,26 @@ async def _run_pipeline_commands(pipeline_id: str, commands: List[List[str]]) ->
     workspace_path = str(pipeline.workspace_abs_path)
 
     run_id = uuid.uuid4().hex
+
+    if kind == "build":
+
+        async def _broadcast_build_completed(
+            results: Dict, _tool_ref: Optional[Dict] = None
+        ) -> None:
+            await manager.broadcast(
+                WSMessage(
+                    type="BUILD_RUN_COMPLETED",
+                    payload={
+                        "run_id": results.get("run_id", run_id),
+                        "passed": results.get("passed"),
+                        "commands": results.get("commands", []),
+                        "error": results.get("error"),
+                    },
+                )
+            )
+
+        CommandRunner.register_on_complete(run_id, _broadcast_build_completed)
+
     asyncio.create_task(CommandRunner.dispatch(run_id, commands, workspace_path))
 
     return {
