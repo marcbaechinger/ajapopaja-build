@@ -25,21 +25,6 @@ export interface TaskLifecycleActionsDeps {
   setContentTab(tab: ContentTab, opts?: { hash?: HashWriteMode }): void;
 }
 
-/** Form controls whose clicks must not activate an enclosing backlog row. */
-const EDITABLE_SELECTOR =
-  'input, textarea, select, option, [contenteditable=""], [contenteditable="true"]';
-
-/**
- * Returns whether the click that triggered an action originated inside an
- * editable control (or on the control itself). Selecting/rerendering the
- * surrounding row in that case would detach the control and lose its focus.
- */
-function isEditableControlEvent(event: Event | null, element: HTMLElement): boolean {
-  if (element.matches?.(EDITABLE_SELECTOR)) return true;
-  const target = event?.target as HTMLElement | null;
-  return !!target?.closest?.(EDITABLE_SELECTOR);
-}
-
 /**
  * Registers the task-lifecycle actions on the shared action registry:
  * `schedule_task`, `unschedule_task`, `cancel_progress`, `move_task_up`,
@@ -59,12 +44,7 @@ export function registerTaskLifecycleActions(
 ): void {
   const { actionRegistry } = ctx.context;
 
-  actionRegistry.register('select_task', (event, el) => {
-    // Clicking an inline editor (e.g. the priority input) must not select and
-    // rerender the backlog row: the rerender would remove the input and drop
-    // its focus. The control keeps handling the click itself.
-    if (isEditableControlEvent(event ?? null, el)) return;
-
+  actionRegistry.register('select_task', (_e, el) => {
     const taskId = (el.closest('[data-view-id]') as HTMLElement | null)?.getAttribute('data-view-id') || el.getAttribute('data-view-id') || el.getAttribute('data-task-id');
     if (!taskId) return;
     ctx.state.pendingSpecEditTaskId = null;
