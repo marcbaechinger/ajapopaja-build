@@ -112,8 +112,8 @@ Census of color-only utilities in the file (excluding layout/spacing):
    *base* tokens; tints/derivations are computed by the default stylesheet.
 6. Themeable *and* still accessible: AA contrast for text, visible focus,
    `prefers-reduced-motion` respected, `prefers-contrast` honored.
-7. Forward-compatible: a theme registry that can later be fed by JSON/user
-   themes without touching `PiView.ts`.
+7. Extensible without touching `PiView.ts`: adding a theme is a new
+   code-defined registry entry.
 
 **Non-goals**
 
@@ -122,25 +122,27 @@ Census of color-only utilities in the file (excluding layout/spacing):
 - Changing the surrounding app theme system (`--app-*`, `[data-theme]`); PiView
   themes only *consume*/override inside the PiView subtree.
 - Backend changes, session lifecycle, multi-session.
-- Shipping a visual theme *editor* GUI (a picker is in scope, a token editor is
-  not).
+- Shipping a theme picker, visual theme editor, user-importable theme format, or
+  any per-user/per-pipeline theme persistence.
 
 ## 4. Design overview
 
 ```
-                ┌───────────────────────── PiView root (host mount) ─────────────────────────┐
-                │  class: piview-theme-root                                                     │
-                │  data-piview-theme="batch-terminal"     ← resolves token set                   │
-                │  data-piview-variant="batch"            ← selects default theme / knobs        │
-                │  style: --piview-bg, --piview-fg, …     ← tokens applied here (one element)     │
+                ┌──────────────────────── PiView mount (host element) ─────────────────────────┐
                 │                                                                               │
-                │   #log-content-container.piview-log          #piview-search-bar …              │
-                │     #piview-status-bar                         toolbar / footer buttons        │
+                │   #log-content-container.piview-log      ← the only themed subtree            │
+                │     data-piview-theme="batch-terminal"   ← resolves token set                  │
+                │     data-piview-variant="batch"          ← selects default theme / knobs       │
+                │     style: --piview-bg, --piview-fg, …   ← tokens applied here (one element)   │
+                │                                                                               │
+                │     #piview-status-bar                                                         │
                 │     #piview-toast                                                              │
                 │     #log-blocks (space-y-3.5)                                                  │
                 │        [data-block-id][data-kind] .piview-text                                  │
                 │           [data-role="raw"]                                                    │
                 │           [data-role="formatted"].piview-formatted  ← untouched sanitized HTML │
+                │                                                                               │
+                │   .piview-footer (toolbar / search / actions)  ← app chrome, not themed        │
                 └───────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -149,8 +151,8 @@ Three layers, one direction of dependency:
 1. **Primitive layer** — a theme's raw palette (free-form, author's choice).
 2. **Semantic layer** — role tokens (`--piview-fg-tool`, `--piview-surface-error`,
    …). Themes may set these directly *or* let them be derived from primitives.
-3. **Component layer** — the CSS rules in `style.css` (`PiView.css`) consume
-   only semantic tokens. No rule may contain a literal color again.
+3. **Component layer** — the CSS rules in `PiView.css` consume only semantic
+   tokens. No rule may contain a literal color again.
 
 The `PiView.ts` block builders keep **layout/behavior** utilities only
 (`relative`, `group`, `hidden`, `whitespace-pre-wrap`, `break-all`, `flex`,
@@ -221,7 +223,7 @@ color utilities or positional CSS. Each fix is **an added class token or
 `data-kind` attribute on an element that already exists** — no node added,
 removed, or re-parented:
 
-| Block kind | Existing hook | Gap | Proposed (additive) |
+| Block kind | Existing hook | Gap | Added hook |
 |---|---|---|---|
 | `bash` | none on the `<pre>` | untargetable | `class="piview-bash"` |
 | `notice` | none | untargetable | `class="piview-notice"` |
@@ -238,8 +240,9 @@ existing element, so the structural-freeze test still passes (see §12).
 ## 6. Token reference
 
 Naming: `--piview-<role>` — same prefix as the existing layout tokens, so there
-is one namespace. Tokens are **declared on the PiView root** (not on
-`:root`), so two PiViews in one document can carry different themes.
+is one namespace. Tokens are **declared on the PiView log element**
+(`#log-content-container.piview-log`, not on `:root`), so two PiViews in one
+document can carry different themes.
 
 ### 6.1 Surfaces
 
@@ -319,12 +322,14 @@ A theme author should not have to specify 60 tokens. The default stylesheet
 declares **derived defaults** that a theme can override individually:
 
 ```css
-.piview-theme-root {
+.piview-log {
   /* base knobs a theme is expected to set */
   --piview-bg: #05070a;
   --piview-fg: #4ade80;
   --piview-accent: #38bdf8;
   --piview-accent-2: #22d3ee;
+  --piview-fg-error: #f87171;
+  --piview-fg-ok: var(--piview-fg);
 
   /* derived: sane defaults, individually overridable */
   --piview-surface: color-mix(in oklab, var(--piview-bg) 82%, var(--piview-fg) 18%);
@@ -335,8 +340,6 @@ declares **derived defaults** that a theme can override individually:
   --piview-fg-dim: color-mix(in oklab, var(--piview-fg) 45%, transparent);
   --piview-fg-tool: color-mix(in oklab, var(--piview-fg) 80%, var(--piview-accent-2) 20%);
   --piview-fg-thinking: color-mix(in oklab, var(--piview-fg) 55%, #fde68a 45%);
-  --piview-fg-error: #f87171;
-  --piview-fg-ok: var(--piview-fg);
   /* …*/
 }
 ```
@@ -350,6 +353,30 @@ Consequences:
 - No `!important` arms race with Tailwind: all PiView rules are unlayered
   component CSS that only consume variables.
 
+### 6.6 Authoring a theme
+
+A theme is a `defineTheme({...})` entry in `piviewThemes.ts`. Start from the
+token reference in §6 (the registry's `BASE_*_TOKENS` and `PiView.css` are the
+complete current list) and override only the roles the theme changes.
+
+- **Derivation:** the stylesheet derives surfaces, borders and secondary
+  foreground roles from six base knobs (`--piview-bg`, `--piview-fg`,
+  `--piview-accent`, `--piview-accent-2`, `--piview-fg-error`,
+  `--piview-fg-ok`) via `color-mix()`. A minimal theme needs only those; an
+  elaborate theme may pin any derived token.
+- **Accessibility floors:** every theme must meet WCAG AA (4.5:1) for the
+  documented foreground/background pairs in §10, and must not reduce
+  `--piview-font-size` below 11px or `--piview-leading` below 1.2.
+- **Validation:** run `validateTheme()` (or let `defineTheme()` do it eagerly)
+  to reject a malformed id, unsupported/duplicate variant, non-`--piview-*`
+  token name, empty token value, or non-string `css`.
+- **Structure is off-limits:** a theme may only change CSS custom-property
+  values and add scoped CSS that targets the existing hooks. It may never alter
+  DOM structure — no added/removed/re-parented elements or changed `id`/
+  `data-*`/`aria-*` hooks — and may never change the rendered Markdown markup
+  inside `.piview-formatted`. Theme CSS is scoped under
+  `[data-piview-theme="<id>"]` by the loader.
+
 ## 7. Theme registry and API
 
 ### 7.1 Types
@@ -360,19 +387,19 @@ helpers, no DOM building):
 ```ts
 export type PiViewVariant = 'batch' | 'interactive';
 
-/** Tokens are plain CSS values; `null` means "inherit / don't set". */
+/** Tokens are plain CSS values. */
 export type PiViewTokens = Record<`--piview-${string}`, string>;
 
 export interface PiViewTheme {
-  /** Stable id, used in `data-piview-theme` and persisted in localStorage. */
+  /** Stable id, exposed as `data-piview-theme`. */
   id: string;
-  /** Human label for the picker. */
+  /** Human-readable name for code-defined selection and diagnostics. */
   label: string;
-  /** One-line description shown in the picker. */
+  /** One-line description for code-defined selection and diagnostics. */
   description?: string;
   /** Variants this theme is designed for (a theme may serve both). */
   variants: PiViewVariant[];
-  /** Semantic tokens applied to the PiView root. */
+  /** Semantic tokens applied to the PiView log element. */
   tokens: PiViewTokens;
   /**
    * Optional extra CSS for what variables cannot express (textures, pseudo-
@@ -384,12 +411,15 @@ export interface PiViewTheme {
 
 export const PI_VIEW_THEMES: Record<string, PiViewTheme>;
 export const DEFAULT_THEME_FOR_VARIANT: Record<PiViewVariant, string>;
-export function resolveTheme(variant: PiViewVariant, id?: string): PiViewTheme;
-export function applyTheme(root: HTMLElement, theme: PiViewTheme): void;
-export function validateTheme(theme: PiViewTheme): PiViewThemeIssue[];
+export function resolveTheme(
+  variant: PiViewVariant,
+  id?: string | PiViewTheme
+): PiViewTheme;
+export function applyTheme(logEl: HTMLElement, theme: PiViewTheme): void;
+export function validateTheme(theme: PiViewTheme): string[];
 ```
 
-`applyTheme` sets the theme attribute and writes tokens with
+`applyTheme` sets the theme attribute on the log element and writes tokens with
 `style.setProperty(name, value)` — one element touched, no DOM rebuild.
 
 ### 7.2 `PiViewOptions` additions
@@ -403,10 +433,12 @@ export interface PiViewOptions {
    */
   variant?: PiViewVariant;
   /**
-   * Explicit theme id, overriding the variant default. Unknown ids fall back
-   * to the variant default (and log a dev warning) instead of breaking the log.
+   * Explicit theme id (or theme object for data-only embedding/tests),
+   * overriding the variant default. Unknown ids fall back to the variant
+   * default (and log a dev warning) instead of breaking the log. Nothing is
+   * persisted.
    */
-  theme?: string;
+  theme?: string | PiViewTheme;
 }
 ```
 
@@ -416,15 +448,14 @@ Plus small public methods, mirroring existing `isFollowing()` /
 ```ts
 getVariant(): PiViewVariant;
 getThemeId(): string;
-setTheme(id: string): void;   // runtime switch, idempotent, no re-render
+setTheme(idOrTheme: string | PiViewTheme): void; // runtime switch, no re-render
 onThemeChange(listener: (id: string) => void): () => void;
 ```
 
 ### 7.3 Resolution order
 
 ```
-options.theme
-  → persisted user choice for variant  (localStorage "ajapopaja:piview:theme:<variant>")
+options.theme (string id or theme object)
   → DEFAULT_THEME_FOR_VARIANT[variant]
   → 'batch-terminal'  (hard fallback, builtin, cannot be missing)
 ```
@@ -436,20 +467,16 @@ already themed — no flash of default colors. `applyTheme` runs again on
 ### 7.4 Integration with the app theme
 
 PiView themes are **self-contained**: each declares its own base mode and does
-not read `--app-*` for log-internal roles. Two flavors are supported:
+not read `--app-*` (or `[data-theme]`) for log-internal roles. This is what makes
+deleting the `[data-theme='light'] .piview-log` hack possible: fixed-mode themes
+such as `batch-terminal` are dark regardless of the surrounding app theme, while
+`batch-paper` is light.
 
-- **Fixed-mode themes** (e.g. `batch-terminal`): dark always. This is what makes
-  deleting the `[data-theme='light'] .piview-log` hack possible.
-- **Mode-aware themes**: supply two token blocks, loaded by the app theme:
-
-```css
-[data-piview-theme='paper']            { --piview-bg: #faf9f5; --piview-fg: #2b2b2b; }
-[data-theme='light'][data-piview-theme='paper'] { /* optional refinement */ }
-```
-
-The footer/toolbar live **inside the PiView root**, so they inherit the theme
-too — that is deliberate: a "paper" batch theme should not have a black footer.
-A future `themeFooter: false` option can opt the chrome out.
+The footer, toolbar and search bar are **not** part of the themed subtree. They
+stay on the host app's chrome tokens (`--app-*`, mapped to `--color-app-*` in
+CSS), so an embedded sidebar keeps its host's controls even when its log uses a
+paper or chat preset. Every `--piview-*` consumer is scoped under `.piview-log`;
+footer rules never read `--piview-*`.
 
 ## 8. Batch vs interactive
 
@@ -488,43 +515,42 @@ implements it, PiView resolves the variant itself (and re-resolves on session
 state changes). The existing `InteractiveCodingService` adapter already refuses
 to attach batch sessions, so this is a convenience, not the primary mechanism.
 
-### 8.3 Themes shipped in phase 2
+### 8.3 Built-in themes
 
-- `batch-terminal` (default batch) — today's dark terminal look, tokenized,
+- `batch-terminal` (default batch) — dark terminal transcript, tokenized,
   pixel-parity target.
 - `batch-paper` — light, print-like transcript for screenshot/archival use.
 - `interactive-chat` (default interactive) — chat surface, bubbles, soft radii.
-- `interactive-focus` — de-emphasized chrome, high-contrast prose, for long
+- `interactive-focus` — low-chrome, high-contrast reading mode for long
   conversations.
 
-Themes declare `variants`, so the picker only offers relevant options; a theme
-with `variants: ['batch', 'interactive']` is selectable for both.
+Themes declare `variants`, so a preset may serve one or both variants. They are
+selected from code through the `theme` option (or `setTheme()`); there is no
+picker. A theme with `variants: ['batch', 'interactive']` is selectable for both.
 
-## 9. Choosing a theme (UI)
+## 9. Selecting a theme (code)
 
-Minimal, non-blocking surface:
+Themes are resolved from code; there is no picker, user selection, `localStorage`
+or per-pipeline persistence.
 
-1. **Picker in the footer/toolbar** — a `data-action="open-theme-picker"` button
-   (structure-wise a new *button*; it is chrome the user asked for, not part of
-   the log block structure) reusing the existing click delegation, opening a
-   small popover listing themes for the current variant with a live preview
-   swatch. Selecting applies immediately and persists per variant.
-2. **Command/action registration** — `AppContext` already registers actions such
-   as `toggle_theme`; add `piview_cycle_theme` / `piview_set_variant_theme` so
-   keyboard users and the command palette can switch.
-3. **Per-pipeline override** (phase 3) — store an optional theme id alongside
-   the pipeline's UI prefs so a specific pipeline can carry a distinct look.
-
-If a picker is deemed out of scope for the first release, the theme system still
-works end-to-end via constructor options + localStorage.
+1. **Host/constructor** — pass `variant: 'batch' | 'interactive'` and optionally
+   `theme: '<id>'`. An omitted `theme` uses
+   `DEFAULT_THEME_FOR_VARIANT[variant]`; an unknown id warns once and falls back
+   to the variant default.
+2. **Runtime** — `setTheme(id)` switches the existing log in place without
+   re-rendering; `getThemeId()` and `onThemeChange()` expose the effective theme.
+3. **Adding a preset** — add a `defineTheme(...)` entry to `piviewThemes.ts` and,
+   to make it a default, point `DEFAULT_THEME_FOR_VARIANT` at its id. No picker,
+   persistence, import or editor code is involved.
 
 ## 10. Accessibility
 
 - **Contrast**: every shipped theme must pass WCAG AA (4.5:1) for
   `--piview-fg` on `--piview-bg`, `--piview-fg-tool` on
   `--piview-surface-tool`, `--piview-fg-error` on
-  `--piview-surface-verification-error`, and the status text. `validateTheme()`
-  computes ratios from resolved colors in dev/test and throws in tests.
+  `--piview-surface-verification-error`, and the status text. The
+  registry-driven conformance suite checks every documented pair for every
+  registered theme and both variants.
 - **Focus**: `--piview-focus-ring` drives a real `:focus-visible` outline on
   toolbar, search, copy and format buttons (today they rely on browser defaults
   while using dark backgrounds).
@@ -533,7 +559,10 @@ works end-to-end via constructor options + localStorage.
 - **Search highlights** must not be conveyed by color alone in the current-match
   case (keep the outline) and must respect `forced-colors`.
 - Themes may not reduce `--piview-font-size` below 11px or `--piview-leading`
-  below 1.2 (`validateTheme` clamps with a warning).
+  below 1.2. `validateTheme()` validates the theme's shape (id, label, variants,
+  token names/values, `css` type) but does not silently repair an inaccessible
+  palette. Contrast is checked by the conformance suite; the font-size/leading
+  floors are authoring rules checked in review.
 
 ## 11. Performance
 
@@ -548,28 +577,32 @@ works end-to-end via constructor options + localStorage.
 
 ## 12. Testing
 
-1. **Structure-freeze test (the guardrail for the core constraint).** Render a
-   rich fixture history covering every `BlockKind`, for both variants, under
-   *every* registered theme, and assert a normalized DOM snapshot equality:
-   tag names, nesting, `id`, `data-*`, `aria-*`, `class` sets (order-insensitive,
-   minus a documented allow-list of theme attributes). Any structural drift
-   fails the build.
-2. **Markup-freeze test.** Format a `text` block as Markdown and assert the
-   `.piview-formatted` subtree is identical across themes (innerHTML equality).
-3. **Token application tests.** `setTheme()` sets the attribute and tokens;
-   unknown id falls back; persistence is per variant; switching preserves
-   `scrollTop`, follow mode, collapse states and `formattedBlocks`.
-4. **Derivation tests.** A theme setting only `--piview-bg`/`--piview-fg`
-   resolves derived tints to non-empty computed values (jsdom: assert the
-   stylesheet declares them, or compute via `cssstyle` where feasible).
-5. **Contrast tests.** `validateTheme()` for all builtins (AA thresholds).
-6. **Existing tests to update.** `PiView.test.ts:121` asserts
-   `classList.contains('bg-black')` on the log container; `:702/:743` assert
-   `animate-pulse` on the status dot; `:175` asserts `space-y-3.5`. Retarget
-   these to the new hooks (`piview-log`, `data-anim`, token presence) while
-   keeping the layout assertions that are still meaningful. `PiView.test.ts` and
-   `PiView.keyboard.test.ts` (≈2 500 lines) must stay green.
-7. `tsc` + full frontend suite, as with every other change here.
+The theme work is covered by three registry-driven suites plus the existing
+PiView and host-wiring tests:
+
+1. **`PiView.structure.test.ts` (Task 1)** — the frozen DOM contract: tag names,
+   class hooks and `data-kind`/`data-*` attributes for every `BlockKind`,
+   collapsible internals, and the allow-list of element types inside
+   `#log-content-container`.
+2. **`PiView.themeConformance.test.ts` (Task 8)** — registry-driven coverage
+   across every registered theme and both variants:
+   - structure freeze (normalized DOM equality),
+   - Markdown/markup freeze (`.piview-formatted` `innerHTML` equality,
+     including manual formatting),
+   - token resolution and WCAG AA contrast for every documented pair,
+   - reduced-motion handling,
+   - switch safety (scroll position, follow mode, collapse state, search
+     highlights and formatted blocks survive `setTheme()`),
+   - stylesheet isolation, including footer chrome staying on app tokens.
+3. **`piviewThemes.test.ts`** — registry/`validateTheme()` shape checks,
+   explicit → variant-default → hard-fallback resolution, token application and
+   stale-token cleanup, derivation defaults for a six-knob theme, and the
+   `interactive-chat` preset.
+4. **Existing suites stay green:** `PiView.test.ts`,
+   `PiView.keyboard.test.ts`, and the host-wiring tests
+   (`InteractiveCodingView.test.ts`, `CoderBotDialog.test.ts`,
+   `ExecutionEngineController.test.ts`).
+5. `tsc` + the full frontend suite, as with every other change here.
 
 ## 13. Migration plan
 
@@ -589,22 +622,24 @@ works end-to-end via constructor options + localStorage.
    tokens.
 
 **Phase 1 — registry + variants.**
-6. Add `piviewThemes.ts`, `variant`/`theme` options, `setTheme`, persistence.
+6. Add `piviewThemes.ts`, `variant`/`theme` options, `setTheme`, and variant
+   wiring for the three hosts.
 7. Ship `batch-terminal` (parity) and `interactive-chat`; wire the three hosts.
-8. Add the structure-freeze + markup-freeze + contrast tests.
 
-**Phase 2 — selection UX + more themes.**
-9. Theme picker in the toolbar, action-registry commands, `batch-paper` and
-   `interactive-focus`.
+**Phase 2 — presets and conformance.**
+8. Add `batch-paper` and `interactive-focus` as code-selectable presets in the
+   registry.
+9. Add the registry-driven conformance suite: structure and markup freeze, AA
+   contrast, reduced motion, switch safety and stylesheet isolation.
 
-**Phase 3 — extensibility.**
-10. JSON/user theme import (`validateTheme` + migration on version bump),
-    per-pipeline theme override, theme preview thumbnails.
+There is no picker, action-registry command, user/pipeline persistence, JSON
+import, theme editor, or versioning/migration phase.
 
-**Files touched (phase 0–1):** `PiView.ts`, new `PiView.css` (or a clearly
-partitioned section of `style.css`), `style.css` (remove the light hack),
-`piviewThemes.ts` (new), `InteractiveCodingView.ts`, `ExecutionEngineController.ts`,
-`CoderBotDialog.ts`, `Keybinding.css`, `PiView.test.ts`.
+**Files touched:** `PiView.ts`, `PiView.css`, `style.css` (remove the light
+hack), `piviewThemes.ts`, `InteractiveCodingView.ts`,
+`ExecutionEngineController.ts`, `CoderBotDialog.ts`, `Keybinding.css`,
+`PiView.test.ts`, `PiView.structure.test.ts`, `PiView.themeConformance.test.ts`,
+`piviewThemes.test.ts`.
 
 ## 14. Risks and mitigations
 
@@ -612,23 +647,28 @@ partitioned section of `style.css`), `style.css` (remove the light hack),
 |---|---|
 | Structure-freeze test is too strict and blocks legitimate future markup changes | The test compares against a checked-in expected map per block kind; updating it is an explicit, reviewed diff — that is the point. |
 | Cascade fights: Tailwind utilities vs unlayered `PiView.css` | Remove color utilities from TS entirely; keep layout utilities (layered) untouched. No `!important` in theme rules. |
-| Theme leak into the Markdown editors (`prose-theme` is shared) | All new rules are scoped under `.piview-theme-root` / `.piview-log`; `--tw-prose-*` re-pointing is scoped to `.piview-log .piview-formatted`. |
-| `color-mix` browser support | Baseline in all current evergreen browsers; fall back to explicit token declarations for the two builtin themes. |
-| Two PiViews with different themes on one page | Tokens and the theme attribute live on each PiView root, not `:root`; the structure-freeze test mounts two views with different themes. |
-| Existing tests assert color classes | Phase 0 retargets them deliberately (listed in §12.6). |
-| Theme author breaks accessibility | `validateTheme()` in dev + tests; documented floors for font size/leading. |
+| Theme leak into the Markdown editors (`prose-theme` is shared) | All new rules are scoped under `.piview-log` / `[data-piview-theme="<id>"]`; `--tw-prose-*` re-pointing is scoped to `.piview-log .piview-formatted`. |
+| `color-mix` browser support | Baseline in all current evergreen browsers; the builtin themes also pin explicit token values where parity matters. |
+| Two PiViews with different themes on one page | Tokens and the theme attribute live on each log element, not `:root`; the conformance suite switches each view through every theme. |
+| Existing tests assert color classes | Phase 0 retargets them deliberately; the current suites are listed in §12. |
+| Theme author breaks accessibility | Registry-driven AA contrast checks in the conformance suite plus documented font-size/leading floors and `validateTheme()` shape checks. |
 
-## 15. Open questions
+## 15. Resolved decisions
 
-1. Should the footer/toolbar be themed by the PiView theme (recommended) or stay
-   on `--app-*` so embedded sidebars keep their host's chrome?
-2. Do we need a *third* variant (`replay`/archived sessions) or is batch a
-   superset?
-3. Should `variant` be persisted per pipeline as well as per user?
-4. Is a JSON theme file format (user-importable) in scope for phase 3, and does
-   it need a version field + migration?
-5. Do we want a density token (`--piview-density`) that scales several paddings
-   at once, or per-role padding tokens only?
+- **Chrome stays host-owned.** The footer, toolbar and search bar stay on the
+  app's `--app-*` chrome tokens; only the `.piview-log` subtree is themed. This
+  keeps embedded sidebars visually consistent with their host.
+- **Two variants only.** PiView supports `batch` and `interactive`. There is no
+  `replay`/archived variant; archived output is rendered through `batch`.
+- **Code-resolved, not user-selected.** The theme comes from the `theme` option,
+  falling back to `DEFAULT_THEME_FOR_VARIANT[variant]`. There is no picker UI,
+  no user selection, no `localStorage`, and no per-pipeline persistence.
+- **No data/import format.** Themes are code-defined registry entries. There is
+  no JSON/user-importable theme format, no theme versioning, and no migration
+  path.
+- **Density is per-role, not a single knob.** Density is expressed through the
+  typography/padding/radius tokens (for example `--piview-block-padding`), not a
+  `--piview-density` multiplier.
 
 ## 16. Acceptance criteria
 
