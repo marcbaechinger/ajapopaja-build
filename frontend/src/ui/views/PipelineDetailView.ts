@@ -667,6 +667,7 @@ export class PipelineDetailView extends View {
       pendingSpecProposals: this.pendingSpecProposals,
       artifactInfo: this.ctx.state.artifactInfo,
       buildInProgress: this.ctx.state.buildInProgress,
+      artifactDetailsExpanded: this.ctx.state.artifactDetailsExpanded,
     });
 
 

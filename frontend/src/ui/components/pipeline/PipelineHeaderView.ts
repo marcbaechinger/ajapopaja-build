@@ -77,6 +77,8 @@ export interface PipelineHeaderViewProps {
   isBuilding?: boolean;
   /** Alias for buildInProgress. */
   building?: boolean;
+  /** Whether the expandable artifact details panel is currently open. */
+  artifactDetailsExpanded?: boolean;
 }
 
 export class PipelineHeaderView {
@@ -84,7 +86,8 @@ export class PipelineHeaderView {
     const { pipeline, pipelineId, docbotState, reviewbotState, archbotState, specagentState, devProcessState, user, allTasks, gitStatus, pendingReviews, pendingSpecProposals } = props;
     const artifact = props.artifactInfo ?? props.artifact ?? null;
     const buildInProgress = props.buildInProgress ?? props.isBuilding ?? props.building ?? false;
-    const artifactProps = { pipeline, artifact, buildInProgress };
+    const expanded = props.artifactDetailsExpanded === true;
+    const artifactProps = { pipeline, artifact, buildInProgress, expanded };
 
     let docbotBannerHtml = '';
     if (docbotState.status === 'inProgress') {
@@ -187,8 +190,8 @@ export class PipelineHeaderView {
     }
 
     return `
-      <header class="flex justify-between items-center bg-app-surface px-4 py-2 border-b border-app-border shrink-0">
-        <div class="flex gap-4 items-center">
+      <header class="flex justify-between items-center gap-4 bg-app-surface px-4 py-2 border-b border-app-border shrink-0">
+        <div class="flex gap-4 items-center min-w-0">
           <button onclick="window.location.hash='#'" class="p-2 hover:bg-app-bg rounded-xl transition-all text-app-muted hover:text-app-accent-1 border border-transparent hover:border-app-border group cursor-pointer" title="Back to Dashboard">
             <svg class="w-5 h-5 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
@@ -228,12 +231,14 @@ export class PipelineHeaderView {
                 ${TaskStatusCounter.render(allTasks)}
               </div>
             </div>
-            ${ArtifactView.renderArtifactRow(artifactProps)}
           </div>
         </div>
 
-        <div class="flex items-center gap-3">
-          ${ArtifactView.renderBuildButton(artifactProps)}
+        <div class="flex items-center justify-center gap-2 min-w-0 shrink-0">
+          ${ArtifactView.render(artifactProps)}
+        </div>
+
+        <div class="flex items-center gap-3 shrink-0">
           ${TaskForm.render()}
           <div class="w-px h-6 bg-app-border" aria-hidden="true"></div>
           ${HeaderDialogButtons.render(pipelineId)}

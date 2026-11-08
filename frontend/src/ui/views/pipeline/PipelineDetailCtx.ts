@@ -111,6 +111,8 @@ export interface PipelineDetailState {
   artifact?: BuildArtifactInfo | null;
   /** True while a REST-initiated build is running. */
   buildInProgress: boolean;
+  /** Whether the expandable artifact details panel is currently open. */
+  artifactDetailsExpanded: boolean;
   /** Aliases kept in sync with buildInProgress. */
   isBuilding?: boolean;
   building?: boolean;
@@ -172,6 +174,7 @@ export function createPipelineDetailState(): PipelineDetailState {
     devProcessState: undefined,
     artifactInfo: null,
     buildInProgress: false,
+    artifactDetailsExpanded: false,
     pendingReviews: [],
     pendingSpecProposals: [],
     pullRequests: [],

@@ -40,6 +40,11 @@ function showError(title: string, error: unknown): void {
 export function registerArtifactActions(ctx: PipelineDetailCtx): void {
   const { actionRegistry } = ctx.context;
 
+  actionRegistry.register('toggle_artifact_details', () => {
+    ctx.state.artifactDetailsExpanded = !ctx.state.artifactDetailsExpanded;
+    ctx.refresh.header();
+  });
+
   actionRegistry.register('run_build', async (_e, el) => {
     if (ctx.state.buildInProgress) return;
 

@@ -48,7 +48,7 @@ describe('ArtifactView', () => {
     expect(building).toContain('disabled');
   });
 
-  it('renders the configured artifact path and a missing-build status', () => {
+  it('shows only the label and a missing-build status by default', () => {
     const info = new BuildArtifactInfo({
       configured: true,
       path: 'dist/app.zip',
@@ -59,12 +59,15 @@ describe('ArtifactView', () => {
     const html = ArtifactView.renderArtifactRow({ pipeline: pipeline(), artifact: info });
 
     expect(html).toContain('App bundle');
-    expect(html).toContain('dist/app.zip');
     expect(html).toContain('Not built yet');
+    expect(html).toContain('data-action-click="toggle_artifact_details"');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain('data-artifact-details="true"');
+    expect(html).toContain('shadow-xl hidden"');
     expect(html).not.toContain('data-action-click="download_artifact"');
   });
 
-  it('renders size, modified time, commit and a download action for an existing artifact', () => {
+  it('shows the label, build date and download action by default', () => {
     const info = new BuildArtifactInfo({
       configured: true,
       path: 'dist/app.zip',
@@ -76,11 +79,36 @@ describe('ArtifactView', () => {
     });
     const html = ArtifactView.renderArtifactRow({ pipeline: pipeline(), artifact: info });
 
-    expect(html).toContain('1.5 KB');
-    expect(html).toContain('abcdef1');
+    expect(html).toContain('App bundle');
     expect(html).toContain('2026');
     expect(html).toContain('data-action-click="download_artifact"');
     expect(html).toContain('Download');
+    expect(html).toContain('shadow-xl hidden"');
+  });
+
+  it('reveals metadata in an overlay when expanded', () => {
+    const info = new BuildArtifactInfo({
+      configured: true,
+      path: 'dist/app.zip',
+      label: 'App bundle',
+      description: 'Production bundle',
+      exists: true,
+      size: 1536,
+      modified_at: '2026-01-02T03:04:05Z',
+      version: 'abcdef1234567890',
+    });
+    const html = ArtifactView.renderArtifactRow({
+      pipeline: pipeline(),
+      artifact: info,
+      expanded: true,
+    });
+
+    expect(html).toContain('aria-expanded="true"');
+    expect(html).not.toContain('shadow-xl hidden"');
+    expect(html).toContain('dist/app.zip');
+    expect(html).toContain('1.5 KB');
+    expect(html).toContain('abcdef1234567890');
+    expect(html).toContain('Production bundle');
   });
 
   it('renders nothing when no artifact is configured', () => {
@@ -125,7 +153,7 @@ describe('ArtifactView', () => {
     });
     expect(button).toContain('data-action-click="run_build"');
 
-    const html = ArtifactView.renderArtifactRow({ artifact: info });
+    const html = ArtifactView.renderArtifactRow({ artifact: info, expanded: true });
     expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
     expect(html).toContain('dist/&lt;app&gt;.zip');
     expect(html).not.toContain('<script>alert(1)</script>');
