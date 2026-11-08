@@ -74,8 +74,6 @@ export interface DiffHeaderViewOptions {
   files?: DiffHeaderFile[] | null;
   /** Pre-formatted stats text. Overrides the values derived from stats/files. */
   statsText?: string;
-  /** Alias for {@link statsText}. */
-  changes?: string;
   /** Header starts expanded. Default true. */
   initiallyExpanded?: boolean;
   /**
@@ -102,7 +100,7 @@ function resolveStats(
   if (typeof options.stats === 'string') {
     return { stats: { files: 0, added: 0, removed: 0 }, text: options.stats };
   }
-  const suppliedText = options.statsText ?? options.changes;
+  const suppliedText = options.statsText;
   if (suppliedText !== undefined) {
     return {
       stats: options.stats ?? { files: 0, added: 0, removed: 0 },
@@ -316,6 +314,3 @@ function renderMetaRow(label: string, value?: string, title?: string): string {
     </div>
   `;
 }
-
-// Friendly aliases for callers/tests that use the shorter or reordered name.
-export { DiffHeaderView as DiffHeader, DiffHeaderView as DiffViewHeader };

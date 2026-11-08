@@ -95,8 +95,6 @@ export class HistoryView {
   // The expanded rows only mount the lightweight metadata header; the full diff
   // body is rendered on demand by DiffDialog.
   private headerViews: Map<string, DiffHeaderView> = new Map();
-  // Backwards-compatible alias for code/tests that used the old field name.
-  private diffViews: Map<string, DiffHeaderView> = this.headerViews;
   private loadingDiffs: Set<string> = new Set();
   private diffErrors: Map<string, string> = new Map();
 
@@ -317,21 +315,6 @@ export class HistoryView {
     register('history_toggle_commit', (_event, element) => {
       if (this.destroyed) return;
       this.toggleCommit(element.getAttribute('data-commit-hash') ?? '');
-    });
-    // Alias for hosts that want a history-specific action name; the rendered
-    // button uses the shared `open_diff_view` action directly.
-    register('history_open_diff', (event, element) => {
-      if (this.destroyed) return;
-      const registry = this.registry as any;
-      if (typeof registry.execute === 'function') {
-        void registry.execute('open_diff_view', event, element);
-        return;
-      }
-      const handler =
-        typeof registry.get === 'function'
-          ? registry.get('open_diff_view')
-          : registry.handlers?.get?.('open_diff_view');
-      if (typeof handler === 'function') handler(event, element);
     });
     // Standalone fallback: in the pipeline view `open_diff_view` is registered
     // globally, but keeping a local fallback makes the HistoryView reusable on
@@ -696,7 +679,7 @@ export class HistoryView {
   }
 
   private destroyDiffViews(): void {
-    for (const view of this.diffViews.values()) view.destroy();
+    for (const view of this.headerViews.values()) view.destroy();
     this.headerViews.clear();
   }
 

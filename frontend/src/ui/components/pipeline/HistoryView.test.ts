@@ -314,7 +314,7 @@ describe('HistoryView', () => {
 
     const openDiff = vi.fn();
     registry.register('open_diff_view', openDiff);
-    await registry.get('history_open_diff')(new Event('click'), button as any);
+    await registry.get('open_diff_view')(new Event('click'), button as any);
     expect(openDiff).toHaveBeenCalled();
   });
 
@@ -477,11 +477,11 @@ describe('HistoryView', () => {
     await flush();
     await flush();
 
-    expect((view as any).diffViews.size).toBe(1);
+    expect((view as any).headerViews.size).toBe(1);
 
     view.destroy();
 
-    expect((view as any).diffViews.size).toBe(0);
+    expect((view as any).headerViews.size).toBe(0);
     expect(root.innerHTML).toBe('');
   });
 });

@@ -33,12 +33,6 @@ export interface DiffDialogProps {
    * already loads it to render the commit header).
    */
   diff?: CommitDiff | null;
-  /** Alias for {@link diff}, kept for callers that prefer an explicit name. */
-  initialDiff?: CommitDiff | null;
-  /** Additional aliases for the already-loaded commit diff. */
-  commitDiff?: CommitDiff | null;
-  /** Additional alias for the already-loaded commit diff. */
-  preloadedDiff?: CommitDiff | null;
 }
 
 /**
@@ -61,14 +55,8 @@ export class DiffDialog extends BaseDialog<void> {
       iconSvg: Icon.render('quickfix', { size: 20 }),
     });
     this.props = props;
-    const initialDiff =
-      props.diff ??
-      props.initialDiff ??
-      props.commitDiff ??
-      props.preloadedDiff ??
-      null;
-    if (initialDiff) {
-      this.diff = initialDiff;
+    if (props.diff) {
+      this.diff = props.diff;
       this.loading = false;
       this.reRender();
     } else {
