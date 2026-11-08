@@ -422,8 +422,8 @@ export class HistoryView {
         data-action-click="history_toggle_commit" data-commit-hash="${escapeHtml(hash)}"
         aria-expanded="${isExpanded}">
         <td class="py-1 pl-2 pr-1 w-5 align-middle text-app-muted">${chevron}</td>
-        <td class="py-1 pr-2 font-mono text-[10px] text-app-accent-1 whitespace-nowrap align-middle" title="${escapeHtml(hash)}">${escapeHtml(shortHash)}</td>
-        <td class="py-1 pr-2 text-app-text truncate align-middle" title="${subject}" data-role="history-subject">${subject}</td>
+        <td class="py-1 pr-2 font-mono text-xs text-app-accent-1 whitespace-nowrap align-middle" title="${escapeHtml(hash)}">${escapeHtml(shortHash)}</td>
+        <td class="py-1 pr-2 text-xs text-app-text truncate align-middle" title="${subject}" data-role="history-subject">${subject}</td>
         <td class="py-1 pr-2 text-app-muted whitespace-nowrap align-middle" data-role="history-author">${author}</td>
         <td class="py-1 pr-2 text-app-muted whitespace-nowrap align-middle text-right" data-role="history-date">${escapeHtml(date)}</td>
       </tr>
