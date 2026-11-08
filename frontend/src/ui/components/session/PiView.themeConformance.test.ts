@@ -35,6 +35,7 @@ import {
   type PiViewVariant,
 } from './piviewThemes.ts';
 import type { RenderBlock } from '../../../core/CoderBotService.ts';
+import { THEME_SETS } from '../../theme/themeSets.ts';
 import piViewCss from './PiView.css?raw';
 import keybindingCss from './Keybinding.css?raw';
 import tailwindThemeCss from 'tailwindcss/theme.css?raw';
@@ -496,6 +497,37 @@ function missingTokenKeys(theme: PiViewTheme, requiredKeys: readonly string[]): 
   return requiredKeys.filter((key) => (tokenValue(theme, key) ?? '').trim() === '');
 }
 
+/**
+ * Theme-set app palette contrast. App tokens are CSS-variable references into
+ * the same Tailwind palette the PiView themes use, so the color resolver above
+ * can check them without a browser. Like the PiView checks, this iterates the
+ * registry: every set and both modes get covered automatically.
+ */
+const APP_CONTRAST_PAIRS = [
+  { name: 'app body', fg: '--app-text', bg: '--app-bg' },
+  { name: 'app accent', fg: '--app-accent-1', bg: '--app-surface' },
+] as const;
+
+function resolveAppToken(
+  set: (typeof THEME_SETS)[string],
+  mode: 'dark' | 'light',
+  name: string
+): Rgba {
+  const value = set.appTokens[mode]?.[name];
+  if (!value) throw new Error(`${set.id}/${mode} has no ${name}`);
+  return parseColor(value, Object.values(PI_VIEW_THEMES)[0], new Set());
+}
+
+function appPairContrast(
+  set: (typeof THEME_SETS)[string],
+  mode: 'dark' | 'light',
+  pair: (typeof APP_CONTRAST_PAIRS)[number]
+): number {
+  const background = resolveAppToken(set, mode, pair.bg);
+  const foreground = resolveAppToken(set, mode, pair.fg);
+  return contrastRatio(foreground, background);
+}
+
 // ---------------------------------------------------------------------------
 // Additional theme registered inside the suite
 // ---------------------------------------------------------------------------
@@ -655,6 +687,21 @@ describe('PiView theme conformance: tokens and contrast', () => {
           expect(
             ratio,
             `${theme.id}/${variant} ${pair.name} contrast ${ratio.toFixed(2)}:1`
+          ).toBeGreaterThanOrEqual(AA_CONTRAST_RATIO);
+        }
+      }
+    }
+  });
+
+  it('meets WCAG AA for the app palette in every set and mode', () => {
+    for (const set of Object.values(THEME_SETS)) {
+      for (const mode of ['dark', 'light'] as const) {
+        if (!set.appTokens[mode]) continue;
+        for (const pair of APP_CONTRAST_PAIRS) {
+          const ratio = appPairContrast(set, mode, pair);
+          expect(
+            ratio,
+            `${set.id}/${mode} ${pair.name} contrast ${ratio.toFixed(2)}:1`
           ).toBeGreaterThanOrEqual(AA_CONTRAST_RATIO);
         }
       }

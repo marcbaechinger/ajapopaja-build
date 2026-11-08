@@ -113,7 +113,9 @@ export const DARK_PALETTE: PalettePrimitives = {
   '--palette-info': 'var(--color-cyan-400)',
 };
 
-/** The default set's light palette. */
+/** The default set's light palette. The accents use the 700 step so accent text
+ * clears WCAG AA on the light surface; the dark set keeps the brighter 400
+ * accents. */
 export const LIGHT_PALETTE: PalettePrimitives = {
   '--palette-bg': 'var(--color-slate-50)',
   '--palette-surface': 'var(--color-white)',
@@ -121,12 +123,12 @@ export const LIGHT_PALETTE: PalettePrimitives = {
   '--palette-text': 'var(--color-slate-900)',
   '--palette-muted': 'var(--color-slate-500)',
   '--palette-border': 'var(--color-slate-200)',
-  '--palette-accent': 'var(--color-sky-600)',
-  '--palette-accent-2': 'var(--color-cyan-600)',
+  '--palette-accent': 'var(--color-sky-700)',
+  '--palette-accent-2': 'var(--color-cyan-700)',
   '--palette-ok': 'var(--color-green-600)',
   '--palette-error': 'var(--color-red-600)',
   '--palette-warn': 'var(--color-amber-600)',
-  '--palette-info': 'var(--color-cyan-600)',
+  '--palette-info': 'var(--color-cyan-700)',
 };
 
 /**
@@ -149,7 +151,8 @@ export const AMBER_DARK_PALETTE: PalettePrimitives = {
   '--palette-info': 'var(--color-rose-400)',
 };
 
-/** The alternative "Ember" set's light palette. */
+/** The alternative "Ember" set's light palette. Like the default light set,
+ * the accents use the 700 step to keep accent text at AA on the light surface. */
 export const AMBER_LIGHT_PALETTE: PalettePrimitives = {
   '--palette-bg': 'var(--color-stone-50)',
   '--palette-surface': 'var(--color-white)',
@@ -157,12 +160,12 @@ export const AMBER_LIGHT_PALETTE: PalettePrimitives = {
   '--palette-text': 'var(--color-stone-900)',
   '--palette-muted': 'var(--color-stone-500)',
   '--palette-border': 'var(--color-stone-200)',
-  '--palette-accent': 'var(--color-amber-600)',
-  '--palette-accent-2': 'var(--color-rose-600)',
+  '--palette-accent': 'var(--color-amber-700)',
+  '--palette-accent-2': 'var(--color-rose-700)',
   '--palette-ok': 'var(--color-green-600)',
   '--palette-error': 'var(--color-red-600)',
   '--palette-warn': 'var(--color-amber-600)',
-  '--palette-info': 'var(--color-rose-600)',
+  '--palette-info': 'var(--color-rose-700)',
 };
 
 /** Named aliases for the alternative set, matching its "Ember" label. */
@@ -747,6 +750,14 @@ const INTERACTIVE_EMBER_LIGHT_THEME = defineTheme({
   css: INTERACTIVE_CHAT_CSS,
 });
 
+/**
+ * The print preset. It is intentionally kept as a code-selectable preset
+ * rather than a picker entry. Next to the harmonized light defaults it is
+ * narrower in scope (batch only, print/serif typography) but still has a
+ * distinct, useful look, so removing it would only shrink the public theme
+ * registry. It is validated and covered by the registry-driven conformance
+ * suite just like every other theme.
+ */
 const BATCH_PAPER_THEME = defineTheme({
   id: 'batch-paper',
   label: 'Paper',
@@ -786,6 +797,12 @@ const BATCH_PAPER_THEME = defineTheme({
 `,
 });
 
+/**
+ * The low-chrome reading preset. Kept as a code-selectable preset (no picker),
+ * matching `batch-paper`: it remains a distinct long-conversation mode even
+ * though the harmonized interactive default now shares its neutral palette.
+ * Registry-driven validation/conformance covers it automatically.
+ */
 const INTERACTIVE_FOCUS_THEME = defineTheme({
   id: 'interactive-focus',
   label: 'Focus',

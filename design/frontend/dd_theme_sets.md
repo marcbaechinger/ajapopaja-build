@@ -179,7 +179,7 @@ themes onto it.
 
 | Role | Default set value |
 |---|---|
-| accent / accent-2 | `sky-400` / `cyan-400` (dark), `sky-600` / `cyan-600` (light) |
+| accent / accent-2 | `sky-400` / `cyan-400` (dark), `sky-700` / `cyan-700` (light; AA on the light surface) |
 | neutrals | slate (as today's `--app-*`) |
 | ok / error / warn / info | green / red / amber / cyan (status only) |
 
@@ -212,7 +212,7 @@ Illustrative example — "**Amber / Rose**" (warm) rather than sky/cyan:
 
 | Primitive | dark | light |
 |---|---|---|
-| accent / accent-2 | `amber-400` / `rose-400` | `amber-600` / `rose-600` |
+| accent / accent-2 | `amber-400` / `rose-400` | `amber-700` / `rose-700` |
 | neutrals | `stone-950/900/100/400/800` | `stone-50/white/900/500/200` |
 | ok / error / warn / info | green / red / amber / rose (unchanged semantic) | |
 
@@ -400,3 +400,21 @@ source + subscription); `frontend/src/core/AppContext.ts`; `frontend/src/ui/view
 - [ ] All existing PiView conformance tests (structure/markup freeze, contrast,
       token completeness) pass against both sets.
 - [ ] `tsc` + full frontend suite green.
+
+## 14. Cleanup decisions (Phase D)
+
+- **`batch-paper` / `interactive-focus`:** kept as code-selectable presets
+  (no picker entry). They still pass `validateTheme` and the registry-driven
+  conformance suite; comments in the registry record why they remain even
+  though the harmonized light/interactive defaults now overlap conceptually.
+- **Deprecated aliases:** `batch-terminal` and `interactive-chat` remain
+  registered as aliases of `batch-default` / `interactive-default`, are
+  documented as deprecated in the registry, and are covered by tests.
+- **Static app-token fallback:** the `:root` and `[data-theme='light']`
+  `--app-*` blocks in `style.css` stay as the pre-JS first-paint fallback.
+  `ThemeManager` writes the active set's tokens inline on `<html>` after load,
+  and the existing `@theme` mapping (`--color-app-*` → `var(--app-*)`) keeps
+  Tailwind utilities following either source.
+- **Light accents:** both sets use the Tailwind 700 step for light-mode accents
+  (instead of the illustrative 600 step) so accent text clears WCAG AA against
+  the light surface. Dark mode keeps the brighter 400 accents.

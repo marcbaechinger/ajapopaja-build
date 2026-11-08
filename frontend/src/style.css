@@ -17,7 +17,14 @@
   --color-app-accent-2: var(--app-accent-2);
 }
 
-/* Default Theme (Dark - Sky Primary) */
+/* Default Theme (Dark - Sky Primary)
+ *
+ * Pre-JS fallback: these static blocks paint a themed first frame before
+ * ThemeManager runs. After load the manager writes the active set's --app-*
+ * tokens inline on <html>, which override these values; keep both blocks so
+ * the app still looks right when JavaScript has not run yet. The @theme mapping
+ * above keeps Tailwind's --color-app-* utilities pointed at whichever source is
+ * active. */
 :root {
   --app-bg: var(--color-slate-950);
   --app-surface: var(--color-slate-900);
@@ -39,8 +46,8 @@
   --app-muted: var(--color-slate-500);
   --app-border: var(--color-slate-200);
   
-  --app-accent-1: var(--color-sky-600);
-  --app-accent-2: var(--color-cyan-600);
+  --app-accent-1: var(--color-sky-700);
+  --app-accent-2: var(--color-cyan-700);
 }
 
 /* Ensure body uses the theme background and text colors */

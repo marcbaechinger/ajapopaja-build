@@ -23,10 +23,20 @@ import {
   THEME_SET_STORAGE_KEY,
   ThemeManager,
   deriveAppTokens,
+  derivePiviewTheme,
+  themeManager,
   validateThemeSet,
+  type PalettePrimitives,
   type ThemeSet,
 } from './themeSets.ts';
-import { PI_VIEW_THEMES } from '../components/session/piviewThemes.ts';
+import {
+  PI_VIEW_THEMES,
+  resolveTheme,
+  validateTheme,
+  type PiViewTheme,
+} from '../components/session/piviewThemes.ts';
+import { PiView, type PiSessionService } from '../components/session/PiView.ts';
+import type { RenderBlock } from '../../core/CoderBotService.ts';
 
 const DARK_TOKENS = {
   '--app-bg': 'var(--color-slate-950)',
@@ -44,9 +54,50 @@ const LIGHT_TOKENS = {
   '--app-text': 'var(--color-slate-900)',
   '--app-muted': 'var(--color-slate-500)',
   '--app-border': 'var(--color-slate-200)',
-  '--app-accent-1': 'var(--color-sky-600)',
-  '--app-accent-2': 'var(--color-cyan-600)',
+  '--app-accent-1': 'var(--color-sky-700)',
+  '--app-accent-2': 'var(--color-cyan-700)',
 };
+
+function tokenValue(theme: PiViewTheme, name: string): string | undefined {
+  return (theme.tokens as Record<string, string>)[name];
+}
+
+function numericToken(theme: PiViewTheme, name: string): number {
+  const raw = tokenValue(theme, name);
+  expect(raw, `${theme.id} must provide ${name}`).toBeTruthy();
+  const value = Number.parseFloat(raw!);
+  expect(Number.isFinite(value), `${theme.id} ${name} must be numeric`).toBe(true);
+  return value;
+}
+
+function serviceWithHistory(history: RenderBlock[]): PiSessionService {
+  return {
+    getHistory: () => history,
+    getCurrentTaskId: () => null,
+    isActive: () => false,
+    getSessionStartTime: () => null,
+    onSessionStartTimeChange: () => () => {},
+    clearHistory: () => {},
+    stopSession: async () => {},
+    onBlocks: () => () => {},
+    onMessage: () => () => {},
+    onSessionStateChange: () => () => {},
+  };
+}
+
+const PROPAGATION_FIXTURE: RenderBlock[] = [
+  { id: 'user', kind: 'user', header: 'You', text: 'hello alpha', complete: true },
+  {
+    id: 'text',
+    kind: 'text',
+    text: '# Heading\n\nAlpha **bold** and *italic*',
+    complete: true,
+  },
+  { id: 'thinking', kind: 'thinking', text: 'hmm alpha' },
+  { id: 'tool', kind: 'tool', header: '→ Calling write', text: 'const alpha = 1' },
+  { id: 'bash', kind: 'bash', text: '$ echo alpha' },
+  { id: 'verification', kind: 'verification', text: '● PASS', sub: ['- cmd  1'] },
+];
 
 describe('deriveAppTokens', () => {
   it('maps every palette role onto the app token namespace', () => {
@@ -162,8 +213,8 @@ describe('theme set registry', () => {
     expect(defaultSet.palette.dark?.['--palette-accent']).toBe('var(--color-sky-400)');
     expect(ember.palette.dark?.['--palette-accent']).toBe('var(--color-amber-400)');
     expect(ember.palette.dark?.['--palette-accent-2']).toBe('var(--color-rose-400)');
-    expect(ember.palette.light?.['--palette-accent']).toBe('var(--color-amber-600)');
-    expect(ember.palette.light?.['--palette-accent-2']).toBe('var(--color-rose-600)');
+    expect(ember.palette.light?.['--palette-accent']).toBe('var(--color-amber-700)');
+    expect(ember.palette.light?.['--palette-accent-2']).toBe('var(--color-rose-700)');
 
     // Density tokens stay identical; the palette roles are what differ.
     expect(ember.batchTheme.dark?.tokens['--piview-bg']).not.toBe(
@@ -194,6 +245,272 @@ describe('theme set registry', () => {
       setId: 'ember',
       mode: 'dark',
     });
+  });
+});
+
+describe('density invariant', () => {
+  const MODES = ['dark', 'light'] as const;
+
+  it('keeps batch compact and interactive roomy in every set and mode', () => {
+    const batchReference = new Map<string, number>();
+    const interactiveReference = new Map<string, number>();
+
+    for (const set of Object.values(THEME_SETS)) {
+      for (const mode of MODES) {
+        const batch = set.batchTheme[mode]!;
+        const interactive = set.interactiveTheme[mode]!;
+
+        expect(numericToken(batch, '--piview-font-size')).toBeLessThanOrEqual(11);
+        expect(numericToken(batch, '--piview-block-padding')).toBeLessThanOrEqual(0.5);
+        expect(numericToken(batch, '--piview-radius-block')).toBeLessThanOrEqual(0.25);
+
+        expect(numericToken(interactive, '--piview-font-size')).toBeGreaterThanOrEqual(12);
+        expect(numericToken(interactive, '--piview-block-padding')).toBeGreaterThanOrEqual(0.75);
+
+        for (const key of [
+          '--piview-font-size',
+          '--piview-leading',
+          '--piview-font-size-prose',
+          '--piview-leading-prose',
+          '--piview-block-gap',
+          '--piview-block-padding',
+          '--piview-radius-block',
+          '--piview-radius-chrome',
+        ]) {
+          const compactValue = numericToken(batch, key);
+          const roomyValue = numericToken(interactive, key);
+          const batchKey = `${mode}:${key}`;
+          if (!batchReference.has(batchKey)) {
+            batchReference.set(batchKey, compactValue);
+            interactiveReference.set(batchKey, roomyValue);
+          } else {
+            expect(compactValue, `${set.id}/${mode} batch ${key}`).toBe(
+              batchReference.get(batchKey)
+            );
+            expect(roomyValue, `${set.id}/${mode} interactive ${key}`).toBe(
+              interactiveReference.get(batchKey)
+            );
+          }
+        }
+      }
+    }
+  });
+});
+
+describe('palette parity and propagation', () => {
+  const MODES = ['dark', 'light'] as const;
+  const PIVIEW_PALETTE_MAP: ReadonlyArray<[keyof PalettePrimitives, string]> = [
+    ['--palette-bg', '--piview-bg'],
+    ['--palette-surface', '--piview-surface'],
+    ['--palette-text', '--piview-fg'],
+    ['--palette-muted', '--piview-fg-muted'],
+    ['--palette-border', '--piview-border'],
+    ['--palette-accent', '--piview-accent'],
+    ['--palette-accent-2', '--piview-accent-2'],
+    ['--palette-ok', '--piview-fg-ok'],
+    ['--palette-warn', '--piview-fg-thinking'],
+    ['--palette-info', '--piview-fg-notice'],
+  ];
+
+  it('maps a primitive change to app, interactive and batch deterministically', () => {
+    const base = THEME_SETS[DEFAULT_THEME_SET].palette.dark!;
+    const changed: PalettePrimitives = {
+      ...base,
+      '--palette-bg': 'sentinel-bg',
+      '--palette-accent': 'sentinel-accent',
+      '--palette-error': 'sentinel-error',
+    };
+
+    expect(deriveAppTokens(changed)).toEqual({
+      ...deriveAppTokens(base),
+      '--app-bg': 'sentinel-bg',
+      '--app-accent-1': 'sentinel-accent',
+    });
+
+    const batch = derivePiviewTheme(changed, 'compact');
+    const interactive = derivePiviewTheme(changed, 'roomy');
+    for (const tokens of [batch, interactive]) {
+      expect(tokens['--piview-bg']).toBe('sentinel-bg');
+      expect(tokens['--piview-accent']).toBe('sentinel-accent');
+      expect(tokens['--piview-fg-error']).toBe('sentinel-error');
+    }
+    expect(batch).not.toEqual(interactive);
+  });
+
+  it('derives every registered set from its own palette on both surfaces', () => {
+    for (const set of Object.values(THEME_SETS)) {
+      for (const mode of MODES) {
+        const palette = set.palette[mode]!;
+        expect(set.appTokens[mode]).toEqual(deriveAppTokens(palette));
+
+        for (const theme of [set.batchTheme[mode]!, set.interactiveTheme[mode]!]) {
+          for (const [paletteKey, piviewToken] of PIVIEW_PALETTE_MAP) {
+            expect(
+              tokenValue(theme, piviewToken),
+              `${set.id}/${mode} ${theme.id} ${piviewToken}`
+            ).toBe(palette[paletteKey]);
+          }
+        }
+      }
+    }
+  });
+
+  it('uses distinct palette primitives across sets but the same density roles', () => {
+    const [first, second] = Object.values(THEME_SETS);
+    expect(first.palette.dark!['--palette-bg']).not.toBe(
+      second.palette.dark!['--palette-bg']
+    );
+    expect(first.palette.dark!['--palette-accent']).not.toBe(
+      second.palette.dark!['--palette-accent']
+    );
+    expect(first.batchTheme.dark!.tokens['--piview-font-size']).toBe(
+      second.batchTheme.dark!.tokens['--piview-font-size']
+    );
+    expect(first.interactiveTheme.dark!.tokens['--piview-block-padding']).toBe(
+      second.interactiveTheme.dark!.tokens['--piview-block-padding']
+    );
+  });
+});
+
+describe('theme set propagation', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    document.documentElement.removeAttribute('data-theme');
+    document.documentElement.removeAttribute('data-theme-set');
+    document.documentElement.removeAttribute('style');
+    document.body.innerHTML = '';
+    themeManager.setSet(DEFAULT_THEME_SET);
+    themeManager.setMode('dark');
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    document.body.innerHTML = '';
+    themeManager.setSet(DEFAULT_THEME_SET);
+    themeManager.setMode('dark');
+  });
+
+  it('re-themes a mounted PiView in place and keeps scroll/follow/collapse/search/format state', () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const view = new PiView(serviceWithHistory(PROPAGATION_FIXTURE), host, {
+      variant: 'batch',
+    });
+    view.render();
+    view.flushAutoFormat();
+
+    const log = host.querySelector('#log-content-container') as HTMLElement;
+    const blocks = host.querySelector('#log-blocks') as HTMLElement;
+    expect(log).not.toBeNull();
+    expect(blocks).not.toBeNull();
+
+    (host.querySelector('#collapse-blocks-btn') as HTMLButtonElement).click();
+    (host.querySelector('#follow-btn') as HTMLButtonElement).click();
+    expect(view.isFollowing()).toBe(false);
+
+    let scrollTopValue = 321;
+    Object.defineProperty(log, 'scrollTop', {
+      configurable: true,
+      get: () => scrollTopValue,
+      set: (value: number) => {
+        scrollTopValue = value;
+      },
+    });
+
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
+    });
+    const input = host.querySelector('#piview-search-input') as HTMLInputElement;
+    input.value = 'alpha';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    vi.advanceTimersByTime(250);
+    expect(host.querySelectorAll('mark.piview-search-match').length).toBeGreaterThan(0);
+
+    const baselineBlocks = blocks.innerHTML;
+    const baselineSearch = (
+      host.querySelector('#piview-search-count') as HTMLElement
+    ).textContent;
+    const baselineFormatted = Array.from(
+      log.querySelectorAll('[data-role="formatted"]')
+    ) as HTMLElement[];
+    const footer = host.querySelector('.piview-footer') as HTMLElement;
+    const footerBefore = footer.outerHTML;
+
+    expect(view.getThemeId()).toBe('batch-default');
+    expect(log.getAttribute('data-piview-theme')).toBe('batch-default');
+
+    themeManager.setSet('ember');
+
+    const ember = THEME_SETS.ember;
+    expect(view.getThemeId()).toBe('batch-ember');
+    expect(log.getAttribute('data-piview-theme')).toBe('batch-ember');
+    expect(log.style.getPropertyValue('--piview-bg')).toBe(
+      ember.palette.dark!['--palette-bg']
+    );
+    expect(blocks.innerHTML).toBe(baselineBlocks);
+    expect(log.scrollTop).toBe(321);
+    expect(view.isFollowing()).toBe(false);
+    expect(
+      (host.querySelector('#piview-search-count') as HTMLElement).textContent
+    ).toBe(baselineSearch);
+    const formattedNow = Array.from(
+      log.querySelectorAll('[data-role="formatted"]')
+    ) as HTMLElement[];
+    expect(formattedNow).toEqual(baselineFormatted);
+    formattedNow.forEach((el) => expect(el.isConnected).toBe(true));
+
+    // Footer chrome stays on --app-* and carries no PiView theme tokens.
+    expect(footer.outerHTML).toBe(footerBefore);
+    expect(footer.hasAttribute('data-piview-theme')).toBe(false);
+    expect(getComputedStyle(footer).getPropertyValue('--piview-bg').trim()).toBe('');
+    expect(document.documentElement.style.getPropertyValue('--app-bg')).toBe(
+      ember.palette.dark!['--palette-bg']
+    );
+    expect(document.documentElement.style.getPropertyValue('--app-accent-1')).toBe(
+      ember.palette.dark!['--palette-accent']
+    );
+
+    themeManager.setMode('light');
+
+    expect(view.getThemeId()).toBe('batch-ember-light');
+    expect(log.getAttribute('data-piview-theme')).toBe('batch-ember-light');
+    expect(log.style.getPropertyValue('--piview-bg')).toBe(
+      ember.palette.light!['--palette-bg']
+    );
+    expect(document.documentElement.style.getPropertyValue('--app-bg')).toBe(
+      ember.palette.light!['--palette-bg']
+    );
+    expect(blocks.innerHTML).toBe(baselineBlocks);
+    expect(log.scrollTop).toBe(321);
+    expect(view.isFollowing()).toBe(false);
+
+    view.destroy();
+    host.remove();
+  });
+});
+
+describe('code-selectable presets and deprecated aliases', () => {
+  it('keeps batch-paper and interactive-focus valid code-selectable presets', () => {
+    for (const id of ['batch-paper', 'interactive-focus']) {
+      const theme = PI_VIEW_THEMES[id];
+      expect(theme, `${id} must remain registered`).toBeDefined();
+      expect(theme.id).toBe(id);
+      expect(validateTheme(theme)).toEqual([]);
+    }
+  });
+
+  it('resolves the deprecated ids to the harmonized defaults', () => {
+    expect(PI_VIEW_THEMES['batch-terminal']).toBe(PI_VIEW_THEMES['batch-default']);
+    expect(PI_VIEW_THEMES['interactive-chat']).toBe(
+      PI_VIEW_THEMES['interactive-default']
+    );
+    expect(resolveTheme('batch', 'batch-terminal')).toBe(
+      PI_VIEW_THEMES['batch-default']
+    );
+    expect(resolveTheme('interactive', 'interactive-chat')).toBe(
+      PI_VIEW_THEMES['interactive-default']
+    );
   });
 });
 
@@ -239,6 +556,39 @@ describe('ThemeManager', () => {
     const restored = new ThemeManager();
     expect(restored.getActiveSetId()).toBe(DEFAULT_THEME_SET);
     expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+  });
+
+  it('persists and restores the alternative set and mode across manager instances', () => {
+    const first = new ThemeManager();
+    first.setSet('ember');
+    first.setMode('light');
+
+    const restored = new ThemeManager();
+    expect(restored.getActiveSetId()).toBe('ember');
+    expect(restored.getActiveMode()).toBe('light');
+    expect(document.documentElement.getAttribute('data-theme-set')).toBe('ember');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+    expect(restored.themeForVariant('batch')).toBe(THEME_SETS.ember.batchTheme.light);
+    expect(restored.themeForVariant('interactive')).toBe(
+      THEME_SETS.ember.interactiveTheme.light
+    );
+  });
+
+  it('falls back to the default set for a stale persisted id', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    localStorage.setItem(
+      THEME_SET_STORAGE_KEY,
+      JSON.stringify({ setId: 'retired-set', mode: 'light' })
+    );
+
+    const manager = new ThemeManager();
+
+    expect(manager.getActiveSetId()).toBe(DEFAULT_THEME_SET);
+    expect(manager.getActiveMode()).toBe('light');
+    expect(document.documentElement.getAttribute('data-theme-set')).toBe(
+      DEFAULT_THEME_SET
+    );
+    expect(warn).toHaveBeenCalledTimes(1);
   });
 
   it('falls back to the default set for an unknown id and warns once', () => {
