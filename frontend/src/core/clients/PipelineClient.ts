@@ -212,24 +212,15 @@ export class PipelineClient extends BaseClient {
   }
 
   /** Mint a short-lived, pipeline- and path-bound artifact download token. */
-  async mintArtifactToken(id: string): Promise<{ token: string; expires_in: number; expiresIn: number }> {
+  async mintArtifactToken(id: string): Promise<{ token: string; expires_in: number }> {
     const response = await this.fetch(`${this.baseUrl}/pipelines/${id}/artifact/token`, {
       method: 'POST',
     });
     const data = await response.json();
-    const expiresIn = Number(data?.expires_in ?? 0);
-    const result = {
+    return {
       token: String(data?.token ?? ''),
-      expires_in: expiresIn,
+      expires_in: Number(data?.expires_in ?? 0),
     };
-    // Mirror the camelCase convention used by FileBrowserClient without
-    // changing the server-shaped enumerable payload.
-    Object.defineProperty(result, 'expiresIn', {
-      configurable: true,
-      enumerable: false,
-      get: () => expiresIn,
-    });
-    return result as { token: string; expires_in: number; expiresIn: number };
   }
 
   /** Build the token-bearing URL a browser tab can use to download the artifact. */
