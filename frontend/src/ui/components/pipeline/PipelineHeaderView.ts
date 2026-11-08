@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { Pipeline, Task, type GitStatusDetails } from '../../../core/domain.ts';
+import { Pipeline, Task, type BuildArtifactInfo, type GitStatusDetails } from '../../../core/domain.ts';
 import { UserProfileBadge } from '../common/UserProfileBadge.ts';
 import { TaskStatusCounter } from './TaskStatusCounter.ts';
 import { RepositoryStatusBadge } from './RepositoryStatusBadge.ts';
@@ -24,6 +24,7 @@ import { ReviewNotificationBadge } from './ReviewNotificationBadge.ts';
 import { SpecProposalBadge } from './SpecProposalBadge.ts';
 import { Icon } from '../common/Icon.ts';
 import type { SpecProposal } from '../../../core/clients/SpecBotClient.ts';
+import { ArtifactView } from './ArtifactView.ts';
 
 export interface DocbotState {
   status: 'none' | 'prCreated' | 'error' | 'inProgress' | 'noUpdate';
@@ -66,11 +67,24 @@ export interface PipelineHeaderViewProps {
   gitStatus?: GitStatusDetails;
   pendingReviews: string[];
   pendingSpecProposals?: SpecProposal[];
+  /** Live artifact metadata loaded from GET /artifact. */
+  artifactInfo?: BuildArtifactInfo | null;
+  /** Alias used by callers that only keep the artifact in local state. */
+  artifact?: BuildArtifactInfo | null;
+  /** True while the pipeline's build commands are running. */
+  buildInProgress?: boolean;
+  /** Alias for buildInProgress. */
+  isBuilding?: boolean;
+  /** Alias for buildInProgress. */
+  building?: boolean;
 }
 
 export class PipelineHeaderView {
   static render(props: PipelineHeaderViewProps): string {
     const { pipeline, pipelineId, docbotState, reviewbotState, archbotState, specagentState, devProcessState, user, allTasks, gitStatus, pendingReviews, pendingSpecProposals } = props;
+    const artifact = props.artifactInfo ?? props.artifact ?? null;
+    const buildInProgress = props.buildInProgress ?? props.isBuilding ?? props.building ?? false;
+    const artifactProps = { pipeline, artifact, buildInProgress };
 
     let docbotBannerHtml = '';
     if (docbotState.status === 'inProgress') {
@@ -214,10 +228,12 @@ export class PipelineHeaderView {
                 ${TaskStatusCounter.render(allTasks)}
               </div>
             </div>
+            ${ArtifactView.renderArtifactRow(artifactProps)}
           </div>
         </div>
 
         <div class="flex items-center gap-3">
+          ${ArtifactView.renderBuildButton(artifactProps)}
           ${TaskForm.render()}
           <div class="w-px h-6 bg-app-border" aria-hidden="true"></div>
           ${HeaderDialogButtons.render(pipelineId)}

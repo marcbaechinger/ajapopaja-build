@@ -189,6 +189,44 @@ export class BuildArtifactSpec {
   }
 }
 
+/**
+ * Live metadata/fingerprint for a pipeline's configured build artifact.
+ * Mirrors the backend ``BuildArtifactInfo`` response. The fields are computed
+ * on demand; nothing here is persisted.
+ */
+export class BuildArtifactInfo {
+  declare pipeline_id?: string | null;
+  declare configured?: boolean;
+  declare path?: string | null;
+  declare label?: string | null;
+  declare description?: string | null;
+  declare media_type?: string | null;
+  declare exists?: boolean;
+  declare size?: number | null;
+  declare modified_at?: string | null;
+  declare version?: string | null;
+  declare sha256?: string | null;
+  declare build_commands_configured?: boolean;
+  declare download_url?: string | null;
+  declare download_token?: string | null;
+  declare expires_in?: number | null;
+
+  constructor(json: any) {
+    // Preserve the exact server payload (including snake_case fields) while
+    // exposing the camelCase alias used by TypeScript/UI code below.
+    if (json && typeof json === 'object') Object.assign(this, json);
+  }
+
+  /** Camel-case alias for ``modified_at`` used by the header view. */
+  get modifiedAt(): string | null | undefined {
+    return this.modified_at ?? null;
+  }
+
+  set modifiedAt(value: string | null | undefined) {
+    this.modified_at = value ?? null;
+  }
+}
+
 export class Pipeline {
   id?: string;
   name: string = '';

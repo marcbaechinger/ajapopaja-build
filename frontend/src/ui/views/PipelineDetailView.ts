@@ -36,6 +36,7 @@ import { ContentTabsController } from './pipeline/ContentTabsController.ts';
 import { registerPullRequestActions } from './pipeline/actions/pullRequestActions.ts';
 import { registerBotActions, openCoderBotDialog } from './pipeline/actions/botActions.ts';
 import { registerMiscActions } from './pipeline/actions/miscActions.ts';
+import { registerArtifactActions } from './pipeline/actions/artifactActions.ts';
 import { registerTaskSpecActions } from './pipeline/actions/taskSpecActions.ts';
 import { registerTaskModelActions } from './pipeline/actions/taskModelActions.ts';
 import { registerTaskDesignDocActions } from './pipeline/actions/taskDesignDocActions.ts';
@@ -328,6 +329,8 @@ export class PipelineDetailView extends View {
   }
 
   private registerActions() {
+    registerArtifactActions(this.ctx);
+
     registerPullRequestActions(this.ctx, {
       // Accepting/rejecting/submitting a PR only changes the pull-request
       // section. Use the targeted refresh so the rest of the page (notably the
@@ -450,6 +453,7 @@ export class PipelineDetailView extends View {
         this.context.dataManager.updatePipeline(this.pipeline);
       }
       this.realtime?.fetchPullRequests();
+      void this.realtime?.fetchArtifact();
       this.scheduleRefreshGitStatus();
       this.loadDevServerStatus();
       this.updateHeader();
@@ -660,7 +664,9 @@ export class PipelineDetailView extends View {
       allTasks: this.allLoadedTasks,
       gitStatus: this.gitStatus,
       pendingReviews: this.pendingReviews,
-      pendingSpecProposals: this.pendingSpecProposals
+      pendingSpecProposals: this.pendingSpecProposals,
+      artifactInfo: this.ctx.state.artifactInfo,
+      buildInProgress: this.ctx.state.buildInProgress,
     });
 
 

@@ -994,3 +994,82 @@ describe('PipelineClient dev server endpoints', () => {
     await expect(client.startDevServer('pipe-1')).rejects.toThrow('No serve commands configured');
   });
 });
+
+describe('PipelineClient build artifact endpoints', () => {
+  let client: PipelineClient;
+  let mockAuthService: any;
+  const baseUrl = 'http://api.test';
+
+  beforeEach(() => {
+    mockAuthService = {
+      getAccessToken: vi.fn().mockReturnValue('mock-token'),
+      refreshToken: vi.fn().mockResolvedValue(null),
+    };
+    vi.stubGlobal('fetch', vi.fn());
+    client = new PipelineClient(baseUrl, mockAuthService);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('should POST to run the configured build commands', async () => {
+    const payload = { status: 'started', run_id: 'run-1', message: 'started' };
+    (fetch as any).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(payload),
+    });
+
+    const result = await client.runBuild('pipe-1');
+
+    expect(result).toEqual(payload);
+    const url = new URL((fetch as any).mock.calls[0][0]);
+    expect(url.pathname).toBe('/pipelines/pipe-1/run/build');
+    expect((fetch as any).mock.calls[0][1].method).toBe('POST');
+  });
+
+  it('should GET the artifact metadata and preserve the server payload', async () => {
+    const payload = {
+      pipeline_id: 'pipe-1',
+      configured: true,
+      path: 'app/build/outputs/apk/debug/app-debug.apk',
+      label: 'Debug APK',
+      exists: true,
+      size: 1024,
+      modified_at: '2026-01-01T00:00:00Z',
+      version: 'abcdef1234567890',
+      sha256: 'deadbeef',
+      build_commands_configured: true,
+    };
+    (fetch as any).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(payload),
+    });
+
+    const artifact = await client.getArtifact('pipe-1');
+
+    expect(artifact).toEqual(payload);
+    expect(artifact.modifiedAt).toBe(payload.modified_at);
+    const url = new URL((fetch as any).mock.calls[0][0]);
+    expect(url.pathname).toBe('/pipelines/pipe-1/artifact');
+    expect((fetch as any).mock.calls[0][1]?.method).toBeUndefined();
+  });
+
+  it('should POST to mint a download token and build the download URL', async () => {
+    (fetch as any).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ token: 'abc.def', expires_in: 60 }),
+    });
+
+    const result = await client.mintArtifactToken('pipe-1');
+
+    expect(result).toEqual({ token: 'abc.def', expires_in: 60 });
+    const url = new URL((fetch as any).mock.calls[0][0]);
+    expect(url.pathname).toBe('/pipelines/pipe-1/artifact/token');
+    expect((fetch as any).mock.calls[0][1].method).toBe('POST');
+    expect(client.artifactDownloadUrl('pipe-1', 'abc.def')).toBe(
+      `${baseUrl}/pipelines/pipe-1/artifact/download?token=abc.def`
+    );
+  });
+});

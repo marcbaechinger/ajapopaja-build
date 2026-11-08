@@ -17,11 +17,12 @@
 import { ExecutionEngineView } from '../../components/pipeline/ExecutionEngineView.ts';
 import { PullRequestSection } from '../../components/pipeline/PullRequestSection.ts';
 import { TaskItem } from '../../components/pipeline/TaskItem.ts';
-import { TaskStatus } from '../../../core/domain.ts';
-import type { Pipeline, Task } from '../../../core/domain.ts';
+import { TaskStatus, AppNotification, NotificationSeverity } from '../../../core/domain.ts';
+import type { Pipeline, Task, BuildArtifactInfo } from '../../../core/domain.ts';
 import type { SpecProposal } from '../../../core/clients/SpecBotClient.ts';
 import { LocalStorageManager } from '../../../core/LocalStorageManager.ts';
 import type { PipelineDetailCtx } from './PipelineDetailCtx.ts';
+import { NotificationToast } from '../../components/common/NotificationToast.ts';
 
 /** Shell / cross-controller effects the realtime controller must trigger. */
 export interface PipelineRealtimeCallbacks {
@@ -114,6 +115,25 @@ export class PipelineRealtimeController {
 
     // Listen for process and bot status updates via specific WS event queries
     const eventHandlers: Record<string, (payload: any) => void> = {
+      'BUILD_RUN_COMPLETED': (p) => {
+        if (p?.pipeline_id && p.pipeline_id !== ctx.pipelineId) return;
+        ctx.state.buildInProgress = false;
+        const passed = p?.passed !== false && !p?.error;
+        const message = p?.error
+          ? String(p.error)
+          : passed
+            ? 'Build completed successfully.'
+            : 'The configured build commands failed.';
+        NotificationToast.show(new AppNotification({
+          id: `build:${p?.run_id ?? 'run'}:${Date.now()}`,
+          severity: passed ? NotificationSeverity.NORMAL : NotificationSeverity.ERROR,
+          title: passed ? 'Build completed' : 'Build failed',
+          message,
+        }));
+        // The build may have produced or replaced the artifact; refresh the
+        // live metadata so the header row reflects the new file immediately.
+        void this.fetchArtifact();
+      },
       'DOCBOT_STARTED': (p) => { ctx.state.docbotState = { status: 'inProgress', taskId: p.task_id }; },
       'DOCBOT_COMPLETED': (p) => {
         const result = p.result;
@@ -215,6 +235,31 @@ export class PipelineRealtimeController {
         ctx.refresh.header();
       }));
     });
+
+    // Build completion broadcasts are emitted by the REST build endpoint with
+    // only run metadata. Depending on whether the payload carries a
+    // pipeline_id, DataManager routes it to the pipeline-specific or the
+    // global channel, so listen on both.
+    const buildHandler = eventHandlers['BUILD_RUN_COMPLETED'];
+    this.unsubs.push(dm.on('ws:BUILD_RUN_COMPLETED:global', (payload) => {
+      if (payload?.pipeline_id && payload.pipeline_id !== ctx.pipelineId) return;
+      buildHandler(payload);
+      ctx.refresh.header();
+    }));
+  }
+
+  /** Loads the live build-artifact metadata and repaints the header row. */
+  async fetchArtifact(): Promise<void> {
+    const { ctx } = this.deps;
+    const client = ctx.context.pipelineClient;
+    if (!client?.getArtifact) return;
+    try {
+      const info = await client.getArtifact(ctx.pipelineId);
+      ctx.state.artifactInfo = info as BuildArtifactInfo;
+      ctx.refresh.header();
+    } catch (error) {
+      console.error('Failed to load build artifact:', error);
+    }
   }
 
   /** Unsubscribes. Safe to call twice. */

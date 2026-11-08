@@ -582,6 +582,48 @@ describe('PipelineRealtimeController', () => {
     });
   });
 
+  describe('build completion', () => {
+    it('re-enables the build and refreshes the artifact after success', async () => {
+      context.pipelineClient = {
+        getArtifact: vi.fn().mockResolvedValue({ configured: true, exists: true, path: 'dist/app.zip' }),
+      };
+      ctx.state.buildInProgress = true;
+      const ctrl = makeController();
+      ctrl.start();
+
+      handlers['ws:BUILD_RUN_COMPLETED:p1']({ run_id: 'run-1', passed: true });
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(ctx.state.buildInProgress).toBe(false);
+      expect(context.pipelineClient.getArtifact).toHaveBeenCalledWith('p1');
+      expect(ctx.state.artifactInfo).toMatchObject({ path: 'dist/app.zip' });
+      expect(ctx.refresh.header).toHaveBeenCalled();
+      expect(document.body.textContent).toContain('Build completed');
+    });
+
+    it('handles the global build-completion channel and reports failures', async () => {
+      context.pipelineClient = {
+        getArtifact: vi.fn().mockResolvedValue({ configured: true, exists: false }),
+      };
+      ctx.state.buildInProgress = true;
+      const ctrl = makeController();
+      ctrl.start();
+
+      handlers['ws:BUILD_RUN_COMPLETED:global']({
+        run_id: 'run-2',
+        passed: false,
+        error: 'make failed',
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(ctx.state.isBuilding).toBe(false);
+      expect(document.body.textContent).toContain('Build failed');
+      expect(document.body.textContent).toContain('make failed');
+    });
+  });
+
   describe('stop()', () => {
     it('removes every subscription so later emissions are ignored', () => {
       const ctrl = makeController();

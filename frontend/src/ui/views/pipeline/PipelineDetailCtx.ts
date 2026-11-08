@@ -15,7 +15,7 @@
  */
 
 import type { AppContext } from '../../../core/AppContext.ts';
-import type { Pipeline, Task, GitStatusDetails } from '../../../core/domain.ts';
+import type { Pipeline, Task, GitStatusDetails, BuildArtifactInfo } from '../../../core/domain.ts';
 import type { ContentTab } from '../../../core/PipelineRoute.ts';
 import type EasyMDE from 'easymde';
 import type { SpecProposal } from '../../../core/clients/SpecBotClient.ts';
@@ -105,6 +105,15 @@ export interface PipelineDetailState {
   archbotState: ArchbotState;
   specagentState: SpecAgentState;
   devProcessState: DevProcessState | undefined;
+  /** Live metadata/fingerprint for the pipeline's build artifact. */
+  artifactInfo: BuildArtifactInfo | null;
+  /** Aliases kept in sync with artifactInfo for callers that use the shorter name. */
+  artifact?: BuildArtifactInfo | null;
+  /** True while a REST-initiated build is running. */
+  buildInProgress: boolean;
+  /** Aliases kept in sync with buildInProgress. */
+  isBuilding?: boolean;
+  building?: boolean;
   pendingReviews: string[];
   pendingSpecProposals: SpecProposal[];
   pullRequests: any[];
@@ -138,7 +147,7 @@ export interface PipelineDetailCtx {
  * not add defaults that the view did not previously have.
  */
 export function createPipelineDetailState(): PipelineDetailState {
-  return {
+  const state: PipelineDetailState = {
     pipeline: null,
 
     allLoadedTasks: [],
@@ -161,12 +170,37 @@ export function createPipelineDetailState(): PipelineDetailState {
     archbotState: { status: 'none', taskId: null },
     specagentState: { status: 'none', taskId: null },
     devProcessState: undefined,
+    artifactInfo: null,
+    buildInProgress: false,
     pendingReviews: [],
     pendingSpecProposals: [],
     pullRequests: [],
 
     gitStatus: undefined,
   };
+
+  // Keep the short-form aliases in sync without making them separate sources
+  // of truth. Defining them non-enumerably keeps the state's public shape and
+  // equality checks focused on the canonical fields above.
+  Object.defineProperties(state, {
+    artifact: {
+      configurable: true,
+      get: () => state.artifactInfo,
+      set: (value: BuildArtifactInfo | null) => { state.artifactInfo = value; },
+    },
+    isBuilding: {
+      configurable: true,
+      get: () => state.buildInProgress,
+      set: (value: boolean) => { state.buildInProgress = value; },
+    },
+    building: {
+      configurable: true,
+      get: () => state.buildInProgress,
+      set: (value: boolean) => { state.buildInProgress = value; },
+    },
+  });
+
+  return state;
 }
 
 export function createPipelineDetailCtx(args: {

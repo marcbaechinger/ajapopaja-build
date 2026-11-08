@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { Pipeline, PipelineStatus, CommitDiff, BuildArtifactSpec, type GitStatusDetails, type GitLogResponse } from '../domain.ts';
+import { Pipeline, PipelineStatus, CommitDiff, BuildArtifactSpec, BuildArtifactInfo, type GitStatusDetails, type GitLogResponse } from '../domain.ts';
 import { BaseClient } from './BaseClient.ts';
 import { AuthService } from '../AuthService.ts';
 
@@ -195,5 +195,45 @@ export class PipelineClient extends BaseClient {
       { method: 'POST' },
     );
     return await response.json();
+  }
+
+  /** Trigger the pipeline's configured build commands. */
+  async runBuild(id: string): Promise<{ status: string; run_id?: string; message?: string }> {
+    const response = await this.fetch(`${this.baseUrl}/pipelines/${id}/run/build`, {
+      method: 'POST',
+    });
+    return await response.json();
+  }
+
+  /** Get the live metadata/fingerprint for the pipeline's build artifact. */
+  async getArtifact(id: string): Promise<BuildArtifactInfo> {
+    const response = await this.fetch(`${this.baseUrl}/pipelines/${id}/artifact`);
+    return new BuildArtifactInfo(await response.json());
+  }
+
+  /** Mint a short-lived, pipeline- and path-bound artifact download token. */
+  async mintArtifactToken(id: string): Promise<{ token: string; expires_in: number; expiresIn: number }> {
+    const response = await this.fetch(`${this.baseUrl}/pipelines/${id}/artifact/token`, {
+      method: 'POST',
+    });
+    const data = await response.json();
+    const expiresIn = Number(data?.expires_in ?? 0);
+    const result = {
+      token: String(data?.token ?? ''),
+      expires_in: expiresIn,
+    };
+    // Mirror the camelCase convention used by FileBrowserClient without
+    // changing the server-shaped enumerable payload.
+    Object.defineProperty(result, 'expiresIn', {
+      configurable: true,
+      enumerable: false,
+      get: () => expiresIn,
+    });
+    return result as { token: string; expires_in: number; expiresIn: number };
+  }
+
+  /** Build the token-bearing URL a browser tab can use to download the artifact. */
+  artifactDownloadUrl(id: string, token: string): string {
+    return `${this.baseUrl}/pipelines/${id}/artifact/download?token=${encodeURIComponent(token)}`;
   }
 }
