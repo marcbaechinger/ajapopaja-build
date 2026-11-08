@@ -17,9 +17,11 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   AMBER_DARK_PALETTE,
+  AMBER_LIGHT_PALETTE,
   BASE_DARK_TOKENS,
   DARK_PALETTE,
   DEFAULT_THEME_FOR_VARIANT,
+  LIGHT_PALETTE,
   PI_VIEW_THEMES,
   applyTheme,
   defineTheme,
@@ -331,6 +333,32 @@ describe('palette-derived syntax and search roles', () => {
       expect(['#000', 'transparent'], `${literal} is a hard-coded hue`).toContain(literal);
     }
   });
+});
+
+describe('shipped light theme derivation', () => {
+  const lightThemes = [
+    { id: 'batch-default-light', palette: LIGHT_PALETTE },
+    { id: 'interactive-default-light', palette: LIGHT_PALETTE },
+    { id: 'batch-ember-light', palette: AMBER_LIGHT_PALETTE },
+    { id: 'interactive-ember-light', palette: AMBER_LIGHT_PALETTE },
+  ];
+  const paletteRoles = [
+    ['--piview-bg', '--palette-bg'],
+    ['--piview-fg', '--palette-text'],
+    ['--piview-accent', '--palette-accent'],
+    ['--piview-accent-2', '--palette-accent-2'],
+  ] as const;
+
+  it.each(lightThemes)(
+    '$id pins palette-derived roles without a base-token spread',
+    ({ id, palette }) => {
+      const theme = PI_VIEW_THEMES[id] as PiViewTheme;
+      expect(theme, `${id} is registered`).toBeDefined();
+      for (const [token, paletteToken] of paletteRoles) {
+        expect(theme.tokens[token], `${id} ${token}`).toBe(palette[paletteToken]);
+      }
+    }
+  );
 });
 
 /**

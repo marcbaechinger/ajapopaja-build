@@ -388,9 +388,10 @@ export function derivePiviewTheme(
 export const BASE_DARK_TOKENS: PiViewTokens = derivePiviewTheme(DARK_PALETTE, 'compact');
 
 /**
- * A light token base derived from the shared light palette. It is exported for
- * theme authors and print-like presets; all colour roles, including syntax and
- * search, come from {@link derivePiviewTheme} rather than a copied palette.
+ * The hand-tuned light token base for print-like presets such as `batch-paper`.
+ * It is exported for theme authors, but it is not the base of the derived
+ * default/Ember light themes: those derive directly from their own palettes via
+ * {@link derivePiviewTheme}.
  */
 export const BASE_LIGHT_TOKENS: PiViewTokens = derivePiviewTheme(LIGHT_PALETTE, 'compact');
 

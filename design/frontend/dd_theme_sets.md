@@ -238,9 +238,12 @@ Concrete changes:
    aliases so existing `PiViewOptions.theme` values keep working.
 
 Light mode: the default set supports both `light` and `dark` app modes (today's
-`data-theme`). The two PiView themes gain a light variant reusing
-`BASE_LIGHT_TOKENS` with the same sky/cyan accents, so a light app is matched by
-light logs. (See §10 open question 1 for the alternative: each set is single-mode.)
+`data-theme`). The two PiView themes gain a light variant derived directly from
+the set's light palette (with the same sky/cyan accents), so a light app is
+matched by light logs. `BASE_LIGHT_TOKENS` remains an exported token base for
+print-like presets such as `batch-paper`; it is not spread into the derived
+default/Ember light themes. (See §10 open question 1 for the alternative: each
+set is single-mode.)
 
 ## 7. The alternative set
 
