@@ -1218,7 +1218,7 @@ export class PiView {
       case 'bash': {
         const pre = document.createElement('pre');
         pre.className =
-          'whitespace-pre-wrap break-all bg-black/40 border-l-2 border-app-accent-2/40 pl-2';
+          'piview-bash whitespace-pre-wrap break-all bg-black/40 border-l-2 border-app-accent-2/40 pl-2';
         pre.textContent = block.text ?? '';
         el = pre;
         break;
@@ -1256,7 +1256,7 @@ export class PiView {
       }
       case 'notice': {
         el = document.createElement('div');
-        el.className = 'text-app-accent-2 whitespace-pre-wrap break-all';
+        el.className = 'piview-notice text-app-accent-2 whitespace-pre-wrap break-all';
         el.textContent = block.text ?? '';
         break;
       }
@@ -1271,10 +1271,10 @@ export class PiView {
         const wrapper = document.createElement('div');
         const isError = block.error;
         wrapper.className =
-          'piview-collapsible piview-toolverify border rounded p-2 ' +
+          'piview-collapsible piview-toolverify piview-verification ' +
           (isError
-            ? 'border-red-500/60 bg-red-950/30'
-            : 'border-green-500/60 bg-green-950/30');
+            ? 'piview-verification-error border-red-500/60 bg-red-950/30'
+            : 'piview-verification-ok border-green-500/60 bg-green-950/30');
         const { header, label } = this.buildCollapsibleHeader(!this.blocksCollapsed);
         label.className =
           'font-semibold whitespace-pre-wrap break-all ' +
@@ -1293,7 +1293,7 @@ export class PiView {
       case 'divider': {
         el = document.createElement('div');
         el.className =
-          'text-app-text/40 border-t border-app-border/40 pt-1 whitespace-pre-wrap break-all';
+          'piview-divider text-app-text/40 border-t border-app-border/40 pt-1 whitespace-pre-wrap break-all';
         el.textContent = block.text ?? '';
         break;
       }
@@ -1311,7 +1311,7 @@ export class PiView {
       }
       default: {
         el = document.createElement('div');
-        el.className = 'whitespace-pre-wrap break-all';
+        el.className = 'piview-block whitespace-pre-wrap break-all';
         el.textContent = block.text ?? '';
         break;
       }
@@ -1319,6 +1319,7 @@ export class PiView {
     // Shared per-block chrome: positioning context + copy button (on hover).
     el.classList.add('relative', 'group');
     el.setAttribute('data-block-id', block.id);
+    el.setAttribute('data-kind', block.kind);
     this.attachBlockActions(el, block);
     return el;
   }
