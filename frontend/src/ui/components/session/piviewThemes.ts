@@ -35,6 +35,13 @@
  * (batch-default parity) values for every token, so a theme may override only
  * the handful of roles it cares about.
  *
+ * Colour contract: every `--piview-syntax-*` and `--piview-search-*` role is
+ * derived from the palette primitives in {@link derivePiviewTheme}. There is no
+ * set-independent exception: the semantic `ok`/`error`/`warn` bases stay
+ * recognisable because they are blended with the set's own accent family. A new
+ * theme set therefore changes the code and search hues together with the chrome
+ * instead of layering a fixed hue family on top.
+ *
  * Builtins: `batch-default` is the dark, dense transcript with a matching
  * `batch-default-light`; `batch-paper` is a light, print/archival transcript;
  * `interactive-default` is the roomy conversation with a matching
@@ -211,10 +218,61 @@ function blend(first: string, firstPercentage: number, second: string, secondPer
 }
 
 /**
+ * Derive the ten syntax roles from the palette primitives. The semantic base
+ * (ok/error/warn/accent) keeps the role recognisable, while each blend also
+ * carries the set's accent family so switching sets changes the whole syntax
+ * palette rather than only the chrome around it.
+ */
+function deriveSyntaxTokens(palette: PalettePrimitives): PiViewTokens {
+  const text = palette['--palette-text'];
+  const muted = palette['--palette-muted'];
+  const accent = palette['--palette-accent'];
+  const accent2 = palette['--palette-accent-2'];
+  const ok = palette['--palette-ok'];
+  const error = palette['--palette-error'];
+  const warn = palette['--palette-warn'];
+
+  return {
+    '--piview-syntax-comment': blend(muted, 80, text, 20),
+    '--piview-syntax-keyword': blend(blend(error, 75, accent2, 25), 80, text, 20),
+    '--piview-syntax-string': blend(ok, 70, accent, 30),
+    '--piview-syntax-number': blend(accent, 55, accent2, 45),
+    '--piview-syntax-built-in': blend(warn, 70, accent2, 30),
+    '--piview-syntax-title': accent,
+    '--piview-syntax-tag': blend(ok, 60, accent2, 40),
+    '--piview-syntax-meta': blend(muted, 65, text, 35),
+    '--piview-syntax-addition': blend(ok, 80, accent, 20),
+    '--piview-syntax-deletion': blend(blend(error, 80, accent2, 20), 80, text, 20),
+  };
+}
+
+/**
+ * Derive the search-highlight roles from the palette. The accent and warning
+ * primitives supply the tint; the palette text colour is the matching ink for
+ * both highlight levels, so dark and light sets stay readable without a mode
+ * branch. The current-match outline uses the same text/accent blend.
+ */
+function deriveSearchTokens(palette: PalettePrimitives): PiViewTokens {
+  const text = palette['--palette-text'];
+  const accent = palette['--palette-accent'];
+  const warn = palette['--palette-warn'];
+
+  return {
+    '--piview-search-hit': mix(accent, 30),
+    '--piview-search-hit-fg': text,
+    '--piview-search-current': mix(blend(warn, 60, accent, 40), 50),
+    '--piview-search-current-fg': text,
+    '--piview-search-current-outline': blend(text, 80, accent, 20),
+  };
+}
+
+/**
  * Map the shared palette onto PiView's semantic roles. The optional density
  * preset (or token map) layers typography/spacing on top, and
  * `chatRefinements` adds the interactive conversation's card/motion tokens.
- * No hue is chosen here: every colour comes from the palette primitives.
+ * No hue is chosen here: every colour, including the syntax and search roles,
+ * comes from the palette primitives. The function contains no hue literals
+ * beyond the neutral `#000` used for shading and `transparent`.
  */
 export function derivePiviewTheme(
   palette: PalettePrimitives,
@@ -288,11 +346,6 @@ export function derivePiviewTheme(
     '--piview-accent-2': accent2,
     '--piview-accent-fg': bg,
     '--piview-selection': mix(accent, 30),
-    '--piview-search-hit': 'rgba(251, 191, 36, 0.35)',
-    '--piview-search-hit-fg': 'inherit',
-    '--piview-search-current': 'rgba(251, 191, 36, 0.9)',
-    '--piview-search-current-fg': '#000',
-    '--piview-search-current-outline': 'rgba(255, 255, 255, 0.7)',
     '--piview-focus-ring': accent,
     '--piview-danger': error,
     '--piview-danger-hover': blend(error, 80, '#000', 20),
@@ -305,7 +358,7 @@ export function derivePiviewTheme(
     '--piview-status-dot-idle': mix(text, 40),
     '--piview-status-dot-active': ok,
     '--piview-motion-pulse': 'pulse',
-    '--piview-shortcut-flash': 'rgba(255, 255, 255, 0.15)',
+    '--piview-shortcut-flash': mix(text, 15),
 
     '--piview-gap-block': '0.4em',
     '--piview-gap-li': '0.2em',
@@ -316,16 +369,8 @@ export function derivePiviewTheme(
     '--piview-max-width': '87ch',
     '--piview-pre-max-width': '130ch',
 
-    '--piview-syntax-comment': '#8b949e',
-    '--piview-syntax-keyword': '#ff7b72',
-    '--piview-syntax-string': '#a5d6ff',
-    '--piview-syntax-number': 'var(--color-sky-300)',
-    '--piview-syntax-built-in': '#ffa657',
-    '--piview-syntax-title': '#d2a8ff',
-    '--piview-syntax-tag': '#7ee787',
-    '--piview-syntax-meta': '#8b949e',
-    '--piview-syntax-addition': '#7ee787',
-    '--piview-syntax-deletion': '#ffa198',
+    ...deriveSyntaxTokens(palette),
+    ...deriveSearchTokens(palette),
 
     ...densityTokens,
     ...chatRefinements,
@@ -340,77 +385,11 @@ export function derivePiviewTheme(
 export const BASE_DARK_TOKENS: PiViewTokens = derivePiviewTheme(DARK_PALETTE, 'compact');
 
 /**
- * A light base palette for print/paper-like themes. It starts from the dark
- * palette so themes only need to override what differs; the values are chosen
- * to keep the same role structure as {@link BASE_DARK_TOKENS}.
+ * A light token base derived from the shared light palette. It is exported for
+ * theme authors and print-like presets; all colour roles, including syntax and
+ * search, come from {@link derivePiviewTheme} rather than a copied palette.
  */
-export const BASE_LIGHT_TOKENS: PiViewTokens = {
-  ...BASE_DARK_TOKENS,
-  '--piview-bg': '#faf9f5',
-  '--piview-bg-image': 'none',
-  '--piview-surface': '#f2efe8',
-  '--piview-surface-sticky': 'color-mix(in oklab, #faf9f5 95%, transparent)',
-  '--piview-surface-tool': 'color-mix(in oklab, #f2efe8 60%, transparent)',
-  '--piview-surface-bash': 'color-mix(in oklab, #faf9f5 60%, #d9d4c8 40%)',
-  '--piview-surface-user': 'color-mix(in oklab, #0284c7 8%, transparent)',
-  '--piview-surface-verification-ok': 'color-mix(in oklab, #bbf7d0 35%, transparent)',
-  '--piview-surface-verification-error': 'color-mix(in oklab, #fecaca 35%, transparent)',
-  '--piview-surface-formatted-active': 'color-mix(in oklab, #f2efe8 70%, transparent)',
-  '--piview-surface-pre': '#f2efe8',
-  '--piview-surface-code': 'color-mix(in oklab, #f2efe8 80%, transparent)',
-  '--piview-surface-hover': 'color-mix(in oklab, #e8e3d8 80%, transparent)',
-  '--piview-surface-icon': 'color-mix(in oklab, #f2efe8 70%, transparent)',
-
-  '--piview-fg': '#1f2937',
-  '--piview-fg-dim': 'color-mix(in oklab, #1f2937 55%, transparent)',
-  '--piview-fg-faint': 'color-mix(in oklab, #1f2937 40%, transparent)',
-  '--piview-fg-title': '#111827',
-  '--piview-fg-muted': '#4b5563',
-  '--piview-fg-tool': '#166534',
-  '--piview-fg-thinking': '#92400e',
-  '--piview-fg-notice': '#0e7490',
-  '--piview-fg-error': '#b91c1c',
-  '--piview-fg-ok': '#15803d',
-  '--piview-fg-user-label': '#0369a1',
-  '--piview-fg-status': '#15803d',
-  '--piview-fg-heading': '#0f172a',
-  '--piview-fg-link': '#0369a1',
-  '--piview-fg-strong': '#0f172a',
-  '--piview-fg-quote': '#374151',
-  '--piview-fg-code': '#0e7490',
-  '--piview-fg-pre': '#1f2937',
-  '--piview-fg-icon': '#15803d',
-  '--piview-fg-icon-format': '#0e7490',
-
-  '--piview-border': '#d8d2c4',
-  '--piview-border-subtle': 'color-mix(in oklab, #d8d2c4 60%, transparent)',
-  '--piview-border-tool': 'color-mix(in oklab, #d8d2c4 70%, transparent)',
-  '--piview-border-accent-user': 'color-mix(in oklab, #0284c7 50%, transparent)',
-  '--piview-border-accent-thinking': 'color-mix(in oklab, #1f2937 20%, transparent)',
-  '--piview-border-accent-bash': 'color-mix(in oklab, #0e7490 40%, transparent)',
-  '--piview-border-accent-quote': '#0284c7',
-  '--piview-border-verification-ok': 'color-mix(in oklab, #22c55e 55%, transparent)',
-  '--piview-border-verification-error': 'color-mix(in oklab, #ef4444 55%, transparent)',
-
-  '--piview-accent': '#0284c7',
-  '--piview-accent-2': '#0e7490',
-  '--piview-accent-fg': '#ffffff',
-  '--piview-selection': 'color-mix(in oklab, #0284c7 22%, transparent)',
-  '--piview-search-hit': 'rgba(251, 191, 36, 0.45)',
-  '--piview-search-hit-fg': '#111827',
-  '--piview-search-current': 'rgba(251, 191, 36, 0.95)',
-  '--piview-search-current-fg': '#111827',
-  '--piview-search-current-outline': 'rgba(17, 24, 39, 0.6)',
-  '--piview-focus-ring': '#0284c7',
-  '--piview-danger': '#dc2626',
-  '--piview-danger-hover': '#b91c1c',
-
-  '--piview-scrollbar-thumb': '#d8d2c4',
-  '--piview-scrollbar-track': 'transparent',
-  '--piview-status-dot-idle': 'color-mix(in oklab, #1f2937 35%, transparent)',
-  '--piview-status-dot-active': '#15803d',
-  '--piview-shortcut-flash': 'rgba(17, 24, 39, 0.12)',
-};
+export const BASE_LIGHT_TOKENS: PiViewTokens = derivePiviewTheme(LIGHT_PALETTE, 'compact');
 
 /**
  * A chat-oriented base. Kept separate from the dark transcript palette so an
@@ -518,28 +497,10 @@ function interactiveChatRefinements(palette: PalettePrimitives): PiViewTokens {
 }
 
 /**
- * A muted light-mode syntax palette that stays above AA on the code surface.
- * Shared by both light theme sets: syntax hues are semantic, not part of the
- * set's accent family.
- */
-const LIGHT_SYNTAX_OVERRIDES: PiViewTokens = {
-  '--piview-syntax-comment': '#57606a',
-  '--piview-syntax-keyword': '#b31d28',
-  '--piview-syntax-string': '#0a3069',
-  '--piview-syntax-number': '#0550ae',
-  '--piview-syntax-built-in': '#953800',
-  '--piview-syntax-title': '#6f42c1',
-  '--piview-syntax-tag': '#116329',
-  '--piview-syntax-meta': '#57606a',
-  '--piview-syntax-addition': '#116329',
-  '--piview-syntax-deletion': '#a40e26',
-};
-
-/**
- * Roles whose dark-mode derivation is not accessible enough on the default
- * light palette. The accents stay sky-600/cyan-600; the error text is darkened,
- * headings use the primary ink, and code uses the muted light syntax palette so
- * every role clears AA on its light surface.
+ * Roles whose dark-mode derivation is not accessible enough on the light
+ * palette. Syntax and search are deliberately absent: they are derived from the
+ * light palette like every other set-dependent role, so no fixed hue family is
+ * layered on top.
  */
 const LIGHT_DEFAULT_OVERRIDES: PiViewTokens = {
   '--piview-surface-bash':
@@ -548,9 +509,6 @@ const LIGHT_DEFAULT_OVERRIDES: PiViewTokens = {
   '--piview-fg-thinking': 'var(--color-amber-800)',
   '--piview-fg-error': 'var(--color-red-800)',
   '--piview-fg-heading': 'var(--color-slate-900)',
-  '--piview-search-current-outline': 'rgba(15, 23, 42, 0.6)',
-  '--piview-shortcut-flash': 'rgba(15, 23, 42, 0.12)',
-  ...LIGHT_SYNTAX_OVERRIDES,
 };
 
 /**
@@ -565,9 +523,6 @@ const LIGHT_EMBER_OVERRIDES: PiViewTokens = {
   '--piview-fg-user-label': 'var(--color-amber-800)',
   '--piview-fg-error': 'var(--color-red-800)',
   '--piview-fg-heading': 'var(--color-stone-900)',
-  '--piview-search-current-outline': 'rgba(28, 25, 23, 0.6)',
-  '--piview-shortcut-flash': 'rgba(28, 25, 23, 0.12)',
-  ...LIGHT_SYNTAX_OVERRIDES,
 };
 
 /**
@@ -582,7 +537,6 @@ function deriveLightTheme(
   overrides: PiViewTokens
 ): PiViewTokens {
   return {
-    ...BASE_LIGHT_TOKENS,
     ...derivePiviewTheme(palette, density, chatRefinements),
     ...overrides,
   };
@@ -769,11 +723,22 @@ const BATCH_PAPER_THEME = defineTheme({
   description:
     'Light, print-like transcript with paper surfaces, ink text and a muted, readable syntax palette.',
   variants: ['batch'],
-  tokens: {
-    ...BASE_LIGHT_TOKENS,
-
+  tokens: derivePiviewTheme(LIGHT_PALETTE, 'compact', {
     '--piview-bg': '#faf9f5',
     '--piview-bg-image': 'none',
+    '--piview-surface': '#f2efe8',
+    '--piview-surface-sticky': 'color-mix(in oklab, #faf9f5 95%, transparent)',
+    '--piview-surface-tool': 'color-mix(in oklab, #f2efe8 60%, transparent)',
+    '--piview-surface-bash': 'color-mix(in oklab, #faf9f5 60%, #d9d4c8 40%)',
+    '--piview-surface-formatted-active': 'color-mix(in oklab, #f2efe8 70%, transparent)',
+    '--piview-surface-pre': '#f2efe8',
+    '--piview-surface-code': 'color-mix(in oklab, #f2efe8 80%, transparent)',
+    '--piview-surface-hover': 'color-mix(in oklab, #e8e3d8 80%, transparent)',
+    '--piview-surface-icon': 'color-mix(in oklab, #f2efe8 70%, transparent)',
+    '--piview-border': '#d8d2c4',
+    '--piview-border-subtle': 'color-mix(in oklab, #d8d2c4 60%, transparent)',
+    '--piview-border-tool': 'color-mix(in oklab, #d8d2c4 70%, transparent)',
+    '--piview-scrollbar-thumb': '#d8d2c4',
     '--piview-font-prose': '"Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif',
     '--piview-font-size-prose': '13px',
     '--piview-leading-prose': '1.5',
@@ -781,21 +746,13 @@ const BATCH_PAPER_THEME = defineTheme({
     '--piview-radius-chrome': '0.125rem',
     '--piview-shadow-block': 'none',
     '--piview-motion-pulse': 'none',
-    '--piview-fg-status': '#166534',
+    '--piview-fg-ok': 'var(--color-green-800)',
+    '--piview-fg-thinking': 'var(--color-amber-800)',
+    '--piview-fg-error': 'var(--color-red-800)',
+    '--piview-fg-heading': 'var(--color-slate-900)',
+    '--piview-fg-status': 'var(--color-green-800)',
     '--piview-accent': 'var(--color-sky-700)',
-
-    // A muted light-mode syntax palette that stays above AA on the code surface.
-    '--piview-syntax-comment': '#57606a',
-    '--piview-syntax-keyword': '#b31d28',
-    '--piview-syntax-string': '#0a3069',
-    '--piview-syntax-number': '#0550ae',
-    '--piview-syntax-built-in': '#953800',
-    '--piview-syntax-title': '#6f42c1',
-    '--piview-syntax-tag': '#116329',
-    '--piview-syntax-meta': '#57606a',
-    '--piview-syntax-addition': '#116329',
-    '--piview-syntax-deletion': '#a40e26',
-  },
+  }),
   css: `
 .piview-formatted {
   font-family: var(--piview-font-prose);

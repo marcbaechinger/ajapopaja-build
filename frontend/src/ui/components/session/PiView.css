@@ -93,12 +93,17 @@
   --piview-danger-hover:
     color-mix(in oklab, var(--piview-fg-error) 80%, #000 20%);
 
-  /* Search highlights. */
-  --piview-search-hit: rgba(251, 191, 36, 0.35);
+  /* Search highlights, derived from the accent/warning roles. */
+  --piview-search-hit:
+    color-mix(in oklab, var(--piview-accent) 30%, transparent);
   --piview-search-hit-fg: var(--piview-fg);
-  --piview-search-current: rgba(251, 191, 36, 0.9);
-  --piview-search-current-fg: #000;
-  --piview-search-current-outline: rgba(255, 255, 255, 0.7);
+  --piview-search-current:
+    color-mix(in oklab,
+      color-mix(in oklab, var(--piview-fg-thinking) 60%, var(--piview-accent) 40%) 50%,
+      transparent);
+  --piview-search-current-fg: var(--piview-fg);
+  --piview-search-current-outline:
+    color-mix(in oklab, var(--piview-fg) 80%, var(--piview-accent) 20%);
 
   /* Typography, density and chrome. */
   --piview-font-log: var(--font-mono);
@@ -117,7 +122,7 @@
   --piview-status-dot-idle: color-mix(in oklab, var(--piview-fg) 40%, transparent);
   --piview-status-dot-active: var(--piview-fg-ok);
   --piview-motion-pulse: pulse;
-  --piview-shortcut-flash: rgba(255, 255, 255, 0.15);
+  --piview-shortcut-flash: color-mix(in oklab, var(--piview-fg) 15%, transparent);
   --piview-control-active: 0;
 
   /* Markdown rhythm and measure (themes may override these on the log root). */
@@ -130,17 +135,30 @@
   --piview-max-width: 87ch;
   --piview-pre-max-width: 130ch;
 
-  /* Fixed dark syntax palette. */
-  --piview-syntax-comment: #8b949e;
-  --piview-syntax-keyword: #ff7b72;
-  --piview-syntax-string: #a5d6ff;
-  --piview-syntax-number: #79c0ff;
-  --piview-syntax-built-in: #ffa657;
-  --piview-syntax-title: #d2a8ff;
-  --piview-syntax-tag: #7ee787;
-  --piview-syntax-meta: #8b949e;
-  --piview-syntax-addition: #7ee787;
-  --piview-syntax-deletion: #ffa198;
+  /* Syntax defaults, derived from the same semantic roles as the registry. */
+  --piview-syntax-comment:
+    color-mix(in oklab, var(--piview-fg-muted) 80%, var(--piview-fg) 20%);
+  --piview-syntax-keyword:
+    color-mix(in oklab,
+      color-mix(in oklab, var(--piview-fg-error) 75%, var(--piview-accent-2) 25%) 80%,
+      var(--piview-fg) 20%);
+  --piview-syntax-string:
+    color-mix(in oklab, var(--piview-fg-ok) 70%, var(--piview-accent) 30%);
+  --piview-syntax-number:
+    color-mix(in oklab, var(--piview-accent) 55%, var(--piview-accent-2) 45%);
+  --piview-syntax-built-in:
+    color-mix(in oklab, var(--piview-fg-thinking) 70%, var(--piview-accent-2) 30%);
+  --piview-syntax-title: var(--piview-accent);
+  --piview-syntax-tag:
+    color-mix(in oklab, var(--piview-fg-ok) 60%, var(--piview-accent-2) 40%);
+  --piview-syntax-meta:
+    color-mix(in oklab, var(--piview-fg-muted) 65%, var(--piview-fg) 35%);
+  --piview-syntax-addition:
+    color-mix(in oklab, var(--piview-fg-ok) 80%, var(--piview-accent) 20%);
+  --piview-syntax-deletion:
+    color-mix(in oklab,
+      color-mix(in oklab, var(--piview-fg-error) 80%, var(--piview-accent-2) 20%) 80%,
+      var(--piview-fg) 20%);
 
   background-color: var(--piview-bg);
   background-image: var(--piview-bg-image);

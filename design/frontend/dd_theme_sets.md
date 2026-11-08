@@ -167,6 +167,34 @@ The semantic `ok`/`error`/`warn`/`info` primitives are what let "green" survive
 only as a *status* color in the harmonized batch theme rather than as the
 default foreground.
 
+### 5.1.1 Syntax and search derivation
+
+The ten PiView syntax roles and the five search-highlight roles are **derived
+from the palette primitives**, not from a fixed syntax family. The derivation
+keeps each role recognisable and still makes it set-dependent by blending the
+semantic base with the set's accent family:
+
+| Role | Derivation (via the shared `blend()` helper) |
+|---|---|
+| `syntax-comment` / `syntax-meta` | muted + text |
+| `syntax-keyword` / `syntax-deletion` | error + accent-2 + text |
+| `syntax-string` / `syntax-addition` | ok + accent |
+| `syntax-number` | accent + accent-2 |
+| `syntax-built-in` | warn + accent-2 |
+| `syntax-title` | accent |
+| `syntax-tag` | ok + accent-2 |
+| `search-hit` | accent at alpha |
+| `search-current` | warn + accent at alpha |
+| `search-hit-fg` / `search-current-fg` | palette text |
+| `search-current-outline` | text + accent |
+
+**Exceptions:** none. No syntax or search role is deliberately semantic-only.
+The `ok`/`error`/`warn` palette primitives remain semantic *inputs*, but each
+syntax role also mixes in the set's accent so every registered set changes the
+whole code and search palette, not just its chrome. `batch-paper` is built with
+the same derivation helper as the set themes; only its paper surfaces and
+print typography are preset refinements.
+
 ### 5.2 Density roles
 
 Two density presets, owned by the surface role and shared by all sets:

@@ -16,11 +16,14 @@
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
+  AMBER_DARK_PALETTE,
   BASE_DARK_TOKENS,
+  DARK_PALETTE,
   DEFAULT_THEME_FOR_VARIANT,
   PI_VIEW_THEMES,
   applyTheme,
   defineTheme,
+  derivePiviewTheme,
   resolveTheme,
   validateTheme,
   type PiViewTheme,
@@ -29,6 +32,7 @@ import {
 import { PiView, type PiSessionService } from './PiView.ts';
 import type { RenderBlock } from '../../../core/CoderBotService.ts';
 import piViewCss from './PiView.css?raw';
+import piviewThemesSource from './piviewThemes.ts?raw';
 
 function serviceWithHistory(history: RenderBlock[] = []): PiSessionService {
   return {
@@ -282,6 +286,49 @@ describe('PiView theme registry', () => {
     view.setTheme('unknown-for-test');
     expect(warn).toHaveBeenCalledTimes(1);
     view.destroy();
+  });
+});
+
+describe('palette-derived syntax and search roles', () => {
+  const dark = derivePiviewTheme(DARK_PALETTE, 'compact');
+  const ember = derivePiviewTheme(AMBER_DARK_PALETTE, 'compact');
+  const darkValues = dark as Record<string, string>;
+  const emberValues = ember as Record<string, string>;
+  const derivedNames = Object.keys(dark).filter((name) =>
+    /^--piview-(?:syntax|search)-/.test(name)
+  );
+
+  it('derives all ten syntax roles plus the five search roles', () => {
+    expect(
+      derivedNames.filter((name) => name.startsWith('--piview-syntax-'))
+    ).toHaveLength(10);
+    expect(
+      derivedNames.filter((name) => name.startsWith('--piview-search-'))
+    ).toHaveLength(5);
+  });
+
+  it('changes every syntax and search token when the palette changes', () => {
+    for (const name of derivedNames) {
+      expect(emberValues[name], `${name} did not follow the palette`).not.toBe(
+        darkValues[name]
+      );
+    }
+  });
+
+  it('contains no literal hue in derivePiviewTheme beyond neutral #000', () => {
+    const start = piviewThemesSource.indexOf('export function derivePiviewTheme');
+    const end = piviewThemesSource.indexOf('export const BASE_DARK_TOKENS', start);
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+
+    const body = piviewThemesSource.slice(start, end);
+    const literals = Array.from(
+      body.matchAll(/#[0-9a-fA-F]{3,8}|rgba?\([^)]*\)/g),
+      (match) => match[0].toLowerCase()
+    );
+    for (const literal of literals) {
+      expect(['#000', 'transparent'], `${literal} is a hard-coded hue`).toContain(literal);
+    }
   });
 });
 

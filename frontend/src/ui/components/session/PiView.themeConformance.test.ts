@@ -198,6 +198,19 @@ interface ContrastPair {
  * not theme-specific token values; every registered theme is checked against
  * every pair automatically.
  */
+const SYNTAX_ROLES = [
+  'comment',
+  'keyword',
+  'string',
+  'number',
+  'built-in',
+  'title',
+  'tag',
+  'meta',
+  'addition',
+  'deletion',
+] as const;
+
 const CONTRAST_PAIRS: ContrastPair[] = [
   { name: 'log body', fg: '--piview-fg', bg: '--piview-bg' },
   {
@@ -246,6 +259,37 @@ const CONTRAST_PAIRS: ContrastPair[] = [
     base: '--piview-bg',
   },
   { name: 'accent button', fg: '--piview-accent-fg', bg: '--piview-accent' },
+  ...SYNTAX_ROLES.flatMap((role) => [
+    {
+      name: `syntax ${role} on pre`,
+      fg: `--piview-syntax-${role}`,
+      bg: '--piview-surface-pre',
+    },
+    {
+      name: `syntax ${role} on code`,
+      fg: `--piview-syntax-${role}`,
+      bg: '--piview-surface-code',
+      base: '--piview-bg',
+    },
+  ]),
+  {
+    name: 'search hit',
+    fg: '--piview-search-hit-fg',
+    bg: '--piview-search-hit',
+    base: '--piview-bg',
+  },
+  {
+    name: 'search current',
+    fg: '--piview-search-current-fg',
+    bg: '--piview-search-current',
+    base: '--piview-bg',
+  },
+  {
+    name: 'search current outline',
+    fg: '--piview-search-current-outline',
+    bg: '--piview-search-current',
+    base: '--piview-bg',
+  },
 ];
 
 const AA_CONTRAST_RATIO = 4.5;
