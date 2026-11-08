@@ -22,8 +22,6 @@ application.
 
 from core.services import repo_bootstrap
 from core.services.artifact import (
-    ArtifactService,
-    BuildArtifactService,
     compute_sha256,
     get_artifact_info,
 )
@@ -58,8 +56,6 @@ __all__ = [
     "FileBrowserService",
     "PathEscapeError",
     "UnreadablePathError",
-    "ArtifactService",
-    "BuildArtifactService",
     "compute_sha256",
     "get_artifact_info",
     "NotificationManager",

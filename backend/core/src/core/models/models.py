@@ -214,8 +214,8 @@ class BuildArtifactInfo(BaseModel):
         The artifact service is intentionally synchronous (it only stats,
         hashes and reads git metadata), but consumers may reasonably use it
         from an async context. Returning ``self`` makes both
-        ``ArtifactService.get_info(pipeline)`` and
-        ``await ArtifactService.get_info(pipeline)`` work.
+        ``get_artifact_info(pipeline)`` and
+        ``await get_artifact_info(pipeline)`` work.
         """
         if False:  # pragma: no cover - makes this method a generator
             yield None

@@ -205,59 +205,8 @@ def get_artifact_info(
     return BuildArtifactInfo(**info)
 
 
-class ArtifactService:
-    """Reusable, read-only service for pipeline build artifact metadata."""
-
-    get = staticmethod(get_artifact_info)
-    get_info = staticmethod(get_artifact_info)
-    get_artifact = staticmethod(get_artifact_info)
-    get_artifact_info = staticmethod(get_artifact_info)
-    get_build_artifact = staticmethod(get_artifact_info)
-    get_build_artifact_info = staticmethod(get_artifact_info)
-    info = staticmethod(get_artifact_info)
-    build_info = staticmethod(get_artifact_info)
-    describe = staticmethod(get_artifact_info)
-
-
-# Descriptive class alias for callers that prefer the full concept name.
-BuildArtifactService = ArtifactService
-
-
-# Convenient module-level aliases. ``get_build_artifact`` intentionally mirrors
-# the future MCP tool name; it returns metadata only, never file bytes.
-get_info = get_artifact_info
-get_build_artifact = get_artifact_info
-get_build_artifact_info = get_artifact_info
-build_artifact_info = get_artifact_info
-compute_artifact_info = get_artifact_info
-get_artifact = get_artifact_info
-get_artifact_metadata = get_artifact_info
-artifact_info = get_artifact_info
-
-# Backwards/utility aliases for callers that only need the content hash.
-sha256_file = compute_sha256
-_compute_sha256 = compute_sha256
-_sha256 = compute_sha256
-_hash_file = compute_sha256
-
-# Version-helper aliases kept for callers that test provenance directly.
-_get_version = _workspace_version
-_head_version = _workspace_version
-
-
 __all__ = [
-    "ArtifactService",
-    "BuildArtifactService",
     "HASH_CHUNK_SIZE",
-    "artifact_info",
-    "build_artifact_info",
-    "compute_artifact_info",
     "compute_sha256",
-    "get_artifact",
     "get_artifact_info",
-    "get_artifact_metadata",
-    "get_build_artifact",
-    "get_build_artifact_info",
-    "get_info",
-    "sha256_file",
 ]
