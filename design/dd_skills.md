@@ -75,7 +75,7 @@ The frontmatter (`name`, `description`) is preserved unchanged so skill discover
 
 ### 5.1. Bundle vs. Reference the Script
 **Challenge:** Keep the skill portable without duplicating maintenance.
-**Decision:** Bundle a copy of `mcp_client.py` in the skill directory. This is the standard pattern for self-contained skills (see the Agent Skills standard and Pi's skill docs, which recommend relative paths and bundled helper scripts). The script is small, stable, and has a single external dependency (`httpx`). Keeping the canonical copy in `backend/mcp/src/scripts/` is acceptable; the skill copy is the portable distribution.
+**Decision:** Bundle a copy of `mcp_client.py` in the skill directory. This is the standard pattern for self-contained skills (see the Agent Skills standard and Pi's skill docs, which recommend relative paths and bundled helper scripts). The script is small, stable, and has a single external dependency (`httpx`). The copy at `.pi/skills/ajapopaja/mcp_client.py` is now the single source of truth; the legacy `backend/mcp/src/scripts/mcp_client.py` duplicate has been removed.
 
 ### 5.2. Relative Paths
 **Challenge:** Ensure commands work regardless of where the skill is installed.

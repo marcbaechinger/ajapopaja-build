@@ -65,10 +65,12 @@ python3 ./mcp_client.py --url http://localhost:8000 get-task <pipeline_id>
 
 ### 3.3. Implementation
 
-The token is threaded from the CLI into `MCPHttpClient` and then into `RpcHelper`
-(`backend/mcp/src/scripts/mcp_rpc.py`). `RpcHelper` adds the `Authorization` header to
-every request it sends, so all RPC calls (including `initialize`, `tools/list`, and
-`tools/call`) are authenticated consistently.
+The token is threaded from the CLI into `MCPHttpClient`, whose `_send_rpc` method
+adds the `Authorization` header to every request it sends. All RPC calls (including
+`initialize`, `tools/list`, and `tools/call`) are therefore authenticated
+consistently. The canonical CLI now lives only at
+`.pi/skills/ajapopaja/mcp_client.py`; the earlier backend duplicate and its
+`mcp_rpc.py` helper have been removed.
 
 ## 4. Verification Plan
 
