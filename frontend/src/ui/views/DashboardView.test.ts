@@ -119,6 +119,8 @@ describe('DashboardView', () => {
     expect(container.innerHTML).not.toContain('md:grid-cols-2');
     // The inline creation form is gone.
     expect(container.querySelector('form[data-action-submit="create_pipeline"]')).toBeNull();
+    // The header omits the search button to keep the scarce horizontal space free.
+    expect(container.querySelector('[data-action-click="open_search"]')).toBeNull();
   });
 
   it('renders the theme-set picker with every set and the current one marked', () => {
