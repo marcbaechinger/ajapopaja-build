@@ -95,6 +95,14 @@ def is_auth_cookie_secure() -> bool:
 RAW_FILE_SCOPE = "file:raw"
 RAW_FILE_TOKEN_TTL_SECONDS = 60
 
+# Scope and lifetime of the short-lived tokens that authorise a single build
+# artifact download. Artifact tokens are pipeline- and path-bound and, like raw
+# tokens, must never be accepted as general access credentials.
+ARTIFACT_SCOPE = "artifact:download"
+ARTIFACT_TOKEN_TTL_SECONDS = int(
+    os.getenv("ARTIFACT_TOKEN_TTL_SECONDS", str(RAW_FILE_TOKEN_TTL_SECONDS))
+)
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
 
@@ -104,6 +112,15 @@ class RawFileToken(BaseModel):
     username: str
     pipeline_id: str
     path: str
+
+
+class ArtifactToken(BaseModel):
+    """Decoded claims of a build-artifact download token."""
+
+    pipeline_id: str
+    path: str
+    jti: str
+    exp: Optional[int] = None
 
 
 def verify_password(plain_password: str, hashed_password: str):
@@ -193,6 +210,60 @@ def decode_raw_file_token(token: Optional[str]) -> RawFileToken:
     return RawFileToken(username=username, pipeline_id=pipeline_id, path=path)
 
 
+def create_artifact_token(pipeline_id: str, path: str) -> str:
+    """Mint a short-lived, pipeline- and path-bound artifact download token.
+
+    The token carries the scope ``artifact:download`` together with the
+    pipeline id and repository-relative artifact path. It is only accepted by
+    :func:`decode_artifact_token`; the central :func:`decode_token` guard
+    rejects it as a general access credential.
+    """
+    expire = datetime.now(UTC) + timedelta(seconds=ARTIFACT_TOKEN_TTL_SECONDS)
+    to_encode = {
+        "scope": ARTIFACT_SCOPE,
+        "pipeline_id": pipeline_id,
+        "path": path,
+        "jti": str(uuid.uuid4()),
+        "exp": expire,
+    }
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def decode_artifact_token(token: Optional[str]) -> ArtifactToken:
+    """Validate an artifact download token and return its claims.
+
+    Raises ``HTTPException(401)`` for anything that is not a valid, unexpired
+    token carrying the artifact download scope and the required bindings.
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or expired artifact token",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    if not token:
+        raise credentials_exception
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        raise credentials_exception
+
+    if payload.get("scope") != ARTIFACT_SCOPE:
+        raise credentials_exception
+
+    pipeline_id = payload.get("pipeline_id")
+    path = payload.get("path")
+    jti = payload.get("jti")
+    if not pipeline_id or not path or not jti:
+        raise credentials_exception
+
+    return ArtifactToken(
+        pipeline_id=pipeline_id,
+        path=path,
+        jti=jti,
+        exp=payload.get("exp"),
+    )
+
+
 def decode_token(token: str) -> dict:
     """Decode and validate an application JWT.
 
@@ -204,6 +275,8 @@ def decode_token(token: str) -> dict:
     payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     if payload.get("scope") == RAW_FILE_SCOPE:
         raise JWTError("raw file token cannot be used as an access credential")
+    if payload.get("scope") == ARTIFACT_SCOPE:
+        raise JWTError("artifact token cannot be used as an access credential")
     return payload
 
 
