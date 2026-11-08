@@ -16,6 +16,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  DENSITY_COMPACT,
+  DENSITY_ROOMY,
   DEFAULT_THEME_SET,
   THEME_SETS,
   THEME_SET_STORAGE_KEY,
@@ -118,6 +120,80 @@ describe('validateThemeSet', () => {
     const issues = validateThemeSet(broken);
     expect(issues.some((issue) => issue.includes('palette.light'))).toBe(true);
     expect(issues.some((issue) => issue.includes('appTokens.light'))).toBe(true);
+  });
+});
+
+describe('theme set registry', () => {
+  const MODES = ['dark', 'light'] as const;
+
+  it('registers the default set and the alternative Ember set', () => {
+    expect(Object.keys(THEME_SETS)).toEqual(['default', 'ember']);
+    for (const set of Object.values(THEME_SETS)) {
+      expect(validateThemeSet(set)).toEqual([]);
+      expect(set.mode).toBe('both');
+      for (const mode of MODES) {
+        expect(set.palette[mode]).toBeDefined();
+        expect(set.appTokens[mode]).toEqual(deriveAppTokens(set.palette[mode]!));
+        expect(set.batchTheme[mode]).toBeDefined();
+        expect(set.interactiveTheme[mode]).toBeDefined();
+      }
+    }
+  });
+
+  it('reuses the compact/roomy density roles in both sets', () => {
+    for (const set of Object.values(THEME_SETS)) {
+      for (const mode of MODES) {
+        const batch = set.batchTheme[mode]!;
+        const interactive = set.interactiveTheme[mode]!;
+        for (const [name, value] of Object.entries(DENSITY_COMPACT)) {
+          expect(batch.tokens[name as keyof typeof batch.tokens]).toBe(value);
+        }
+        for (const [name, value] of Object.entries(DENSITY_ROOMY)) {
+          expect(interactive.tokens[name as keyof typeof interactive.tokens]).toBe(value);
+        }
+      }
+    }
+  });
+
+  it('uses the warm amber/rose palette only for the alternative set', () => {
+    const defaultSet = THEME_SETS[DEFAULT_THEME_SET];
+    const ember = THEME_SETS.ember;
+
+    expect(defaultSet.palette.dark?.['--palette-accent']).toBe('var(--color-sky-400)');
+    expect(ember.palette.dark?.['--palette-accent']).toBe('var(--color-amber-400)');
+    expect(ember.palette.dark?.['--palette-accent-2']).toBe('var(--color-rose-400)');
+    expect(ember.palette.light?.['--palette-accent']).toBe('var(--color-amber-600)');
+    expect(ember.palette.light?.['--palette-accent-2']).toBe('var(--color-rose-600)');
+
+    // Density tokens stay identical; the palette roles are what differ.
+    expect(ember.batchTheme.dark?.tokens['--piview-bg']).not.toBe(
+      defaultSet.batchTheme.dark?.tokens['--piview-bg']
+    );
+    expect(ember.batchTheme.dark?.tokens['--piview-font-size']).toBe(
+      defaultSet.batchTheme.dark?.tokens['--piview-font-size']
+    );
+  });
+
+  it('selects the alternative set through the manager and persists it', () => {
+    localStorage.clear();
+    document.documentElement.removeAttribute('style');
+
+    const manager = new ThemeManager();
+    manager.setSet('ember');
+
+    expect(manager.getActiveSetId()).toBe('ember');
+    expect(manager.themeForVariant('batch')).toBe(THEME_SETS.ember.batchTheme.dark);
+    expect(manager.themeForVariant('interactive')).toBe(
+      THEME_SETS.ember.interactiveTheme.dark
+    );
+    expect(document.documentElement.getAttribute('data-theme-set')).toBe('ember');
+    expect(document.documentElement.style.getPropertyValue('--app-accent-1')).toBe(
+      'var(--color-amber-400)'
+    );
+    expect(JSON.parse(localStorage.getItem(THEME_SET_STORAGE_KEY)!)).toEqual({
+      setId: 'ember',
+      mode: 'dark',
+    });
   });
 });
 

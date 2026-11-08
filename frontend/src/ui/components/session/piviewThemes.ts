@@ -39,8 +39,10 @@
  * `batch-default-light`; `batch-paper` is a light, print/archival transcript;
  * `interactive-default` is the roomy conversation with a matching
  * `interactive-default-light`; and `interactive-focus` is a low-chrome,
- * high-contrast reading mode for long conversations. The two presets are
- * code-selectable only (no picker or persistence). The deprecated ids
+ * high-contrast reading mode for long conversations. The alternative "Ember"
+ * theme set adds `batch-ember`/`interactive-ember` and their light variants on
+ * the warm amber/rose palette, reusing the same density roles. The two presets
+ * are code-selectable only (no picker or persistence). The deprecated ids
  * `batch-terminal` and `interactive-chat` remain registered as aliases of the
  * two dark defaults.
  */
@@ -126,6 +128,46 @@ export const LIGHT_PALETTE: PalettePrimitives = {
   '--palette-warn': 'var(--color-amber-600)',
   '--palette-info': 'var(--color-cyan-600)',
 };
+
+/**
+ * The alternative "Ember" set's dark palette: warm stone neutrals with amber
+ * and rose accents. It is deliberately a different hue family from the
+ * default, while keeping the same semantic roles (green/red stay status).
+ */
+export const AMBER_DARK_PALETTE: PalettePrimitives = {
+  '--palette-bg': 'var(--color-stone-950)',
+  '--palette-surface': 'var(--color-stone-900)',
+  '--palette-elevated': 'var(--color-stone-800)',
+  '--palette-text': 'var(--color-stone-100)',
+  '--palette-muted': 'var(--color-stone-400)',
+  '--palette-border': 'var(--color-stone-800)',
+  '--palette-accent': 'var(--color-amber-400)',
+  '--palette-accent-2': 'var(--color-rose-400)',
+  '--palette-ok': 'var(--color-green-400)',
+  '--palette-error': 'var(--color-red-400)',
+  '--palette-warn': 'var(--color-amber-400)',
+  '--palette-info': 'var(--color-rose-400)',
+};
+
+/** The alternative "Ember" set's light palette. */
+export const AMBER_LIGHT_PALETTE: PalettePrimitives = {
+  '--palette-bg': 'var(--color-stone-50)',
+  '--palette-surface': 'var(--color-white)',
+  '--palette-elevated': 'var(--color-white)',
+  '--palette-text': 'var(--color-stone-900)',
+  '--palette-muted': 'var(--color-stone-500)',
+  '--palette-border': 'var(--color-stone-200)',
+  '--palette-accent': 'var(--color-amber-600)',
+  '--palette-accent-2': 'var(--color-rose-600)',
+  '--palette-ok': 'var(--color-green-600)',
+  '--palette-error': 'var(--color-red-600)',
+  '--palette-warn': 'var(--color-amber-600)',
+  '--palette-info': 'var(--color-rose-600)',
+};
+
+/** Named aliases for the alternative set, matching its "Ember" label. */
+export const EMBER_DARK_PALETTE = AMBER_DARK_PALETTE;
+export const EMBER_LIGHT_PALETTE = AMBER_LIGHT_PALETTE;
 
 /** The two surface-role density presets. Palette and density are orthogonal. */
 export type PiViewDensity = 'compact' | 'roomy';
@@ -473,19 +515,11 @@ function interactiveChatRefinements(palette: PalettePrimitives): PiViewTokens {
 }
 
 /**
- * Roles whose dark-mode derivation is not accessible enough on the light
- * palette. The accents stay sky-600/cyan-600; the error text is darkened,
- * headings use the primary ink, and code uses the muted light syntax palette so
- * every role clears AA on its light surface.
+ * A muted light-mode syntax palette that stays above AA on the code surface.
+ * Shared by both light theme sets: syntax hues are semantic, not part of the
+ * set's accent family.
  */
-const LIGHT_DEFAULT_OVERRIDES: PiViewTokens = {
-  '--piview-surface-bash':
-    'color-mix(in oklab, var(--color-slate-100) 70%, var(--color-slate-200) 30%)',
-  '--piview-fg-error': 'var(--color-red-800)',
-  '--piview-fg-heading': 'var(--color-slate-900)',
-  '--piview-search-current-outline': 'rgba(15, 23, 42, 0.6)',
-  '--piview-shortcut-flash': 'rgba(15, 23, 42, 0.12)',
-
+const LIGHT_SYNTAX_OVERRIDES: PiViewTokens = {
   '--piview-syntax-comment': '#57606a',
   '--piview-syntax-keyword': '#b31d28',
   '--piview-syntax-string': '#0a3069',
@@ -498,16 +532,73 @@ const LIGHT_DEFAULT_OVERRIDES: PiViewTokens = {
   '--piview-syntax-deletion': '#a40e26',
 };
 
-/** Derive the harmonized light defaults without the dark-only role assumptions. */
+/**
+ * Roles whose dark-mode derivation is not accessible enough on the default
+ * light palette. The accents stay sky-600/cyan-600; the error text is darkened,
+ * headings use the primary ink, and code uses the muted light syntax palette so
+ * every role clears AA on its light surface.
+ */
+const LIGHT_DEFAULT_OVERRIDES: PiViewTokens = {
+  '--piview-surface-bash':
+    'color-mix(in oklab, var(--color-slate-100) 70%, var(--color-slate-200) 30%)',
+  '--piview-fg-error': 'var(--color-red-800)',
+  '--piview-fg-heading': 'var(--color-slate-900)',
+  '--piview-search-current-outline': 'rgba(15, 23, 42, 0.6)',
+  '--piview-shortcut-flash': 'rgba(15, 23, 42, 0.12)',
+  ...LIGHT_SYNTAX_OVERRIDES,
+};
+
+/**
+ * The same accessibility corrections as {@link LIGHT_DEFAULT_OVERRIDES}, on the
+ * alternative set's stone/amber family.
+ */
+const LIGHT_EMBER_OVERRIDES: PiViewTokens = {
+  '--piview-surface-bash':
+    'color-mix(in oklab, var(--color-stone-100) 70%, var(--color-stone-200) 30%)',
+  '--piview-fg-error': 'var(--color-red-800)',
+  '--piview-fg-heading': 'var(--color-stone-900)',
+  '--piview-search-current-outline': 'rgba(28, 25, 23, 0.6)',
+  '--piview-shortcut-flash': 'rgba(28, 25, 23, 0.12)',
+  ...LIGHT_SYNTAX_OVERRIDES,
+};
+
+/**
+ * Derive a light PiView theme without the dark-only role assumptions. The
+ * palette supplies every hue; the overrides only correct roles whose derived
+ * value would fall below AA in light mode.
+ */
+function deriveLightTheme(
+  palette: PalettePrimitives,
+  density: PiViewDensity,
+  chatRefinements: PiViewTokens = {},
+  overrides: PiViewTokens
+): PiViewTokens {
+  return {
+    ...BASE_LIGHT_TOKENS,
+    ...derivePiviewTheme(palette, density, chatRefinements),
+    ...overrides,
+  };
+}
+
+/** Derive the harmonized default light theme. */
 function deriveLightDefaultTheme(
   density: PiViewDensity,
   chatRefinements: PiViewTokens = {}
 ): PiViewTokens {
-  return {
-    ...BASE_LIGHT_TOKENS,
-    ...derivePiviewTheme(LIGHT_PALETTE, density, chatRefinements),
-    ...LIGHT_DEFAULT_OVERRIDES,
-  };
+  return deriveLightTheme(LIGHT_PALETTE, density, chatRefinements, LIGHT_DEFAULT_OVERRIDES);
+}
+
+/** Derive the alternative "Ember" light theme. */
+function deriveLightEmberTheme(
+  density: PiViewDensity,
+  chatRefinements: PiViewTokens = {}
+): PiViewTokens {
+  return deriveLightTheme(
+    AMBER_LIGHT_PALETTE,
+    density,
+    chatRefinements,
+    LIGHT_EMBER_OVERRIDES
+  );
 }
 
 const INTERACTIVE_CHAT_CSS = `
@@ -607,6 +698,51 @@ const INTERACTIVE_DEFAULT_LIGHT_THEME = defineTheme({
   tokens: deriveLightDefaultTheme(
     'roomy',
     interactiveChatRefinements(LIGHT_PALETTE)
+  ),
+  css: INTERACTIVE_CHAT_CSS,
+});
+
+/** The dense alternative transcript on the warm amber/rose palette. */
+const BATCH_EMBER_THEME = defineTheme({
+  id: 'batch-ember',
+  label: 'Ember',
+  description: 'Dense, warm transcript on the amber-and-rose palette.',
+  variants: ['batch', 'interactive'],
+  tokens: derivePiviewTheme(AMBER_DARK_PALETTE, 'compact'),
+});
+
+/** The roomy alternative conversation, sharing the Ember palette. */
+const INTERACTIVE_EMBER_THEME = defineTheme({
+  id: 'interactive-ember',
+  label: 'Ember chat',
+  description: 'Conversational layout with the warm amber-and-rose palette.',
+  variants: ['interactive'],
+  tokens: derivePiviewTheme(
+    AMBER_DARK_PALETTE,
+    'roomy',
+    interactiveChatRefinements(AMBER_DARK_PALETTE)
+  ),
+  css: INTERACTIVE_CHAT_CSS,
+});
+
+/** The dense alternative transcript in light mode. */
+const BATCH_EMBER_LIGHT_THEME = defineTheme({
+  id: 'batch-ember-light',
+  label: 'Ember (light)',
+  description: 'Dense, warm transcript on the light amber-and-rose palette.',
+  variants: ['batch', 'interactive'],
+  tokens: deriveLightEmberTheme('compact'),
+});
+
+/** The roomy alternative conversation in light mode. */
+const INTERACTIVE_EMBER_LIGHT_THEME = defineTheme({
+  id: 'interactive-ember-light',
+  label: 'Ember chat (light)',
+  description: 'Conversational layout with the light amber-and-rose palette.',
+  variants: ['interactive'],
+  tokens: deriveLightEmberTheme(
+    'roomy',
+    interactiveChatRefinements(AMBER_LIGHT_PALETTE)
   ),
   css: INTERACTIVE_CHAT_CSS,
 });
@@ -734,9 +870,13 @@ const INTERACTIVE_FOCUS_THEME = defineTheme({
 export const PI_VIEW_THEMES: Record<string, PiViewTheme> = {
   [BATCH_DEFAULT_THEME.id]: BATCH_DEFAULT_THEME,
   [BATCH_DEFAULT_LIGHT_THEME.id]: BATCH_DEFAULT_LIGHT_THEME,
+  [BATCH_EMBER_THEME.id]: BATCH_EMBER_THEME,
+  [BATCH_EMBER_LIGHT_THEME.id]: BATCH_EMBER_LIGHT_THEME,
   [BATCH_PAPER_THEME.id]: BATCH_PAPER_THEME,
   [INTERACTIVE_DEFAULT_THEME.id]: INTERACTIVE_DEFAULT_THEME,
   [INTERACTIVE_DEFAULT_LIGHT_THEME.id]: INTERACTIVE_DEFAULT_LIGHT_THEME,
+  [INTERACTIVE_EMBER_THEME.id]: INTERACTIVE_EMBER_THEME,
+  [INTERACTIVE_EMBER_LIGHT_THEME.id]: INTERACTIVE_EMBER_LIGHT_THEME,
   [INTERACTIVE_FOCUS_THEME.id]: INTERACTIVE_FOCUS_THEME,
 
   // Deprecated ids kept as aliases so existing `PiViewOptions.theme` strings

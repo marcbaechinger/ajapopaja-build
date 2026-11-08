@@ -15,10 +15,14 @@
  */
 
 import {
+  AMBER_DARK_PALETTE,
+  AMBER_LIGHT_PALETTE,
   DARK_PALETTE,
   DENSITY_COMPACT,
   DENSITY_PRESETS,
   DENSITY_ROOMY,
+  EMBER_DARK_PALETTE,
+  EMBER_LIGHT_PALETTE,
   LIGHT_PALETTE,
   PI_VIEW_THEMES,
   derivePiviewTheme,
@@ -32,10 +36,14 @@ import {
 // Re-export the shared palette/derivation API from the theme-set module, which
 // is the public entry point for theme data.
 export {
+  AMBER_DARK_PALETTE,
+  AMBER_LIGHT_PALETTE,
   DARK_PALETTE,
   DENSITY_COMPACT,
   DENSITY_PRESETS,
   DENSITY_ROOMY,
+  EMBER_DARK_PALETTE,
+  EMBER_LIGHT_PALETTE,
   LIGHT_PALETTE,
   derivePiviewTheme,
 };
@@ -219,9 +227,37 @@ const DEFAULT_SET: ThemeSet = {
   },
 };
 
+/**
+ * The alternative warm set. It reuses the default set's density roles verbatim
+ * (compact batch, roomy interactive); only the palette primitives differ.
+ */
+const EMBER_SET: ThemeSet = {
+  id: 'ember',
+  label: 'Ember',
+  description: 'Warm amber-and-rose palette.',
+  mode: 'both',
+  palette: {
+    dark: AMBER_DARK_PALETTE,
+    light: AMBER_LIGHT_PALETTE,
+  },
+  appTokens: {
+    dark: deriveAppTokens(AMBER_DARK_PALETTE),
+    light: deriveAppTokens(AMBER_LIGHT_PALETTE),
+  },
+  interactiveTheme: {
+    dark: PI_VIEW_THEMES['interactive-ember'],
+    light: PI_VIEW_THEMES['interactive-ember-light'],
+  },
+  batchTheme: {
+    dark: PI_VIEW_THEMES['batch-ember'],
+    light: PI_VIEW_THEMES['batch-ember-light'],
+  },
+};
+
 /** The single source of truth for available theme sets. */
 export const THEME_SETS: Record<string, ThemeSet> = {
   [DEFAULT_SET.id]: DEFAULT_SET,
+  [EMBER_SET.id]: EMBER_SET,
 };
 
 /** Fallback used when a requested/persisted set id is unknown or invalid. */
