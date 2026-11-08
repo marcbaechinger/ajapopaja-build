@@ -302,7 +302,6 @@ export class DashboardView extends View {
           <div class="flex items-center gap-3 bg-app-bg px-4 py-2 rounded-xl border border-app-border">
             <div class="flex flex-col items-end">
               <span class="text-xs font-bold text-app-text">${user?.username || 'User'}</span>
-              <span class="text-[9px] text-app-muted uppercase font-black tracking-widest">Logged In</span>
             </div>
             <div class="w-px h-6 bg-app-border mx-1"></div>
             <button data-action-click="perform_logout" class="p-1.5 hover:bg-red-500/10 text-app-muted hover:text-red-400 rounded-lg transition-all cursor-pointer group/logout" title="Logout">
