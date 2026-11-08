@@ -833,11 +833,12 @@ class CoderBotSession(PiRpcProcess):
             task = await Task.get(self.task_id)
             task_title = task.title if task else ""
 
-            # Include the task ID and the relevant commit hashes in the PR summary
-            # so a human can see exactly which version of the code was verified. The
-            # task ID, the hash of the commit the verification ran on (HEAD after
-            # CoderBot's commit) and the hash of the commit on top of which the new
-            # commit was created (the previous HEAD, if any) are reported.
+            # Include the task ID, the model used for the implementation and the
+            # relevant commit hashes in the PR summary so a human can see exactly
+            # which version of the code was verified. The task ID, the model, the
+            # hash of the commit the verification ran on (HEAD after CoderBot's
+            # commit) and the hash of the commit on top of which the new commit was
+            # created (the previous HEAD, if any) are reported.
             #
             # NOTE: the "Verified commit (HEAD)" is the hash of the commit created
             # and tested inside CoderBot's isolated sandbox. That sandbox (and its
@@ -852,6 +853,7 @@ class CoderBotSession(PiRpcProcess):
                 "",
                 "### Verification",
                 f"Task ID: **{self.task_id}**",
+                f"Model: **{self.model}**",
             ]
             if head_commit_hash:
                 summary_meta.append(f"Verified commit (HEAD): `{head_commit_hash}`")

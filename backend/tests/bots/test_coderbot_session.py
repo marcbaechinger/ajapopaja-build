@@ -1183,7 +1183,9 @@ async def test_coderbot_handle_agent_end_reports_task_id_and_commit_hashes(
     task = Task(title="Test Task", pipeline_id="p1", design_doc="D", spec="S")
     await task.insert()
 
-    session = CoderBotSession(pipeline_id="p1", task_id=str(task.id))
+    session = CoderBotSession(
+        pipeline_id="p1", task_id=str(task.id), model="test-model:cloud"
+    )
     session.helper = MagicMock()
     session.helper.branch_name = "branch"
 
@@ -1237,6 +1239,7 @@ async def test_coderbot_handle_agent_end_reports_task_id_and_commit_hashes(
     summary = prs[0].summary
     assert "### Verification" in summary
     assert f"Task ID: **{task.id}**" in summary
+    assert "Model: **test-model:cloud**" in summary
     assert "Verified commit (HEAD): `verified-head-hash`" in summary
     assert "Parent commit (base): `parent-base-hash`" in summary
     assert "Status: **PASSED**" in summary
