@@ -115,6 +115,19 @@ describe('ThemeSetPicker', () => {
     );
   });
 
+  it('returns focus to the trigger when a set row is selected', () => {
+    picker.toggle();
+    const ember = root.querySelector<HTMLElement>('[data-theme-set-row="ember"]')!;
+    ember.focus();
+    expect(document.activeElement).toBe(ember);
+
+    ember.click();
+
+    expect(picker.isOpen()).toBe(false);
+    expect(document.activeElement).toBe(trigger());
+    expect(themeManager.getActiveSetId()).toBe('ember');
+  });
+
   it('closes on Escape and returns focus to the trigger', () => {
     picker.toggle();
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));

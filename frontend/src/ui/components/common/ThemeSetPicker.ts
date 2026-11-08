@@ -356,9 +356,11 @@ export class ThemeSetPicker {
     // the event so the action handler does not apply it a second time.
     const row = target.closest<HTMLElement>('[data-theme-set-row]');
     if (row) {
+      // Close first so the synchronous refresh caused by setSet runs with the
+      // popover already hidden and cannot move focus back onto a row.
+      this.close(true);
       const setId = row.getAttribute('data-theme-set-row');
       if (setId) themeManager.setSet(setId);
-      this.close();
     }
   }
 
