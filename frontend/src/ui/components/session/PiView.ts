@@ -17,10 +17,19 @@
 import type { RenderBlock } from '../../../core/CoderBotService.ts';
 import { Icon } from '../common/Icon.ts';
 import { KeybindingManager } from './KeybindingManager.ts';
+import {
+  applyTheme,
+  PI_VIEW_THEMES,
+  resolveTheme,
+  type PiViewTheme,
+  type PiViewVariant,
+} from './piviewThemes.ts';
 import { renderMarkdown } from '../utils/markdown.ts';
 import { copyToClipboard } from '../../utils/clipboard.ts';
 import './Keybinding.css';
 import './PiView.css';
+
+export type { PiViewTheme, PiViewTokens, PiViewVariant } from './piviewThemes.ts';
 
 /**
  * Classes for the Markdown-rendered ("Format as markup") view of a block.
@@ -85,6 +94,17 @@ export interface PiSessionService {
 }
 
 export interface PiViewOptions {
+  /**
+   * Session variant this view renders. Selects the default theme and lets a
+   * theme vary its look per session type. Default 'batch'.
+   */
+  variant?: PiViewVariant;
+  /**
+   * Explicit theme id (or a theme object for data-only embedding/tests),
+   * overriding the variant default. Unknown ids fall back to the variant
+   * default instead of breaking the log. Nothing is persisted.
+   */
+  theme?: string | PiViewTheme;
   /** Render the follow/clear/stop action bar. Default true. */
   showFooter?: boolean;
   /** Start with follow-mode auto-scroll enabled. Default true. */
@@ -178,6 +198,14 @@ export class PiView {
   private deferInitialRender: boolean;
   private onOpenDialog?: () => void;
   private unsubs: (() => void)[] = [];
+
+  /** Session variant and the effective theme resolved from the registry. */
+  private variant: PiViewVariant;
+  private theme: PiViewTheme;
+  private themeId: string;
+  private themeListeners: Set<(id: string) => void> = new Set();
+  /** Unknown ids already warned about, so a repeated setTheme() warns once. */
+  private warnedThemeIds: Set<string> = new Set();
 
   /**
    * Pending `requestAnimationFrame` handle for a deferred initial render. While
@@ -295,6 +323,13 @@ export class PiView {
     this.emptyStateAction = options.emptyStateAction;
     this.onOpenDialog = options.onOpenDialog;
     this.keyboardBindings = options.keyboardBindings ?? {};
+    this.variant = options.variant === 'interactive' ? 'interactive' : 'batch';
+    if (typeof options.theme === 'string' && !PI_VIEW_THEMES[options.theme]) {
+      this.warnUnknownTheme(options.theme);
+    }
+    // Resolve before render() so the first paint is already themed (no FOUC).
+    this.theme = resolveTheme(this.variant, options.theme);
+    this.themeId = this.theme.id;
     // Build the action->key lookup once, after overrides are merged over defaults.
     this.actionToKey = this.buildBindings();
   }
@@ -302,6 +337,60 @@ export class PiView {
   /** The element the PiView was mounted into. */
   getRoot(): HTMLElement {
     return this.root;
+  }
+
+  /** The session variant this view was created for. */
+  getVariant(): PiViewVariant {
+    return this.variant;
+  }
+
+  /** The id of the currently effective theme. */
+  getThemeId(): string {
+    return this.themeId;
+  }
+
+  /**
+   * Switch the effective theme at runtime. This only writes tokens/the theme
+   * attribute on the existing log element; it never re-renders blocks, so
+   * scroll position, follow mode, collapse states, search highlights and
+   * formatted blocks all survive. Unknown ids fall back to the variant default
+   * (with a one-time warning).
+   */
+  setTheme(idOrTheme: string | PiViewTheme): void {
+    if (typeof idOrTheme === 'string' && !PI_VIEW_THEMES[idOrTheme]) {
+      this.warnUnknownTheme(idOrTheme);
+    }
+    const next = resolveTheme(this.variant, idOrTheme);
+    this.theme = next;
+    const changed = this.themeId !== next.id;
+    this.themeId = next.id;
+    if (this.logContainer) {
+      applyTheme(this.logContainer, next);
+    }
+    if (changed) {
+      this.themeListeners.forEach((listener) => {
+        try {
+          listener(this.themeId);
+        } catch (e) {
+          console.error('PiView: error in theme change listener', e);
+        }
+      });
+    }
+  }
+
+  /**
+   * Subscribe to effective-theme changes. Returns an unsubscribe function; all
+   * listeners are also removed by {@link destroy()}.
+   */
+  onThemeChange(listener: (id: string) => void): () => void {
+    this.themeListeners.add(listener);
+    return () => this.themeListeners.delete(listener);
+  }
+
+  private warnUnknownTheme(id: string): void {
+    if (this.warnedThemeIds.has(id)) return;
+    this.warnedThemeIds.add(id);
+    console.warn(`PiView: unknown theme "${id}", falling back to the variant default`);
   }
 
   /**
@@ -349,6 +438,7 @@ export class PiView {
       }
     });
     this.unsubs = [];
+    this.themeListeners.clear();
     this.stopStatusTimer();
     if (this.copyToastTimer !== null) {
       window.clearTimeout(this.copyToastTimer);
@@ -374,6 +464,9 @@ export class PiView {
     const resizeClass = this.resizable ? 'resize-y overflow-x-hidden' : '';
     container.className =
       `piview-log relative px-4 pb-4 font-mono text-[11px] leading-tight overflow-y-auto ${resizeClass} ${this.logHeightClass} custom-scrollbar`;
+    container.setAttribute('data-piview-variant', this.variant);
+    // Apply before the container is appended so the first paint is themed.
+    applyTheme(container, this.theme);
     const statusBar = document.createElement('div');
     statusBar.id = 'piview-status-bar';
     statusBar.className = 'sticky top-0 z-10 border-b px-1 pb-1 mb-1 flex items-center gap-2';
