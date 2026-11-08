@@ -29,7 +29,11 @@
  * `PiView.css`) is public API. Token names are additive-only: do not rename a
  * shipped token, do not repurpose an existing token for a different role, and
  * do not remove one. Adding a new token is fine. That lets existing themes keep
- * working while new themes opt into new roles.
+ * working while new themes opt into new roles. Tokens introduced before the
+ * theme system has shipped may still be removed while they are unreleased; once
+ * released, the additive-only guarantees apply. A token must either have a
+ * `var(...)` consumer in PiView-owned CSS or be documented as an extension hook
+ * in the theme token guard.
  *
  * Themes do not need to be complete. `PiView.css` supplies the default
  * (batch-default parity) values for every token, so a theme may override only
@@ -358,7 +362,6 @@ export function derivePiviewTheme(
     '--piview-status-dot-idle': mix(text, 40),
     '--piview-status-dot-active': ok,
     '--piview-motion-pulse': 'pulse',
-    '--piview-shortcut-flash': mix(text, 15),
 
     '--piview-gap-block': '0.4em',
     '--piview-gap-li': '0.2em',

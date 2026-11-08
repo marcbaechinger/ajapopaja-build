@@ -313,7 +313,6 @@ document can carry different themes.
 | `--piview-scrollbar-thumb` / `-track` | global `--app-border` | log-scoped scrollbar |
 | `--piview-status-dot-idle` / `-active` | `bg-app-text/40` / `bg-green-400` | status dot |
 | `--piview-motion-pulse` | `animate-pulse` | active dot animation (set `none` for reduced motion) |
-| `--piview-shortcut-flash` | literal `rgba(255,255,255,…)` | `.shortcut-active` overlay |
 | `--piview-syntax-*` (10 tokens) | global `--syntax-*` | highlight.js inside the log |
 
 ### 6.5 Derivation: elaborate themes from few knobs

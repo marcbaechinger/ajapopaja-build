@@ -32,6 +32,7 @@ import {
 import { PiView, type PiSessionService } from './PiView.ts';
 import type { RenderBlock } from '../../../core/CoderBotService.ts';
 import piViewCss from './PiView.css?raw';
+import keybindingCss from './Keybinding.css?raw';
 import piviewThemesSource from './piviewThemes.ts?raw';
 
 function serviceWithHistory(history: RenderBlock[] = []): PiSessionService {
@@ -337,7 +338,12 @@ describe('palette-derived syntax and search roles', () => {
  * enough for it to be checked. Comments are stripped so prose in the
  * stylesheet cannot masquerade as a declaration or reference.
  */
-const PI_VIEW_CSS_SOURCE = piViewCss.replace(/\/\*[\s\S]*?\*\//g, '');
+function stripCssComments(css: string): string {
+  return css.replace(/\/\*[\s\S]*?\*\//g, '');
+}
+
+const PI_VIEW_CSS_SOURCE = stripCssComments(piViewCss);
+const KEYBINDING_CSS_SOURCE = stripCssComments(keybindingCss);
 
 function cssTokenReferences(css: string): Set<string> {
   return new Set(
@@ -350,6 +356,19 @@ function cssTokenDeclarations(css: string): Set<string> {
     Array.from(css.matchAll(/(--piview-[a-z0-9-]+)\s*:/g), (match) => match[1])
   );
 }
+
+/**
+ * Explicit extension hooks that are intentionally part of the public token
+ * surface but have no consumer in the PiView-owned stylesheets yet. Keep this
+ * list minimal: delete an unshipped token instead of adding it here, and never
+ * allow-list a token merely because a control forgot to consume it.
+ */
+const EXTENSION_HOOKS = new Set([
+  '--piview-danger', // reserved for danger actions; footer controls use app tokens
+  '--piview-danger-hover',
+  '--piview-radius-chrome', // reserved for future chrome corners
+  '--piview-surface-code', // reserved for inline-code backgrounds
+]);
 
 describe('PiView theme token guard', () => {
   it('provides every token referenced by PiView.css from each theme or its defaults', () => {
@@ -368,6 +387,33 @@ describe('PiView theme token guard', () => {
           `${theme.id} does not provide ${name} and PiView.css has no derivation default`
         ).toBe(true);
       }
+    }
+  });
+
+  it('only declares PiView tokens that are consumed or explicitly extension hooks', () => {
+    const referenced = new Set([
+      ...cssTokenReferences(PI_VIEW_CSS_SOURCE),
+      ...cssTokenReferences(KEYBINDING_CSS_SOURCE),
+      ...Object.values(PI_VIEW_THEMES).flatMap((theme) =>
+        Array.from(cssTokenReferences(stripCssComments(theme.css ?? '')))
+      ),
+    ]);
+    const declared = new Set([
+      ...cssTokenDeclarations(PI_VIEW_CSS_SOURCE),
+      ...Object.values(PI_VIEW_THEMES).flatMap((theme) => Object.keys(theme.tokens)),
+    ]);
+
+    // Guard the guard: the stylesheets must actually contain consumers.
+    expect(referenced.size).toBeGreaterThan(0);
+
+    const unconsumed = Array.from(declared)
+      .filter((name) => !referenced.has(name) && !EXTENSION_HOOKS.has(name))
+      .sort();
+    expect(unconsumed).toEqual([]);
+
+    // Remove stale allow-list entries so the exception surface stays honest.
+    for (const hook of EXTENSION_HOOKS) {
+      expect(declared, `${hook} is allow-listed but not declared`).toContain(hook);
     }
   });
 
