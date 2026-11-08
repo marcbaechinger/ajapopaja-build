@@ -195,6 +195,123 @@ python3 ./mcp_client.py --url http://localhost:${PORT:-8081} update-task-spec <t
 - If you get a `307 Redirect` or `405 Method Not Allowed`, ensure the URL ends with `/mcp/` or use the `--url http://localhost:${PORT:-8081}` default which handles it.
 - Ensure the FastAPI server is running on the specified port (default `8081`, configurable via `$PORT`).
 
+## Artifacts
+
+A pipeline can declare **one** build artifact (a single file produced by its
+build, e.g. an APK or a ZIP). Query it, download it when it changed, then hand
+it to a host-side process. The artifact API is generic: it always delivers one
+file, so if a build produces several outputs the build command must package
+them (for example into a ZIP) first.
+
+### 1. Check for an update
+
+Fetch the artifact metadata (existence, size, modification time, source version
+and SHA-256) plus a short-lived download token:
+
+```bash
+python3 ./mcp_client.py --url http://localhost:${PORT:-8081} get-artifact <pipeline_id>
+```
+
+Use `--json` for compact, script-friendly output.
+
+Keep a fingerprint of the artifact you last downloaded or installed in your
+session notes or a small local JSON file:
+
+```json
+{
+  "pipeline_id": "…",
+  "sha256": "…",
+  "size": 4821376,
+  "modified_at": "…",
+  "version": "a1b2c3d4…",
+  "local_path": "app-debug.apk"
+}
+```
+
+On each poll compare the new metadata with that fingerprint:
+
+- `size` and `modified_at` are the cheap first check (if both are unchanged,
+  the file probably did not change).
+- `sha256` is the **authoritative** equality check — download only when it
+  differs.
+- `version` is the workspace `HEAD` commit at query time: useful provenance,
+  but not proof that the file was built from exactly that commit.
+
+If `exists` is `false` (or the artifact is not configured), there is nothing to
+fetch yet: ask the user to run the build in the web UI first and then poll again.
+
+### 2. Download when newer
+
+The metadata above already mints the download token; `download-artifact`
+fetches fresh metadata and streams the bytes to a local file:
+
+```bash
+python3 ./mcp_client.py --url http://localhost:${PORT:-8081} \
+    download-artifact <pipeline_id> --output ./app-debug.apk
+```
+
+Without `--output`/`-o` the artifact's own filename is used in the current
+directory. The download is a plain HTTP `GET` against the API, so it works from
+the host without a user login.
+
+**curl fallback.** If you prefer `curl`, mint the token and download directly:
+
+```bash
+TOKEN=$(python3 ./mcp_client.py --url http://localhost:${PORT:-8081} \
+    get-artifact <pipeline_id> --json | jq -r .download_token)
+curl -fL "http://localhost:${PORT:-8081}/api/pipelines/<pipeline_id>/artifact/download?token=$TOKEN" \
+    -o app-debug.apk
+```
+
+### 3. Integrate
+
+Give the downloaded file to the host-side process that needs it: install it on
+a device, upload it, unpack it, run it, and so on. Only re-integrate after the
+fingerprint actually changed. Android is one integration; see below.
+
+### Installing Android APKs
+
+To install the downloaded artifact on a device or emulator attached to the
+host:
+
+1. **Confirm a device/emulator is attached:**
+
+   ```bash
+   adb devices
+   ```
+
+   The list must contain a device in the `device` state (not `offline` or
+   `unauthorized`).
+
+2. **Download the APK** with `download-artifact` (or the `curl` fallback):
+
+   ```bash
+   python3 ./mcp_client.py --url http://localhost:${PORT:-8081} \
+       download-artifact <pipeline_id> --output ./app-debug.apk
+   ```
+
+3. **Install it, replacing any existing version:**
+
+   ```bash
+   adb install -r ./app-debug.apk
+   ```
+
+4. **Optional: launch the app.** Pass the package and activity from the
+   repository (the artifact API does not know them):
+
+   ```bash
+   adb shell am start -n <package>/<activity>
+   ```
+
+5. **If `adb install` reports `INSTALL_FAILED_UPDATE_INCOMPATIBLE`** (typically
+   a signature mismatch between a debug and a release build), uninstall the
+   existing package first and then install again:
+
+   ```bash
+   adb uninstall <package>
+   adb install ./app-debug.apk
+   ```
+
 ## Building Android Projects
 
 The container ships JDK 17 and the Android command-line tools, with
@@ -220,8 +337,9 @@ Guidance:
 - Kotlin is resolved through the Kotlin Gradle plugin from Maven; no separate
   Kotlin compiler is required.
 - Build artifacts such as `app/build/outputs/apk/debug/app-debug.apk` remain in
-  the workspace. Installing or running them on a device/emulator is out of
-  scope.
+  the workspace. To get one onto a host-side device/emulator, use the
+  Artifacts workflow above (query → download → `adb install`); no `docker cp`
+  is needed.
 - The NDK and CMake are not pre-installed. For native projects, install the
   required versions on demand with `sdkmanager --install "ndk;<version>"`.
 
