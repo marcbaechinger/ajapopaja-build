@@ -20,6 +20,10 @@ import { Pipeline, PipelineStatus, Task } from '../../core/domain.ts';
 import { ConfirmationDialog } from '../components/dialogs/ConfirmationDialog.ts';
 import { PipelineEditDialog } from '../components/dialogs/PipelineEditDialog.ts';
 import { Icon } from '../components/common/Icon.ts';
+import {
+  ThemeSetPicker,
+  wasThemeSetPickerEventHandled,
+} from '../components/common/ThemeSetPicker.ts';
 import { PipelineItemView } from '../components/pipeline/PipelineItemView.ts';
 import { SessionManagerButton } from '../components/session/SessionManagerButton.ts';
 import { copyToClipboard } from '../utils/clipboard.ts';
@@ -54,6 +58,8 @@ export class DashboardView extends View {
   private unsubs: (() => void)[] = [];
   /** The getting-started overlay, when open. Used to dismiss it before creating a pipeline. */
   private gettingStartedDialog: GettingStartedDialog | null = null;
+  /** Header control for choosing the app-wide theme set + light/dark mode. */
+  private themeSetPicker = new ThemeSetPicker();
 
   constructor(context: AppContext) {
     super();
@@ -81,6 +87,13 @@ export class DashboardView extends View {
   private registerActions() {
     this.context.actionRegistry.register('create_pipeline', async () => {
       await this.openCreatePipelineDialog();
+    });
+
+    // The theme-set picker trigger. Set rows keep the global `set_theme_set`
+    // action (registered by AppContext) and carry their `data-theme-set-id`.
+    this.context.actionRegistry.register('toggle_theme_set_picker', (event) => {
+      if (wasThemeSetPickerEventHandled(event)) return;
+      this.themeSetPicker.toggle();
     });
 
     // The primary button inside the getting-started overlay: dismiss the guide
@@ -304,9 +317,7 @@ export class DashboardView extends View {
           <button data-action-click="open_health_check" class="p-2 hover:bg-app-bg rounded-lg transition-colors cursor-pointer text-app-muted hover:text-green-500" title="System Health">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
           </button>
-          <button data-action-click="toggle_theme" class="p-2 hover:bg-app-bg rounded-lg transition-colors cursor-pointer text-app-muted hover:text-app-accent-2" title="Toggle Theme">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
-          </button>
+          ${this.themeSetPicker.render()}
         </div>
       </header>
 
@@ -336,6 +347,7 @@ export class DashboardView extends View {
 
   mount(container: HTMLElement) {
     this.container = container;
+    this.themeSetPicker.mount(container);
     this.refreshList();
     this.updateVersion();
     this.checkOllama();
@@ -364,6 +376,7 @@ export class DashboardView extends View {
   unmount() {
     this.unsubs.forEach(unsub => unsub());
     this.unsubs = [];
+    this.themeSetPicker.destroy();
     this.gettingStartedDialog?.dismiss();
     this.gettingStartedDialog = null;
   }

@@ -43,6 +43,7 @@ import { SessionManagerPanel, registerSessionGenerateTitleAction } from '../ui/c
 import { SessionManagerButton } from '../ui/components/session/SessionManagerButton';
 import { HealthCheckDialog } from '../ui/components/dialogs/HealthCheckDialog';
 import { handleQuickPromptButtonClick } from '../ui/components/common/QuickPromptButton';
+import { wasThemeSetPickerEventHandled } from '../ui/components/common/ThemeSetPicker.ts';
 import { setTaskSpecProposalUpdater } from '../ui/components/pipeline/SpecSection';
 import { registerOnePromptHandlers } from './oneprompt';
 import * as themeSets from '../ui/theme/themeSets.ts';
@@ -263,7 +264,10 @@ export class AppContext {
       themeManager.setMode(this.state.theme === 'light' ? 'dark' : 'light');
     });
 
-    this.actionRegistry.register('set_theme_set', (_event, element) => {
+    this.actionRegistry.register('set_theme_set', (event, element) => {
+      // The picker applies its own row selection directly (so it also works in
+      // lightweight hosts); don't apply the same click twice via the registry.
+      if (wasThemeSetPickerEventHandled(event)) return;
       const setId = AppContext.resolveThemeSetId(element);
       if (setId) themeManager.setSet(setId);
     });

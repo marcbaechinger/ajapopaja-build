@@ -17,6 +17,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { DashboardView } from './DashboardView.ts';
 import { PipelineStatus, TaskStatus } from '../../core/domain.ts';
+import { THEME_SETS } from '../theme/themeSets.ts';
 import {
   installGettingStartedFetchMock,
   flushPromises,
@@ -118,6 +119,47 @@ describe('DashboardView', () => {
     expect(container.innerHTML).not.toContain('md:grid-cols-2');
     // The inline creation form is gone.
     expect(container.querySelector('form[data-action-submit="create_pipeline"]')).toBeNull();
+  });
+
+  it('renders the theme-set picker with every set and the current one marked', () => {
+    const view = new DashboardView(mockContext);
+    container.innerHTML = view.render();
+
+    const trigger = container.querySelector('[data-theme-set-picker-trigger]') as HTMLElement;
+    expect(trigger).toBeTruthy();
+    expect(trigger.getAttribute('aria-haspopup')).toBe('menu');
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    for (const set of Object.values(THEME_SETS)) {
+      expect(container.textContent).toContain(set.label);
+      expect(container.querySelector(`[data-theme-set-id="${set.id}"]`)).toBeTruthy();
+    }
+    expect(
+      container.querySelector('[data-theme-set-id="default"]')?.getAttribute('aria-checked')
+    ).toBe('true');
+
+    view.unmount();
+  });
+
+  it('opens and closes the theme-set picker through its registered action', () => {
+    const view = new DashboardView(mockContext);
+    container.innerHTML = view.render();
+    view.mount(container);
+
+    const toggleAction = mockContext.actionRegistry.register.mock.calls.find(
+      (c: any) => c[0] === 'toggle_theme_set_picker'
+    )[1];
+    const trigger = container.querySelector('[data-theme-set-picker-trigger]') as HTMLElement;
+    const menu = container.querySelector('[data-theme-set-menu]') as HTMLElement;
+
+    toggleAction(new MouseEvent('click'), trigger);
+    expect(menu.hidden).toBe(false);
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(menu.hidden).toBe(true);
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+
+    view.unmount();
   });
 
   it('should refresh pipeline list and fetch tasks for each pipeline', async () => {

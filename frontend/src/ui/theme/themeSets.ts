@@ -368,6 +368,11 @@ export class ThemeManager {
     return this.activeSetId;
   }
 
+  /** The light/dark mode currently applied within the active set. */
+  getActiveMode(): ThemeMode {
+    return this.activeMode;
+  }
+
   getActiveSet(): ThemeSet {
     return this.resolveSet(this.activeSetId);
   }
