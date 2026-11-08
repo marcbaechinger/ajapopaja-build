@@ -140,10 +140,18 @@
 
 .piview-log #piview-status-dot {
   background-color: var(--piview-status-dot-idle);
+  animation: none;
 }
 
 .piview-log #piview-status-dot[data-state="active"] {
   background-color: var(--piview-status-dot-active);
+  animation: var(--piview-motion-pulse) 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.5;
+  }
 }
 
 .piview-log #piview-status-text {
@@ -503,6 +511,9 @@
   background-color: var(--app-surface);
   border: 1px solid var(--app-border);
   color: var(--app-text);
+  /* The static button class preserves the on-state elevation; the off state
+     remains flat exactly as it did when this was toggled from TypeScript. */
+  box-shadow: none;
 }
 
 .piview-footer #follow-btn[data-state="off"]:hover {
@@ -516,4 +527,40 @@
 
 .piview-footer #stop-bot-btn:hover {
   background-color: var(--color-red-700);
+}
+
+/*
+ * Footer control state hooks. TypeScript owns the state attributes; the base
+ * appearance stays on the app-theme control rules above, so these selectors are
+ * intentionally non-visual in the parity theme. Themes can target the same
+ * attributes (and this custom property) to style active controls.
+ */
+.piview-footer #follow-btn[data-active="true"],
+.piview-footer #thinking-toggle-btn[data-active="true"],
+.piview-footer #collapse-blocks-btn[data-active="true"],
+.piview-footer #error-toggle-btn[data-active="true"],
+.piview-footer #search-toggle-btn[data-active="true"],
+.piview-footer #prev-error-btn[data-active="true"],
+.piview-footer #next-error-btn[data-active="true"],
+.piview-footer #stop-bot-btn[data-active="true"],
+.piview-footer #copy-all-btn[data-active="true"] {
+  --piview-control-active: 1;
+}
+
+.piview-footer #follow-btn[data-active="false"],
+.piview-footer #thinking-toggle-btn[data-active="false"],
+.piview-footer #collapse-blocks-btn[data-active="false"],
+.piview-footer #error-toggle-btn[data-active="false"],
+.piview-footer #search-toggle-btn[data-active="false"],
+.piview-footer #prev-error-btn[data-active="false"],
+.piview-footer #next-error-btn[data-active="false"],
+.piview-footer #stop-bot-btn[data-active="false"],
+.piview-footer #copy-all-btn[data-active="false"] {
+  --piview-control-active: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .piview-log {
+    --piview-motion-pulse: none;
+  }
 }

@@ -473,6 +473,7 @@ export class PiView {
       { id: 'follow-btn' }
     );
     followBtn.setAttribute('data-state', 'on');
+    followBtn.setAttribute('data-active', 'true');
     actions.appendChild(followBtn);
 
     const clearBtn = this.createButton(
@@ -490,6 +491,8 @@ export class PiView {
       'px-3 py-1.5 rounded text-xs font-medium transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer hidden',
       { id: 'stop-bot-btn' }
     );
+    stopBtn.setAttribute('data-state', 'idle');
+    stopBtn.setAttribute('data-active', 'false');
     actions.appendChild(stopBtn);
 
     const thinkingBtn = this.createButton(
@@ -499,6 +502,8 @@ export class PiView {
       'px-2 py-1.5 rounded text-xs font-medium border transition-colors flex items-center gap-1.5 cursor-pointer',
       { id: 'thinking-toggle-btn', ariaPressed: false }
     );
+    thinkingBtn.setAttribute('data-state', 'expanded');
+    thinkingBtn.setAttribute('data-active', 'true');
     actions.appendChild(thinkingBtn);
 
     const collapseBtn = this.createButton(
@@ -508,6 +513,8 @@ export class PiView {
       'px-2 py-1.5 rounded text-xs font-medium border transition-colors flex items-center gap-1.5 cursor-pointer',
       { id: 'collapse-blocks-btn', ariaPressed: false }
     );
+    collapseBtn.setAttribute('data-state', 'expanded');
+    collapseBtn.setAttribute('data-active', 'false');
     actions.appendChild(collapseBtn);
 
     const errorToggleBtn = this.createButton(
@@ -517,6 +524,8 @@ export class PiView {
       'px-2 py-1.5 rounded text-xs font-medium border transition-colors flex items-center gap-1.5 cursor-pointer',
       { id: 'error-toggle-btn', ariaPressed: true }
     );
+    errorToggleBtn.setAttribute('data-state', 'visible');
+    errorToggleBtn.setAttribute('data-active', 'true');
     actions.appendChild(errorToggleBtn);
 
     const prevErrorBtn = this.createButton(
@@ -528,6 +537,8 @@ export class PiView {
       'px-2 py-1.5 rounded text-xs font-medium border transition-colors flex items-center cursor-pointer disabled:opacity-40 disabled:cursor-default',
       { id: 'prev-error-btn', disabled: true }
     );
+    prevErrorBtn.setAttribute('data-state', 'disabled');
+    prevErrorBtn.setAttribute('data-active', 'false');
     actions.appendChild(prevErrorBtn);
 
     const nextErrorBtn = this.createButton(
@@ -537,6 +548,8 @@ export class PiView {
       'px-2 py-1.5 rounded text-xs font-medium border transition-colors flex items-center cursor-pointer disabled:opacity-40 disabled:cursor-default',
       { id: 'next-error-btn', disabled: true }
     );
+    nextErrorBtn.setAttribute('data-state', 'disabled');
+    nextErrorBtn.setAttribute('data-active', 'false');
     actions.appendChild(nextErrorBtn);
 
     // Right-aligned group of footer buttons, ordered left-to-right: the
@@ -568,6 +581,8 @@ export class PiView {
       'px-2 py-1.5 rounded text-xs font-medium border transition-colors flex items-center gap-1.5 cursor-pointer',
       { id: 'copy-all-btn' }
     );
+    copyAllBtn.setAttribute('data-state', 'idle');
+    copyAllBtn.setAttribute('data-active', 'false');
     rightActions.appendChild(copyAllBtn);
 
     const searchToggleBtn = this.createButton(
@@ -577,6 +592,8 @@ export class PiView {
       'px-2 py-1.5 rounded text-xs font-medium border transition-colors flex items-center gap-1.5 cursor-pointer',
       { id: 'search-toggle-btn', ariaPressed: false }
     );
+    searchToggleBtn.setAttribute('data-state', 'closed');
+    searchToggleBtn.setAttribute('data-active', 'false');
     rightActions.appendChild(searchToggleBtn);
 
     // Main action buttons on the left, the (open-dialog / copy / search)
@@ -1711,7 +1728,7 @@ export class PiView {
         : `${Icon.render('clock', { size: 14 })} Follow Mode: OFF`;
 
       btn.setAttribute('data-state', this.isFollowMode ? 'on' : 'off');
-      btn.classList.toggle('shadow-sm', this.isFollowMode);
+      btn.setAttribute('data-active', String(this.isFollowMode));
 
       const label = this.isFollowMode ? 'Follow Mode: ON' : 'Follow Mode: OFF';
       this.buttonLabels['toggle-follow'] = label;
@@ -1806,6 +1823,8 @@ export class PiView {
     // Plus (expand all) when collapsed, minus (collapse all) when expanded.
     btn.innerHTML = this.cleanIcon(Icon.render(collapsed ? 'plus' : 'minus', { size: 14 }));
     btn.setAttribute('aria-pressed', String(collapsed));
+    btn.setAttribute('data-state', collapsed ? 'collapsed' : 'expanded');
+    btn.setAttribute('data-active', String(collapsed));
     const label = collapsed ? 'Expand all blocks' : 'Collapse all blocks';
     this.buttonLabels['toggle-block-collapse'] = label;
     this.updateButtonTooltip('toggle-block-collapse');
@@ -1835,6 +1854,8 @@ export class PiView {
     const visible = this.errorVisible;
     btn.innerHTML = this.cleanIcon(Icon.render(visible ? 'eye' : 'eyeOff', { size: 14 }));
     btn.setAttribute('aria-pressed', String(visible));
+    btn.setAttribute('data-state', visible ? 'visible' : 'hidden');
+    btn.setAttribute('data-active', String(visible));
     const label = visible ? 'Hide error blocks' : 'Show error blocks';
     this.buttonLabels['toggle-error-visibility'] = label;
     this.updateButtonTooltip('toggle-error-visibility');
@@ -1887,8 +1908,16 @@ export class PiView {
     const next = this.root.querySelector('#next-error-btn') as HTMLButtonElement | null;
     const prev = this.root.querySelector('#prev-error-btn') as HTMLButtonElement | null;
     const total = this.errorEls.length;
-    if (prev) prev.disabled = total === 0 || this.currentErrorIndex <= 0;
-    if (next) next.disabled = total === 0 || this.currentErrorIndex >= total - 1;
+    if (prev) {
+      prev.disabled = total === 0 || this.currentErrorIndex <= 0;
+      prev.setAttribute('data-state', prev.disabled ? 'disabled' : 'enabled');
+      prev.setAttribute('data-active', String(!prev.disabled));
+    }
+    if (next) {
+      next.disabled = total === 0 || this.currentErrorIndex >= total - 1;
+      next.setAttribute('data-state', next.disabled ? 'disabled' : 'enabled');
+      next.setAttribute('data-active', String(!next.disabled));
+    }
   }
 
   /**
@@ -1907,6 +1936,8 @@ export class PiView {
     const collapsed = this.searchCollapsed;
     btn.innerHTML = this.cleanIcon(Icon.render(collapsed ? 'search' : 'close', { size: 14 }));
     btn.setAttribute('aria-pressed', String(!collapsed));
+    btn.setAttribute('data-state', collapsed ? 'closed' : 'open');
+    btn.setAttribute('data-active', String(!collapsed));
     const label = collapsed ? 'Show search bar' : 'Hide search bar';
     this.buttonLabels['toggle-search'] = label;
     this.updateButtonTooltip('toggle-search');
@@ -1918,6 +1949,8 @@ export class PiView {
     const expanded = this.thinkingExpanded;
     btn.innerHTML = Icon.render(expanded ? 'chevronDown' : 'chevronRight', { size: 14 });
     btn.setAttribute('aria-pressed', String(expanded));
+    btn.setAttribute('data-state', expanded ? 'expanded' : 'collapsed');
+    btn.setAttribute('data-active', String(expanded));
     const label = expanded ? 'Collapse all thinking blocks' : 'Expand all thinking blocks';
     this.buttonLabels['toggle-thinking'] = label;
     this.updateButtonTooltip('toggle-thinking');
@@ -1926,11 +1959,9 @@ export class PiView {
   private updateStopButtonVisibility(active: boolean) {
     const btn = this.root.querySelector('#stop-bot-btn');
     if (btn) {
-      if (active) {
-        btn.classList.remove('hidden');
-      } else {
-        btn.classList.add('hidden');
-      }
+      btn.setAttribute('data-state', active ? 'active' : 'idle');
+      btn.setAttribute('data-active', String(active));
+      btn.classList.toggle('hidden', !active);
     }
   }
 
@@ -2028,11 +2059,6 @@ export class PiView {
     const dot = this.root.querySelector('#piview-status-dot') as HTMLElement | null;
     if (!dot) return;
     dot.setAttribute('data-state', this.sessionActive ? 'active' : 'idle');
-    if (this.sessionActive) {
-      dot.className = 'inline-block w-2 h-2 rounded-full animate-pulse';
-    } else {
-      dot.className = 'inline-block w-2 h-2 rounded-full';
-    }
   }
 
   private updateStatusText() {

@@ -691,7 +691,7 @@ describe('PiView', () => {
     expect(stopBtn.classList.contains('hidden')).toBe(true);
   });
 
-  it('shows idle status and a non-pulsing dot when the session is inactive', () => {
+  it('shows idle status and an idle dot when the session is inactive', () => {
     const { service } = createStubService();
     const view = new PiView(service, mount);
     view.render();
@@ -699,7 +699,7 @@ describe('PiView', () => {
     const text = mount.querySelector('#piview-status-text') as HTMLElement;
     const dot = mount.querySelector('#piview-status-dot') as HTMLElement;
     expect(text.textContent).toContain('Session idle');
-    expect(dot.className).not.toContain('animate-pulse');
+    expect(dot.getAttribute('data-state')).toBe('idle');
   });
 
   it('shows the current model name in the running status when one is known', () => {
@@ -730,7 +730,7 @@ describe('PiView', () => {
     view.destroy();
   });
 
-  it('shows running status + pulsing dot, persists across log entries, and ends on stop', () => {
+  it('shows running status + active dot, persists across log entries, and ends on stop', () => {
     const { service, emitBlocks, listeners } = createStubService();
     const view = new PiView(service, mount);
     view.render();
@@ -740,7 +740,7 @@ describe('PiView', () => {
     let text = mount.querySelector('#piview-status-text') as HTMLElement;
     const dot = mount.querySelector('#piview-status-dot') as HTMLElement;
     expect(text.textContent).toContain('Running since');
-    expect(dot.className).toContain('animate-pulse');
+    expect(dot.getAttribute('data-state')).toBe('active');
 
     // A new log entry does not reset the running status/timer.
     emitBlocks([{ id: 'a', kind: 'text', text: 'x' }]);
@@ -751,7 +751,7 @@ describe('PiView', () => {
     listeners.state.forEach((l) => l(false));
     text = mount.querySelector('#piview-status-text') as HTMLElement;
     expect(text.textContent).toContain('Session ended');
-    expect(dot.className).not.toContain('animate-pulse');
+    expect(dot.getAttribute('data-state')).toBe('idle');
 
     view.destroy();
   });
