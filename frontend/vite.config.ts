@@ -19,9 +19,16 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     // Vitest stubs CSS imports to an empty module by default. The PiView
-    // stylesheet-ownership guard tests read `style.css` and `PiView.css` with
-    // Vite's `?raw` query, so process just those files (all other CSS stays
-    // stubbed).
-    css: { include: [/style\.css/, /PiView\.css/] },
+    // stylesheet-ownership and theme-conformance tests read `style.css`,
+    // `PiView.css`, `Keybinding.css` and Tailwind's palette with Vite's `?raw`
+    // query, so process those files (all other CSS stays stubbed).
+    css: {
+      include: [
+        /style\.css/,
+        /PiView\.css/,
+        /Keybinding\.css/,
+        /tailwindcss\/theme\.css/,
+      ],
+    },
   },
 })

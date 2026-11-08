@@ -727,4 +727,13 @@
   .piview-log {
     --piview-motion-pulse: none;
   }
+
+  /* Status-dot pulse plus any animation a theme attaches inside the log. */
+  .piview-log #piview-status-dot,
+  .piview-log #piview-status-dot[data-state="active"],
+  .piview-log *,
+  .piview-log *::before,
+  .piview-log *::after {
+    animation: none !important;
+  }
 }

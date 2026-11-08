@@ -34,3 +34,9 @@
     background: rgba(255, 255, 255, 0.15);
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .shortcut-active {
+    animation: none;
+  }
+}
