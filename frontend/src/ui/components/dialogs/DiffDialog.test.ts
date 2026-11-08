@@ -38,6 +38,14 @@ describe('DiffDialog', () => {
     },
   }) as any;
 
+  it('uses a wider dialog width than the previous max-w-5xl', () => {
+    const context = makeContext({ commit_hash: 'abc', patch: PATCH });
+    const dialog = new DiffDialog({ context, pipelineId: 'p1', commitHash: 'abc' });
+
+    const content = dialog['dialog'].querySelector('.dialog-content') as HTMLElement;
+    expect(content.className).toContain('max-w-[96rem]');
+  });
+
   it('shows a loading state before the diff resolves', () => {
     const context = {
       pipelineClient: {

@@ -44,7 +44,7 @@ export class DiffDialog extends BaseDialog<void> {
   constructor(props: DiffDialogProps) {
     super({
       title: 'Commit Diff',
-      maxWidth: 'max-w-5xl',
+      maxWidth: 'max-w-[96rem]',
       maxHeight: 'max-h-[90vh]',
       iconSvg: Icon.render('quickfix', { size: 20 }),
     });
