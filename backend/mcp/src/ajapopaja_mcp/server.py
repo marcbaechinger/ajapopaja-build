@@ -29,6 +29,7 @@ mcp.tool()(tools.create_pull_request)
 mcp.tool()(tools.search_tasks)
 mcp.tool()(tools.get_task_details)
 mcp.tool()(tools.get_task_status)
+mcp.tool()(tools.get_build_artifact)
 
 if __name__ == "__main__":
     mcp.run()

@@ -18,14 +18,16 @@ from typing import Any, Dict, List, Optional
 
 import git
 
+from api.auth import ARTIFACT_TOKEN_TTL_SECONDS, create_artifact_token
 from api.git_hosting.gitea import GiteaApiError
 from api.git_hosting.pull_requests import create_pipeline_pull_request
 from api.websocket_manager import WSMessage, manager
 from core.db import init_db
 from core.exceptions import EntityNotFoundError, VersionMismatchError
-from core.models.models import Task, TaskStatus
+from core.models.models import BuildArtifactInfo, Task, TaskStatus
 from core.queries import pipeline as pipeline_queries
 from core.queries import task as task_queries
+from core.services.artifact import get_artifact_info
 from core.utils import git_utils
 
 
@@ -621,3 +623,114 @@ async def get_task_status(task_id: str) -> Dict[str, Any]:
         }
     except EntityNotFoundError as e:
         return {"error": str(e)}
+
+
+class _BuildArtifactToolResult(BuildArtifactInfo):
+    """MCP result model with the REST-only ``configured``/``pipeline_id`` fields.
+
+    The design specifies that ``get_build_artifact`` returns a
+    :class:`BuildArtifactInfo` enriched with a download URL/token. MCP tools in
+    this module traditionally return plain mappings, so this model also offers
+    lightweight mapping access. That keeps the tool convenient for both the
+    MCP JSON serialiser and direct (test/CLI) callers without changing the
+    shared core model.
+    """
+
+    pipeline_id: Optional[str] = None
+    configured: bool = False
+
+    def __getitem__(self, key: str) -> Any:
+        if key in type(self).model_fields:
+            return getattr(self, key)
+        raise KeyError(key)
+
+    def __contains__(self, key: object) -> bool:
+        return isinstance(key, str) and key in type(self).model_fields
+
+    def __iter__(self):
+        return iter(type(self).model_fields)
+
+    def __len__(self) -> int:
+        return len(type(self).model_fields)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return getattr(self, key, default)
+
+    def keys(self):
+        return self.model_dump().keys()
+
+    def items(self):
+        return self.model_dump().items()
+
+    def values(self):
+        return self.model_dump().values()
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, dict):
+            return self.model_dump() == other
+        return super().__eq__(other)
+
+
+async def get_build_artifact(pipeline_id: str) -> Any:
+    """Return live metadata for a pipeline's build artifact.
+
+    The returned :class:`BuildArtifactInfo` is computed from the workspace at
+    call time (existence, size, modification time, source version and SHA-256)
+    and is augmented with a short-lived, pipeline- and path-bound download
+    token. ``download_url`` is deliberately relative so a host-side agent can
+    prepend the API base URL it already uses.
+
+    Byte transfer is intentionally not an MCP tool: the agent downloads the
+    file directly from ``download_url`` using the returned token (design
+    §10.2). This keeps large artifacts out of the MCP JSON channel.
+
+    Args:
+        pipeline_id: The 24-char hex ID of the pipeline.
+
+    Returns:
+        Artifact metadata plus ``download_url``, ``download_token`` and
+        ``expires_in`` when an artifact is configured, or an ``error`` entry.
+    """
+    if not _is_valid_id(pipeline_id):
+        return {
+            "error": (
+                f"Invalid pipeline_id '{pipeline_id}'. Must be a 24-char hex string."
+            )
+        }
+
+    await init_db()
+    try:
+        pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
+    except EntityNotFoundError as e:
+        return {"error": str(e)}
+    except Exception as e:
+        return {"error": f"An unexpected error occurred: {str(e)}"}
+
+    try:
+        info = get_artifact_info(pipeline)
+        # ``BuildArtifactInfo`` is awaitable so both sync and async service
+        # implementations (including test doubles) work here.
+        if hasattr(info, "__await__"):
+            info = await info
+    except Exception as e:
+        return {"error": f"An unexpected error occurred: {str(e)}"}
+
+    data = info if isinstance(info, dict) else info.model_dump()
+    path = data.get("path")
+
+    result = _BuildArtifactToolResult(
+        **data,
+        pipeline_id=pipeline_id,
+        configured=path is not None,
+    )
+
+    if path is not None:
+        result.download_url = f"/api/pipelines/{pipeline_id}/artifact/download"
+        result.download_token = create_artifact_token(pipeline_id, path)
+        result.expires_in = ARTIFACT_TOKEN_TTL_SECONDS
+    else:
+        result.download_url = None
+        result.download_token = None
+        result.expires_in = None
+
+    return result
