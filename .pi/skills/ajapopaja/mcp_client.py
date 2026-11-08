@@ -4,7 +4,9 @@ import json
 import logging
 import os
 import sys
+from pathlib import Path, PurePosixPath
 from typing import Any, Dict, Optional
+from urllib.parse import urlencode
 
 import httpx
 
@@ -139,6 +141,192 @@ class MCPHttpClient:
                     logger.info(f"📝 Tool Output:\n{item.get('text')}")
             return result
         return None
+
+
+def _decode_json(value: Any) -> Any:
+    """Decode a JSON string, returning the original value when it is not JSON."""
+    while isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except (json.JSONDecodeError, TypeError):
+            return None
+    return value
+
+
+def _unwrap_tool_payload(payload: Any) -> Any:
+    """Unwrap the common single-key envelopes used by MCP structured results."""
+    while isinstance(payload, dict) and len(payload) == 1:
+        key = next(iter(payload))
+        if key not in {"result", "data", "structuredContent", "structured_content"}:
+            break
+        payload = payload[key]
+    return payload
+
+
+def _extract_tool_payload(response: Any) -> Optional[Dict[str, Any]]:
+    """Extract the JSON object returned by an MCP ``tools/call`` response.
+
+    FastMCP exposes tool results either as a ``structuredContent`` object or as
+    JSON text in the ``content`` list, depending on the installed protocol
+    version. The helper accepts both, as well as a direct payload (useful for
+    tests and direct callers).
+    """
+    if response is None:
+        return None
+
+    payload = response
+    if isinstance(payload, dict) and "result" in payload:
+        rpc_result = payload["result"]
+        if isinstance(rpc_result, dict):
+            if rpc_result.get("structuredContent") is not None:
+                payload = rpc_result["structuredContent"]
+            elif rpc_result.get("structured_content") is not None:
+                payload = rpc_result["structured_content"]
+            elif isinstance(rpc_result.get("content"), list):
+                payload = None
+                for item in rpc_result["content"]:
+                    if not isinstance(item, dict):
+                        continue
+                    parsed = _decode_json(item.get("text"))
+                    if isinstance(parsed, dict):
+                        payload = parsed
+                        break
+                    if item.get("json") is not None:
+                        payload = _decode_json(item["json"])
+                        break
+                if payload is None:
+                    return None
+            elif "content" not in rpc_result:
+                payload = rpc_result
+            else:
+                return None
+        else:
+            payload = _decode_json(rpc_result)
+
+    payload = _unwrap_tool_payload(payload)
+    if hasattr(payload, "model_dump"):
+        payload = payload.model_dump()
+
+    return payload if isinstance(payload, dict) else None
+
+
+def _print_artifact(payload: Dict[str, Any], as_json: bool = False) -> None:
+    """Print artifact metadata to stdout, optionally as compact JSON."""
+    if as_json:
+        print(json.dumps(payload, default=str, ensure_ascii=False))
+    else:
+        print(json.dumps(payload, indent=2, default=str, ensure_ascii=False))
+
+
+def _artifact_download_url(
+    client: MCPHttpClient, pipeline_id: str, payload: Dict[str, Any]
+) -> str:
+    """Build the absolute artifact download URL for the given metadata."""
+    download_url = payload.get("download_url")
+    if not download_url:
+        download_url = f"/api/pipelines/{pipeline_id}/artifact/download"
+
+    if str(download_url).startswith(("http://", "https://")):
+        url = str(download_url)
+    else:
+        url = f"{client.base_url.rstrip('/')}/{str(download_url).lstrip('/')}"
+
+    token = payload.get("download_token")
+    separator = "&" if "?" in url else "?"
+    return f"{url}{separator}{urlencode({'token': token})}"
+
+
+async def run_get_artifact(
+    client: MCPHttpClient, pipeline_id: str, as_json: bool = False
+) -> Optional[Dict[str, Any]]:
+    """Fetch and print a pipeline's build artifact metadata and download token."""
+    logger.info(f"--- Action: Get Build Artifact (Pipeline: {pipeline_id}) ---")
+    response = await client.call_tool(
+        "get_build_artifact", {"pipeline_id": pipeline_id}
+    )
+    payload = _extract_tool_payload(response)
+    if payload is None:
+        logger.error("Failed to retrieve build artifact metadata.")
+        return None
+
+    if payload.get("error"):
+        logger.error(f"Failed to get build artifact: {payload['error']}")
+    _print_artifact(payload, as_json=as_json)
+    return payload
+
+
+async def run_download_artifact(
+    client: MCPHttpClient, pipeline_id: str, output: Optional[str] = None
+) -> Optional[str]:
+    """Download a pipeline's build artifact, streaming it to a local file."""
+    logger.info(f"--- Action: Download Build Artifact (Pipeline: {pipeline_id}) ---")
+    response = await client.call_tool(
+        "get_build_artifact", {"pipeline_id": pipeline_id}
+    )
+    payload = _extract_tool_payload(response)
+    if payload is None:
+        logger.error("Failed to retrieve build artifact metadata.")
+        return None
+
+    if payload.get("error"):
+        logger.error(f"Failed to get build artifact: {payload['error']}")
+        return None
+
+    token = payload.get("download_token")
+    if not token:
+        logger.error(
+            f"No downloadable build artifact is configured for pipeline {pipeline_id}."
+        )
+        return None
+
+    if output is None:
+        artifact_name = PurePosixPath(str(payload.get("path") or "")).name
+        if not artifact_name:
+            logger.error("Artifact metadata did not include a path or filename.")
+            return None
+        output = artifact_name
+
+    url = _artifact_download_url(client, pipeline_id, payload)
+    headers: Dict[str, str] = {}
+    auth_token = getattr(client, "auth_token", None)
+    if auth_token is None:
+        auth_token = getattr(getattr(client, "rpc", None), "auth_token", None)
+    if auth_token:
+        headers["Authorization"] = f"Bearer {auth_token}"
+
+    output_path = Path(output).expanduser()
+    request_kwargs: Dict[str, Any] = {}
+    if headers:
+        request_kwargs["headers"] = headers
+
+    try:
+        async with client.client.stream("GET", url, **request_kwargs) as download:
+            status_code = getattr(download, "status_code", 200)
+            if status_code >= 400:
+                body = b""
+                if hasattr(download, "aread"):
+                    body = await download.aread()
+                detail = body.decode("utf-8", errors="replace") if body else ""
+                raise RuntimeError(
+                    f"HTTP {status_code} downloading artifact"
+                    + (f": {detail}" if detail else "")
+                )
+
+            with output_path.open("wb") as file_handle:
+                async for chunk in download.aiter_bytes():
+                    if chunk:
+                        file_handle.write(chunk)
+    except Exception as e:
+        logger.error(f"Failed to download build artifact: {e}")
+        return None
+
+    logger.info(f"✅ Saved build artifact to {output_path}")
+    return str(output_path)
+
+
+# Backwards/alternatively named aliases keep the CLI helpers easy to discover.
+run_get_build_artifact = run_get_artifact
+run_download_build_artifact = run_download_artifact
 
 
 async def run_get_next_task(client: MCPHttpClient, pipeline_id: str):
@@ -312,13 +500,9 @@ async def main():
     create_task_parser = subparsers.add_parser(
         "create-task", help="Create a new task in a pipeline"
     )
-    create_task_parser.add_argument(
-        "pipeline_id", help="The 24-char hex pipeline ID"
-    )
+    create_task_parser.add_argument("pipeline_id", help="The 24-char hex pipeline ID")
     create_task_parser.add_argument("--title", required=True, help="Task title")
-    create_task_parser.add_argument(
-        "--spec", help="Markdown-formatted specification"
-    )
+    create_task_parser.add_argument("--spec", help="Markdown-formatted specification")
     create_task_parser.add_argument(
         "--design-doc", dest="design_doc", help="Markdown-formatted design document"
     )
@@ -377,6 +561,30 @@ async def main():
         "--task", dest="task_id", help="Optional task ID to link and mark submitted"
     )
 
+    artifact_parser = subparsers.add_parser(
+        "get-artifact", help="Fetch a pipeline's build artifact metadata and token"
+    )
+    artifact_parser.add_argument("pipeline_id", help="The 24-char hex pipeline ID")
+    artifact_parser.add_argument(
+        "--json",
+        dest="as_json",
+        action="store_true",
+        help="Print compact JSON suitable for scripting (e.g. jq)",
+    )
+
+    download_parser = subparsers.add_parser(
+        "download-artifact", help="Download a pipeline's build artifact"
+    )
+    download_parser.add_argument("pipeline_id", help="The 24-char hex pipeline ID")
+    download_parser.add_argument(
+        "-o",
+        "--output",
+        help=(
+            "Destination file path "
+            "(default: the artifact filename in the current directory)"
+        ),
+    )
+
     subparsers.add_parser("list", help="List all available tools on the MCP server")
 
     args = parser.parse_args()
@@ -427,6 +635,10 @@ async def main():
         await run_create_pull_request(
             client, args.pipeline_id, args.title, args.body, args.task_id
         )
+    elif args.command == "get-artifact":
+        await run_get_artifact(client, args.pipeline_id, as_json=args.as_json)
+    elif args.command == "download-artifact":
+        await run_download_artifact(client, args.pipeline_id, args.output)
 
     await client.close()
 
