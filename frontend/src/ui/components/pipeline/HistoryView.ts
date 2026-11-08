@@ -15,13 +15,16 @@
  */
 
 import type { ActionHandler, ActionRegistry } from '../../../core/ActionRegistry.ts';
+import type { AppContext } from '../../../core/AppContext.ts';
 import type { CommitDiff, GitLogEntry, GitStatusDetails } from '../../../core/domain.ts';
 import type { PipelineClient } from '../../../core/clients/PipelineClient.ts';
 import type {
   PullRequestClient,
   PullRequestSyncResult,
 } from '../../../core/clients/PullRequestClient.ts';
-import { DiffView } from '../common/DiffView.ts';
+import { DiffDialog } from '../dialogs/DiffDialog.ts';
+import { DiffHeaderView } from '../common/DiffHeaderView.ts';
+import { parsePatchFiles } from '../common/DiffView.ts';
 import { Icon } from '../common/Icon.ts';
 import { PaginationControl } from '../common/PaginationControl.ts';
 import { escapeHtml } from '../utils/html.ts';
@@ -42,6 +45,14 @@ export interface HistoryViewOptions {
   pullRequestClient?: PullRequestClient;
   /** Optional direct sync callback, taking precedence over the PR client. */
   syncPullRequests?: (pipelineId: string) => Promise<PullRequestSyncResult>;
+  /**
+   * Optional application context used to open a {@link DiffDialog} directly
+   * when the shared `open_diff_view` action is not registered (for example when
+   * the view is embedded on its own).
+   */
+  context?: AppContext;
+  /** Optional direct callback for opening a commit diff. */
+  openDiff?: (commitHash: string, diff?: CommitDiff) => void | Promise<void>;
 }
 
 /**
@@ -50,10 +61,11 @@ export interface HistoryViewOptions {
  *
  * Owns a stable shell (header strip, commit table, pagination footer) and
  * repaints only the fragments that change. The compact table lists the last
- * {@link HISTORY_PAGE_SIZE} commits; expanding a row lazily loads the full
- * commit detail (message + unified diff) through {@link PipelineClient.getCommitDiff}
- * and caches it, so a re-expansion never re-fetches. A monotonic request id
- * discards stale responses, mirroring `FileBrowseView`.
+ * {@link HISTORY_PAGE_SIZE} commits. Expanding a row lazily loads the commit
+ * metadata through {@link PipelineClient.getCommitDiff} and renders only the
+ * lightweight {@link DiffHeaderView}; the full patch is shown on demand in a
+ * {@link DiffDialog}. A monotonic request id discards stale responses, mirroring
+ * `FileBrowseView`.
  */
 export class HistoryView {
   private root: HTMLElement;
@@ -62,6 +74,8 @@ export class HistoryView {
   private registry: ActionRegistry;
   private pullRequestClient?: PullRequestClient;
   private syncPullRequests?: (pipelineId: string) => Promise<PullRequestSyncResult>;
+  private context?: AppContext;
+  private openDiff?: (commitHash: string, diff?: CommitDiff) => void | Promise<void>;
 
   private page = 0;
   private readonly pageSize = HISTORY_PAGE_SIZE;
@@ -78,7 +92,11 @@ export class HistoryView {
 
   private expanded: Set<string> = new Set();
   private diffCache: Map<string, CommitDiff> = new Map();
-  private diffViews: Map<string, DiffView> = new Map();
+  // The expanded rows only mount the lightweight metadata header; the full diff
+  // body is rendered on demand by DiffDialog.
+  private headerViews: Map<string, DiffHeaderView> = new Map();
+  // Backwards-compatible alias for code/tests that used the old field name.
+  private diffViews: Map<string, DiffHeaderView> = this.headerViews;
   private loadingDiffs: Set<string> = new Set();
   private diffErrors: Map<string, string> = new Map();
 
@@ -92,6 +110,8 @@ export class HistoryView {
     this.registry = options.actionRegistry;
     this.pullRequestClient = options.pullRequestClient;
     this.syncPullRequests = options.syncPullRequests;
+    this.context = options.context;
+    this.openDiff = options.openDiff;
   }
 
   render(): void {
@@ -298,6 +318,53 @@ export class HistoryView {
       if (this.destroyed) return;
       this.toggleCommit(element.getAttribute('data-commit-hash') ?? '');
     });
+    // Alias for hosts that want a history-specific action name; the rendered
+    // button uses the shared `open_diff_view` action directly.
+    register('history_open_diff', (event, element) => {
+      if (this.destroyed) return;
+      const registry = this.registry as any;
+      if (typeof registry.execute === 'function') {
+        void registry.execute('open_diff_view', event, element);
+        return;
+      }
+      const handler =
+        typeof registry.get === 'function'
+          ? registry.get('open_diff_view')
+          : registry.handlers?.get?.('open_diff_view');
+      if (typeof handler === 'function') handler(event, element);
+    });
+    // Standalone fallback: in the pipeline view `open_diff_view` is registered
+    // globally, but keeping a local fallback makes the HistoryView reusable on
+    // its own as well.
+    if (!this.hasRegisteredAction('open_diff_view')) {
+      register('open_diff_view', (event, element) => {
+        if (this.destroyed) return;
+        this.openCommitDiff(event, element);
+      });
+    }
+  }
+
+  private openCommitDiff(_event: Event, element: HTMLElement): void {
+    const hash = element.getAttribute('data-commit-hash') ?? '';
+    if (!hash) return;
+    const diff = this.diffCache.get(hash);
+
+    if (this.openDiff) {
+      void this.openDiff(hash, diff);
+      return;
+    }
+
+    const commit = this.commits.find((item) => item.hash === hash);
+    const context =
+      this.context ??
+      ({ pipelineClient: this.client } as unknown as AppContext);
+    void new DiffDialog({
+      context,
+      pipelineId: this.pipelineId,
+      commitHash: hash,
+      title: commit?.subject ?? undefined,
+      diff: diff ?? undefined,
+    }).show();
   }
 
   private setPage(page: number): void {
@@ -364,11 +431,11 @@ export class HistoryView {
   private renderBody(): void {
     const el = this.root.querySelector('#history-table-container');
     if (!el) return;
-    // Full repaint discards any mounted DiffView's DOM, so tear the views down
-    // first to detach their collapse listeners before rebuilding.
+    // Full repaint discards the mounted header DOM, so tear the views down first
+    // to detach their collapse listeners before rebuilding.
     this.destroyDiffViews();
     el.innerHTML = this.renderTable();
-    this.mountExpandedDiffs();
+    this.mountExpandedHeaders();
   }
 
   private renderTable(): string {
@@ -426,14 +493,26 @@ export class HistoryView {
         <td class="py-1 pr-2 text-xs text-app-text truncate align-middle" title="${subject}" data-role="history-subject">${subject}</td>
         <td class="py-1 pr-2 text-app-muted whitespace-nowrap align-middle" data-role="history-author">${author}</td>
         <td class="py-1 pr-2 text-app-muted whitespace-nowrap align-middle text-right" data-role="history-date">${escapeHtml(date)}</td>
+        <td class="py-1 pr-2 align-middle text-right">${isExpanded ? '' : this.renderOpenDiffButton(hash)}</td>
       </tr>
     `;
 
     if (!isExpanded) return row;
     return row + `
       <tr class="history-commit-detail">
-        <td colspan="5" class="p-0">${this.renderDetail(hash)}</td>
+        <td colspan="6" class="p-0">${this.renderDetail(hash)}</td>
       </tr>
+    `;
+  }
+
+  private renderOpenDiffButton(hash: string): string {
+    return `
+      <button type="button" data-action-click="open_diff_view" data-commit-hash="${escapeHtml(hash)}"
+        class="inline-flex items-center gap-1.5 rounded-md border border-app-border bg-app-surface px-2 py-0.5 text-xs font-semibold text-app-text hover:bg-app-bg hover:border-app-accent-1 transition-colors cursor-pointer whitespace-nowrap"
+        title="Open Commit Diff" aria-label="Open Commit Diff">
+        ${Icon.render('quickfix', { size: 12 })}
+        <span>View Diff</span>
+      </button>
     `;
   }
 
@@ -462,35 +541,36 @@ export class HistoryView {
       `;
     }
 
-    const message = diff.message || diff.subject || '';
     return `
-      <div class="history-detail-body px-3 py-2 bg-app-bg/40 border-t border-app-border/20">
-        <pre class="history-commit-message whitespace-pre-wrap break-words font-sans text-[11px] text-app-text/90 m-0" data-role="history-message">${escapeHtml(message)}</pre>
-        <div id="history-detail-${escapeHtml(hash)}" class="mt-2" data-role="history-diff-mount"></div>
+      <div class="history-detail-body bg-app-bg/40 border-t border-app-border/20" data-role="history-detail">
+        <div id="history-header-${escapeHtml(hash)}" data-role="history-diff-header-mount"></div>
+        <div class="flex justify-end px-3 pb-2">
+          ${this.renderOpenDiffButton(hash)}
+        </div>
       </div>
     `;
   }
 
-  private mountExpandedDiffs(): void {
+  private mountExpandedHeaders(): void {
     for (const hash of this.expanded) {
       const diff = this.diffCache.get(hash);
       if (!diff) continue;
       const mount = this.root.querySelector(
-        `#history-detail-${cssEscape(hash)}`
+        `#history-header-${cssEscape(hash)}`
       ) as HTMLElement | null;
       if (!mount) continue;
-      const view = new DiffView(mount, {
-        patch: diff.patch,
+      const files = parsePatchFiles(diff.patch ?? '');
+      const view = new DiffHeaderView(mount, {
         metadata: {
           label: 'Commit',
-          subject: diff.subject ?? undefined,
+          subject: diff.subject ?? diff.message ?? undefined,
           author: diff.author ?? undefined,
           createdAt: diff.created_at ?? undefined,
         },
-        heightClass: 'max-h-[50vh]',
+        files,
       });
       view.render();
-      this.diffViews.set(hash, view);
+      this.headerViews.set(hash, view);
     }
   }
 
@@ -617,7 +697,7 @@ export class HistoryView {
 
   private destroyDiffViews(): void {
     for (const view of this.diffViews.values()) view.destroy();
-    this.diffViews.clear();
+    this.headerViews.clear();
   }
 
   private formatDate(date?: string | null): string {

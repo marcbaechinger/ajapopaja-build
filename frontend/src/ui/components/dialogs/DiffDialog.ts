@@ -27,6 +27,18 @@ export interface DiffDialogProps {
   commitHash: string;
   /** Optional title (e.g. the task title) shown as a fallback subject. */
   title?: string;
+  /**
+   * Optional already-loaded commit diff. When supplied the dialog renders it
+   * immediately instead of fetching the same commit again (the History view
+   * already loads it to render the commit header).
+   */
+  diff?: CommitDiff | null;
+  /** Alias for {@link diff}, kept for callers that prefer an explicit name. */
+  initialDiff?: CommitDiff | null;
+  /** Additional aliases for the already-loaded commit diff. */
+  commitDiff?: CommitDiff | null;
+  /** Additional alias for the already-loaded commit diff. */
+  preloadedDiff?: CommitDiff | null;
 }
 
 /**
@@ -49,7 +61,19 @@ export class DiffDialog extends BaseDialog<void> {
       iconSvg: Icon.render('quickfix', { size: 20 }),
     });
     this.props = props;
-    this.load();
+    const initialDiff =
+      props.diff ??
+      props.initialDiff ??
+      props.commitDiff ??
+      props.preloadedDiff ??
+      null;
+    if (initialDiff) {
+      this.diff = initialDiff;
+      this.loading = false;
+      this.reRender();
+    } else {
+      this.load();
+    }
   }
 
   private async load() {

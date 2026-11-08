@@ -272,7 +272,7 @@ describe('HistoryView', () => {
     expect(root.textContent).toContain('Failed to read repository status');
   });
 
-  it('lazily loads the full commit detail on first expansion only', async () => {
+  it('lazily loads the commit header on first expansion only', async () => {
     await renderAndLoad();
 
     const row = rowFor(root);
@@ -282,18 +282,40 @@ describe('HistoryView', () => {
 
     expect(client.getCommitDiff).toHaveBeenCalledTimes(1);
     expect(client.getCommitDiff).toHaveBeenCalledWith('p1', COMMIT.hash);
-    expect(root.querySelector('[data-role="history-message"]')!.textContent).toContain(
-      'Longer body explaining it.'
+    // Only the lightweight header is embedded; the full diff lives in the dialog.
+    expect(root.querySelector('[data-role="diff-view"]')).toBeNull();
+    expect(root.querySelector('[data-role="diff-header"]')).not.toBeNull();
+    expect(root.querySelector('[data-role="metadata-subject"]')!.textContent).toBe(
+      'Add a feature'
     );
-    expect(root.querySelector('[data-role="diff-view"]')).not.toBeNull();
+    expect(root.querySelector('[data-role="diff-stats"]')!.textContent).toContain(
+      '1 file changed'
+    );
 
-    // Collapse then re-expand: the cached detail must not be re-fetched.
+    // Collapse then re-expand: the cached header must not be re-fetched.
     registry.get('history_toggle_commit')(new Event('click'), row);
     registry.get('history_toggle_commit')(new Event('click'), row);
     await flush();
 
     expect(client.getCommitDiff).toHaveBeenCalledTimes(1);
-    expect(root.querySelector('[data-role="diff-view"]')).not.toBeNull();
+    expect(root.querySelector('[data-role="diff-view"]')).toBeNull();
+    expect(root.querySelector('[data-role="diff-header"]')).not.toBeNull();
+  });
+
+  it('renders a button that opens the commit diff in the dialog', async () => {
+    await renderAndLoad();
+
+    const button = root.querySelector(
+      '[data-action-click="open_diff_view"][data-commit-hash="' + COMMIT.hash + '"]'
+    ) as HTMLButtonElement;
+    expect(button).not.toBeNull();
+    expect(button.textContent).toContain('View Diff');
+    expect(button.getAttribute('title')).toBe('Open Commit Diff');
+
+    const openDiff = vi.fn();
+    registry.register('open_diff_view', openDiff);
+    await registry.get('history_open_diff')(new Event('click'), button as any);
+    expect(openDiff).toHaveBeenCalled();
   });
 
   it('shows an error when the commit detail cannot be loaded', async () => {

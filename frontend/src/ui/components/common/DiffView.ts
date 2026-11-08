@@ -18,22 +18,17 @@ import { parsePatch } from 'diff';
 import type { StructuredPatch, StructuredPatchHunk } from 'diff';
 import { Icon } from './Icon.ts';
 import { escapeHtml } from '../utils/html.ts';
+import { DiffHeaderView } from './DiffHeaderView.ts';
+import type { DiffMetadata } from './DiffHeaderView.ts';
 
-/** Metadata shown in the collapsible header. All optional so the view is reusable. */
-export interface DiffMetadata {
-  /** PR subject / commit subject. */
-  subject?: string;
-  /** Author name. */
-  author?: string;
-  /** Source branch. */
-  branch?: string;
-  /** ISO date the patch was created. */
-  createdAt?: string;
-  /** ISO date the patch was last updated. */
-  updatedAt?: string;
-  /** Heading shown in the header summary, e.g. "Patch". */
-  label?: string;
-}
+export type {
+  DiffMetadata,
+  DiffHeaderViewOptions,
+  DiffHeaderStats,
+  DiffHeaderFile,
+  DiffHeaderAction,
+} from './DiffHeaderView.ts';
+export { DiffHeaderView } from './DiffHeaderView.ts';
 
 export interface DiffViewOptions {
   /** The git patch (unified diff) to render. */
@@ -190,13 +185,6 @@ export function parsePatchFiles(patch: string): ParsedFileDiff[] {
   return files;
 }
 
-function formatTimestamp(value?: string): string | undefined {
-  if (!value) return undefined;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
-}
-
 /**
  * A self-contained, reusable DOM view that renders a git patch like a patch
  * viewer: a collapsible metadata header (subject / author / branch / dates and
@@ -274,75 +262,12 @@ export class DiffView {
   // Rendering
   // ---------------------------------------------------------------------------
 
-  private aggregate(files: ParsedFileDiff[]): { added: number; removed: number } {
-    return files.reduce(
-      (acc, file) => ({ added: acc.added + file.added, removed: acc.removed + file.removed }),
-      { added: 0, removed: 0 }
-    );
-  }
-
-  private statsText(files: ParsedFileDiff[]): string {
-    const { added, removed } = this.aggregate(files);
-    const count = files.length;
-    return `${count} file${count === 1 ? '' : 's'} changed, +${added}, -${removed}`;
-  }
-
   private renderHeader(files: ParsedFileDiff[]): string {
-    const metadata = this.options.metadata ?? {};
-    const expanded = this.options.initiallyExpanded ?? true;
-    const label = metadata.label ?? 'Patch';
-    const subject = metadata.subject ?? '';
-    const stats = this.statsText(files);
-    const chevron = Icon.render('chevronRight', {
-      size: 14,
-      className: 'transition-transform group-open/diff:rotate-90',
+    return DiffHeaderView.render({
+      metadata: this.options.metadata,
+      files,
+      initiallyExpanded: this.options.initiallyExpanded ?? true,
     });
-
-    return `
-      <details class="diff-view-header group/diff border-b border-app-border bg-app-surface/30" ${
-        expanded ? 'open' : ''
-      } data-role="metadata-header">
-        <summary class="diff-view-header-summary flex items-center gap-3 px-4 py-3 cursor-pointer select-none list-none hover:bg-app-surface/50 transition-colors" data-role="metadata-toggle">
-          <span class="text-app-muted shrink-0" data-role="metadata-chevron">${chevron}</span>
-          <span class="text-[10px] font-black uppercase tracking-widest text-app-accent-2 shrink-0">${escapeHtml(
-            label
-          )}</span>
-          <span class="text-sm font-bold text-app-text truncate" data-role="metadata-subject">${escapeHtml(
-            subject
-          )}</span>
-          <span class="ml-auto font-mono text-[11px] text-app-muted whitespace-nowrap" data-role="diff-stats">${escapeHtml(
-            stats
-          )}</span>
-        </summary>
-        <div class="diff-view-metadata px-4 pb-4 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2${
-          expanded ? '' : ' hidden'
-        }" data-role="metadata-body">
-          ${this.renderMetaRow('Subject', subject)}
-          ${this.renderMetaRow('Author', metadata.author)}
-          ${this.renderMetaRow('Branch', metadata.branch)}
-          ${this.renderMetaRow('Created', formatTimestamp(metadata.createdAt), metadata.createdAt)}
-          ${this.renderMetaRow('Updated', formatTimestamp(metadata.updatedAt), metadata.updatedAt)}
-          ${this.renderMetaRow('Changes', stats)}
-        </div>
-      </details>
-    `;
-  }
-
-  private renderMetaRow(label: string, value?: string, title?: string): string {
-    const display = value && value.trim() ? value : '—';
-    const titleAttr = title ? ` title="${escapeHtml(title)}"` : '';
-    return `
-      <div class="flex items-baseline gap-2 text-xs min-w-0" data-role="meta-row" data-meta="${escapeHtml(
-        label.toLowerCase()
-      )}">
-        <span class="w-16 shrink-0 text-[10px] font-bold uppercase tracking-widest text-app-muted">${escapeHtml(
-          label
-        )}</span>
-        <span class="text-app-text/90 truncate" data-role="meta-value"${titleAttr}>${escapeHtml(
-          display
-        )}</span>
-      </div>
-    `;
   }
 
   private renderFiles(files: ParsedFileDiff[]): string {
