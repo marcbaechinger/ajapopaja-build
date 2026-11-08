@@ -45,6 +45,12 @@ import { HealthCheckDialog } from '../ui/components/dialogs/HealthCheckDialog';
 import { handleQuickPromptButtonClick } from '../ui/components/common/QuickPromptButton';
 import { setTaskSpecProposalUpdater } from '../ui/components/pipeline/SpecSection';
 import { registerOnePromptHandlers } from './oneprompt';
+import * as themeSets from '../ui/theme/themeSets.ts';
+
+const { DEFAULT_THEME_SET, themeManager } = themeSets;
+/** Prefer the registry's key, with a literal fallback for partial mocks. */
+const THEME_SET_STORAGE_KEY =
+  themeSets.THEME_SET_STORAGE_KEY ?? 'ajapopaja:theme-set';
 
 export interface AppState {
   theme: 'light' | 'dark';
@@ -76,6 +82,12 @@ export class AppContext {
   private state: AppState;
 
   constructor(containerId: string, apiBaseUrl: string) {
+    // Restore the persisted theme before anything else can read theme state.
+    // The ThemeManager singleton also restores on import, but doing it here
+    // keeps AppContext correct even if the manager was already constructed by
+    // another import in the same page/session.
+    this.restorePersistedTheme();
+
     this.actionRegistry = new ActionRegistry();
     this.navigator = new Navigator(containerId);
     this.authService = new AuthService();
@@ -108,14 +120,78 @@ export class AppContext {
     new AssistantPanel(this);
     this.sessionManagerPanel = new SessionManagerPanel(this);
     this.setupSessionManager();
-    
-    const savedTheme = document.documentElement.getAttribute('data-theme') as 'light' | 'dark' | null;
+
+    // Re-derive the light/dark mode from the manager's applied document
+    // attribute, then stay in sync with changes made through the manager.
     this.state = {
-      theme: savedTheme || 'dark'
+      theme: this.readActiveTheme()
     };
+    themeManager.onSetChange(() => {
+      this.state.theme = this.readActiveTheme();
+    });
 
     this.initGlobalActions();
     this.setupGlobalShortcuts();
+  }
+
+  /**
+   * Restore the persisted theme-set selection. A missing, corrupt or unknown
+   * selection falls back to the default set; the manager itself applies the
+   * persisted mode and writes the document attributes.
+   */
+  private restorePersistedTheme(): void {
+    let persistedSetId: string | null = null;
+    let persistedMode: 'light' | 'dark' | null = null;
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const raw = localStorage.getItem(THEME_SET_STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw) as {
+            setId?: unknown;
+            mode?: unknown;
+          } | null;
+          if (parsed && typeof parsed === 'object') {
+            if (typeof parsed.setId === 'string') persistedSetId = parsed.setId;
+            if (parsed.mode === 'light' || parsed.mode === 'dark') {
+              persistedMode = parsed.mode;
+            }
+          }
+        }
+      }
+    } catch {
+      // Corrupt or unavailable storage is treated as no persisted choice.
+    }
+
+    const registry = themeSets.THEME_SETS;
+    const known =
+      persistedSetId !== null &&
+      !!registry &&
+      Object.prototype.hasOwnProperty.call(registry, persistedSetId);
+    themeManager.setSet(known ? persistedSetId! : DEFAULT_THEME_SET);
+
+    // The manager usually restores the mode on import. Re-apply it explicitly
+    // so a manager constructed before storage was populated still matches.
+    if (persistedMode && this.readActiveTheme() !== persistedMode) {
+      themeManager.setMode(persistedMode);
+    }
+  }
+
+  /** The mode currently applied by the theme manager. */
+  private readActiveTheme(): 'light' | 'dark' {
+    return document.documentElement.getAttribute('data-theme') === 'light'
+      ? 'light'
+      : 'dark';
+  }
+
+  /** Resolve the set id carried by a picker/action element. */
+  private static resolveThemeSetId(element: HTMLElement): string | null {
+    const attributeId =
+      element.getAttribute('data-theme-set-id') ??
+      element.getAttribute('data-set-id') ??
+      element.getAttribute('data-theme-set');
+    if (attributeId) return attributeId;
+    if (element instanceof HTMLSelectElement) return element.value || null;
+    return null;
   }
 
   /**
@@ -182,9 +258,14 @@ export class AppContext {
     FileView.registerActions(this.actionRegistry);
 
     this.actionRegistry.register('toggle_theme', () => {
-      const newTheme = this.state.theme === 'light' ? 'dark' : 'light';
-      this.state.theme = newTheme;
-      document.documentElement.setAttribute('data-theme', newTheme);
+      // Light/dark is a mode switch within the active set; the manager owns
+      // the document attributes and persistence.
+      themeManager.setMode(this.state.theme === 'light' ? 'dark' : 'light');
+    });
+
+    this.actionRegistry.register('set_theme_set', (_event, element) => {
+      const setId = AppContext.resolveThemeSetId(element);
+      if (setId) themeManager.setSet(setId);
     });
 
     this.actionRegistry.register('perform_logout', async () => {

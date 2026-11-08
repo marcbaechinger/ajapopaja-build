@@ -4,6 +4,32 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Restore the persisted theme set/mode before the stylesheet paints. The
+      ThemeManager module also restores on import, but module scripts may run
+      after the first paint, which would flash the default dark theme for
+      light-mode users. Keep the storage key/shape in sync with
+      ui/theme/themeSets.ts; the manager applies the full token set afterwards.
+    -->
+    <script>
+      (function () {
+        try {
+          var raw = localStorage.getItem('ajapopaja:theme-set');
+          if (!raw) return;
+          var saved = JSON.parse(raw);
+          if (!saved || typeof saved !== 'object') return;
+          var root = document.documentElement;
+          if (typeof saved.setId === 'string' && saved.setId) {
+            root.setAttribute('data-theme-set', saved.setId);
+          }
+          if (saved.mode === 'light' || saved.mode === 'dark') {
+            root.setAttribute('data-theme', saved.mode);
+          }
+        } catch (error) {
+          /* Ignore unavailable/corrupt storage; the defaults apply. */
+        }
+      })();
+    </script>
     <title>Ajapopaja Build - Task Pipeline Manager</title>
   </head>
   <body class="font-sans min-h-screen">
