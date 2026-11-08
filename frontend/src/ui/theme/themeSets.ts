@@ -54,9 +54,12 @@ export interface ThemeSet {
   palette: Partial<Record<ThemeMode, PalettePrimitives>>;
   /** `--app-*` tokens derived from `palette`, per mode. */
   appTokens: Partial<Record<ThemeMode, Record<string, string>>>;
-  /** The two PiView themes, sharing the palette, differing by density role. */
-  interactiveTheme: PiViewTheme;
-  batchTheme: PiViewTheme;
+  /**
+   * The two PiView themes, selected per mode. A `'both'` set declares both
+   * entries; a single-mode set only needs the entry for its mode.
+   */
+  interactiveTheme: Partial<Record<ThemeMode, PiViewTheme>>;
+  batchTheme: Partial<Record<ThemeMode, PiViewTheme>>;
 }
 
 /** Stable storage key for the active set + mode. */
@@ -167,17 +170,26 @@ export function validateThemeSet(set: ThemeSet): string[] {
     }
   }
 
-  const themes: Array<[string, PiViewTheme]> = [
+  const themeRoles: Array<
+    ['interactiveTheme' | 'batchTheme', Partial<Record<ThemeMode, PiViewTheme>>]
+  > = [
     ['interactiveTheme', set.interactiveTheme],
     ['batchTheme', set.batchTheme],
   ];
-  for (const [role, theme] of themes) {
-    if (!theme || typeof theme !== 'object') {
-      issues.push(`${role} must be a PiViewTheme`);
+  for (const [role, themes] of themeRoles) {
+    if (!themes || typeof themes !== 'object' || Array.isArray(themes)) {
+      issues.push(`${role} must map every supported mode to a PiViewTheme`);
       continue;
     }
-    for (const issue of validateTheme(theme)) {
-      issues.push(`${role}: ${issue}`);
+    for (const mode of modes) {
+      const theme = themes[mode];
+      if (!theme || typeof theme !== 'object') {
+        issues.push(`${role}.${mode} must be a PiViewTheme`);
+        continue;
+      }
+      for (const issue of validateTheme(theme)) {
+        issues.push(`${role}.${mode}: ${issue}`);
+      }
     }
   }
 
@@ -197,8 +209,14 @@ const DEFAULT_SET: ThemeSet = {
     dark: deriveAppTokens(DARK_PALETTE),
     light: deriveAppTokens(LIGHT_PALETTE),
   },
-  interactiveTheme: PI_VIEW_THEMES['interactive-default'],
-  batchTheme: PI_VIEW_THEMES['batch-default'],
+  interactiveTheme: {
+    dark: PI_VIEW_THEMES['interactive-default'],
+    light: PI_VIEW_THEMES['interactive-default-light'],
+  },
+  batchTheme: {
+    dark: PI_VIEW_THEMES['batch-default'],
+    light: PI_VIEW_THEMES['batch-default-light'],
+  },
 };
 
 /** The single source of truth for available theme sets. */
@@ -335,7 +353,16 @@ export class ThemeManager {
 
   themeForVariant(variant: PiViewVariant): PiViewTheme {
     const set = this.getActiveSet();
-    return variant === 'interactive' ? set.interactiveTheme : set.batchTheme;
+    const themes = variant === 'interactive' ? set.interactiveTheme : set.batchTheme;
+    const otherMode: ThemeMode = this.activeMode === 'dark' ? 'light' : 'dark';
+    return (
+      themes?.[this.activeMode] ??
+      themes?.[otherMode] ??
+      PI_VIEW_THEMES[
+        variant === 'interactive' ? 'interactive-default' : 'batch-default'
+      ] ??
+      PI_VIEW_THEMES['batch-default']
+    );
   }
 
   onSetChange(cb: (setId: string) => void): () => void {

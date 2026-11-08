@@ -35,12 +35,14 @@
  * (batch-default parity) values for every token, so a theme may override only
  * the handful of roles it cares about.
  *
- * Builtins: `batch-default` is the dark, dense transcript; `batch-paper` is a
- * light, print/archival transcript; `interactive-default` is the roomy
- * conversation; and `interactive-focus` is a low-chrome, high-contrast reading
- * mode for long conversations. The two presets are code-selectable only (no
- * picker or persistence). The deprecated ids `batch-terminal` and
- * `interactive-chat` remain registered as aliases of the two defaults.
+ * Builtins: `batch-default` is the dark, dense transcript with a matching
+ * `batch-default-light`; `batch-paper` is a light, print/archival transcript;
+ * `interactive-default` is the roomy conversation with a matching
+ * `interactive-default-light`; and `interactive-focus` is a low-chrome,
+ * high-contrast reading mode for long conversations. The two presets are
+ * code-selectable only (no picker or persistence). The deprecated ids
+ * `batch-terminal` and `interactive-chat` remain registered as aliases of the
+ * two dark defaults.
  */
 
 /** The two PiView session variants. Each has its own default theme. */
@@ -470,6 +472,44 @@ function interactiveChatRefinements(palette: PalettePrimitives): PiViewTokens {
   };
 }
 
+/**
+ * Roles whose dark-mode derivation is not accessible enough on the light
+ * palette. The accents stay sky-600/cyan-600; the error text is darkened,
+ * headings use the primary ink, and code uses the muted light syntax palette so
+ * every role clears AA on its light surface.
+ */
+const LIGHT_DEFAULT_OVERRIDES: PiViewTokens = {
+  '--piview-surface-bash':
+    'color-mix(in oklab, var(--color-slate-100) 70%, var(--color-slate-200) 30%)',
+  '--piview-fg-error': 'var(--color-red-800)',
+  '--piview-fg-heading': 'var(--color-slate-900)',
+  '--piview-search-current-outline': 'rgba(15, 23, 42, 0.6)',
+  '--piview-shortcut-flash': 'rgba(15, 23, 42, 0.12)',
+
+  '--piview-syntax-comment': '#57606a',
+  '--piview-syntax-keyword': '#b31d28',
+  '--piview-syntax-string': '#0a3069',
+  '--piview-syntax-number': '#0550ae',
+  '--piview-syntax-built-in': '#953800',
+  '--piview-syntax-title': '#6f42c1',
+  '--piview-syntax-tag': '#116329',
+  '--piview-syntax-meta': '#57606a',
+  '--piview-syntax-addition': '#116329',
+  '--piview-syntax-deletion': '#a40e26',
+};
+
+/** Derive the harmonized light defaults without the dark-only role assumptions. */
+function deriveLightDefaultTheme(
+  density: PiViewDensity,
+  chatRefinements: PiViewTokens = {}
+): PiViewTokens {
+  return {
+    ...BASE_LIGHT_TOKENS,
+    ...derivePiviewTheme(LIGHT_PALETTE, density, chatRefinements),
+    ...LIGHT_DEFAULT_OVERRIDES,
+  };
+}
+
 const INTERACTIVE_CHAT_CSS = `
 @keyframes piview-chat-pulse {
   50% { opacity: 0.65; }
@@ -545,6 +585,28 @@ const INTERACTIVE_DEFAULT_THEME = defineTheme({
     DARK_PALETTE,
     'roomy',
     interactiveChatRefinements(DARK_PALETTE)
+  ),
+  css: INTERACTIVE_CHAT_CSS,
+});
+
+/** The dense default transcript in light mode, sharing the app's light palette. */
+const BATCH_DEFAULT_LIGHT_THEME = defineTheme({
+  id: 'batch-default-light',
+  label: 'Default (light)',
+  description: 'Dense, neutral transcript on the shared light palette.',
+  variants: ['batch', 'interactive'],
+  tokens: deriveLightDefaultTheme('compact'),
+});
+
+/** The roomy default conversation in light mode, sharing the app's light palette. */
+const INTERACTIVE_DEFAULT_LIGHT_THEME = defineTheme({
+  id: 'interactive-default-light',
+  label: 'Chat (light)',
+  description: 'Conversational layout with a calmer, roomier rhythm in light mode.',
+  variants: ['interactive'],
+  tokens: deriveLightDefaultTheme(
+    'roomy',
+    interactiveChatRefinements(LIGHT_PALETTE)
   ),
   css: INTERACTIVE_CHAT_CSS,
 });
@@ -671,8 +733,10 @@ const INTERACTIVE_FOCUS_THEME = defineTheme({
  */
 export const PI_VIEW_THEMES: Record<string, PiViewTheme> = {
   [BATCH_DEFAULT_THEME.id]: BATCH_DEFAULT_THEME,
+  [BATCH_DEFAULT_LIGHT_THEME.id]: BATCH_DEFAULT_LIGHT_THEME,
   [BATCH_PAPER_THEME.id]: BATCH_PAPER_THEME,
   [INTERACTIVE_DEFAULT_THEME.id]: INTERACTIVE_DEFAULT_THEME,
+  [INTERACTIVE_DEFAULT_LIGHT_THEME.id]: INTERACTIVE_DEFAULT_LIGHT_THEME,
   [INTERACTIVE_FOCUS_THEME.id]: INTERACTIVE_FOCUS_THEME,
 
   // Deprecated ids kept as aliases so existing `PiViewOptions.theme` strings
