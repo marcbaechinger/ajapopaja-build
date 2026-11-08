@@ -44,6 +44,7 @@ from api.dev_server_ws import register_dev_process_ws
 from api.notifications import register_notification_handlers
 from api.notifications.router import router as notifications_router
 from api.routes.auth import router as auth_router
+from api.routes.artifact import router as artifact_router
 from api.routes.dev_server import pr_dev_router, router as dev_server_router
 from api.routes.docbot import router as docbot_router
 from api.routes.editor_commands import router as editor_router
@@ -297,6 +298,7 @@ async def version():
 
 
 api_router.include_router(pipeline_router)
+api_router.include_router(artifact_router)
 api_router.include_router(task_router)
 api_router.include_router(pipeline_task_router)
 api_router.include_router(auth_router)
