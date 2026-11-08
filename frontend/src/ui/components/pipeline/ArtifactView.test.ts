@@ -86,4 +86,48 @@ describe('ArtifactView', () => {
   it('renders nothing when no artifact is configured', () => {
     expect(ArtifactView.renderArtifactRow({ pipeline: pipeline({ build_artifact: null }) })).toBe('');
   });
+
+  it('renders the build button and artifact row together', () => {
+    const info = new BuildArtifactInfo({
+      configured: true,
+      path: 'dist/app.zip',
+      label: 'App bundle',
+      exists: true,
+      size: 2048,
+    });
+
+    const html = ArtifactView.render({ pipeline: pipeline(), artifact: info });
+
+    expect(html).toContain('data-action-click="run_build"');
+    expect(html).toContain('data-build-artifact-row="true"');
+    expect(html).toContain('data-action-click="download_artifact"');
+  });
+
+  it('renders only the build button when no artifact is declared', () => {
+    const html = ArtifactView.render({
+      pipeline: pipeline({ build_artifact: null }),
+    });
+
+    expect(html).toContain('data-action-click="run_build"');
+    expect(html).not.toContain('data-build-artifact-row="true"');
+  });
+
+  it('supports a direct buildCommands declaration and escapes display text', () => {
+    const info = new BuildArtifactInfo({
+      configured: true,
+      path: 'dist/<app>.zip',
+      label: '<script>alert(1)</script>',
+      exists: false,
+    });
+
+    const button = ArtifactView.renderBuildButton({
+      buildCommands: [['make', 'build']],
+    });
+    expect(button).toContain('data-action-click="run_build"');
+
+    const html = ArtifactView.renderArtifactRow({ artifact: info });
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(html).toContain('dist/&lt;app&gt;.zip');
+    expect(html).not.toContain('<script>alert(1)</script>');
+  });
 });

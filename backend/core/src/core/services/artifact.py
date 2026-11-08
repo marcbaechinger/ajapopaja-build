@@ -33,6 +33,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from core.exceptions import EntityNotFoundError
 from core.models.models import BuildArtifactInfo, BuildArtifactSpec, Pipeline
 from core.services.file_browser import FileBrowserService, guess_media_type
 from core.utils import git_utils
@@ -180,9 +181,9 @@ def get_artifact_info(
 
     try:
         resolved, clean = FileBrowserService.resolve_file(pipeline, spec.path)
-    except (FileNotFoundError, IsADirectoryError):
-        # Not configured/build not run yet; keep the configured path so the
-        # UI/agent can prompt for a build.
+    except (FileNotFoundError, IsADirectoryError, EntityNotFoundError):
+        # Not configured/build not run yet, or the workspace itself is missing;
+        # keep the configured path so the UI/agent can prompt for a build.
         return BuildArtifactInfo(**info)
 
     try:

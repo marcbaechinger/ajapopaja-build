@@ -16,7 +16,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { PipelineClient } from './PipelineClient.ts';
-import { Pipeline, PipelineStatus, CommitDiff } from '../domain.ts';
+import { BuildArtifactInfo, Pipeline, PipelineStatus, CommitDiff } from '../domain.ts';
 
 const mockPipelineResponse = (overrides = {}) => ({
   id: 'pipe-1',
@@ -1070,6 +1070,60 @@ describe('PipelineClient build artifact endpoints', () => {
     expect((fetch as any).mock.calls[0][1].method).toBe('POST');
     expect(client.artifactDownloadUrl('pipe-1', 'abc.def')).toBe(
       `${baseUrl}/pipelines/pipe-1/artifact/download?token=abc.def`
+    );
+  });
+
+  it('should authenticate runBuild and getArtifact requests', async () => {
+    (fetch as any).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ configured: false, exists: false }),
+    });
+
+    await client.runBuild('pipe-1');
+    expect((fetch as any).mock.calls[0][1].headers.get('Authorization')).toBe(
+      'Bearer mock-token'
+    );
+
+    await client.getArtifact('pipe-1');
+    expect((fetch as any).mock.calls[1][1].headers.get('Authorization')).toBe(
+      'Bearer mock-token'
+    );
+  });
+
+  it('should return a BuildArtifactInfo instance for metadata', async () => {
+    (fetch as any).mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          configured: true,
+          path: 'dist/app.apk',
+          exists: false,
+          modified_at: null,
+        }),
+    });
+
+    const artifact = await client.getArtifact('pipe-1');
+
+    expect(artifact).toBeInstanceOf(BuildArtifactInfo);
+    expect(artifact.configured).toBe(true);
+    expect(artifact.exists).toBe(false);
+  });
+
+  it('should propagate build dispatch errors', async () => {
+    (fetch as any).mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: () => Promise.resolve({ detail: 'No build commands configured' }),
+    });
+
+    await expect(client.runBuild('pipe-1')).rejects.toThrow(
+      'No build commands configured'
+    );
+  });
+
+  it('should URL-encode artifact download tokens', () => {
+    expect(client.artifactDownloadUrl('pipe-1', 'a/b+c=')).toBe(
+      `${baseUrl}/pipelines/pipe-1/artifact/download?token=a%2Fb%2Bc%3D`
     );
   });
 });
