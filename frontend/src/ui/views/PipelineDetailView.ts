@@ -936,6 +936,9 @@ export class PipelineDetailView extends View {
       tasks: backlogTasks,
       selectedTaskId,
       collapsedSections: this.collapsedBacklogSections,
+      sidebarCollapsed: this.sidebarCollapsed,
+      // The shell owns the sidebar handle so it survives every backlog repaint.
+      showSidebarToggle: false,
     });
   }
 }

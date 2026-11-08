@@ -54,6 +54,14 @@ export interface BacklogViewProps {
   collapsedProposed?: boolean;
   collapsedBacklog?: boolean;
   collapsedQueue?: boolean;
+  /** Whether the surrounding backlog sidebar is currently collapsed. */
+  sidebarCollapsed?: boolean;
+  /**
+   * Render the sidebar collapse/expand handle at the very top of the backlog
+   * content. Defaults to `true` for standalone rendering; the PipelineDetailView
+   * shell renders the handle itself so it survives backlog repaints.
+   */
+  showSidebarToggle?: boolean;
 }
 
 /**
@@ -97,8 +105,17 @@ export class BacklogView {
       collapsedSections: collapsedSectionsOverride ?? props.collapsedSections,
     });
 
+    const showSidebarToggle = props.showSidebarToggle ?? true;
+    const sidebarCollapsed = props.sidebarCollapsed ?? false;
+    // The standalone handle is absolutely positioned, so reserve its height at
+    // the top of the content. This also aligns "Proposed" with the content tabs.
+    const rootClass = showSidebarToggle
+      ? 'relative flex flex-col gap-3 px-2 pb-2 pt-9 min-h-0'
+      : 'flex flex-col gap-3 p-2 min-h-0';
+
     return `
-      <div class="flex flex-col gap-3 p-2 min-h-0">
+      <div class="${rootClass}">
+        ${showSidebarToggle ? BacklogView.renderSidebarToggle(sidebarCollapsed) : ''}
         ${BacklogView.renderSection({
           key: 'proposed',
           title: 'Proposed',
@@ -133,6 +150,27 @@ export class BacklogView {
         })}
       </div>
     `;
+  }
+
+  /**
+   * The sidebar collapse/expand handle. It is rendered inside the backlog
+   * content so standalone callers get a working handle, while the pipeline shell
+   * renders the same markup directly inside `#backlog-sidebar`.
+   */
+  static renderSidebarToggle(collapsed: boolean = false): string {
+    return `<button id="backlog-sidebar-toggle" type="button"
+      data-action-click="toggle_backlog_sidebar"
+      class="absolute top-1 right-1 z-20 p-1.5 rounded-lg text-app-muted hover:text-app-accent-1 hover:bg-app-bg border border-transparent hover:border-app-border transition-colors cursor-pointer"
+      aria-pressed="${collapsed}" aria-controls="backlog-sidebar"
+      title="${collapsed ? 'Expand backlog sidebar' : 'Collapse backlog sidebar'}">
+      ${BacklogView.sidebarToggleIcon(collapsed)}
+    </button>`;
+  }
+
+  /** Chevron for the sidebar toggle (points the way the sidebar will move). */
+  static sidebarToggleIcon(collapsed: boolean): string {
+    const points = collapsed ? '9 18 15 12 9 6' : '15 18 9 12 15 6';
+    return `<svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="${points}"></polyline></svg>`;
   }
 
   /**

@@ -197,9 +197,13 @@ describe('PipelineDetailView Layout', () => {
     view.mount(container);
 
     const sidebar = container.querySelector('#backlog-sidebar') as HTMLElement;
-    expect(sidebar.classList.contains('hidden')).toBe(true);
-    // The toggle remains reachable so the sidebar can be expanded again.
-    expect(container.querySelector('#backlog-sidebar-toggle')).not.toBeNull();
+    expect(sidebar.classList.contains('hidden')).toBe(false);
+    expect(sidebar.classList.contains('w-9')).toBe(true);
+    expect(container.querySelector('#backlog-view')!.classList.contains('hidden')).toBe(true);
+    // The toggle remains reachable inside the sidebar so it can be expanded again.
+    const toggle = container.querySelector('#backlog-sidebar-toggle') as HTMLElement;
+    expect(toggle).not.toBeNull();
+    expect(sidebar.contains(toggle)).toBe(true);
   });
 
   it('should highlight the backlog row of a selected CREATED task', async () => {

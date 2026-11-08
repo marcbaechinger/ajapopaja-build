@@ -181,6 +181,32 @@ describe('BacklogView', () => {
     expect(html).not.toContain('ring-app-accent-1/40');
   });
 
+  describe('sidebar toggle', () => {
+    it('renders the collapse handle at the very top of the backlog content', () => {
+      const container = document.createElement('div');
+      container.innerHTML = BacklogView.render({ tasks: [] });
+      const toggle = container.querySelector('#backlog-sidebar-toggle') as HTMLElement;
+      expect(toggle).not.toBeNull();
+      expect(toggle.getAttribute('data-action-click')).toBe('toggle_backlog_sidebar');
+      expect(toggle.getAttribute('aria-pressed')).toBe('false');
+      expect(toggle.getAttribute('title')).toBe('Collapse backlog sidebar');
+      expect(container.firstElementChild?.firstElementChild).toBe(toggle);
+    });
+
+    it('reflects the collapsed state and can be omitted when the shell owns it', () => {
+      const collapsed = document.createElement('div');
+      collapsed.innerHTML = BacklogView.render({ tasks: [], sidebarCollapsed: true });
+      const toggle = collapsed.querySelector('#backlog-sidebar-toggle') as HTMLElement;
+      expect(toggle.getAttribute('aria-pressed')).toBe('true');
+      expect(toggle.getAttribute('title')).toBe('Expand backlog sidebar');
+      expect(toggle.innerHTML).toContain('points="9 18 15 12 9 6"');
+
+      const shellOwned = document.createElement('div');
+      shellOwned.innerHTML = BacklogView.render({ tasks: [], showSidebarToggle: false });
+      expect(shellOwned.querySelector('#backlog-sidebar-toggle')).toBeNull();
+    });
+  });
+
   describe('collapsible sections', () => {
     const mount = (html: string): HTMLElement => {
       const container = document.createElement('div');

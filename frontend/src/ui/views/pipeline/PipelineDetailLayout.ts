@@ -61,11 +61,12 @@ export class PipelineDetailLayout {
       `;
   }
 
-  /** The outer page shell: header, sidebar toggle rail, backlog sidebar, main and right sidebar. */
+  /** The outer page shell: header, backlog sidebar, main and right sidebar. */
   static renderShell(opts: RenderShellOptions): string {
     const headerHtml = opts.headerHtml ?? '';
     const sidebarCollapsed = opts.sidebarCollapsed ?? false;
     const backlogHidden = sidebarCollapsed ? ' hidden' : '';
+    const sidebarWidth = sidebarCollapsed ? 'w-9' : 'w-96';
     const prepColumnHtml =
       opts.prepColumnHtml ??
       PipelineDetailLayout.renderPrepColumn({ pullRequestSectionHtml: '' });
@@ -76,22 +77,19 @@ export class PipelineDetailLayout {
         </div>
 
         <div class="flex flex-1 min-h-0">
-          <!-- Sidebar toggle rail: always visible so the backlog sidebar can be
-               collapsed to reclaim horizontal space and expanded again. -->
-          <div class="w-9 flex-none shrink-0 flex flex-col items-center py-2 bg-app-surface/30 border-r border-app-border/60">
+          <!-- Left Sidebar: BacklogView (proposed designs + backlog + queue).
+               The collapse handle lives at the very top of the sidebar. It stays
+               reachable when collapsed because only the backlog content hides. -->
+          <aside id="backlog-sidebar" data-sidebar-collapsed="${sidebarCollapsed}"
+            class="relative ${sidebarWidth} flex-none shrink-0 border-r border-app-border/60 bg-app-surface/30 overflow-y-auto transition-[width] duration-200">
             <button id="backlog-sidebar-toggle" type="button"
               data-action-click="toggle_backlog_sidebar"
-              class="p-1.5 rounded-lg text-app-muted hover:text-app-accent-1 hover:bg-app-bg transition-colors cursor-pointer"
+              class="absolute top-2 right-1 z-20 p-1.5 rounded-lg text-app-muted hover:text-app-accent-1 hover:bg-app-bg border border-transparent hover:border-app-border transition-colors cursor-pointer"
               aria-pressed="${sidebarCollapsed}" aria-controls="backlog-sidebar"
               title="${sidebarCollapsed ? 'Expand backlog sidebar' : 'Collapse backlog sidebar'}">
               ${PipelineDetailLayout.sidebarToggleIcon(sidebarCollapsed)}
             </button>
-          </div>
-
-          <!-- Left Sidebar: BacklogView (proposed designs + backlog + queue) -->
-          <aside id="backlog-sidebar"
-            class="w-96 flex-none shrink-0 border-r border-app-border/60 bg-app-surface/30 overflow-y-auto${backlogHidden}">
-            <div id="backlog-view" class="min-h-full">
+            <div id="backlog-view" class="min-h-full pt-7${backlogHidden}">
               <p class="text-app-muted/40 text-[10px] uppercase font-bold tracking-widest text-center py-6">Loading backlog...</p>
             </div>
           </aside>
@@ -189,12 +187,19 @@ export class PipelineDetailLayout {
 
   /**
    * Applies the persisted backlog-sidebar collapse state to the mounted DOM.
-   * The sidebar is fully hidden to reclaim its width; the toggle rail next to
-   * it stays visible so it can be expanded again.
+   * Collapsing narrows the sidebar and hides its content, but keeps the
+   * absolutely positioned handle visible so the sidebar can be expanded again.
    */
   static applySidebarState(root: ParentNode, collapsed: boolean): void {
     const sidebar = root.querySelector<HTMLElement>('#backlog-sidebar');
-    sidebar?.classList.toggle('hidden', collapsed);
+    if (sidebar) {
+      sidebar.classList.toggle('w-96', !collapsed);
+      sidebar.classList.toggle('w-9', collapsed);
+      sidebar.setAttribute('data-sidebar-collapsed', String(collapsed));
+    }
+
+    const content = root.querySelector<HTMLElement>('#backlog-view');
+    content?.classList.toggle('hidden', collapsed);
 
     const button = root.querySelector<HTMLElement>('#backlog-sidebar-toggle');
     if (button) {

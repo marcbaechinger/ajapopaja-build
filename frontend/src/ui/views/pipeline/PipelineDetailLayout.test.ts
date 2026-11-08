@@ -37,21 +37,39 @@ describe('PipelineDetailLayout', () => {
       expect(html).toContain(headerHtml);
     });
 
-    it('shows the backlog sidebar by default and hides it when collapsed', () => {
+    it('shows the backlog sidebar by default and only hides its content when collapsed', () => {
       const expanded = renderInto(
         PipelineDetailLayout.renderShell({ sidebarCollapsed: false })
       );
+      const expandedSidebar = expanded.querySelector('#backlog-sidebar') as HTMLElement;
+      expect(expandedSidebar.classList.contains('hidden')).toBe(false);
+      expect(expandedSidebar.classList.contains('w-96')).toBe(true);
       expect(
-        expanded.querySelector('#backlog-sidebar')!.classList.contains('hidden')
+        expanded.querySelector('#backlog-view')!.classList.contains('hidden')
       ).toBe(false);
 
       const collapsed = renderInto(
         PipelineDetailLayout.renderShell({ sidebarCollapsed: true })
       );
-      const sidebar = collapsed.querySelector('#backlog-sidebar');
+      const sidebar = collapsed.querySelector('#backlog-sidebar') as HTMLElement;
       expect(sidebar).not.toBeNull();
-      expect(sidebar!.classList.contains('hidden')).toBe(true);
-      expect(sidebar!.className).toContain('hidden');
+      expect(sidebar.classList.contains('hidden')).toBe(false);
+      expect(sidebar.classList.contains('w-9')).toBe(true);
+      expect(
+        collapsed.querySelector('#backlog-view')!.classList.contains('hidden')
+      ).toBe(true);
+      // The handle stays inside the (still visible) sidebar.
+      const toggle = collapsed.querySelector('#backlog-sidebar-toggle');
+      expect(toggle).not.toBeNull();
+      expect(sidebar.contains(toggle)).toBe(true);
+    });
+
+    it('places the toggle at the very top of the backlog sidebar', () => {
+      const root = renderInto(
+        PipelineDetailLayout.renderShell({ sidebarCollapsed: false })
+      );
+      const sidebar = root.querySelector('#backlog-sidebar') as HTMLElement;
+      expect(sidebar.firstElementChild?.id).toBe('backlog-sidebar-toggle');
     });
 
     it('reflects the collapsed state on the toggle button', () => {
@@ -160,24 +178,32 @@ describe('PipelineDetailLayout', () => {
       return root;
     }
 
-    it('toggles the hidden class and rewrites the toggle aria/title/icon', () => {
+    it('narrows the sidebar, hides its content and rewrites the toggle aria/title/icon', () => {
       const root = mountShell();
       const sidebar = root.querySelector('#backlog-sidebar') as HTMLElement;
+      const content = root.querySelector('#backlog-view') as HTMLElement;
       const button = root.querySelector('#backlog-sidebar-toggle') as HTMLElement;
 
       expect(sidebar.classList.contains('hidden')).toBe(false);
+      expect(sidebar.classList.contains('w-96')).toBe(true);
+      expect(content.classList.contains('hidden')).toBe(false);
       expect(button.getAttribute('aria-pressed')).toBe('false');
       expect(button.getAttribute('title')).toBe('Collapse backlog sidebar');
       expect(button.innerHTML).toContain('points="15 18 9 12 15 6"');
 
       PipelineDetailLayout.applySidebarState(root, true);
-      expect(sidebar.classList.contains('hidden')).toBe(true);
+      expect(sidebar.classList.contains('hidden')).toBe(false);
+      expect(sidebar.classList.contains('w-9')).toBe(true);
+      expect(content.classList.contains('hidden')).toBe(true);
+      expect(sidebar.contains(button)).toBe(true);
       expect(button.getAttribute('aria-pressed')).toBe('true');
       expect(button.getAttribute('title')).toBe('Expand backlog sidebar');
       expect(button.innerHTML).toContain('points="9 18 15 12 9 6"');
 
       PipelineDetailLayout.applySidebarState(root, false);
       expect(sidebar.classList.contains('hidden')).toBe(false);
+      expect(sidebar.classList.contains('w-96')).toBe(true);
+      expect(content.classList.contains('hidden')).toBe(false);
       expect(button.getAttribute('aria-pressed')).toBe('false');
       expect(button.getAttribute('title')).toBe('Collapse backlog sidebar');
       expect(button.innerHTML).toContain('points="15 18 9 12 15 6"');
