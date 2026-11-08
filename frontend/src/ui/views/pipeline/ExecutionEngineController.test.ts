@@ -222,6 +222,19 @@ describe('ExecutionEngineController', () => {
       expect(coderBotService.reconnect).toHaveBeenCalledTimes(2);
     });
 
+    it('mounts the sidebar log with the batch variant and batch-terminal theme', () => {
+      coderBotService.getCurrentSession.mockReturnValue({ pipelineId: 'p1', taskId: 't1', active: true });
+      mountEngineShell();
+      const controller = makeController();
+
+      controller.updateSlot();
+
+      const log = engineMount().querySelector('#log-content-container') as HTMLElement;
+      expect(controller['enginePiView']?.getVariant()).toBe('batch');
+      expect(log.getAttribute('data-piview-variant')).toBe('batch');
+      expect(log.getAttribute('data-piview-theme')).toBe('batch-terminal');
+    });
+
     it('re-mounts when the mounted session key changes', () => {
       coderBotService.getCurrentSession.mockReturnValue({ pipelineId: 'p1', taskId: 't1', active: true });
       mountEngineShell();

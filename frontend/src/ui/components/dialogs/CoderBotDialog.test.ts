@@ -61,6 +61,7 @@ describe('CoderBotDialog composition', () => {
     expect(piView.service).toBe(mockService);
     expect(piView.mount).not.toBeNull();
     expect(piView.mount.id).toBe('coderbot-piview-mount');
+    expect(piView.options).toEqual(expect.objectContaining({ variant: 'batch' }));
     expect(piView.render).toHaveBeenCalledTimes(1);
 
     // Dialog footer still supplies the Close button.

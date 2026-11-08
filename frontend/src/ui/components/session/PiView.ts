@@ -76,6 +76,13 @@ export interface PiSessionService {
   getHistory(): RenderBlock[];
   getCurrentTaskId(): string | null;
   isActive(): boolean;
+  /**
+   * Optional session-kind hint used only when the host omits the explicit
+   * `variant` option. PiView re-resolves it on session state changes, so a
+   * service whose kind becomes known asynchronously can still select the right
+   * default theme. Hosts remain the primary source of truth.
+   */
+  getSessionKind?(): PiViewVariant;
   /** Wall-clock start (epoch ms) of the session, when known. */
   getSessionStartTime(): number | null;
   /**
@@ -201,6 +208,10 @@ export class PiView {
 
   /** Session variant and the effective theme resolved from the registry. */
   private variant: PiViewVariant;
+  /** True when the host supplied an explicit variant; service hints never override it. */
+  private variantExplicit: boolean;
+  /** The host's explicit theme option (if any), preserved across variant changes. */
+  private explicitTheme?: string | PiViewTheme;
   private theme: PiViewTheme;
   private themeId: string;
   private themeListeners: Set<(id: string) => void> = new Set();
@@ -323,7 +334,10 @@ export class PiView {
     this.emptyStateAction = options.emptyStateAction;
     this.onOpenDialog = options.onOpenDialog;
     this.keyboardBindings = options.keyboardBindings ?? {};
-    this.variant = options.variant === 'interactive' ? 'interactive' : 'batch';
+    this.variantExplicit =
+      options.variant === 'batch' || options.variant === 'interactive';
+    this.explicitTheme = options.theme;
+    this.variant = this.resolveVariant(options.variant);
     if (typeof options.theme === 'string' && !PI_VIEW_THEMES[options.theme]) {
       this.warnUnknownTheme(options.theme);
     }
@@ -339,9 +353,34 @@ export class PiView {
     return this.root;
   }
 
-  /** The session variant this view was created for. */
+  /** The session variant this view was created for (or resolved from). */
   getVariant(): PiViewVariant {
     return this.variant;
+  }
+
+  /**
+   * Resolve the session variant from an explicit host option first, then the
+   * service's optional kind hint, and finally the historical `batch` default.
+   */
+  private resolveVariant(explicit?: PiViewVariant): PiViewVariant {
+    if (explicit === 'batch' || explicit === 'interactive') return explicit;
+    return this.service.getSessionKind?.() === 'interactive' ? 'interactive' : 'batch';
+  }
+
+  /**
+   * Re-resolve a service-provided variant on session state changes. Explicit
+   * host variants are immutable; a host-provided theme also stays pinned. The
+   * switch only updates the existing root hooks/tokens, never the block DOM.
+   */
+  private syncVariantFromService(): void {
+    if (this.variantExplicit) return;
+    const nextVariant = this.resolveVariant();
+    if (nextVariant === this.variant) return;
+    this.variant = nextVariant;
+    this.logContainer?.setAttribute('data-piview-variant', nextVariant);
+    if (this.explicitTheme === undefined) {
+      this.setTheme(resolveTheme(nextVariant));
+    }
   }
 
   /** The id of the currently effective theme. */
@@ -1209,6 +1248,9 @@ export class PiView {
   }
 
   private initStateSync() {
+    // A service hint may have become available between construction and render.
+    this.syncVariantFromService();
+
     // Initial state
     const active = this.service.isActive();
     this.updateStopButtonVisibility(active);
@@ -1225,6 +1267,7 @@ export class PiView {
     // Subscribe to state changes
     this.unsubs.push(
       this.service.onSessionStateChange((active) => {
+        this.syncVariantFromService();
         this.updateStopButtonVisibility(active);
         this.syncSessionState(active);
       })

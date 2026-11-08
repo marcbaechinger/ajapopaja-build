@@ -45,6 +45,13 @@ function serviceWithHistory(history: RenderBlock[] = []): PiSessionService {
   };
 }
 
+function serviceWithHistoryAndOverrides(
+  history: RenderBlock[],
+  overrides: Partial<PiSessionService>
+): PiSessionService {
+  return { ...serviceWithHistory(history), ...overrides };
+}
+
 function mount(): HTMLElement {
   const el = document.createElement('div');
   document.body.appendChild(el);
@@ -204,6 +211,60 @@ describe('PiView theme registry', () => {
     view.setTheme(custom.id);
     expect(listener).toHaveBeenCalledTimes(1);
     view.destroy();
+  });
+
+  it('uses each variant default when the host mounts without an explicit theme', () => {
+    for (const [variant, themeId] of [
+      ['batch', 'batch-terminal'],
+      ['interactive', 'interactive-chat'],
+    ] as Array<[PiViewVariant, string]>) {
+      const view = new PiView(serviceWithHistory(), mount(), { variant });
+      view.render();
+      const log = view.getRoot().querySelector('#log-content-container') as HTMLElement;
+      expect(view.getVariant()).toBe(variant);
+      expect(view.getThemeId()).toBe(themeId);
+      expect(log.getAttribute('data-piview-variant')).toBe(variant);
+      expect(log.getAttribute('data-piview-theme')).toBe(themeId);
+      view.destroy();
+      view.getRoot().remove();
+    }
+  });
+
+  it('falls back to the service getSessionKind hint only when variant is omitted', () => {
+    let kind: PiViewVariant = 'interactive';
+    const stateListeners = new Set<(active: boolean) => void>();
+    const service = serviceWithHistoryAndOverrides([], {
+      getSessionKind: () => kind,
+      onSessionStateChange: (listener) => {
+        stateListeners.add(listener);
+        return () => stateListeners.delete(listener);
+      },
+    });
+
+    const view = new PiView(service, mount());
+    view.render();
+    const log = view.getRoot().querySelector('#log-content-container') as HTMLElement;
+    expect(view.getVariant()).toBe('interactive');
+    expect(view.getThemeId()).toBe('interactive-chat');
+    expect(log.getAttribute('data-piview-variant')).toBe('interactive');
+
+    // A session state change re-resolves the optional hint and its default theme.
+    kind = 'batch';
+    stateListeners.forEach((listener) => listener(true));
+    expect(view.getVariant()).toBe('batch');
+    expect(view.getThemeId()).toBe('batch-terminal');
+    expect(log.getAttribute('data-piview-variant')).toBe('batch');
+    expect(log.getAttribute('data-piview-theme')).toBe('batch-terminal');
+    view.destroy();
+
+    // An explicit host variant always wins over the service hint.
+    const explicit = new PiView(serviceWithHistoryAndOverrides([], {
+      getSessionKind: () => 'interactive',
+    }), mount(), { variant: 'batch' });
+    explicit.render();
+    expect(explicit.getVariant()).toBe('batch');
+    expect(explicit.getThemeId()).toBe('batch-terminal');
+    explicit.destroy();
   });
 
   it('falls back for an unknown id and warns only once', () => {
