@@ -22,7 +22,7 @@ the HTTP/auth layer.
 """
 
 import logging
-from typing import Any, Optional
+from typing import Optional
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -35,20 +35,11 @@ from api.auth import (
     decode_artifact_token,
     get_current_user,
 )
-from core.exceptions import EntityNotFoundError
-from core.models.models import (
-    BuildArtifactInfo,
-    BuildArtifactSpec,
-    Pipeline,
-    User,
-)
+from api.routes.file_browser import _resolve_file_or_http
+from core.models.models import BuildArtifactInfo, Pipeline, User
 from core.queries import pipeline as pipeline_queries
-from core.services.artifact import get_artifact_info
-from core.services.file_browser import (
-    FileBrowserService,
-    PathEscapeError,
-    guess_media_type,
-)
+from core.services.artifact import coerce_build_artifact_spec, get_artifact_info
+from core.services.file_browser import guess_media_type
 
 logger = logging.getLogger(__name__)
 
@@ -75,62 +66,6 @@ class ArtifactInfoResponse(BuildArtifactInfo):
     configured: bool = False
 
 
-def _artifact_spec(pipeline: Pipeline) -> Optional[BuildArtifactSpec]:
-    """Return the pipeline's validated artifact declaration, if any.
-
-    Pipeline documents normally carry a :class:`BuildArtifactSpec`, but tests
-    and lightweight callers may use a plain dict or duck-typed object. Treat any
-    object without a usable ``path`` as "not configured".
-    """
-    spec = getattr(pipeline, "build_artifact", None)
-    if spec is None:
-        return None
-    if isinstance(spec, BuildArtifactSpec):
-        return spec
-    if isinstance(spec, dict):
-        return BuildArtifactSpec(**spec)
-
-    path = getattr(spec, "path", None)
-    if not isinstance(path, str):
-        return None
-
-    def _text(value: Any) -> Optional[str]:
-        if not isinstance(value, str):
-            return None
-        stripped = value.strip()
-        return stripped or None
-
-    return BuildArtifactSpec(
-        path=path,
-        label=_text(getattr(spec, "label", None)),
-        description=_text(getattr(spec, "description", None)),
-        media_type=_text(getattr(spec, "media_type", None)),
-    )
-
-
-def _resolve_artifact_or_http(pipeline: Pipeline, path: str):
-    """Resolve an artifact path, translating service errors into HTTP errors."""
-    try:
-        return FileBrowserService.resolve_file(pipeline, path)
-    except EntityNotFoundError:
-        raise
-    except PathEscapeError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
-    except IsADirectoryError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Path is a directory, not a file",
-        )
-    except FileNotFoundError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Path not found"
-        )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-        ) from e
-
-
 async def _artifact_info_response(
     pipeline_id: str,
     pipeline: Pipeline,
@@ -148,7 +83,7 @@ async def _artifact_info_response(
     return ArtifactInfoResponse(
         **data,
         pipeline_id=pipeline_id,
-        configured=_artifact_spec(pipeline) is not None,
+        configured=coerce_build_artifact_spec(pipeline) is not None,
     )
 
 
@@ -181,14 +116,14 @@ async def create_download_token(
     immediately instead of when the browser follows the download link.
     """
     pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
-    spec = _artifact_spec(pipeline)
+    spec = coerce_build_artifact_spec(pipeline)
     if spec is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No build artifact configured for this pipeline",
         )
 
-    _resolved, clean = _resolve_artifact_or_http(pipeline, spec.path)
+    _resolved, clean = _resolve_file_or_http(pipeline, spec.path)
     return ArtifactDownloadToken(
         token=create_artifact_token(pipeline_id, clean),
         expires_in=ARTIFACT_TOKEN_TTL_SECONDS,
@@ -215,7 +150,7 @@ async def download_build_artifact(
         )
 
     pipeline = await pipeline_queries.get_pipeline_by_id(pipeline_id)
-    spec = _artifact_spec(pipeline)
+    spec = coerce_build_artifact_spec(pipeline)
     if spec is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -227,7 +162,7 @@ async def download_build_artifact(
             detail="Token does not match this artifact",
         )
 
-    resolved, _clean = _resolve_artifact_or_http(pipeline, spec.path)
+    resolved, _clean = _resolve_file_or_http(pipeline, spec.path)
     media_type = spec.media_type or guess_media_type(resolved.name)
     return FileResponse(
         resolved,

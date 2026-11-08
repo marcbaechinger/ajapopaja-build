@@ -88,12 +88,13 @@ def _optional_text(value: Any) -> Optional[str]:
     return stripped or None
 
 
-def _coerce_spec(pipeline: Pipeline) -> Optional[BuildArtifactSpec]:
-    """Return a validated artifact spec, or ``None`` when not configured.
+def coerce_build_artifact_spec(pipeline: Pipeline) -> Optional[BuildArtifactSpec]:
+    """Return the pipeline's validated artifact declaration, if any.
 
     Real pipelines always carry either ``None`` or a ``BuildArtifactSpec``.
-    The dict/duck-typed branches make the service convenient for tests and
-    callers that construct lightweight pipeline stand-ins.
+    The dict/duck-typed branches make this helper convenient for tests and
+    callers that construct lightweight pipeline stand-ins. Any object without a
+    usable ``path`` is treated as "not configured".
     """
     spec = getattr(pipeline, "build_artifact", None)
     if spec is None:
@@ -161,7 +162,7 @@ def get_artifact_info(
     only; callers can request the authoritative SHA-256 when those change.
     """
     build_commands_configured = _build_commands_configured(pipeline)
-    spec = _coerce_spec(pipeline)
+    spec = coerce_build_artifact_spec(pipeline)
     if spec is None:
         return BuildArtifactInfo(
             **_base_info(
@@ -207,6 +208,7 @@ def get_artifact_info(
 
 __all__ = [
     "HASH_CHUNK_SIZE",
+    "coerce_build_artifact_spec",
     "compute_sha256",
     "get_artifact_info",
 ]
