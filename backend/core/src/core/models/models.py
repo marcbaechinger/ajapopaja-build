@@ -162,6 +162,66 @@ class PipelineStatus(str, Enum):
     COMPLETED = "completed"
 
 
+class BuildArtifactSpec(BaseModel):
+    """Declaration of a pipeline's single build output file.
+
+    ``path`` is a repository-relative POSIX path. It is validated with the same
+    rules as file-browser paths: absolute paths and traversal escapes are
+    rejected, and the ``.git`` metadata directory is never addressable.
+    """
+
+    path: str
+    label: Optional[str] = None
+    description: Optional[str] = None
+    media_type: Optional[str] = None
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, v: str) -> str:
+        clean = sanitize_relative_path(v)
+        if any(part == ".git" for part in clean.split("/")):
+            raise ValueError("build_artifact.path must not reference .git")
+        return clean
+
+
+class BuildArtifactInfo(BaseModel):
+    """Live metadata/fingerprint for a pipeline's configured build artifact.
+
+    The information is computed on demand from the workspace; it is never
+    persisted. ``sha256`` is the authoritative equality key, while ``size`` and
+    ``modified_at`` are cheap hints for deciding whether a hash is needed.
+    """
+
+    path: Optional[str] = None
+    exists: bool = False
+    size: Optional[int] = None
+    modified_at: Optional[datetime] = None
+    version: Optional[str] = None
+    sha256: Optional[str] = None
+    media_type: Optional[str] = None
+    build_commands_configured: bool = False
+    # Optional fields populated by the REST/MCP layers.
+    download_url: Optional[str] = None
+    download_token: Optional[str] = None
+    expires_in: Optional[int] = None
+    # Display metadata copied from the declaration (when one is configured).
+    label: Optional[str] = None
+    description: Optional[str] = None
+
+    def __await__(self):
+        """Allow callers to await a synchronously computed result.
+
+        The artifact service is intentionally synchronous (it only stats,
+        hashes and reads git metadata), but consumers may reasonably use it
+        from an async context. Returning ``self`` makes both
+        ``ArtifactService.get_info(pipeline)`` and
+        ``await ArtifactService.get_info(pipeline)`` work.
+        """
+        if False:  # pragma: no cover - makes this method a generator
+            yield None
+        return self
+
+
 class RepoBootstrapStatus(str, Enum):
     """Outcome of the startup clone-if-missing check for a remote repo."""
 
@@ -196,6 +256,9 @@ class Pipeline(Document):
     # [["sh", "-c", "cd frontend && npm run build"]]). These build the repo.
     # ``None``/empty means "not configured".
     build_commands: Optional[List[List[str]]] = None
+    # Optional declaration of the single file produced by ``build_commands``.
+    # The file itself is never persisted; metadata is computed on demand.
+    build_artifact: Optional[BuildArtifactSpec] = None
     # Per-use-case model overrides. ``None``/empty means "no override" and the
     # global configuration from ``core.config`` is used instead. All fields are
     # optional so existing documents remain valid without a migration.
@@ -320,6 +383,37 @@ class Pipeline(Document):
         global configuration.
         """
         return _normalize_model_override(v)
+
+    @field_validator("build_artifact", mode="before")
+    @classmethod
+    def validate_build_artifact(cls, v):
+        """Sanitize the configured artifact path and reject ``.git``.
+
+        Accept both a :class:`BuildArtifactSpec` and the plain dict shape used
+        by API requests, so persisted documents and incoming payloads share
+        exactly the same path-safety rules as the file browser.
+        """
+        if v is None:
+            return v
+
+        if isinstance(v, BuildArtifactSpec):
+            clean = sanitize_relative_path(v.path)
+            if any(part == ".git" for part in clean.split("/")):
+                raise ValueError("build_artifact.path must not reference .git")
+            v.path = clean
+            return v
+
+        if isinstance(v, dict):
+            raw_path = v.get("path")
+            if raw_path is None:
+                return v
+            clean = sanitize_relative_path(raw_path)
+            if any(part == ".git" for part in clean.split("/")):
+                raise ValueError("build_artifact.path must not reference .git")
+            return {**v, "path": clean}
+
+        # Let Pydantic produce its normal type error for anything else.
+        return v
 
     @field_validator("repo_uri")
     @classmethod
