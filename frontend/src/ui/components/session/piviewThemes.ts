@@ -34,6 +34,13 @@
  * Themes do not need to be complete. `PiView.css` supplies the default
  * (batch-terminal parity) values for every token, so a theme may override only
  * the handful of roles it cares about.
+ *
+ * Builtins: `batch-terminal` is the dark, dense parity/fallback transcript;
+ * `batch-paper` is a light, print/archival transcript; `interactive-chat` is
+ * the default roomy conversation; and `interactive-focus` is a low-chrome,
+ * high-contrast reading mode for long conversations. The two presets are
+ * code-selectable only (no picker or persistence) and are built entirely from
+ * the shared light/chat token bases below.
  */
 
 /** The two PiView session variants. Each has its own default theme. */
@@ -477,14 +484,131 @@ const INTERACTIVE_CHAT_THEME = defineTheme({
 `,
 });
 
+const BATCH_PAPER_THEME = defineTheme({
+  id: 'batch-paper',
+  label: 'Paper',
+  description:
+    'Light, print-like transcript with paper surfaces, ink text and a muted, readable syntax palette.',
+  variants: ['batch'],
+  tokens: {
+    ...BASE_LIGHT_TOKENS,
+
+    '--piview-bg': '#faf9f5',
+    '--piview-bg-image': 'none',
+    '--piview-font-prose': '"Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif',
+    '--piview-font-size-prose': '13px',
+    '--piview-leading-prose': '1.5',
+    '--piview-radius-block': '0.125rem',
+    '--piview-radius-chrome': '0.125rem',
+    '--piview-shadow-block': 'none',
+    '--piview-motion-pulse': 'none',
+    '--piview-fg-status': '#166534',
+
+    // A muted light-mode syntax palette that stays above AA on the code surface.
+    '--piview-syntax-comment': '#57606a',
+    '--piview-syntax-keyword': '#b31d28',
+    '--piview-syntax-string': '#0a3069',
+    '--piview-syntax-number': '#0550ae',
+    '--piview-syntax-built-in': '#953800',
+    '--piview-syntax-title': '#6f42c1',
+    '--piview-syntax-tag': '#116329',
+    '--piview-syntax-meta': '#57606a',
+    '--piview-syntax-addition': '#116329',
+    '--piview-syntax-deletion': '#a40e26',
+  },
+  css: `
+.piview-formatted {
+  font-family: var(--piview-font-prose);
+}
+`,
+});
+
+const INTERACTIVE_FOCUS_THEME = defineTheme({
+  id: 'interactive-focus',
+  label: 'Focus',
+  description:
+    'Long-conversation reading mode: quieter chrome and thinking, high-contrast prose and a tight measure.',
+  variants: ['interactive'],
+  tokens: {
+    ...BASE_CHAT_TOKENS,
+
+    '--piview-bg': '#0b0f14',
+    '--piview-surface': '#11161d',
+    '--piview-surface-sticky': 'color-mix(in oklab, #0b0f14 96%, transparent)',
+    '--piview-surface-tool': 'color-mix(in oklab, #11161d 35%, transparent)',
+    '--piview-surface-bash': 'color-mix(in oklab, #0b0f14 88%, #000 12%)',
+    '--piview-surface-formatted-active': 'color-mix(in oklab, #11161d 55%, transparent)',
+    '--piview-surface-pre': '#0b0f14',
+    '--piview-surface-code': 'color-mix(in oklab, #11161d 70%, transparent)',
+    '--piview-surface-hover': 'color-mix(in oklab, #11161d 80%, transparent)',
+    '--piview-surface-icon': 'color-mix(in oklab, #11161d 55%, transparent)',
+
+    '--piview-fg': '#eef4fa',
+    '--piview-fg-dim': 'color-mix(in oklab, #eef4fa 50%, transparent)',
+    '--piview-fg-faint': 'color-mix(in oklab, #eef4fa 35%, transparent)',
+    '--piview-fg-title': '#f8fbff',
+    '--piview-fg-muted': '#9aa7b6',
+    '--piview-fg-tool': '#93a2b3',
+    '--piview-fg-thinking': '#8f8463',
+    '--piview-fg-notice': '#7cc4e8',
+    '--piview-fg-error': '#ff8a80',
+    '--piview-fg-ok': '#7ee787',
+    '--piview-fg-user-label': '#79c0ff',
+    '--piview-fg-status': '#7f8c9d',
+    '--piview-fg-heading': '#f8fbff',
+    '--piview-fg-link': '#79c0ff',
+    '--piview-fg-strong': '#ffffff',
+    '--piview-fg-quote': '#c6d2df',
+    '--piview-fg-code': '#9ecbff',
+    '--piview-fg-pre': '#eef4fa',
+    '--piview-fg-icon': '#7f8c9d',
+    '--piview-fg-icon-format': '#79c0ff',
+
+    '--piview-border': '#232d39',
+    '--piview-border-subtle': 'color-mix(in oklab, #232d39 35%, transparent)',
+    '--piview-border-tool': 'color-mix(in oklab, #232d39 45%, transparent)',
+    '--piview-border-accent-user': 'color-mix(in oklab, #79c0ff 30%, transparent)',
+    '--piview-border-accent-thinking': 'color-mix(in oklab, #eef4fa 14%, transparent)',
+    '--piview-border-accent-bash': 'color-mix(in oklab, #9ecbff 25%, transparent)',
+    '--piview-border-accent-quote': '#79c0ff',
+    '--piview-border-verification-ok': 'color-mix(in oklab, #7ee787 50%, transparent)',
+    '--piview-border-verification-error': 'color-mix(in oklab, #ff8a80 50%, transparent)',
+
+    '--piview-accent': '#79c0ff',
+    '--piview-accent-2': '#9ecbff',
+    '--piview-accent-fg': '#0b0f14',
+    '--piview-selection': 'color-mix(in oklab, #79c0ff 30%, transparent)',
+    '--piview-focus-ring': '#79c0ff',
+    '--piview-danger': '#da3633',
+    '--piview-danger-hover': '#b62324',
+    '--piview-scrollbar-thumb': '#232d39',
+    '--piview-scrollbar-track': 'transparent',
+    '--piview-status-dot-idle': 'color-mix(in oklab, #eef4fa 25%, transparent)',
+    '--piview-status-dot-active': '#7ee787',
+
+    '--piview-font-size-prose': '14px',
+    '--piview-leading-prose': '1.65',
+    '--piview-max-width': '62ch',
+    '--piview-block-gap': '1.125rem',
+    '--piview-block-padding': '0.75rem',
+    '--piview-radius-block': '8px',
+    '--piview-radius-chrome': '6px',
+    '--piview-shadow-block': 'none',
+  },
+});
+
 /**
  * The single source of truth for available themes. Add a `defineTheme(...)`
  * entry here (and optionally point a variant default at it); no PiView code or
- * test needs to change.
+ * test needs to change. Each entry is the complete palette contribution for a
+ * theme: the batch-paper and interactive-focus presets below are just a shared
+ * token base plus the roles their intent changes.
  */
 export const PI_VIEW_THEMES: Record<string, PiViewTheme> = {
   [BATCH_TERMINAL_THEME.id]: BATCH_TERMINAL_THEME,
+  [BATCH_PAPER_THEME.id]: BATCH_PAPER_THEME,
   [INTERACTIVE_CHAT_THEME.id]: INTERACTIVE_CHAT_THEME,
+  [INTERACTIVE_FOCUS_THEME.id]: INTERACTIVE_FOCUS_THEME,
 };
 
 /** Hard fallback if a variant has no (or an unknown) default theme. */
