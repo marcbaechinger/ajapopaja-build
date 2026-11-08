@@ -24,6 +24,7 @@ import {
   type PiViewTheme,
   type PiViewVariant,
 } from './piviewThemes.ts';
+import { themeManager } from '../../theme/themeSets.ts';
 import { renderMarkdown } from '../utils/markdown.ts';
 import { copyToClipboard } from '../../utils/clipboard.ts';
 import './Keybinding.css';
@@ -206,7 +207,9 @@ export class PiView {
   private onOpenDialog?: () => void;
   private unsubs: (() => void)[] = [];
 
-  /** Session variant and the effective theme resolved from the registry. */
+  /**
+   * Session variant and the effective theme resolved from the active theme set.
+   */
   private variant: PiViewVariant;
   /** True when the host supplied an explicit variant; service hints never override it. */
   private variantExplicit: boolean;
@@ -342,8 +345,22 @@ export class PiView {
       this.warnUnknownTheme(options.theme);
     }
     // Resolve before render() so the first paint is already themed (no FOUC).
-    this.theme = resolveTheme(this.variant, options.theme);
+    // Without an explicit host theme, the shared theme manager is the source;
+    // the registry default remains the fallback for isolated/direct-registry use.
+    this.theme =
+      options.theme === undefined
+        ? this.resolveDefaultTheme(this.variant)
+        : resolveTheme(this.variant, options.theme);
     this.themeId = this.theme.id;
+    // Re-theme mounted views in place when the active set changes. An explicit
+    // host theme stays pinned, preserving the host-as-source-of-truth rule.
+    this.unsubs.push(
+      themeManager.onSetChange(() => {
+        if (this.explicitTheme === undefined) {
+          this.setTheme(this.resolveDefaultTheme(this.variant));
+        }
+      })
+    );
     // Build the action->key lookup once, after overrides are merged over defaults.
     this.actionToKey = this.buildBindings();
   }
@@ -368,6 +385,21 @@ export class PiView {
   }
 
   /**
+   * Resolve the default theme for a variant from the shared theme manager,
+   * falling back to the static registry default when the manager cannot yet
+   * provide one (e.g. a direct-registry test environment).
+   */
+  private resolveDefaultTheme(variant: PiViewVariant): PiViewTheme {
+    try {
+      const theme = themeManager.themeForVariant(variant);
+      if (theme) return theme;
+    } catch {
+      // Fall through to the registry default.
+    }
+    return resolveTheme(variant);
+  }
+
+  /**
    * Re-resolve a service-provided variant on session state changes. Explicit
    * host variants are immutable; a host-provided theme also stays pinned. The
    * switch only updates the existing root hooks/tokens, never the block DOM.
@@ -379,7 +411,7 @@ export class PiView {
     this.variant = nextVariant;
     this.logContainer?.setAttribute('data-piview-variant', nextVariant);
     if (this.explicitTheme === undefined) {
-      this.setTheme(resolveTheme(nextVariant));
+      this.setTheme(this.resolveDefaultTheme(nextVariant));
     }
   }
 
