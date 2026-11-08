@@ -134,6 +134,15 @@ those primitives into its own token space. The set is the only place a hue is
 chosen. Density is applied per surface role (batch/interactive) and reused
 verbatim by every set.
 
+**Single-mode sets and the effective mode.** A set declares `mode: 'both'` or a
+single mode (`'dark'`/`'light'`). The requested app mode is always normalised
+through the active set: if the set supports the request it is used unchanged,
+otherwise it resolves to the set's only/first supported mode. `effectiveMode`
+is the single source of truth for `data-theme`, the inline `--app-*` tokens,
+persistence and `themeForVariant`, so app chrome and PiView logs can never end
+up in different modes. The mode control in the picker disables (with a
+title/`aria-disabled` explanation) any mode the active set does not support.
+
 ### 5.1 Shared palette primitives
 
 Each set declares ~10 primitives (the hue family):
@@ -255,22 +264,33 @@ contrast and token-completeness suites keep working against them).
 export class ThemeManager {
   getActiveSetId(): string;
   getActiveSet(): ThemeSet;
-  setMode(mode: ThemeMode): void;                 // light/dark within a set
-  setSet(id: string): void;
+  getActiveMode(): ThemeMode;                     // always the effective mode
+  getSupportedModes(): ThemeMode[];
+  getEffectiveMode(): ThemeMode;
+  setMode(mode: ThemeMode): void;                 // normalises to a supported mode
+  setSet(id: string): void;                       // also normalises the mode
   themeForVariant(variant: PiViewVariant): PiViewTheme;  // set.batchTheme / set.interactiveTheme
   onSetChange(cb: (setId: string) => void): () => void;
 }
 export const themeManager: ThemeManager;          // module singleton
 ```
 
+`effectiveMode(set, requested)` returns `requested` when the set supports it,
+otherwise the set's only/first supported mode. `setSet`, `setMode`, the
+persisted-state restore and `themeForVariant` all use this one helper; there is
+no "fall back to the other mode" path. A persisted selection whose mode is
+unsupported by its restored set is rewritten to the normalised `{ setId, mode }`.
+
 `setSet`/`setMode`:
 
-1. set `data-theme-set="<id>"` and `data-theme="<mode>"` on `<html>`;
-2. write the set's `--app-*` tokens (and `--syntax-*` if a set overrides them)
-   as inline custom properties on `<html>` (or a dedicated `<style>`), so the
-   app chrome, footers and editors all follow;
-3. persist `{ setId, mode }` to `localStorage` (`ajapopaja:theme-set`);
-4. notify subscribers.
+1. resolve the effective mode for the active set;
+2. set `data-theme-set="<id>"` and `data-theme="<effective-mode>"` on `<html>`;
+3. write the effective mode's `--app-*` tokens (and `--syntax-*` if a set
+   overrides them) as inline custom properties on `<html>` (or a dedicated
+   `<style>`), so the app chrome, footers and editors all follow;
+4. persist `{ setId, mode: effectiveMode }` to `localStorage`
+   (`ajapopaja:theme-set`);
+5. notify subscribers.
 
 ### 8.3 PiView integration (minimal)
 

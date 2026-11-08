@@ -113,9 +113,20 @@ export function deriveAppTokens(palette: PalettePrimitives): Record<string, stri
  * The supported modes of a set. `'both'` is expanded in the same order as
  * {@link THEME_MODES}; a single-mode set yields exactly that mode.
  */
-function modesForSet(set: ThemeSet): ThemeMode[] {
+export function getSupportedModes(set: ThemeSet): ThemeMode[] {
   if (set.mode === 'both') return [...THEME_MODES];
   return THEME_MODES.includes(set.mode) ? [set.mode] : [];
+}
+
+/**
+ * Resolve the mode a set can actually render. A requested mode the set does not
+ * support normalises to the set's only/first supported mode (dark as a last
+ * resort for an invalid set). This is the single source of truth used by the
+ * document, the PiView themes and persistence so all surfaces stay in lockstep.
+ */
+export function effectiveMode(set: ThemeSet, requested: ThemeMode): ThemeMode {
+  const modes = getSupportedModes(set);
+  return modes.includes(requested) ? requested : (modes[0] ?? 'dark');
 }
 
 /**
@@ -147,7 +158,7 @@ export function validateThemeSet(set: ThemeSet): string[] {
     issues.push("mode must be 'dark', 'light' or 'both'");
   }
 
-  const modes = modesForSet(set);
+  const modes = getSupportedModes(set);
   for (const mode of modes) {
     const palette = set.palette?.[mode];
     if (!palette || typeof palette !== 'object' || Array.isArray(palette)) {
@@ -362,6 +373,9 @@ export class ThemeManager {
     }
 
     this.applyToDocument();
+    // Rewrite a restored selection when its mode was unsupported (or its set
+    // was stale) so storage reflects the normalised, applied state.
+    if (persisted) this.persist();
   }
 
   getActiveSetId(): string {
@@ -373,12 +387,25 @@ export class ThemeManager {
     return this.activeMode;
   }
 
+  /** The modes the active set can render. */
+  getSupportedModes(): ThemeMode[] {
+    return getSupportedModes(this.getActiveSet());
+  }
+
+  /** The active mode normalised to a mode the active set supports. */
+  getEffectiveMode(): ThemeMode {
+    return effectiveMode(this.getActiveSet(), this.activeMode);
+  }
+
   getActiveSet(): ThemeSet {
     return this.resolveSet(this.activeSetId);
   }
 
   setMode(mode: ThemeMode): void {
-    this.activeMode = isThemeMode(mode) ? mode : 'dark';
+    const requested = isThemeMode(mode) ? mode : 'dark';
+    // Normalise eagerly: the manager's public active mode is always the mode
+    // its set can actually render, never an unsupported request.
+    this.activeMode = effectiveMode(this.getActiveSet(), requested);
     this.applyToDocument();
     this.persist();
     this.notify();
@@ -387,6 +414,7 @@ export class ThemeManager {
   setSet(id: string): void {
     const set = this.resolveSet(id, true);
     this.activeSetId = set.id;
+    this.activeMode = effectiveMode(set, this.activeMode);
     this.applyToDocument();
     this.persist();
     this.notify();
@@ -395,10 +423,9 @@ export class ThemeManager {
   themeForVariant(variant: PiViewVariant): PiViewTheme {
     const set = this.getActiveSet();
     const themes = variant === 'interactive' ? set.interactiveTheme : set.batchTheme;
-    const otherMode: ThemeMode = this.activeMode === 'dark' ? 'light' : 'dark';
+    const mode = effectiveMode(set, this.activeMode);
     return (
-      themes?.[this.activeMode] ??
-      themes?.[otherMode] ??
+      themes?.[mode] ??
       PI_VIEW_THEMES[
         variant === 'interactive' ? 'interactive-default' : 'batch-default'
       ] ??
@@ -431,17 +458,20 @@ export class ThemeManager {
   private applyToDocument(): void {
     const set = this.getActiveSet();
     this.activeSetId = set.id;
+    const mode = effectiveMode(set, this.activeMode);
+    this.activeMode = mode;
 
     if (typeof document !== 'undefined') {
       const root = document.documentElement;
       root.setAttribute('data-theme-set', set.id);
-      root.setAttribute('data-theme', this.activeMode);
-      applyAppTokens(set.appTokens[this.activeMode] ?? {});
+      root.setAttribute('data-theme', mode);
+      applyAppTokens(set.appTokens[mode] ?? {});
     }
   }
 
   private persist(): void {
-    writePersistedThemeSet({ setId: this.activeSetId, mode: this.activeMode });
+    const mode = effectiveMode(this.getActiveSet(), this.activeMode);
+    writePersistedThemeSet({ setId: this.activeSetId, mode });
   }
 
   private notify(): void {

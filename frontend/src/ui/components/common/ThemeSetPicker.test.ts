@@ -59,6 +59,7 @@ describe('ThemeSetPicker', () => {
     picker.destroy();
     root.remove();
     document.body.innerHTML = '';
+    delete THEME_SETS.temporary;
   });
 
   const trigger = () => root.querySelector<HTMLButtonElement>('[data-theme-set-picker-trigger]')!;
@@ -177,5 +178,34 @@ describe('ThemeSetPicker', () => {
       root.querySelector('[data-theme-mode="light"]')!.getAttribute('aria-pressed')
     ).toBe('true');
     expect(themeManager.getActiveSetId()).toBe(DEFAULT_THEME_SET);
+  });
+
+  it('disables a mode control the active single-mode set does not support', () => {
+    const base = THEME_SETS[DEFAULT_THEME_SET];
+    THEME_SETS.temporary = {
+      ...base,
+      id: 'temporary',
+      label: 'Temporary dark',
+      mode: 'dark',
+      palette: { dark: base.palette.dark },
+      appTokens: { dark: base.appTokens.dark },
+      interactiveTheme: { dark: base.interactiveTheme.dark },
+      batchTheme: { dark: base.batchTheme.dark },
+    };
+
+    themeManager.setMode('light');
+    themeManager.setSet('temporary');
+    picker.refresh();
+    picker.toggle();
+
+    const light = root.querySelector<HTMLButtonElement>('[data-theme-mode="light"]')!;
+    const dark = root.querySelector<HTMLButtonElement>('[data-theme-mode="dark"]')!;
+    expect(themeManager.getActiveMode()).toBe('dark');
+    expect(light.disabled).toBe(true);
+    expect(light.getAttribute('aria-disabled')).toBe('true');
+    expect(light.getAttribute('data-theme-mode-supported')).toBe('false');
+    expect(light.title).toContain('not supported');
+    expect(dark.disabled).toBe(false);
+    expect(dark.getAttribute('aria-pressed')).toBe('true');
   });
 });

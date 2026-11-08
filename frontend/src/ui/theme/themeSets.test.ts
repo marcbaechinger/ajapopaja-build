@@ -644,4 +644,89 @@ describe('ThemeManager', () => {
     expect(manager.themeForVariant('batch')).toBe(PI_VIEW_THEMES['batch-default']);
     expect(manager.themeForVariant('interactive')).toBe(PI_VIEW_THEMES['interactive-default']);
   });
+
+  function registerDarkOnlySet(): ThemeSet {
+    const base = THEME_SETS[DEFAULT_THEME_SET];
+    const darkOnly: ThemeSet = {
+      ...base,
+      id: 'temporary',
+      label: 'Temporary dark',
+      mode: 'dark',
+      palette: { dark: base.palette.dark },
+      appTokens: { dark: base.appTokens.dark },
+      interactiveTheme: { dark: base.interactiveTheme.dark },
+      batchTheme: { dark: base.batchTheme.dark },
+    };
+    THEME_SETS.temporary = darkOnly;
+    return darkOnly;
+  }
+
+  it('normalises a dark-only set selected while light mode is active', () => {
+    const darkOnly = registerDarkOnlySet();
+    const manager = new ThemeManager();
+    manager.setMode('light');
+    expect(manager.getActiveMode()).toBe('light');
+
+    manager.setSet('temporary');
+
+    expect(manager.getActiveMode()).toBe('dark');
+    expect(manager.getEffectiveMode()).toBe('dark');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    for (const [name, value] of Object.entries(DARK_TOKENS)) {
+      expect(document.documentElement.style.getPropertyValue(name)).toBe(value);
+    }
+    expect(manager.themeForVariant('batch')).toBe(darkOnly.batchTheme.dark);
+    expect(manager.themeForVariant('interactive')).toBe(
+      darkOnly.interactiveTheme.dark
+    );
+    expect(JSON.parse(localStorage.getItem(THEME_SET_STORAGE_KEY)!)).toEqual({
+      setId: 'temporary',
+      mode: 'dark',
+    });
+  });
+
+  it('normalises setMode to a mode the active single-mode set supports', () => {
+    const darkOnly = registerDarkOnlySet();
+    const manager = new ThemeManager();
+    manager.setSet('temporary');
+
+    manager.setMode('light');
+
+    expect(manager.getActiveMode()).toBe('dark');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    expect(manager.themeForVariant('batch')).toBe(darkOnly.batchTheme.dark);
+    expect(manager.themeForVariant('interactive')).toBe(
+      darkOnly.interactiveTheme.dark
+    );
+    expect(JSON.parse(localStorage.getItem(THEME_SET_STORAGE_KEY)!)).toEqual({
+      setId: 'temporary',
+      mode: 'dark',
+    });
+  });
+
+  it('normalises a persisted unsupported mode for a single-mode set', () => {
+    const darkOnly = registerDarkOnlySet();
+    localStorage.setItem(
+      THEME_SET_STORAGE_KEY,
+      JSON.stringify({ setId: 'temporary', mode: 'light' })
+    );
+
+    const manager = new ThemeManager();
+
+    expect(manager.getActiveSetId()).toBe('temporary');
+    expect(manager.getActiveMode()).toBe('dark');
+    expect(document.documentElement.getAttribute('data-theme-set')).toBe('temporary');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    expect(document.documentElement.style.getPropertyValue('--app-bg')).toBe(
+      DARK_TOKENS['--app-bg']
+    );
+    expect(manager.themeForVariant('batch')).toBe(darkOnly.batchTheme.dark);
+    expect(manager.themeForVariant('interactive')).toBe(
+      darkOnly.interactiveTheme.dark
+    );
+    expect(JSON.parse(localStorage.getItem(THEME_SET_STORAGE_KEY)!)).toEqual({
+      setId: 'temporary',
+      mode: 'dark',
+    });
+  });
 });

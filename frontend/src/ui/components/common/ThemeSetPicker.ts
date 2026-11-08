@@ -18,6 +18,7 @@ import { Icon } from './Icon.ts';
 import { escapeHtml } from '../utils/html.ts';
 import {
   THEME_SETS,
+  getSupportedModes,
   themeManager,
   type PalettePrimitives,
   type ThemeMode,
@@ -145,8 +146,15 @@ export class ThemeSetPicker {
 
     if (!this.open) return;
     if (previousMode) {
+      // A set switch may have made the previously focused mode unsupported;
+      // fall back to the mode that is actually applied.
+      const targetMode = getSupportedModes(this.activeSet()).includes(
+        previousMode as ThemeMode
+      )
+        ? previousMode
+        : this.activeMode();
       this.menu
-        .querySelector<HTMLElement>(`[data-theme-mode="${previousMode}"]`)
+        .querySelector<HTMLElement>(`[data-theme-mode="${targetMode}"]`)
         ?.focus();
     } else if (previousSetId) {
       this.menu
@@ -171,8 +179,10 @@ export class ThemeSetPicker {
   }
 
   private renderMenuContent(): string {
+    const activeSet = this.activeSet();
     const activeId = themeManager.getActiveSetId();
     const activeMode = this.activeMode();
+    const supportedModes = getSupportedModes(activeSet);
     const rows = Object.values(THEME_SETS)
       .map((set) => this.renderSetRow(set, set.id === activeId, activeMode))
       .join('');
@@ -183,7 +193,14 @@ export class ThemeSetPicker {
       <div class="mt-1.5 border-t border-app-border pt-2">
         <div class="px-2 pb-1 text-[10px] font-black uppercase tracking-widest text-app-muted">Mode</div>
         <div class="grid grid-cols-2 gap-1" role="group" aria-label="Color mode">
-          ${MODES.map((mode) => this.renderModeButton(mode, mode === activeMode)).join('')}
+          ${MODES.map((mode) =>
+            this.renderModeButton(
+              mode,
+              mode === activeMode,
+              supportedModes.includes(mode),
+              activeSet
+            )
+          ).join('')}
         </div>
       </div>
     `;
@@ -218,11 +235,24 @@ export class ThemeSetPicker {
     `;
   }
 
-  private renderModeButton(mode: ThemeMode, active: boolean): string {
-    const buttonClass = active
-      ? 'border-app-accent-2/40 bg-app-accent-2/15 text-app-accent-2'
-      : 'border-app-border text-app-muted hover:bg-app-bg hover:text-app-text';
+  private renderModeButton(
+    mode: ThemeMode,
+    active: boolean,
+    supported: boolean,
+    set: ThemeSet
+  ): string {
     const label = mode === 'dark' ? 'Dark' : 'Light';
+    const buttonClass = !supported
+      ? 'border-app-border text-app-muted opacity-40 cursor-not-allowed'
+      : active
+        ? 'border-app-accent-2/40 bg-app-accent-2/15 text-app-accent-2'
+        : 'border-app-border text-app-muted hover:bg-app-bg hover:text-app-text';
+    const title = supported
+      ? `Use ${label.toLowerCase()} mode`
+      : `${label} mode is not supported by the ${set.label} theme set`;
+    const disabledAttrs = supported
+      ? ''
+      : 'disabled aria-disabled="true" data-theme-mode-supported="false"';
     const icon =
       mode === 'dark'
         ? `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>`
@@ -233,7 +263,10 @@ export class ThemeSetPicker {
               data-theme-mode="${mode}"
               data-theme-mode-button
               data-theme-mode-active="${active}"
+              data-theme-mode-supported="${supported}"
               aria-pressed="${active}"
+              title="${escapeHtml(title)}"
+              ${disabledAttrs}
               class="flex items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-colors cursor-pointer ${buttonClass}">
         ${icon}
         <span>${label}</span>
@@ -343,6 +376,12 @@ export class ThemeSetPicker {
     handledEvents.add(event);
     const modeButton = target.closest<HTMLElement>('[data-theme-mode]');
     if (modeButton) {
+      if (
+        modeButton.hasAttribute('disabled') ||
+        modeButton.getAttribute('aria-disabled') === 'true'
+      ) {
+        return;
+      }
       const mode = modeButton.getAttribute('data-theme-mode');
       if (mode === 'light' || mode === 'dark') {
         themeManager.setMode(mode);
