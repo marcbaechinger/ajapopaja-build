@@ -20,6 +20,7 @@ import { KeybindingManager } from './KeybindingManager.ts';
 import { renderMarkdown } from '../utils/markdown.ts';
 import { copyToClipboard } from '../../utils/clipboard.ts';
 import './Keybinding.css';
+import './PiView.css';
 
 /**
  * Classes for the Markdown-rendered ("Format as markup") view of a block.
@@ -372,26 +373,26 @@ export class PiView {
     // no horizontal scrollbar is lost).
     const resizeClass = this.resizable ? 'resize-y overflow-x-hidden' : '';
     container.className =
-      `piview-log relative bg-black text-green-400 px-4 pb-4 font-mono text-[11px] leading-tight overflow-y-auto ${resizeClass} ${this.logHeightClass} custom-scrollbar selection:bg-app-accent-1/30`;
+      `piview-log relative px-4 pb-4 font-mono text-[11px] leading-tight overflow-y-auto ${resizeClass} ${this.logHeightClass} custom-scrollbar`;
     const statusBar = document.createElement('div');
     statusBar.id = 'piview-status-bar';
-    statusBar.className = 'sticky top-0 z-10 bg-black/95 border-b border-app-border/40 px-1 pb-1 mb-1 flex items-center gap-2';
+    statusBar.className = 'sticky top-0 z-10 border-b px-1 pb-1 mb-1 flex items-center gap-2';
     statusBar.setAttribute('aria-live', 'polite');
     const dot = document.createElement('span');
     dot.id = 'piview-status-dot';
     dot.setAttribute('aria-hidden', 'true');
-    dot.className = 'inline-block w-2 h-2 rounded-full bg-app-text/40';
+    dot.className = 'inline-block w-2 h-2 rounded-full';
+    dot.setAttribute('data-state', 'idle');
     statusBar.appendChild(dot);
     const text = document.createElement('span');
     text.id = 'piview-status-text';
-    text.className = 'text-green-300';
     text.textContent = 'Session idle';
     statusBar.appendChild(text);
     container.appendChild(statusBar);
     const toast = document.createElement('div');
     toast.id = 'piview-toast';
     toast.className =
-      'absolute top-1 right-1 z-20 px-2 py-1 rounded text-[10px] pointer-events-none bg-app-accent-1 text-white opacity-0 transition-opacity';
+      'absolute top-1 right-1 z-20 px-2 py-1 rounded text-[10px] pointer-events-none opacity-0 transition-opacity';
     container.appendChild(toast);
     const blocks = document.createElement('div');
     blocks.id = 'log-blocks';
@@ -404,15 +405,15 @@ export class PiView {
     emptyState.setAttribute('role', 'status');
     emptyState.setAttribute('aria-live', 'polite');
     emptyState.className =
-      'flex flex-col items-center justify-center text-center gap-1.5 py-10 px-4 text-app-text/50';
+      'flex flex-col items-center justify-center text-center gap-1.5 py-10 px-4';
     const emptyIcon = document.createElement('span');
     emptyIcon.setAttribute('aria-hidden', 'true');
-    emptyIcon.className = 'text-app-text/40 mb-1';
+    emptyIcon.className = 'mb-1';
     emptyIcon.innerHTML = this.cleanIcon(Icon.render('clock', { size: 32 }));
     emptyState.appendChild(emptyIcon);
     const emptyTitle = document.createElement('p');
     emptyTitle.id = 'piview-empty-title';
-    emptyTitle.className = 'text-sm font-medium text-app-text/70';
+    emptyTitle.className = 'text-sm font-medium';
     emptyTitle.textContent = 'No active session…';
     emptyState.appendChild(emptyTitle);
     const emptySub = document.createElement('p');
@@ -424,7 +425,7 @@ export class PiView {
       action.id = 'piview-empty-state-action';
       action.type = 'button';
       action.className =
-        'mt-2 px-3 py-1.5 rounded text-xs font-medium bg-app-accent-1 text-white hover:bg-app-accent-1/80 transition-colors flex items-center gap-1.5 cursor-pointer';
+        'mt-2 px-3 py-1.5 rounded text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer';
       action.innerHTML = `${this.cleanIcon(Icon.render('lightning', { size: 14 }))}
             ${this.emptyStateAction.label}`;
       action.addEventListener('click', () => this.emptyStateAction?.onClick());
@@ -439,7 +440,7 @@ export class PiView {
     sessionEnded.setAttribute('role', 'status');
     sessionEnded.setAttribute('aria-live', 'polite');
     sessionEnded.className =
-      'flex items-center gap-2 text-green-400 font-semibold text-xs py-1.5';
+      'flex items-center gap-2 font-semibold text-xs py-1.5';
     const endedIcon = document.createElement('span');
     endedIcon.innerHTML = this.cleanIcon(Icon.render('check', { size: 14, label: 'Session ended' }));
     sessionEnded.appendChild(endedIcon);
@@ -456,7 +457,7 @@ export class PiView {
   private buildFooter(): HTMLElement {
     const footer = document.createElement('div');
     footer.className =
-      'p-3 border-t border-app-border flex flex-col gap-2 bg-app-surface/50';
+      'piview-footer p-3 border-t flex flex-col gap-2';
     footer.appendChild(this.buildSearchBar());
 
     const actionsRow = document.createElement('div');
@@ -468,16 +469,17 @@ export class PiView {
       'toggle-follow',
       'Follow Mode: ON',
       `${Icon.render('refresh', { size: 14 })}\n            Follow Mode: ON`,
-      'px-3 py-1.5 rounded text-xs font-medium bg-app-accent-1 text-white hover:bg-app-accent-1/80 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer',
+      'px-3 py-1.5 rounded text-xs font-medium transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer',
       { id: 'follow-btn' }
     );
+    followBtn.setAttribute('data-state', 'on');
     actions.appendChild(followBtn);
 
     const clearBtn = this.createButton(
       'clear-logs',
       'Clear',
       `${Icon.render('trash', { size: 14 })}\n            Clear`,
-      'px-3 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer'
+      'px-3 py-1.5 rounded text-xs font-medium border transition-colors flex items-center gap-1.5 cursor-pointer'
     );
     actions.appendChild(clearBtn);
 
@@ -485,7 +487,7 @@ export class PiView {
       'stop-bot',
       'Stop Bot',
       `${Icon.render('close', { size: 14 })}\n            Stop Bot`,
-      'px-3 py-1.5 rounded text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer hidden',
+      'px-3 py-1.5 rounded text-xs font-medium transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer hidden',
       { id: 'stop-bot-btn' }
     );
     actions.appendChild(stopBtn);
@@ -494,7 +496,7 @@ export class PiView {
       'toggle-thinking',
       'Expand all thinking blocks',
       Icon.render('chevronRight', { size: 14 }),
-      'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer',
+      'px-2 py-1.5 rounded text-xs font-medium border transition-colors flex items-center gap-1.5 cursor-pointer',
       { id: 'thinking-toggle-btn', ariaPressed: false }
     );
     actions.appendChild(thinkingBtn);
@@ -503,7 +505,7 @@ export class PiView {
       'toggle-block-collapse',
       'Collapse all blocks',
       Icon.render('minus', { size: 14 }),
-      'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer',
+      'px-2 py-1.5 rounded text-xs font-medium border transition-colors flex items-center gap-1.5 cursor-pointer',
       { id: 'collapse-blocks-btn', ariaPressed: false }
     );
     actions.appendChild(collapseBtn);
@@ -512,7 +514,7 @@ export class PiView {
       'toggle-error-visibility',
       'Hide error blocks',
       Icon.render('eye', { size: 14 }),
-      'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer',
+      'px-2 py-1.5 rounded text-xs font-medium border transition-colors flex items-center gap-1.5 cursor-pointer',
       { id: 'error-toggle-btn', ariaPressed: true }
     );
     actions.appendChild(errorToggleBtn);
@@ -523,7 +525,7 @@ export class PiView {
       `<span class="flex items-center">${this.cleanIcon(
         Icon.render('alert', { size: 14, className: 'rotate-180' })
       )}</span>`,
-      'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center cursor-pointer disabled:opacity-40 disabled:cursor-default',
+      'px-2 py-1.5 rounded text-xs font-medium border transition-colors flex items-center cursor-pointer disabled:opacity-40 disabled:cursor-default',
       { id: 'prev-error-btn', disabled: true }
     );
     actions.appendChild(prevErrorBtn);
@@ -532,7 +534,7 @@ export class PiView {
       'next-error',
       'Next error',
       `<span class="flex items-center">${this.cleanIcon(Icon.render('alert', { size: 14 }))}</span>`,
-      'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center cursor-pointer disabled:opacity-40 disabled:cursor-default',
+      'px-2 py-1.5 rounded text-xs font-medium border transition-colors flex items-center cursor-pointer disabled:opacity-40 disabled:cursor-default',
       { id: 'next-error-btn', disabled: true }
     );
     actions.appendChild(nextErrorBtn);
@@ -553,7 +555,7 @@ export class PiView {
         'open-dialog',
         'Open in Dialog',
         this.cleanIcon(Icon.render('documentation', { size: 14, label: 'Open in Dialog' })),
-        'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center justify-center cursor-pointer',
+        'px-2 py-1.5 rounded text-xs font-medium border transition-colors flex items-center justify-center cursor-pointer',
         { id: 'open-dialog-btn' }
       );
       rightActions.appendChild(openDialogBtn);
@@ -563,7 +565,7 @@ export class PiView {
       'copy-all-log',
       'Copy entire log',
       Icon.render('copyRects', { size: 14, label: 'Copy entire log' }),
-      'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer',
+      'px-2 py-1.5 rounded text-xs font-medium border transition-colors flex items-center gap-1.5 cursor-pointer',
       { id: 'copy-all-btn' }
     );
     rightActions.appendChild(copyAllBtn);
@@ -572,7 +574,7 @@ export class PiView {
       'toggle-search',
       'Show search bar',
       this.cleanIcon(Icon.render('search', { size: 14 })),
-      'px-2 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer',
+      'px-2 py-1.5 rounded text-xs font-medium border transition-colors flex items-center gap-1.5 cursor-pointer',
       { id: 'search-toggle-btn', ariaPressed: false }
     );
     rightActions.appendChild(searchToggleBtn);
@@ -656,7 +658,7 @@ export class PiView {
 
     const label = document.createElement('label');
     label.setAttribute('for', 'piview-search-input');
-    label.className = 'flex items-center text-app-text/50';
+    label.className = 'flex items-center';
     label.innerHTML = this.cleanIcon(Icon.render('search', { size: 12 }));
     wrap.appendChild(label);
 
@@ -668,7 +670,7 @@ export class PiView {
     input.autocomplete = 'off';
     input.spellcheck = false;
     input.className =
-      'w-full sm:w-52 px-2 py-1 rounded text-xs bg-black/40 border border-app-border text-green-300 placeholder:text-app-text/40 focus:outline-none focus:border-app-accent-1/60';
+      'w-full sm:w-52 px-2 py-1 rounded text-xs border focus:outline-none';
     input.addEventListener('input', this.handleSearchInput);
     input.addEventListener('keydown', (e: KeyboardEvent) => {
       if (e.key === 'Enter') {
@@ -694,7 +696,7 @@ export class PiView {
     prevBtn.title = 'Previous match';
     prevBtn.setAttribute('aria-label', 'Previous match');
     prevBtn.className =
-      'px-2 py-1 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center cursor-pointer disabled:opacity-40 disabled:cursor-default';
+      'px-2 py-1 rounded text-xs font-medium border transition-colors flex items-center cursor-pointer disabled:opacity-40 disabled:cursor-default';
     prevBtn.innerHTML = this.cleanIcon(
       Icon.render('chevronDown', { size: 14, className: 'rotate-180' })
     );
@@ -707,14 +709,14 @@ export class PiView {
     nextBtn.title = 'Next match';
     nextBtn.setAttribute('aria-label', 'Next match');
     nextBtn.className =
-      'px-2 py-1 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center cursor-pointer disabled:opacity-40 disabled:cursor-default';
+      'px-2 py-1 rounded text-xs font-medium border transition-colors flex items-center cursor-pointer disabled:opacity-40 disabled:cursor-default';
     nextBtn.innerHTML = this.cleanIcon(Icon.render('chevronDown', { size: 14 }));
     nextBtn.addEventListener('click', () => this.nextMatch());
     wrap.appendChild(nextBtn);
 
     const counter = document.createElement('span');
     counter.id = 'piview-search-count';
-    counter.className = 'text-xs text-app-text/50 tabular-nums';
+    counter.className = 'text-xs tabular-nums';
     counter.setAttribute('role', 'status');
     counter.setAttribute('aria-live', 'polite');
     counter.textContent = '0 / 0';
@@ -1183,16 +1185,16 @@ export class PiView {
       case 'user': {
         const wrapper = document.createElement('div');
         wrapper.className =
-          'piview-user border-l-2 border-app-accent-1/60 bg-app-accent-1/10 rounded px-2 py-1';
+          'piview-user border-l-2 rounded px-2 py-1';
         const header = document.createElement('div');
         header.setAttribute('data-role', 'header');
         header.className =
-          'text-app-accent-1 font-semibold text-[10px] uppercase tracking-wider';
+          'font-semibold text-[10px] uppercase tracking-wider';
         header.textContent = block.header ?? 'You';
         wrapper.appendChild(header);
         const body = document.createElement('div');
         body.setAttribute('data-role', 'body');
-        body.className = 'text-app-text whitespace-pre-wrap break-all';
+        body.className = 'whitespace-pre-wrap break-all';
         body.textContent = block.text ?? '';
         wrapper.appendChild(body);
         el = wrapper;
@@ -1201,14 +1203,14 @@ export class PiView {
       case 'tool': {
         const wrapper = document.createElement('div');
         wrapper.className =
-          'piview-collapsible piview-toolverify border border-app-border/60 rounded p-2 bg-app-surface/40';
+          'piview-collapsible piview-toolverify border rounded p-2';
         const { header, label } = this.buildCollapsibleHeader(!this.blocksCollapsed);
-        label.className = 'text-app-accent-2 font-semibold whitespace-pre-wrap break-all';
+        label.className = 'font-semibold whitespace-pre-wrap break-all';
         label.textContent = block.header ?? '';
         wrapper.appendChild(header);
         const body = document.createElement('pre');
         body.setAttribute('data-role', 'body');
-        body.className = 'whitespace-pre-wrap break-all text-green-300 mt-1 min-h-0';
+        body.className = 'whitespace-pre-wrap break-all mt-1 min-h-0';
         body.textContent = this.toolBodyText(block);
         if (this.blocksCollapsed) body.classList.add('hidden');
         wrapper.appendChild(body);
@@ -1218,18 +1220,18 @@ export class PiView {
       case 'bash': {
         const pre = document.createElement('pre');
         pre.className =
-          'piview-bash whitespace-pre-wrap break-all bg-black/40 border-l-2 border-app-accent-2/40 pl-2';
+          'piview-bash whitespace-pre-wrap break-all border-l-2 pl-2';
         pre.textContent = block.text ?? '';
         el = pre;
         break;
       }
       case 'thinking': {
         el = document.createElement('div');
-        el.className = 'piview-collapsible piview-thinking border-l-2 border-app-text/20 pl-2';
+        el.className = 'piview-collapsible piview-thinking border-l-2 pl-2';
         const header = document.createElement('div');
         header.setAttribute('data-role', 'header');
         header.setAttribute('data-toggle', '');
-        header.className = 'flex items-center gap-1 text-app-text/50 font-medium cursor-pointer select-none';
+        header.className = 'flex items-center gap-1 font-medium cursor-pointer select-none';
         const glyph = document.createElement('span');
         glyph.setAttribute('data-glyph', '');
         glyph.innerHTML = Icon.render(this.thinkingExpanded ? 'chevronDown' : 'chevronRight', {
@@ -1256,13 +1258,13 @@ export class PiView {
       }
       case 'notice': {
         el = document.createElement('div');
-        el.className = 'piview-notice text-app-accent-2 whitespace-pre-wrap break-all';
+        el.className = 'piview-notice whitespace-pre-wrap break-all';
         el.textContent = block.text ?? '';
         break;
       }
       case 'error': {
         el = document.createElement('div');
-        el.className = 'piview-error text-red-400 whitespace-pre-wrap break-all';
+        el.className = 'piview-error whitespace-pre-wrap break-all';
         el.textContent = block.text ?? '';
         if (!this.errorVisible) el.classList.add('hidden');
         break;
@@ -1272,18 +1274,14 @@ export class PiView {
         const isError = block.error;
         wrapper.className =
           'piview-collapsible piview-toolverify piview-verification ' +
-          (isError
-            ? 'piview-verification-error border-red-500/60 bg-red-950/30'
-            : 'piview-verification-ok border-green-500/60 bg-green-950/30');
+          (isError ? 'piview-verification-error' : 'piview-verification-ok');
         const { header, label } = this.buildCollapsibleHeader(!this.blocksCollapsed);
-        label.className =
-          'font-semibold whitespace-pre-wrap break-all ' +
-          (isError ? 'text-red-400' : 'text-green-400');
+        label.className = 'font-semibold whitespace-pre-wrap break-all';
         label.textContent = block.text ?? '';
         wrapper.appendChild(header);
         const body = document.createElement('pre');
         body.setAttribute('data-role', 'body');
-        body.className = 'whitespace-pre-wrap break-all text-green-300 mt-1 min-h-0';
+        body.className = 'whitespace-pre-wrap break-all mt-1 min-h-0';
         body.textContent = (block.sub ?? []).join('\n');
         if (this.blocksCollapsed) body.classList.add('hidden');
         wrapper.appendChild(body);
@@ -1293,7 +1291,7 @@ export class PiView {
       case 'divider': {
         el = document.createElement('div');
         el.className =
-          'piview-divider text-app-text/40 border-t border-app-border/40 pt-1 whitespace-pre-wrap break-all';
+          'piview-divider border-t pt-1 whitespace-pre-wrap break-all';
         el.textContent = block.text ?? '';
         break;
       }
@@ -1329,7 +1327,7 @@ export class PiView {
     const copyBtn = document.createElement('button');
     copyBtn.type = 'button';
     copyBtn.className =
-      'piview-copy absolute top-1 right-1 z-10 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 hover:bg-black/80 text-green-300 hover:text-white cursor-pointer';
+      'piview-copy absolute top-1 right-1 z-10 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer';
     copyBtn.title = 'Copy block';
     copyBtn.setAttribute('aria-label', 'Copy block');
     copyBtn.setAttribute('data-copy-block', block.id);
@@ -1341,7 +1339,7 @@ export class PiView {
     const formatBtn = document.createElement('button');
     formatBtn.type = 'button';
     formatBtn.className =
-      'piview-format absolute top-1 right-8 z-10 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 hover:bg-black/80 text-cyan-300 hover:text-white cursor-pointer';
+      'piview-format absolute top-1 right-8 z-10 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer';
     formatBtn.title = 'Format as markup';
     formatBtn.setAttribute('aria-label', 'Format as markup');
     formatBtn.setAttribute('data-format-block', block.id);
@@ -1429,10 +1427,6 @@ export class PiView {
     } else {
       const txt = block.text ?? block.header ?? '';
       this.replaceTextPreservingActions(el, txt);
-    }
-    // Apply error tinting to error blocks.
-    if (block.kind === 'error' && !el.classList.contains('text-red-400')) {
-      el.classList.add('text-red-400');
     }
   }
 
@@ -1716,9 +1710,8 @@ export class PiView {
         ? `${Icon.render('refresh', { size: 14 })} Follow Mode: ON`
         : `${Icon.render('clock', { size: 14 })} Follow Mode: OFF`;
 
-      btn.className = this.isFollowMode
-        ? 'px-3 py-1.5 rounded text-xs font-medium bg-app-accent-1 text-white hover:bg-app-accent-1/80 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer'
-        : 'px-3 py-1.5 rounded text-xs font-medium bg-app-surface border border-app-border text-app-text hover:bg-app-bg transition-colors flex items-center gap-1.5 cursor-pointer';
+      btn.setAttribute('data-state', this.isFollowMode ? 'on' : 'off');
+      btn.classList.toggle('shadow-sm', this.isFollowMode);
 
       const label = this.isFollowMode ? 'Follow Mode: ON' : 'Follow Mode: OFF';
       this.buttonLabels['toggle-follow'] = label;
@@ -2034,10 +2027,11 @@ export class PiView {
   private updateStatusDot() {
     const dot = this.root.querySelector('#piview-status-dot') as HTMLElement | null;
     if (!dot) return;
+    dot.setAttribute('data-state', this.sessionActive ? 'active' : 'idle');
     if (this.sessionActive) {
-      dot.className = 'inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse';
+      dot.className = 'inline-block w-2 h-2 rounded-full animate-pulse';
     } else {
-      dot.className = 'inline-block w-2 h-2 rounded-full bg-app-text/40';
+      dot.className = 'inline-block w-2 h-2 rounded-full';
     }
   }
 

@@ -477,20 +477,6 @@ del {
   color: var(--syntax-deletion);
 }
 
-/* In-log search highlight */
-mark.piview-search-match {
-  background: rgba(251, 191, 36, 0.35);
-  color: inherit;
-  border-radius: 2px;
-  padding: 0 1px;
-  margin: 0 -0.5px;
-}
-mark.piview-search-current {
-  background: rgba(251, 191, 36, 0.9);
-  color: #000;
-  outline: 1px solid rgba(255, 255, 255, 0.7);
-}
-
 /* Markdown-rendered blocks ("Format as markup" toggle) */
 .piview-formatted {
   /*
@@ -619,24 +605,17 @@ mark.piview-search-current {
   margin-bottom: 0;
 }
 
-.piview-formatted-active.piview-collapsible,
-.piview-formatted-active.piview-toolverify {
-  @apply bg-black/20;
-}
-
 /*
- * PiView is an always-dark, terminal-style surface: its log container hard-codes
- * `bg-black` and green foregrounds, while its block chrome (status text,
- * thinking headers, dividers, rendered Markdown, …) is built from the semantic
- * `--app-*` theme tokens. In light mode those tokens resolve to dark-on-light
- * colours, which become unreadable against the black terminal (dark text on a
- * black background).
+ * PiView's log colours now come from the --piview-* token layer in PiView.css.
+ * The shared Markdown/prose rules still consume the semantic --app-* tokens,
+ * though, so re-anchor those to their dark values inside the always-dark log
+ * subtree. In light mode the app tokens would otherwise become dark-on-light
+ * colours that are unreadable against the terminal background.
  *
- * Re-anchor the terminal palette to its dark values for the log subtree only,
- * so the surrounding page - and the PiView footer, which lives outside the log
- * container - keeps the active light theme. Scoping by the container class keeps
- * this correct when more than one PiView is mounted at once (e.g. the embedded
- * sidebar log and an opened dialog).
+ * Scoping by the container class keeps this correct when more than one PiView
+ * is mounted at once (e.g. the embedded sidebar log and an opened dialog), while
+ * the surrounding page - and the PiView footer outside the log - keeps the
+ * active light theme.
  */
 [data-theme='light'] .piview-log {
   --app-bg: var(--color-slate-950);
@@ -646,25 +625,5 @@ mark.piview-search-current {
   --app-border: var(--color-slate-800);
   --app-accent-1: var(--color-sky-400);
   --app-accent-2: var(--color-cyan-400);
-}
-
-/*
- * Thinking text tone.
- *
- * Thinking is secondary to the assistant's visible answer, so it must stay
- * comfortably readable without competing for attention. Dark mode uses a soft
- * light yellow; light mode uses darkgrey. Because the log is an always-dark
- * terminal surface, the light-mode grey stays light enough to read on black, so
- * the text is legible in both themes. Ownership lives here (and nowhere else)
- * so the colour is tunable from a single place, mirroring the other PiView text
- * rules.
- */
-.piview-thinking-body {
-  color: var(--color-yellow-200); /* light yellow */
-}
-
-[data-theme='light'] .piview-thinking-body {
-  /* darkgrey; readable on the black log */
-  color: var(--color-slate-400);
 }
 

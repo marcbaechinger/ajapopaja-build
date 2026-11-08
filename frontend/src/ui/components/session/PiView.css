@@ -1,0 +1,519 @@
+/**
+ * Copyright 2026 Marc Baechinger
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/*
+ * PiView theme tokens.
+ *
+ * This is the only token block in PiView-owned CSS. Every value reproduces the
+ * colours PiView rendered before the de-hardcoding (the log has always been a
+ * dark terminal surface, so those are the dark app-theme values). Rules below
+ * only consume these tokens through var(); the footer/toolbar deliberately stay
+ * on the surrounding app theme (--app-*) and are not themed by PiView.
+ */
+.piview-log {
+  --piview-bg: var(--color-black);
+  --piview-bg-image: none;
+
+  --piview-surface: var(--color-slate-900);
+  --piview-surface-sticky: color-mix(in oklab, var(--color-black) 95%, transparent);
+  --piview-surface-tool: color-mix(in oklab, var(--color-slate-900) 40%, transparent);
+  --piview-surface-bash: color-mix(in oklab, var(--color-black) 40%, transparent);
+  --piview-surface-user: color-mix(in oklab, var(--color-sky-400) 10%, transparent);
+  --piview-surface-verification-ok: color-mix(in oklab, var(--color-green-950) 30%, transparent);
+  --piview-surface-verification-error: color-mix(in oklab, var(--color-red-950) 30%, transparent);
+  --piview-surface-formatted-active: color-mix(in oklab, var(--color-black) 20%, transparent);
+  --piview-surface-pre: var(--color-slate-900);
+  --piview-surface-code: color-mix(in oklab, var(--color-slate-900) 80%, transparent);
+  --piview-surface-hover: color-mix(in oklab, var(--color-black) 80%, transparent);
+  --piview-surface-icon: color-mix(in oklab, var(--color-black) 50%, transparent);
+
+  --piview-fg: var(--color-green-400);
+  --piview-fg-dim: color-mix(in oklab, var(--color-slate-100) 50%, transparent);
+  --piview-fg-faint: color-mix(in oklab, var(--color-slate-100) 40%, transparent);
+  --piview-fg-title: color-mix(in oklab, var(--color-slate-100) 70%, transparent);
+  --piview-fg-muted: var(--color-slate-400);
+  --piview-fg-tool: var(--color-green-300);
+  --piview-fg-thinking: var(--color-yellow-200);
+  --piview-fg-notice: var(--color-cyan-400);
+  --piview-fg-error: var(--color-red-400);
+  --piview-fg-ok: var(--color-green-400);
+  --piview-fg-user-label: var(--color-sky-400);
+  --piview-fg-status: var(--color-green-300);
+  --piview-fg-heading: var(--color-sky-400);
+  --piview-fg-link: var(--color-sky-400);
+  --piview-fg-strong: var(--color-cyan-400);
+  --piview-fg-quote: var(--color-slate-100);
+  --piview-fg-code: var(--color-cyan-400);
+  --piview-fg-pre: var(--color-slate-100);
+  --piview-fg-icon: var(--color-green-300);
+  --piview-fg-icon-format: var(--color-cyan-300);
+
+  --piview-border: var(--color-slate-800);
+  --piview-border-subtle: color-mix(in oklab, var(--color-slate-800) 40%, transparent);
+  --piview-border-tool: color-mix(in oklab, var(--color-slate-800) 60%, transparent);
+  --piview-border-accent-user: color-mix(in oklab, var(--color-sky-400) 60%, transparent);
+  --piview-border-accent-thinking: color-mix(in oklab, var(--color-slate-100) 20%, transparent);
+  --piview-border-accent-bash: color-mix(in oklab, var(--color-cyan-400) 40%, transparent);
+  --piview-border-accent-quote: var(--color-sky-400);
+  --piview-border-verification-ok: color-mix(in oklab, var(--color-green-500) 60%, transparent);
+  --piview-border-verification-error: color-mix(in oklab, var(--color-red-500) 60%, transparent);
+
+  --piview-accent: var(--color-sky-400);
+  --piview-accent-2: var(--color-cyan-400);
+  --piview-accent-fg: var(--color-white);
+  --piview-selection: color-mix(in oklab, var(--color-sky-400) 30%, transparent);
+  --piview-search-hit: rgba(251, 191, 36, 0.35);
+  --piview-search-hit-fg: inherit;
+  --piview-search-current: rgba(251, 191, 36, 0.9);
+  --piview-search-current-fg: #000;
+  --piview-search-current-outline: rgba(255, 255, 255, 0.7);
+  --piview-focus-ring: var(--color-sky-400);
+  --piview-danger: var(--color-red-600);
+  --piview-danger-hover: var(--color-red-700);
+
+  --piview-font-log: var(--font-mono);
+  --piview-font-prose: var(--font-sans);
+  --piview-font-size: 11px;
+  --piview-leading: 1.25;
+  --piview-font-size-prose: 12px;
+  --piview-leading-prose: 1.375;
+  --piview-block-gap: 0.875rem;
+  --piview-block-padding: 0.5rem;
+  --piview-radius-block: 0.25rem;
+  --piview-radius-chrome: 0.25rem;
+  --piview-shadow-block: none;
+  --piview-scrollbar-thumb: var(--color-slate-800);
+  --piview-scrollbar-track: transparent;
+  --piview-status-dot-idle: color-mix(in oklab, var(--color-slate-100) 40%, transparent);
+  --piview-status-dot-active: var(--color-green-400);
+  --piview-motion-pulse: pulse;
+  --piview-shortcut-flash: rgba(255, 255, 255, 0.15);
+
+  --piview-syntax-comment: var(--syntax-comment);
+  --piview-syntax-keyword: var(--syntax-keyword);
+  --piview-syntax-string: var(--syntax-string);
+  --piview-syntax-number: var(--syntax-number);
+  --piview-syntax-built-in: var(--syntax-built-in);
+  --piview-syntax-title: var(--syntax-title);
+  --piview-syntax-tag: var(--syntax-tag);
+  --piview-syntax-meta: var(--syntax-meta);
+  --piview-syntax-addition: var(--syntax-addition);
+  --piview-syntax-deletion: var(--syntax-deletion);
+
+  background-color: var(--piview-bg);
+  background-image: var(--piview-bg-image);
+  color: var(--piview-fg);
+  scrollbar-color: var(--piview-scrollbar-thumb) var(--piview-scrollbar-track);
+}
+
+/* Log scope ---------------------------------------------------------------- */
+
+.piview-log::selection {
+  background-color: var(--piview-selection);
+}
+
+.piview-log::-webkit-scrollbar-thumb {
+  background-color: var(--piview-scrollbar-thumb);
+}
+
+.piview-log::-webkit-scrollbar-track {
+  background-color: var(--piview-scrollbar-track);
+}
+
+.piview-log #piview-status-bar {
+  background-color: var(--piview-surface-sticky);
+  border-bottom-color: var(--piview-border-subtle);
+}
+
+.piview-log #piview-status-dot {
+  background-color: var(--piview-status-dot-idle);
+}
+
+.piview-log #piview-status-dot[data-state="active"] {
+  background-color: var(--piview-status-dot-active);
+}
+
+.piview-log #piview-status-text {
+  color: var(--piview-fg-status);
+}
+
+.piview-log #piview-toast {
+  background-color: var(--piview-accent);
+  color: var(--piview-accent-fg);
+}
+
+.piview-log #piview-empty-state {
+  color: var(--piview-fg-dim);
+}
+
+.piview-log #piview-empty-state [aria-hidden="true"] {
+  color: var(--piview-fg-faint);
+}
+
+.piview-log #piview-empty-title {
+  color: var(--piview-fg-title);
+}
+
+.piview-log #piview-empty-state-action {
+  background-color: var(--piview-accent);
+  color: var(--piview-accent-fg);
+}
+
+.piview-log #piview-empty-state-action:hover {
+  background-color: color-mix(in oklab, var(--piview-accent) 80%, transparent);
+}
+
+.piview-log #piview-session-ended {
+  color: var(--piview-fg-ok);
+}
+
+.piview-log [data-kind="user"],
+.piview-log .piview-user {
+  background-color: var(--piview-surface-user);
+  border-left-color: var(--piview-border-accent-user);
+}
+
+.piview-log [data-kind="user"] [data-role="header"],
+.piview-log .piview-user [data-role="header"] {
+  color: var(--piview-fg-user-label);
+}
+
+.piview-log [data-kind="user"] [data-role="body"],
+.piview-log .piview-user [data-role="body"] {
+  color: var(--piview-fg);
+}
+
+.piview-log [data-kind="tool"],
+.piview-log .piview-toolverify:not(.piview-verification) {
+  background-color: var(--piview-surface-tool);
+  border-color: var(--piview-border-tool);
+}
+
+.piview-log [data-kind="tool"] [data-label],
+.piview-log .piview-toolverify:not(.piview-verification) [data-label] {
+  color: var(--piview-accent-2);
+}
+
+.piview-log [data-kind="tool"] [data-role="body"],
+.piview-log .piview-toolverify:not(.piview-verification) [data-role="body"] {
+  color: var(--piview-fg-tool);
+}
+
+.piview-log [data-kind="bash"],
+.piview-log .piview-bash {
+  background-color: var(--piview-surface-bash);
+  border-left-color: var(--piview-border-accent-bash);
+}
+
+.piview-log [data-kind="thinking"],
+.piview-log .piview-thinking {
+  border-left-color: var(--piview-border-accent-thinking);
+}
+
+.piview-log [data-kind="thinking"] [data-role="header"],
+.piview-log .piview-thinking [data-role="header"] {
+  color: var(--piview-fg-dim);
+}
+
+.piview-log .piview-thinking-body {
+  color: var(--piview-fg-thinking);
+}
+
+.piview-log [data-kind="notice"],
+.piview-log .piview-notice {
+  color: var(--piview-fg-notice);
+}
+
+.piview-log [data-kind="error"],
+.piview-log .piview-error {
+  color: var(--piview-fg-error);
+}
+
+.piview-log .piview-verification-ok {
+  background-color: var(--piview-surface-verification-ok);
+  border-color: var(--piview-border-verification-ok);
+}
+
+.piview-log .piview-verification-error {
+  background-color: var(--piview-surface-verification-error);
+  border-color: var(--piview-border-verification-error);
+}
+
+.piview-log .piview-verification-ok [data-label] {
+  color: var(--piview-fg-ok);
+}
+
+.piview-log .piview-verification-error [data-label] {
+  color: var(--piview-fg-error);
+}
+
+.piview-log [data-kind="verification"] [data-role="body"] {
+  color: var(--piview-fg-tool);
+}
+
+.piview-log [data-kind="divider"],
+.piview-log .piview-divider {
+  color: var(--piview-fg-faint);
+  border-top-color: var(--piview-border-subtle);
+}
+
+.piview-log .piview-formatted-active.piview-collapsible,
+.piview-log .piview-formatted-active.piview-toolverify {
+  background-color: var(--piview-surface-formatted-active);
+}
+
+.piview-log .piview-copy {
+  background-color: var(--piview-surface-icon);
+  color: var(--piview-fg-icon);
+}
+
+.piview-log .piview-format {
+  background-color: var(--piview-surface-icon);
+  color: var(--piview-fg-icon-format);
+}
+
+.piview-log .piview-copy:hover,
+.piview-log .piview-format:hover {
+  background-color: var(--piview-surface-hover);
+  color: var(--piview-accent-fg);
+}
+
+.piview-log .piview-copy:focus-visible,
+.piview-log .piview-format:focus-visible,
+.piview-log [data-action]:focus-visible,
+.piview-log #piview-search-input:focus-visible {
+  outline: 2px solid var(--piview-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Search highlights -------------------------------------------------------- */
+
+.piview-log mark.piview-search-match {
+  background-color: var(--piview-search-hit);
+  color: var(--piview-search-hit-fg);
+  border-radius: 2px;
+  padding: 0 1px;
+  margin: 0 -0.5px;
+}
+
+.piview-log mark.piview-search-current {
+  background-color: var(--piview-search-current);
+  color: var(--piview-search-current-fg);
+  outline: 1px solid var(--piview-search-current-outline);
+}
+
+/* Response element typography --------------------------------------------- */
+
+.piview-log .piview-formatted {
+  --tw-prose-body: var(--piview-fg);
+  --tw-prose-headings: var(--piview-fg-heading);
+  --tw-prose-lead: var(--piview-fg-muted);
+  --tw-prose-links: var(--piview-fg-link);
+  --tw-prose-bold: var(--piview-fg-strong);
+  --tw-prose-counters: var(--piview-fg-muted);
+  --tw-prose-bullets: var(--piview-fg-muted);
+  --tw-prose-hr: var(--piview-border);
+  --tw-prose-quotes: var(--piview-fg-quote);
+  --tw-prose-quote-borders: var(--piview-border-accent-quote);
+  --tw-prose-captions: var(--piview-fg-muted);
+  --tw-prose-code: var(--piview-fg-code);
+  --tw-prose-pre-code: var(--piview-fg-pre);
+  --tw-prose-pre-bg: var(--piview-surface-pre);
+  --tw-prose-th-borders: var(--piview-border);
+  --tw-prose-td-borders: var(--piview-border);
+
+  --tw-prose-invert-body: var(--piview-fg);
+  --tw-prose-invert-headings: var(--piview-fg-heading);
+  --tw-prose-invert-lead: var(--piview-fg-muted);
+  --tw-prose-invert-links: var(--piview-fg-link);
+  --tw-prose-invert-bold: var(--piview-fg-strong);
+  --tw-prose-invert-counters: var(--piview-fg-muted);
+  --tw-prose-invert-bullets: var(--piview-fg-muted);
+  --tw-prose-invert-hr: var(--piview-border);
+  --tw-prose-invert-quotes: var(--piview-fg-quote);
+  --tw-prose-invert-quote-borders: var(--piview-border-accent-quote);
+  --tw-prose-invert-captions: var(--piview-fg-muted);
+  --tw-prose-invert-code: var(--piview-fg-code);
+  --tw-prose-invert-pre-code: var(--piview-fg-pre);
+  --tw-prose-invert-pre-bg: var(--piview-surface-pre);
+  --tw-prose-invert-th-borders: var(--piview-border);
+  --tw-prose-invert-td-borders: var(--piview-border);
+}
+
+/* Syntax highlighting ------------------------------------------------------ */
+
+.piview-log .hljs {
+  color: var(--piview-fg-pre);
+}
+
+.piview-log .hljs-comment,
+.piview-log .hljs-quote {
+  color: var(--piview-syntax-comment);
+  font-style: italic;
+}
+
+.piview-log .hljs-keyword,
+.piview-log .hljs-selector-tag,
+.piview-log .hljs-literal,
+.piview-log .hljs-doctag {
+  color: var(--piview-syntax-keyword);
+}
+
+.piview-log .hljs-string,
+.piview-log .hljs-regexp,
+.piview-log .hljs-attribute,
+.piview-log .hljs-attr,
+.piview-log .hljs-meta .hljs-string {
+  color: var(--piview-syntax-string);
+}
+
+.piview-log .hljs-number,
+.piview-log .hljs-symbol,
+.piview-log .hljs-bullet {
+  color: var(--piview-syntax-number);
+}
+
+.piview-log .hljs-built_in,
+.piview-log .hljs-type,
+.piview-log .hljs-selector-id,
+.piview-log .hljs-selector-class,
+.piview-log .hljs-title.class_,
+.piview-log .hljs-class .hljs-title {
+  color: var(--piview-syntax-built-in);
+}
+
+.piview-log .hljs-title,
+.piview-log .hljs-section {
+  color: var(--piview-syntax-title);
+  font-weight: 600;
+}
+
+.piview-log .hljs-tag,
+.piview-log .hljs-name {
+  color: var(--piview-syntax-tag);
+}
+
+.piview-log .hljs-variable,
+.piview-log .hljs-template-variable {
+  color: var(--piview-syntax-built-in);
+}
+
+.piview-log .hljs-meta,
+.piview-log .hljs-meta .hljs-keyword {
+  color: var(--piview-syntax-meta);
+}
+
+.piview-log .hljs-link {
+  color: var(--piview-syntax-number);
+  text-decoration: underline;
+}
+
+.piview-log .hljs-emphasis {
+  font-style: italic;
+}
+
+.piview-log .hljs-strong {
+  font-weight: 700;
+}
+
+.piview-log .hljs-addition {
+  color: var(--piview-syntax-addition);
+}
+
+.piview-log .hljs-deletion {
+  color: var(--piview-syntax-deletion);
+}
+
+/*
+ * The thinking body's tone is mode-aware today: soft yellow on the dark app
+ * theme, muted slate on the light app theme. Preserve that while sourcing the
+ * colours from the same token layer.
+ */
+[data-theme='light'] .piview-log .piview-thinking-body {
+  color: var(--piview-fg-muted);
+}
+
+/* Footer / toolbar / search bar: app theme, not PiView-themed. -------------- */
+
+.piview-footer {
+  background-color: color-mix(in oklab, var(--app-surface) 50%, transparent);
+  border-top-color: var(--app-border);
+}
+
+.piview-footer #piview-search-bar label {
+  color: color-mix(in oklab, var(--app-text) 50%, transparent);
+}
+
+.piview-footer #piview-search-input {
+  background-color: color-mix(in oklab, var(--color-black) 40%, transparent);
+  border-color: var(--app-border);
+  color: var(--color-green-300);
+}
+
+.piview-footer #piview-search-input::placeholder {
+  color: color-mix(in oklab, var(--app-text) 40%, transparent);
+}
+
+.piview-footer #piview-search-input:focus {
+  border-color: color-mix(in oklab, var(--app-accent-1) 60%, transparent);
+  outline: none;
+}
+
+.piview-footer #piview-search-count {
+  color: color-mix(in oklab, var(--app-text) 50%, transparent);
+}
+
+.piview-footer #piview-search-prev,
+.piview-footer #piview-search-next,
+.piview-footer [data-action]:not([data-action="toggle-follow"]):not([data-action="stop-bot"]) {
+  background-color: var(--app-surface);
+  border-color: var(--app-border);
+  color: var(--app-text);
+}
+
+.piview-footer #piview-search-prev:hover,
+.piview-footer #piview-search-next:hover,
+.piview-footer [data-action]:not([data-action="toggle-follow"]):not([data-action="stop-bot"]):hover {
+  background-color: var(--app-bg);
+}
+
+.piview-footer #follow-btn[data-state="on"] {
+  background-color: var(--app-accent-1);
+  color: var(--color-white);
+}
+
+.piview-footer #follow-btn[data-state="on"]:hover {
+  background-color: color-mix(in oklab, var(--app-accent-1) 80%, transparent);
+}
+
+.piview-footer #follow-btn[data-state="off"] {
+  background-color: var(--app-surface);
+  border: 1px solid var(--app-border);
+  color: var(--app-text);
+}
+
+.piview-footer #follow-btn[data-state="off"]:hover {
+  background-color: var(--app-bg);
+}
+
+.piview-footer #stop-bot-btn {
+  background-color: var(--color-red-600);
+  color: var(--color-white);
+}
+
+.piview-footer #stop-bot-btn:hover {
+  background-color: var(--color-red-700);
+}

@@ -118,7 +118,7 @@ describe('PiView', () => {
     const stopBtn = mount.querySelector('#stop-bot-btn');
 
     expect(logContainer).not.toBeNull();
-    expect(logContainer?.classList.contains('bg-black')).toBe(true);
+    expect(logContainer?.classList.contains('piview-log')).toBe(true);
     expect(blocksContainer).not.toBeNull();
     expect(followBtn).not.toBeNull();
     expect(stopBtn).not.toBeNull();
@@ -305,19 +305,19 @@ describe('PiView', () => {
     const bashEls = Array.from(container.querySelectorAll('pre'));
     expect(bashEls.some((p) => p.textContent === '$ cmd')).toBe(true);
 
-    // thinking / notice / error classes
+    // thinking / notice / error blocks are selectable by their data-kind hook
     expect(Array.from(container.querySelectorAll('.italic.opacity-70')).some((el) => el.textContent === 'hmm')).toBe(true);
-    expect(Array.from(container.querySelectorAll('.text-app-accent-2')).some((el) => el.textContent === '● started')).toBe(true);
-    expect(Array.from(container.querySelectorAll('.text-red-400')).some((el) => el.textContent === 'boom')).toBe(true);
+    expect(container.querySelector('[data-kind="notice"]')?.textContent).toBe('● started');
+    expect(container.querySelector('[data-kind="error"]')?.textContent).toBe('boom');
 
-    // verification wrapper w/ error tint on failed variant
-    const okVerify = Array.from(container.querySelectorAll('.border-green-500\\/60')).filter((el) => el.textContent?.includes('PASS'));
+    // verification wrapper w/ the ok variant hook
+    const okVerify = Array.from(container.querySelectorAll('.piview-verification-ok')).filter((el) => el.textContent?.includes('PASS'));
     expect(okVerify.length).toBeGreaterThan(0);
     const verifyHeader = okVerify[0].querySelector('[data-role="header"]');
     expect(verifyHeader?.textContent).toContain('● PASS');
 
     // divider
-    expect(Array.from(container.querySelectorAll('.text-app-text\\/40')).some((el) => el.textContent === '— turn —')).toBe(true);
+    expect(container.querySelector('[data-kind="divider"]')?.textContent).toBe('— turn —');
 
     // plain text
     expect(Array.from(container.querySelectorAll('div')).some((el) => el.textContent === 'plain')).toBe(true);
