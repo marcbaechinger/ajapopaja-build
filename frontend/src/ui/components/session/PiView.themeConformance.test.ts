@@ -230,6 +230,22 @@ const CONTRAST_PAIRS: ContrastPair[] = [
     bg: '--piview-surface-formatted-active',
     base: '--piview-bg',
   },
+  { name: 'session ended', fg: '--piview-fg-ok', bg: '--piview-bg' },
+  {
+    name: 'verification ok',
+    fg: '--piview-fg-ok',
+    bg: '--piview-surface-verification-ok',
+    base: '--piview-bg',
+  },
+  { name: 'thinking body', fg: '--piview-fg-thinking', bg: '--piview-bg' },
+  { name: 'notice', fg: '--piview-fg-notice', bg: '--piview-bg' },
+  {
+    name: 'user label',
+    fg: '--piview-fg-user-label',
+    bg: '--piview-surface-user',
+    base: '--piview-bg',
+  },
+  { name: 'accent button', fg: '--piview-accent-fg', bg: '--piview-accent' },
 ];
 
 const AA_CONTRAST_RATIO = 4.5;

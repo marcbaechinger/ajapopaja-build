@@ -125,9 +125,9 @@ export const LIGHT_PALETTE: PalettePrimitives = {
   '--palette-border': 'var(--color-slate-200)',
   '--palette-accent': 'var(--color-sky-700)',
   '--palette-accent-2': 'var(--color-cyan-700)',
-  '--palette-ok': 'var(--color-green-600)',
+  '--palette-ok': 'var(--color-green-800)',
   '--palette-error': 'var(--color-red-600)',
-  '--palette-warn': 'var(--color-amber-600)',
+  '--palette-warn': 'var(--color-amber-800)',
   '--palette-info': 'var(--color-cyan-700)',
 };
 
@@ -162,9 +162,9 @@ export const AMBER_LIGHT_PALETTE: PalettePrimitives = {
   '--palette-border': 'var(--color-stone-200)',
   '--palette-accent': 'var(--color-amber-700)',
   '--palette-accent-2': 'var(--color-rose-700)',
-  '--palette-ok': 'var(--color-green-600)',
+  '--palette-ok': 'var(--color-green-800)',
   '--palette-error': 'var(--color-red-600)',
-  '--palette-warn': 'var(--color-amber-600)',
+  '--palette-warn': 'var(--color-amber-800)',
   '--palette-info': 'var(--color-rose-700)',
 };
 
@@ -544,6 +544,8 @@ const LIGHT_SYNTAX_OVERRIDES: PiViewTokens = {
 const LIGHT_DEFAULT_OVERRIDES: PiViewTokens = {
   '--piview-surface-bash':
     'color-mix(in oklab, var(--color-slate-100) 70%, var(--color-slate-200) 30%)',
+  '--piview-fg-ok': 'var(--color-green-800)',
+  '--piview-fg-thinking': 'var(--color-amber-800)',
   '--piview-fg-error': 'var(--color-red-800)',
   '--piview-fg-heading': 'var(--color-slate-900)',
   '--piview-search-current-outline': 'rgba(15, 23, 42, 0.6)',
@@ -558,6 +560,9 @@ const LIGHT_DEFAULT_OVERRIDES: PiViewTokens = {
 const LIGHT_EMBER_OVERRIDES: PiViewTokens = {
   '--piview-surface-bash':
     'color-mix(in oklab, var(--color-stone-100) 70%, var(--color-stone-200) 30%)',
+  '--piview-fg-ok': 'var(--color-green-800)',
+  '--piview-fg-thinking': 'var(--color-amber-800)',
+  '--piview-fg-user-label': 'var(--color-amber-800)',
   '--piview-fg-error': 'var(--color-red-800)',
   '--piview-fg-heading': 'var(--color-stone-900)',
   '--piview-search-current-outline': 'rgba(28, 25, 23, 0.6)',
@@ -777,6 +782,7 @@ const BATCH_PAPER_THEME = defineTheme({
     '--piview-shadow-block': 'none',
     '--piview-motion-pulse': 'none',
     '--piview-fg-status': '#166534',
+    '--piview-accent': 'var(--color-sky-700)',
 
     // A muted light-mode syntax palette that stays above AA on the code surface.
     '--piview-syntax-comment': '#57606a',
