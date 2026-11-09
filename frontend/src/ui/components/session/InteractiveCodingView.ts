@@ -533,7 +533,7 @@ export class InteractiveCodingView {
           </div>
         </div>
         <div id="interactive-piview-mount"></div>
-        <div class="p-3 border-t border-app-border/40 bg-app-surface/50">
+        <div class="px-3 pt-3 border-t border-app-border/40 bg-app-surface/50">
           <div id="interactive-prompt-mount"></div>
         </div>
       </div>

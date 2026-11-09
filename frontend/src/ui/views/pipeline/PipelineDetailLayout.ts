@@ -98,7 +98,7 @@ export class PipelineDetailLayout {
           <main class="flex-[2] min-w-0 overflow-y-auto">
             <!-- Top padding lives on the prep column's inner p-2 wrapper; keep
                  the outer wrapper from adding a second top padding (p-4). -->
-            <div class="w-full px-4 pb-4">
+            <div class="w-full px-4">
               ${prepColumnHtml}
             </div>
           </main>
