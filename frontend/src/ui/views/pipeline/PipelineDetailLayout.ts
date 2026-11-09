@@ -81,7 +81,7 @@ export class PipelineDetailLayout {
                The collapse handle lives at the very top of the sidebar. It stays
                reachable when collapsed because only the backlog content hides. -->
           <aside id="backlog-sidebar" data-sidebar-collapsed="${sidebarCollapsed}"
-            class="relative ${sidebarWidth} flex-none shrink-0 border-r border-app-border/60 bg-app-surface/30 overflow-y-auto transition-[width] duration-200">
+            class="relative ${sidebarWidth} flex-none shrink-0 border-r border-app-border/60 bg-app-surface/30 overflow-y-auto transition-[width] duration-200 pt-6">
             <button id="backlog-sidebar-toggle" type="button"
               data-action-click="toggle_backlog_sidebar"
               class="absolute top-2 right-1 z-20 p-1.5 rounded-lg text-app-muted hover:text-app-accent-1 hover:bg-app-bg border border-transparent hover:border-app-border transition-colors cursor-pointer"
@@ -89,7 +89,7 @@ export class PipelineDetailLayout {
               title="${sidebarCollapsed ? 'Expand backlog sidebar' : 'Collapse backlog sidebar'}">
               ${PipelineDetailLayout.sidebarToggleIcon(sidebarCollapsed)}
             </button>
-            <div id="backlog-view" class="min-h-full pt-7${backlogHidden}">
+            <div id="backlog-view" class="min-h-full${backlogHidden}">
               <p class="text-app-muted/40 text-[10px] uppercase font-bold tracking-widest text-center py-6">Loading backlog...</p>
             </div>
           </aside>
