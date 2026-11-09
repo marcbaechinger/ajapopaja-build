@@ -1,5 +1,64 @@
 # Release Notes
 
+## 0.4.2 – Android support, build artifacts, PiView themes, and UI polish
+
+This release adds first-class Android builds and build-artifact delivery,
+introduces a full theming system for PiView, and aligns the app's dark/light
+mode across every component.
+
+### 🤖 Android build support
+
+* **Android toolchain in the container** – the image now ships JDK 17 and the
+  Android SDK command-line tools with accepted licenses. Agents build Android
+  projects using the repository's Gradle wrapper; the Android Gradle Plugin
+  downloads the project-specific platform and build-tools on demand (see
+  [`howtos/android_builds.md`](howtos/android_builds.md)).
+
+### 📦 Build artifact management and delivery
+
+* **Build artifacts are first-class** – a new build-artifact data model, REST
+  API and download-token auth let pipelines expose their `build_commands` output
+  (e.g. an Android APK) for download.
+* **Build in the UI** – the pipeline view gains a **Build** button and an
+  artifact status/download row; build completion is broadcast over WebSocket.
+* **Agent-accessible** – a `get_build_artifact` MCP tool and
+  `get-artifact`/`download-artifact` CLI commands let agents and the bundled
+  skill fetch and deliver artifacts to the host.
+
+### 🎨 PiView themes and app theme alignment
+
+* **PiView theme system** – PiView colors moved into a dedicated `--piview-*`
+  token layer with a theme registry, variant/theme options and `setTheme()`.
+  New `batch-terminal` and `interactive-chat` themes ship alongside
+  `batch-paper` and `interactive-focus` presets, backed by a conformance suite
+  (structure/markup freeze, contrast, reduced motion).
+* **Theme sets** – `ThemeSet` types, a registry and a `ThemeManager` store
+  provide harmonized palettes (interactive → app, batch → interactive), with
+  light variants for the default interactive and batch themes and an
+  alternative theme set. A theme-set picker in the dashboard persists the
+  selection.
+* **Dark/light mode alignment** – the app theme is aligned with PiView, and
+  dark/light mode is improved across all components, including AA-contrast fixes
+  for light-mode PiView status/thinking roles and a broadened contrast matrix.
+
+### ✨ UI cleanups and improvements
+
+* **Decluttered dashboard** – the redundant “Logged In” label and the Search
+  button in the dashboard header are gone; the profile badge and theme-set
+  picker are reordered.
+* **Simpler, roomier views** – `HistoryView` is simplified with aligned line-item
+  fonts, the `DiffDialog` is wider, and the backlog sidebar layout is improved.
+* **Model selector for interactive sessions** – the “Start interactive session”
+  screen now lets you choose the model.
+
+### 🔧 Fixes
+
+* Copy-to-clipboard now works on insecure origins (e.g. `http://ajapopaja`).
+* Fixed input-field focus in the backlog section.
+* The batch-session verification info now includes the model.
+* Fixed a cross-pipeline `BUILD_RUN_COMPLETED` broadcast.
+* Removed the legacy `backend/mcp/src/scripts/mcp_client.py` duplicate.
+
 ## 0.4.1 – GitHub pull‑request support
 
 * **Remote GitHub repositories can now open pull requests** – the remote PR

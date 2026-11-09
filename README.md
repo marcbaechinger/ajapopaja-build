@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/marcbaechinger/ajapopaja-build/actions/workflows/ci.yml/badge.svg)](https://github.com/marcbaechinger/ajapopaja-build/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Version](https://img.shields.io/badge/version-0.4.1-green.svg)](https://github.com/marcbaechinger/ajapopaja-build/releases)
+[![Version](https://img.shields.io/badge/version-0.4.2-green.svg)](https://github.com/marcbaechinger/ajapopaja-build/releases)
 
 Welcome to **Ajapopaja Build** – an automated task‑pipeline manager for Coding AI
 agents, with a human‑supervised management layer. It helps you break work into
@@ -86,6 +86,16 @@ Agents work on real code inside isolated sandboxes and report back through the U
   command-line tools with accepted licenses. Agents build Android projects with
   the repository's Gradle wrapper; AGP downloads the project-specific platform
   and build-tools on demand (see [`howtos/android_builds.md`](howtos/android_builds.md)).
+- **Build artifact management and delivery** – pipelines run their
+  `build_commands` and expose the result (e.g. an Android APK) in the UI via a
+  **Build** button and an artifact status/download row. Artifacts are served
+  through a token‑authenticated REST endpoint, a `get_build_artifact` MCP tool,
+  and `get-artifact`/`download-artifact` CLI commands, so agents can build and
+  deliver build outputs to the host.
+- **Theming and dark/light mode** – a PiView theme system (a dedicated
+  `--piview-*` token layer, theme registry, and a conformance suite) plus
+  harmonized theme sets with a persisted picker, and the app theme aligned with
+  PiView so dark and light mode look consistent across every component.
 - **Secure by default** – JWT‑based authentication across the API, sandboxed
   workspaces with path‑traversal protection, and Markdown sanitization.
 
@@ -241,7 +251,7 @@ python scripts/generate_db_overview.py --uri mongodb://host:27017 --db prod \
 
 ## Release history
 
-See [**`RELEASENOTES.md`**](RELEASENOTES.md). The current release is **0.4.1**.
+See [**`RELEASENOTES.md`**](RELEASENOTES.md). The current release is **0.4.2**.
 
 ---
 

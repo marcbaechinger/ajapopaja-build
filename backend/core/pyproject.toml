@@ -1,6 +1,6 @@
 [project]
 name = "core"
-version = "0.4.1"
+version = "0.4.2"
 description = "Ajapopaja Build Core Shared Library"
 authors = []
 dependencies = [
