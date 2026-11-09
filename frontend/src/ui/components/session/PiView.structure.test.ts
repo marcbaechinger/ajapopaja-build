@@ -410,17 +410,21 @@ describe('PiView DOM structure contract', () => {
       'DIV',
       'DIV',
       'DIV',
-      'DIV',
     ]);
     expect(
       Array.from(container.children).map((el) => (el as HTMLElement).id).filter(Boolean)
     ).toEqual([
       'piview-status-bar',
-      'piview-toast',
       'log-blocks',
       'piview-empty-state',
       'piview-session-ended',
     ]);
+
+    // The toast overlay lives in the non-scrolling frame so it stays visible
+    // while the log content scrolls.
+    const frame = container.parentElement as HTMLElement;
+    expect(frame?.classList.contains('piview-log-frame')).toBe(true);
+    expect(frame.querySelector('#piview-toast')).not.toBeNull();
 
     const unexpected = Array.from(container.querySelectorAll('*'))
       // SVG elements report lowercase tag names even in an HTML document.

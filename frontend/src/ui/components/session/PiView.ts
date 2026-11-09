@@ -221,6 +221,7 @@ export class PiView {
   private root: HTMLElement;
   private destroyed = false;
   private logContainer: HTMLElement | null = null;
+  private logFrame: HTMLElement | null = null;
   private blocksContainer: HTMLElement | null = null;
   private blockEls: Map<string, HTMLElement> = new Map();
   private isFollowMode: boolean;
@@ -452,10 +453,10 @@ export class PiView {
 
   /**
    * Switch the effective theme at runtime. This only writes tokens/the theme
-   * attribute on the existing log element; it never re-renders blocks, so
-   * scroll position, follow mode, collapse states, search highlights and
-   * formatted blocks all survive. Unknown ids fall back to the variant default
-   * (with a one-time warning).
+   * attribute on the existing log element and its frame; it never re-renders
+   * blocks, so scroll position, follow mode, collapse states, search highlights
+   * and formatted blocks all survive. Unknown ids fall back to the variant
+   * default (with a one-time warning).
    */
   setTheme(idOrTheme: string | PiViewTheme): void {
     if (typeof idOrTheme === 'string' && !PI_VIEW_THEMES[idOrTheme]) {
@@ -465,6 +466,9 @@ export class PiView {
     this.theme = next;
     const changed = this.themeId !== next.id;
     this.themeId = next.id;
+    if (this.logFrame) {
+      applyTheme(this.logFrame, next);
+    }
     if (this.logContainer) {
       applyTheme(this.logContainer, next);
     }
@@ -557,6 +561,17 @@ export class PiView {
   // ---------------------------------------------------------------------------
 
   private buildLogArea(): HTMLElement {
+    // The scrollable log sits inside a non-scrolling frame. The frame owns the
+    // toast overlay so the copy/format confirmation stays pinned to the visible
+    // log viewport instead of scrolling away with the log content.
+    const frame = document.createElement('div');
+    frame.className = 'piview-log-frame relative';
+    // Theme tokens are applied to the frame as well so the toast (a sibling of
+    // the scrolled `.piview-log` element) inherits the same accent/foreground
+    // tokens instead of depending on the scrolled content.
+    applyTheme(frame, this.theme);
+    this.logFrame = frame;
+
     const container = document.createElement('div');
     container.id = 'log-content-container';
     // `resize-y` needs overflow other than `visible`; the log already scrolls
@@ -569,6 +584,7 @@ export class PiView {
     container.setAttribute('data-piview-variant', this.variant);
     // Apply before the container is appended so the first paint is themed.
     applyTheme(container, this.theme);
+    frame.appendChild(container);
     const statusBar = document.createElement('div');
     statusBar.id = 'piview-status-bar';
     statusBar.className = 'sticky top-0 z-10 border-b px-1 pb-1 mb-1 flex items-center gap-2';
@@ -587,8 +603,8 @@ export class PiView {
     const toast = document.createElement('div');
     toast.id = 'piview-toast';
     toast.className =
-      'absolute top-1 right-1 z-20 px-2 py-1 rounded text-[10px] pointer-events-none opacity-0 transition-opacity';
-    container.appendChild(toast);
+      'absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20 px-2 py-1 rounded text-[10px] pointer-events-none opacity-0 transition-opacity';
+    frame.appendChild(toast);
     const blocks = document.createElement('div');
     blocks.id = 'log-blocks';
     blocks.className = LOG_BLOCK_SPACING_CLASS;
@@ -655,7 +671,7 @@ export class PiView {
     this.sessionEndedEl = sessionEnded;
     container.appendChild(sessionEnded);
 
-    return container;
+    return frame;
   }
 
   /** Whether the empty-state action is configured with a model selector. */

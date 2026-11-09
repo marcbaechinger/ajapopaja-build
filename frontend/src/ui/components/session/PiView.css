@@ -237,7 +237,7 @@
   color: var(--piview-fg-status);
 }
 
-.piview-log #piview-toast {
+.piview-log-frame #piview-toast {
   background-color: var(--piview-accent);
   color: var(--piview-accent-fg);
 }
@@ -375,7 +375,6 @@
 .piview-log .piview-copy:hover,
 .piview-log .piview-format:hover {
   background-color: var(--piview-surface-hover);
-  color: var(--piview-accent-fg);
 }
 
 .piview-log .piview-copy:focus-visible,
