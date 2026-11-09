@@ -174,6 +174,69 @@ async def test_start_interactive_session(async_client, init_mock_db):
 
 
 @pytest.mark.asyncio
+async def test_start_interactive_session_with_model(async_client, init_mock_db):
+    _authenticate()
+    try:
+        with (
+            patch(
+                "api.coderbot.router.Pipeline.get", new_callable=AsyncMock
+            ) as mock_get,
+            patch(
+                "api.coderbot.router.coderbot_manager.start_interactive_session",
+                new_callable=AsyncMock,
+            ) as mock_start,
+        ):
+            pipeline = MagicMock()
+            pipeline.repo_uri = "https://github.com/example/repo.git"
+            mock_get.return_value = pipeline
+            mock_start.return_value = {
+                "pipeline_id": "p1",
+                "is_active": True,
+                "start_time": None,
+                "busy": False,
+                "model": "qwen3.6:27b",
+            }
+
+            response = await async_client.post(
+                "/api/coderbot/interactive/start/p1",
+                json={"model": "  qwen3.6:27b  "},
+            )
+            assert response.status_code == status.HTTP_202_ACCEPTED
+            mock_start.assert_awaited_once_with(
+                pipeline, model="qwen3.6:27b"
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_start_interactive_session_with_model_query(async_client, init_mock_db):
+    _authenticate()
+    try:
+        with (
+            patch(
+                "api.coderbot.router.Pipeline.get", new_callable=AsyncMock
+            ) as mock_get,
+            patch(
+                "api.coderbot.router.coderbot_manager.start_interactive_session",
+                new_callable=AsyncMock,
+            ) as mock_start,
+        ):
+            pipeline = MagicMock()
+            pipeline.repo_uri = "https://github.com/example/repo.git"
+            mock_get.return_value = pipeline
+            mock_start.return_value = {"pipeline_id": "p1", "is_active": True}
+
+            response = await async_client.post(
+                "/api/coderbot/interactive/start/p1?model=gpt-oss%3A120"
+            )
+            assert response.status_code == status.HTTP_202_ACCEPTED
+            mock_start.assert_awaited_once_with(pipeline, model="gpt-oss:120")
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
 async def test_start_interactive_session_pipeline_not_found(async_client, init_mock_db):
     _authenticate()
     try:

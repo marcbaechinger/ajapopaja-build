@@ -1117,6 +1117,65 @@ describe('PiView', () => {
     expect(mount.querySelector('#piview-empty-state-action')).toBeNull();
   });
 
+  it('renders a model selector in the empty state and passes the selected model', () => {
+    const onClick = vi.fn();
+    const { service } = createStubService({ isActive: vi.fn(() => false) });
+    const view = new PiView(service, mount, {
+      emptyStateAction: {
+        label: 'Start Interactive Session',
+        onClick,
+        modelOptions: ['model-b', 'model-a'],
+      },
+    });
+    view.render();
+
+    const select = mount.querySelector('#piview-empty-state-model') as HTMLSelectElement;
+    expect(select).not.toBeNull();
+    expect(Array.from(select.options).map((o) => o.value)).toEqual([
+      '',
+      'model-a',
+      'model-b',
+    ]);
+    expect(select.options[0].textContent).toContain('Use default');
+
+    // Leaving the selector on its default starts with the configured default.
+    (mount.querySelector('#piview-empty-state-action') as HTMLButtonElement).click();
+    expect(onClick).toHaveBeenLastCalledWith(null);
+
+    select.value = 'model-b';
+    select.dispatchEvent(new Event('change'));
+    (mount.querySelector('#piview-empty-state-action') as HTMLButtonElement).click();
+    expect(onClick).toHaveBeenLastCalledWith('model-b');
+
+    view.destroy();
+  });
+
+  it('loads the empty-state model catalog asynchronously in place', async () => {
+    const onClick = vi.fn();
+    const loadModelOptions = vi.fn().mockResolvedValue(['loaded-model']);
+    const { service } = createStubService({ isActive: vi.fn(() => false) });
+    const view = new PiView(service, mount, {
+      emptyStateAction: { label: 'Start', onClick, loadModelOptions },
+    });
+    view.render();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const select = mount.querySelector('#piview-empty-state-model') as HTMLSelectElement;
+    expect(loadModelOptions).toHaveBeenCalledTimes(1);
+    expect(Array.from(select.options).map((o) => o.value)).toEqual([
+      '',
+      'loaded-model',
+    ]);
+
+    select.value = 'loaded-model';
+    select.dispatchEvent(new Event('change'));
+    (mount.querySelector('#piview-empty-state-action') as HTMLButtonElement).click();
+    expect(onClick).toHaveBeenLastCalledWith('loaded-model');
+
+    view.destroy();
+  });
+
   it('search bar is collapsed by default and toggled by the right-aligned search icon', () => {
     const { service } = createStubService();
     const view = new PiView(service, mount);

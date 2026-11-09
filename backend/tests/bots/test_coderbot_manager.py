@@ -605,6 +605,36 @@ async def test_start_interactive_session_runs_in_remote_repo_without_sandbox(
 
 
 @pytest.mark.asyncio
+async def test_start_interactive_session_with_explicit_model(init_mock_db):
+    """An explicitly selected model overrides the manager default."""
+    manager = CoderBotManager()
+    manager.set_default_model("default-model:cloud")
+
+    pipeline = MagicMock()
+    pipeline.id = "p1"
+    pipeline.repo_uri = "https://github.com/example/repo.git"
+    pipeline.workspace_abs_path = "/tmp/remote/repo"
+
+    session = _interactive_session_mock()
+
+    with (
+        patch(
+            "api.coderbot.manager.git_utils.ensure_repo_cloned", new_callable=AsyncMock
+        ),
+        patch(
+            "api.coderbot.manager.InteractivePiSession", return_value=session
+        ) as mock_cls,
+        patch.object(manager, "_watch_interactive_session", new_callable=AsyncMock),
+        patch("api.coderbot.manager.ws_manager.broadcast", new_callable=AsyncMock),
+    ):
+        await manager.start_interactive_session(pipeline, model="selected:cloud")
+
+    assert mock_cls.call_args.kwargs["model"] == "selected:cloud"
+    record = await manager.get_session(manager._interactive_uid)
+    assert record.model == "selected:cloud"
+
+
+@pytest.mark.asyncio
 async def test_start_interactive_session_broadcasts_started(init_mock_db):
     manager = CoderBotManager()
     pipeline = MagicMock()

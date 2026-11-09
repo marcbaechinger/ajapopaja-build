@@ -62,6 +62,10 @@ export class ContentTabsController {
   // rebuilt once after `loadPipeline()` resolves, when the capability becomes
   // known for a deep-linked Coding Agent tab. `null` = no view mounted.
   private interactiveViewAllowsStart: boolean | null = null;
+  // CoderBot model catalog shared by the empty-state start control. The array
+  // identity is stable so a late fetch can refresh the mounted PiView too.
+  private coderbotModelOptions: string[] = [];
+  private coderbotModelOptionsRequest: Promise<string[]> | null = null;
 
   constructor(deps: ContentTabsControllerDeps) {
     this.deps = deps;
@@ -220,20 +224,62 @@ export class ContentTabsController {
    * Coding Agent tab. Shared by the `start_interactive_session` action and the
    * empty-state button rendered inside the embedded PiView.
    */
-  async startInteractiveSession(): Promise<void> {
+  async startInteractiveSession(model?: string | null): Promise<void> {
     const { ctx } = this.deps;
     // Only remote pipelines (repo_uri set) support an interactive session; the
     // empty-state button is not offered otherwise.
     if (!ctx.state.pipeline?.repo_uri) return;
 
+    const selectedModel = typeof model === 'string' ? model.trim() : '';
     try {
-      await ctx.context.interactiveCodingService.startSession(ctx.pipelineId);
+      // Preserve the legacy no-model call shape so the backend/manager applies
+      // its configured CoderBot default when the selector is left on default.
+      if (selectedModel) {
+        await ctx.context.interactiveCodingService.startSession(ctx.pipelineId, selectedModel);
+      } else {
+        await ctx.context.interactiveCodingService.startSession(ctx.pipelineId);
+      }
       this.setTab('coding-agent', { hash: 'push' });
       this.syncInteractiveSession();
     } catch (error) {
       console.error('Start interactive session error:', error);
       alert('Failed to start interactive session');
     }
+  }
+
+  /**
+   * Loads the CoderBot model catalog used by the Start action. Reuses the same
+   * pipeline `model-options` endpoint and `coderbot` list as the pipeline edit
+   * dialog and the paused-session picker. Failures degrade to an empty list so
+   * the "use default" option remains available.
+   */
+  private loadCoderbotModelOptions(): Promise<string[]> {
+    if (this.coderbotModelOptionsRequest) return this.coderbotModelOptionsRequest;
+    const { ctx } = this.deps;
+    const client = ctx.context.pipelineClient;
+    if (!client?.getModelOptions) {
+      this.coderbotModelOptionsRequest = Promise.resolve([]);
+      return this.coderbotModelOptionsRequest;
+    }
+    this.coderbotModelOptionsRequest = Promise.resolve(
+      client.getModelOptions(ctx.pipelineId)
+    )
+      .then((options) => {
+        const models = Array.isArray(options?.coderbot) ? [...options.coderbot] : [];
+        // Mutate in place: the empty-state action holds this same array, so a
+        // fetch that resolves after mount is visible to hosts/tests too.
+        this.coderbotModelOptions.splice(
+          0,
+          this.coderbotModelOptions.length,
+          ...models
+        );
+        return models;
+      })
+      .catch((error) => {
+        console.error('Failed to load CoderBot models:', error);
+        return [];
+      });
+    return this.coderbotModelOptionsRequest;
   }
 
   /** Opens the app-wide session-manager panel for this pipeline. */
@@ -282,7 +328,11 @@ export class ContentTabsController {
         emptyStateAction: allowsStart
           ? {
               label: 'Start Interactive Session',
-              onClick: () => this.startInteractiveSession(),
+              onClick: (model) => this.startInteractiveSession(model),
+              modelOptions: this.coderbotModelOptions,
+              loadModelOptions: () => this.loadCoderbotModelOptions(),
+              defaultModelLabel: 'Use default (CoderBot model)',
+              modelLabel: 'Model',
             }
           : undefined,
         onAgentFinished: this.deps.onAgentFinished,
@@ -290,6 +340,8 @@ export class ContentTabsController {
     );
     this.interactiveViewAllowsStart = allowsStart;
     this.interactiveCodingView.render();
+    // Prefetch so a remount (or a host inspecting the action) sees the catalog.
+    if (allowsStart) void this.loadCoderbotModelOptions();
   }
 
   private teardownInteractiveCodingView() {

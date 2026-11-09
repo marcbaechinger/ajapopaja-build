@@ -191,6 +191,15 @@ describe('InteractiveCodingService', () => {
     expect(service.isActive()).toBe(true);
   });
 
+  it('startSession forwards an explicitly selected model', async () => {
+    await service.startSession('p1', 'custom-model:cloud');
+    expect(client.startInteractiveSession).toHaveBeenCalledWith(
+      'p1',
+      'custom-model:cloud'
+    );
+    expect(service.getCurrentModel()).toBe('custom-model:cloud');
+  });
+
   it('sendMessage calls the client and toggles busy until turn ended', async () => {
     await service.sendMessage('do the thing');
     expect(client.sendInteractiveMessage).toHaveBeenCalledWith('do the thing');

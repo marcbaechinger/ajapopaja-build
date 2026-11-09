@@ -66,7 +66,10 @@ export class CoderBotClient extends BaseClient {
   // Interactive session endpoints
   // ---------------------------------------------------------------------------
 
-  async startInteractiveSession(pipelineId: string): Promise<{
+  async startInteractiveSession(
+    pipelineId: string,
+    model?: string | null
+  ): Promise<{
     pipeline_id: string;
     uid?: string | null;
     is_active: boolean;
@@ -74,8 +77,15 @@ export class CoderBotClient extends BaseClient {
     busy: boolean;
     model?: string | null;
   }> {
+    const selectedModel = typeof model === 'string' ? model.trim() : '';
     const res = await this.fetch(`/api/coderbot/interactive/start/${pipelineId}`, {
       method: 'POST',
+      ...(selectedModel
+        ? {
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: selectedModel }),
+          }
+        : {}),
     });
     return await res.json();
   }

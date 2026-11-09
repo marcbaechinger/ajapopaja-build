@@ -52,6 +52,16 @@ class InteractiveMessageRequest(BaseModel):
     message: str
 
 
+class StartInteractiveSessionRequest(BaseModel):
+    """Optional request body for starting an interactive session.
+
+    ``model`` selects a specific pi-agent model from the CoderBot catalog. When
+    omitted (or blank) the manager/configured CoderBot default is used.
+    """
+
+    model: Optional[str] = None
+
+
 class CreateSessionRequest(BaseModel):
     """Request body for creating a new durable Pi session."""
 
@@ -300,13 +310,27 @@ async def get_interactive_session():
 
 
 @router.post("/interactive/start/{pipeline_id}", status_code=202)
-async def start_interactive_session(pipeline_id: str):
-    """Start an interactive Pi session for a remote pipeline repository."""
+async def start_interactive_session(
+    pipeline_id: str,
+    request: Optional[StartInteractiveSessionRequest] = None,
+    model: Optional[str] = Query(None),
+):
+    """Start an interactive Pi session for a remote pipeline repository.
+
+    A specific CoderBot model can be supplied either as a JSON body
+    (``{"model": "..."}``) or a ``?model=...`` query parameter. When neither is
+    provided the configured CoderBot default is used.
+    """
     pipeline = await Pipeline.get(pipeline_id)
     if not pipeline:
         raise HTTPException(status_code=404, detail="Pipeline not found")
 
+    selected_model = (request.model if request else None) or model
     try:
+        if selected_model and selected_model.strip():
+            return await coderbot_manager.start_interactive_session(
+                pipeline, model=selected_model.strip()
+            )
         return await coderbot_manager.start_interactive_session(pipeline)
     except InteractiveSessionAlreadyActiveError as e:
         raise HTTPException(status_code=409, detail=str(e))

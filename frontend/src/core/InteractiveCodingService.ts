@@ -285,16 +285,23 @@ export class InteractiveCodingService implements PiSessionService {
   // HTTP lifecycle API
   // ---------------------------------------------------------------------------
 
-  /** Start an interactive session for the given pipeline (remote repos only). */
-  public async startSession(pipelineId: string): Promise<void> {
+  /**
+   * Start an interactive session for the given pipeline (remote repos only).
+   * An optional model id overrides the configured CoderBot default; omitting it
+   * keeps the existing default-model behaviour.
+   */
+  public async startSession(pipelineId: string, model?: string | null): Promise<void> {
     this.currentPipelineId = pipelineId;
-    const info = await this.client.startInteractiveSession(pipelineId);
+    const selectedModel = typeof model === 'string' ? model.trim() : '';
+    const info = selectedModel
+      ? await this.client.startInteractiveSession(pipelineId, selectedModel)
+      : await this.client.startInteractiveSession(pipelineId);
     if (info) {
       // The STARTED websocket event drives most of the state; adopt the HTTP
       // response as an immediate/fallback update.
       this.setActive(!!info.is_active);
       this.setBusy(!!info.busy);
-      this.currentModel = info.model ?? null;
+      this.currentModel = info.model ?? (selectedModel || null);
       this.setStartTime(this.parseStartTime(info.start_time));
       const uid = (info as any).uid ?? this.sessionUid;
       if (uid) {

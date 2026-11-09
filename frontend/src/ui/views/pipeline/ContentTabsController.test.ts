@@ -181,6 +181,21 @@ describe('ContentTabsController (tabs + lazy mounts + sub-route, via PipelineDet
     expect(mockContext.interactiveCodingService.startSession).toHaveBeenCalledWith('p1');
   });
 
+  it('passes a selected model from the empty-state selector to the service', async () => {
+    const view = new PipelineDetailView(mockContext, { id: 'p1' });
+    container.innerHTML = view.render() as string;
+    view.mount(container);
+    await view.loadPipeline();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const options = (InteractiveCodingView as any).mock.calls.at(-1)[2];
+    await options.emptyStateAction.onClick('qwen3.6:27b');
+    expect(mockContext.interactiveCodingService.startSession).toHaveBeenCalledWith(
+      'p1',
+      'qwen3.6:27b'
+    );
+  });
+
   it('omits the empty-state Start action for local pipelines', async () => {
     mockContext.pipelineClient.get.mockResolvedValue({ id: 'p1', name: 'Pipe 1' });
     const view = new PipelineDetailView(mockContext, { id: 'p1' });

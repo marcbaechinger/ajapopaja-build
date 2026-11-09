@@ -398,29 +398,38 @@ class CoderBotManager:
             "model": getattr(session, "model", None),
         }
 
-    async def start_interactive_session(self, pipeline: Pipeline) -> dict:
+    async def start_interactive_session(
+        self, pipeline: Pipeline, model: Optional[str] = None
+    ) -> dict:
         """Start an interactive Pi session in the pipeline's remote repository.
 
         Only remote pipelines (``repo_uri`` set) are supported: the session runs
         directly in the actual repository clone (no sandbox, no branch). Exactly
-        one interactive session may be active at a time.
+        one interactive session may be active at a time. An optional ``model``
+        selects a specific CoderBot model; otherwise the configured default is
+        used.
         """
         async with self._interactive_lock:
             if self._interactive_session is not None:
                 raise InteractiveSessionAlreadyActiveError(
                     "An interactive session is already active."
                 )
-            await self.create_interactive_session(pipeline)
+            await self.create_interactive_session(pipeline, model=model)
             session = self._interactive_session
             return self._interactive_session_info(session)
 
     async def create_interactive_session(
-        self, pipeline: Pipeline, owner: Optional[str] = None
+        self,
+        pipeline: Pipeline,
+        owner: Optional[str] = None,
+        model: Optional[str] = None,
     ) -> PiSession:
         """Create, spawn and register a new interactive Pi session.
 
         Returns the durable :class:`PiSession` record. The live process is
-        available through the registry (``self._sessions[record.uid]``).
+        available through the registry (``self._sessions[record.uid]``). An
+        optional ``model`` overrides the manager's configured default for this
+        session only.
         """
         if not pipeline.repo_uri:
             raise InteractiveSessionNotSupportedError(
@@ -438,6 +447,7 @@ class CoderBotManager:
                 "Could not resolve the pipeline repository workspace."
             )
 
+        selected_model = normalize_model(model) or self._default_model
         uid = str(uuid_module.uuid4())
         record = PiSession(
             uid=uid,
@@ -446,7 +456,7 @@ class CoderBotManager:
             owner=owner,
             pipeline_id=str(pipeline.id),
             cwd=str(workspace),
-            model=self._default_model,
+            model=selected_model,
             skill_names=list(config.INTERACTIVE_SKILLS),
             bot_type="interactive",
         )
@@ -454,7 +464,7 @@ class CoderBotManager:
         pi_session_store.write_meta(record)
 
         session = InteractivePiSession(
-            model=self._default_model,
+            model=selected_model,
             cwd=str(workspace),
             pipeline_id=str(pipeline.id),
             session_uid=uid,

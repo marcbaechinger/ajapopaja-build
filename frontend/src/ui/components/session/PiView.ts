@@ -181,7 +181,30 @@ export interface PiViewOptions {
 /** A button shown inside the empty-state placeholder. */
 export interface EmptyStateAction {
   label: string;
-  onClick: () => void;
+  /**
+   * Invoked when the action is clicked. When a model selector is configured,
+   * the selected CoderBot model id is passed (or `null` for the default).
+   */
+  onClick: (model?: string | null) => void;
+  /**
+   * Optional CoderBot model catalog. Supplying this (even as an empty array)
+   * renders a model selector above the action button, with a leading "use
+   * default" option. Usually populated from the pipeline `model-options`
+   * endpoint, mirroring the PipelineEditDialog's CoderBot model select.
+   */
+  modelOptions?: string[];
+  /**
+   * Optional async catalog loader used when the host has not prefetched the
+   * options yet. The selector stays usable meanwhile and is refreshed in place
+   * once the promise resolves; failures degrade to the default-only option.
+   */
+  loadModelOptions?: () => Promise<string[]>;
+  /** Initially selected model id. Empty/null selects the default option. */
+  model?: string | null;
+  /** Label for the selector's default option. */
+  defaultModelLabel?: string;
+  /** Accessible/visible label for the selector. */
+  modelLabel?: string;
 }
 
 /**
@@ -196,6 +219,7 @@ export interface EmptyStateAction {
 export class PiView {
   private service: PiSessionService;
   private root: HTMLElement;
+  private destroyed = false;
   private logContainer: HTMLElement | null = null;
   private blocksContainer: HTMLElement | null = null;
   private blockEls: Map<string, HTMLElement> = new Map();
@@ -251,6 +275,10 @@ export class PiView {
   private emptyStateEl: HTMLElement | null = null;
   private sessionEndedEl: HTMLElement | null = null;
   private emptyStateAction?: EmptyStateAction;
+  private emptyStateModel: string | null = null;
+  private emptyStateModelOptions: string[] = [];
+  private emptyStateModelSelect: HTMLSelectElement | null = null;
+  private emptyStateModelLoadStarted = false;
 
   /** Timestamp (ms) recorded when each block was first rendered. */
   private blockTimestamps: Map<string, number> = new Map();
@@ -335,6 +363,8 @@ export class PiView {
     this.deferInitialRender = options.deferInitialRender ?? false;
     this.autoFormatText = options.autoFormatText ?? true;
     this.emptyStateAction = options.emptyStateAction;
+    this.emptyStateModel = options.emptyStateAction?.model ?? null;
+    this.emptyStateModelOptions = [...(options.emptyStateAction?.modelOptions ?? [])];
     this.onOpenDialog = options.onOpenDialog;
     this.keyboardBindings = options.keyboardBindings ?? {};
     this.variantExplicit =
@@ -490,6 +520,7 @@ export class PiView {
    * Unsubscribes from the service and detaches listeners.
    */
   destroy(): void {
+    this.destroyed = true;
     // Cancel a deferred initial render that hasn't fired yet so we never render
     // into DOM that is being torn down.
     if (this.renderFrameHandle !== null) {
@@ -585,6 +616,9 @@ export class PiView {
     emptySub.textContent = 'When a bot starts, its activity log will appear here.';
     emptyState.appendChild(emptySub);
     if (this.emptyStateAction) {
+      if (this.hasEmptyStateModelSelector()) {
+        emptyState.appendChild(this.buildEmptyStateModelSelect());
+      }
       const action = document.createElement('button');
       action.id = 'piview-empty-state-action';
       action.type = 'button';
@@ -592,7 +626,13 @@ export class PiView {
         'mt-2 px-3 py-1.5 rounded text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer';
       action.innerHTML = `${this.cleanIcon(Icon.render('lightning', { size: 14 }))}
             ${this.emptyStateAction.label}`;
-      action.addEventListener('click', () => this.emptyStateAction?.onClick());
+      action.addEventListener('click', () => {
+        if (this.hasEmptyStateModelSelector()) {
+          this.emptyStateAction?.onClick(this.emptyStateModel);
+        } else {
+          this.emptyStateAction?.onClick();
+        }
+      });
       emptyState.appendChild(action);
     }
     this.emptyStateEl = emptyState;
@@ -616,6 +656,89 @@ export class PiView {
     container.appendChild(sessionEnded);
 
     return container;
+  }
+
+  /** Whether the empty-state action is configured with a model selector. */
+  private hasEmptyStateModelSelector(): boolean {
+    const action = this.emptyStateAction;
+    return !!action && (action.modelOptions !== undefined || !!action.loadModelOptions);
+  }
+
+  /**
+   * Builds the model selector shown in the empty-state placeholder. Uses the
+   * same catalog and "use default" convention as the PipelineEditDialog's
+   * CoderBot model select, but without depending on a dialog/AppContext so the
+   * reusable PiView stays host-agnostic.
+   */
+  private buildEmptyStateModelSelect(): HTMLElement {
+    const action = this.emptyStateAction!;
+    const row = document.createElement('label');
+    row.className = 'mt-2 flex items-center gap-2 text-xs';
+    const label = document.createElement('span');
+    label.className = 'text-[10px] font-bold uppercase tracking-wider';
+    label.textContent = action.modelLabel ?? 'Model';
+    row.appendChild(label);
+
+    const select = document.createElement('select');
+    select.id = 'piview-empty-state-model';
+    select.name = 'piview_model';
+    select.className =
+      'piview-model-select bg-app-bg border border-app-border rounded px-2 py-1 text-xs text-app-text outline-none focus:ring-1 focus:ring-app-accent-1 cursor-pointer';
+    select.setAttribute('aria-label', action.modelLabel ?? 'CoderBot model');
+    select.addEventListener('change', () => {
+      this.emptyStateModel = select.value || null;
+    });
+    this.emptyStateModelSelect = select;
+    this.renderEmptyStateModelOptions(select);
+    row.appendChild(select);
+
+    // Kick off the async catalog load after the selector exists so the result
+    // can be rendered in place without discarding a selection or the log DOM.
+    void this.loadEmptyStateModelOptions();
+    return row;
+  }
+
+  /** Rebuilds the model select options while preserving the current value. */
+  private renderEmptyStateModelOptions(select: HTMLSelectElement): void {
+    const action = this.emptyStateAction;
+    if (!action) return;
+    const current = this.emptyStateModel ?? '';
+    const values = [...this.emptyStateModelOptions];
+    // Keep an explicitly selected model available even if it is no longer in
+    // the fetched catalog (e.g. a model removed from models.json).
+    if (current && !values.includes(current)) values.push(current);
+    values.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+    select.textContent = '';
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = action.defaultModelLabel ?? 'Use default model';
+    defaultOption.selected = !current;
+    select.appendChild(defaultOption);
+    for (const value of values) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = value;
+      option.selected = value === current;
+      select.appendChild(option);
+    }
+    select.value = current;
+  }
+
+  /** Fetches the model catalog once and refreshes the empty-state selector. */
+  private async loadEmptyStateModelOptions(): Promise<void> {
+    const loader = this.emptyStateAction?.loadModelOptions;
+    if (!loader || this.emptyStateModelLoadStarted) return;
+    this.emptyStateModelLoadStarted = true;
+    try {
+      const options = await loader();
+      if (this.destroyed) return;
+      this.emptyStateModelOptions = Array.isArray(options) ? [...options] : [];
+    } catch (error) {
+      console.error('PiView: failed to load model options', error);
+    }
+    if (this.destroyed || !this.emptyStateModelSelect) return;
+    this.renderEmptyStateModelOptions(this.emptyStateModelSelect);
   }
 
   private buildFooter(): HTMLElement {
